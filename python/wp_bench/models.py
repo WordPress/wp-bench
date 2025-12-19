@@ -1,8 +1,6 @@
 """Model interface leveraging LiteLLM providers."""
 from __future__ import annotations
 
-from typing import List, Sequence
-
 from litellm import completion, completion_cost
 from litellm.utils import ModelResponse
 
@@ -15,10 +13,18 @@ class ModelInterface:
     def __init__(self, config: ModelConfig):
         self.config = config
 
-    def generate(self, messages: Sequence[dict]) -> str:
+    def generate(self, prompt: str) -> str:
+        """Generate a completion for the given prompt.
+
+        Args:
+            prompt: The user prompt to send to the model.
+
+        Returns:
+            The model's response text.
+        """
         response: ModelResponse = completion(
             model=self.config.name,
-            messages=list(messages),
+            messages=[{"role": "user", "content": prompt}],
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             top_p=self.config.top_p,
@@ -26,13 +32,6 @@ class ModelInterface:
         )
         choice = response.choices[0]
         return choice.message["content"]  # type: ignore[index]
-
-    @staticmethod
-    def to_messages(system_prompt: str, user_prompt: str) -> List[dict]:
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
 
     @staticmethod
     def estimate_cost(response: ModelResponse) -> float:

@@ -30,7 +30,7 @@ grader:
 run:
   suite: wp-core-v1
   # limit: 10            # limit tests per model (null = all)
-  concurrency: 4
+  concurrency: 5
 
 # Output paths
 output:
