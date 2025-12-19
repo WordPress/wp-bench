@@ -2,15 +2,19 @@
 from __future__ import annotations
 
 import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
 import orjson
+from rich import box
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import Progress
 from rich.table import Table
+from rich.text import Text
 
 from .config import HarnessConfig, ModelConfig
 from .datasets import ExecutionTest, KnowledgeTest, load_tests
@@ -20,6 +24,49 @@ from .scoring import ScoreAggregator
 from .utils import ensure_dir, sha256, strip_code_fences
 
 console = Console()
+
+
+class TestError(Exception):
+    """Wrapper to preserve test context when an error occurs."""
+
+    def __init__(self, test_id: str, test_type: str, original_error: Exception):
+        self.test_id = test_id
+        self.test_type = test_type
+        self.original_error = original_error
+        self.traceback_str = traceback.format_exc()
+        super().__init__(str(original_error))
+
+
+def print_test_error(error: TestError) -> None:
+    """Display a detailed error panel for a failed test."""
+    content = Text()
+    content.append("Test ID\n", style="bold")
+    content.append(f"  {error.test_id}\n\n", style="cyan")
+
+    content.append("Test Type\n", style="bold")
+    content.append(f"  {error.test_type}\n\n", style="magenta")
+
+    content.append("Error Type\n", style="bold")
+    content.append(f"  {type(error.original_error).__name__}\n\n", style="red")
+
+    content.append("Message\n", style="bold")
+    content.append(f"  {error.original_error}\n\n", style="yellow")
+
+    content.append("Traceback\n", style="bold")
+    for line in error.traceback_str.strip().split("\n"):
+        content.append(f"  {line}\n", style="bright_black")
+
+    panel = Panel(
+        content,
+        title="[red bold]Benchmark Failed[/red bold]",
+        subtitle="[dim]Fix the error and re-run[/dim]",
+        border_style="red",
+        box=box.HEAVY,
+        padding=(1, 2),
+    )
+
+    console.print()
+    console.print(panel)
 
 
 def _timestamped_path(path: Path) -> Path:
@@ -56,11 +103,18 @@ class BenchmarkRunner:
 
         Returns:
             Dict containing metadata (scores, config) and individual test results.
+
+        Raises:
+            SystemExit: If a test fails, prints error details and exits with code 1.
         """
         tests = load_tests(self.config.dataset)
         self.environment.setup()
-        self._run_knowledge_tests(tests["knowledge"])
-        self._run_execution_tests(tests["execution"])
+        try:
+            self._run_knowledge_tests(tests["knowledge"])
+            self._run_execution_tests(tests["execution"])
+        except TestError as e:
+            print_test_error(e)
+            raise SystemExit(1) from e
         summary = self.aggregator.finalize()
         payload = {
             "metadata": {
@@ -88,34 +142,45 @@ class BenchmarkRunner:
 
         Args:
             tests: List of knowledge test definitions.
+
+        Raises:
+            TestError: If any test fails, stops execution and raises with details.
         """
         limit = self.config.run.limit or len(tests)
         tests_to_run = tests[:limit]
         concurrency = self.config.run.concurrency
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
-            prompt = self._render_knowledge_prompt(test)
-            answer = strip_code_fences(self.model.generate(prompt)).strip()
-            correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
-            return {
-                "test_id": test.id,
-                "type": "knowledge",
-                "prompt_hash": sha256(prompt),
-                "answer": answer,
-                "correct": bool(correct),
-                "score": correct,
-            }
+            try:
+                prompt = self._render_knowledge_prompt(test)
+                answer = strip_code_fences(self.model.generate(prompt)).strip()
+                correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
+                return {
+                    "test_id": test.id,
+                    "type": "knowledge",
+                    "prompt_hash": sha256(prompt),
+                    "answer": answer,
+                    "correct": bool(correct),
+                    "score": correct,
+                }
+            except Exception as e:
+                raise TestError(test.id, "knowledge", e) from e
 
         with Progress() as progress:
             task = progress.add_task("Knowledge", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
                 for future in as_completed(futures):
-                    result = future.result()
-                    with self._lock:
-                        self.aggregator.add_knowledge(result["score"])
-                        self.records.append(result)
-                    progress.update(task, advance=1)
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_knowledge(result["score"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
 
     def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
         """Run code generation execution tests in parallel.
@@ -125,6 +190,9 @@ class BenchmarkRunner:
 
         Args:
             tests: List of execution test definitions.
+
+        Raises:
+            TestError: If any test fails, stops execution and raises with details.
         """
         limit = self.config.run.limit or len(tests)
         tests_to_run = tests[:limit]
@@ -132,39 +200,47 @@ class BenchmarkRunner:
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
             """Process a single execution test (runs in thread pool)."""
-            prompt = self._render_execution_prompt(test)
-            completion = self.model.generate(prompt)
-            code = strip_code_fences(completion)
-            verification_spec = {
-                "static_checks": test.static_checks,
-                "runtime_checks": test.runtime_checks,
-                "judge_config": test.judge_config,
-            }
-            env_result = self.environment.execute_code(code, verification_spec)
-            correctness = self._score_assertions(env_result.raw)
-            quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
-            return {
-                "test_id": test.id,
-                "type": "execution",
-                "prompt_hash": sha256(prompt),
-                "code": code,
-                "result": env_result.raw,
-                "stdout": env_result.stdout,
-                "stderr": env_result.stderr,
-                "correctness": correctness,
-                "quality": quality,
-            }
+            try:
+                prompt = self._render_execution_prompt(test)
+                completion = self.model.generate(prompt)
+                code = strip_code_fences(completion)
+                verification_spec = {
+                    "static_checks": test.static_checks,
+                    "runtime_checks": test.runtime_checks,
+                    "judge_config": test.judge_config,
+                }
+                env_result = self.environment.execute_code(code, verification_spec)
+                correctness = self._score_assertions(env_result.raw)
+                quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
+                return {
+                    "test_id": test.id,
+                    "type": "execution",
+                    "prompt_hash": sha256(prompt),
+                    "code": code,
+                    "result": env_result.raw,
+                    "stdout": env_result.stdout,
+                    "stderr": env_result.stderr,
+                    "correctness": correctness,
+                    "quality": quality,
+                }
+            except Exception as e:
+                raise TestError(test.id, "execution", e) from e
 
         with Progress() as progress:
             task = progress.add_task("Execution", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
                 for future in as_completed(futures):
-                    result = future.result()
-                    with self._lock:
-                        self.aggregator.add_execution(result["correctness"], result["quality"])
-                        self.records.append(result)
-                    progress.update(task, advance=1)
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
 
     @staticmethod
     def _render_knowledge_prompt(test: KnowledgeTest) -> str:
@@ -262,23 +338,30 @@ class MultiModelRunner:
 
         Returns:
             Dict mapping model names to their individual results.
+
+        Raises:
+            SystemExit: If a test fails, prints error details and exits with code 1.
         """
         models = self.config.get_models()
         tests = load_tests(self.config.dataset)
         self.environment.setup()
 
-        for model_config in models:
-            model_name = model_config.name
-            console.print(f"\n[bold blue]Running: {model_name}[/bold blue]")
+        try:
+            for model_config in models:
+                model_name = model_config.name
+                console.print(f"\n[bold blue]Running: {model_name}[/bold blue]")
 
-            runner = SingleModelRunner(
-                config=self.config,
-                model_config=model_config,
-                environment=self.environment,
-                tests=tests,
-            )
-            result = runner.run()
-            self.results[model_name] = result
+                runner = SingleModelRunner(
+                    config=self.config,
+                    model_config=model_config,
+                    environment=self.environment,
+                    tests=tests,
+                )
+                result = runner.run()
+                self.results[model_name] = result
+        except TestError as e:
+            print_test_error(e)
+            raise SystemExit(1) from e
 
         self._print_comparison_table()
         self._write_outputs()
@@ -386,27 +469,35 @@ class SingleModelRunner:
         concurrency = self.config.run.concurrency
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
-            prompt = BenchmarkRunner._render_knowledge_prompt(test)
-            answer = strip_code_fences(self.model.generate(prompt)).strip()
-            correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
-            return {
-                "test_id": test.id,
-                "type": "knowledge",
-                "answer": answer,
-                "correct": bool(correct),
-                "score": correct,
-            }
+            try:
+                prompt = BenchmarkRunner._render_knowledge_prompt(test)
+                answer = strip_code_fences(self.model.generate(prompt)).strip()
+                correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
+                return {
+                    "test_id": test.id,
+                    "type": "knowledge",
+                    "answer": answer,
+                    "correct": bool(correct),
+                    "score": correct,
+                }
+            except Exception as e:
+                raise TestError(test.id, "knowledge", e) from e
 
         with Progress() as progress:
             task = progress.add_task("Knowledge", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
                 for future in as_completed(futures):
-                    result = future.result()
-                    with self._lock:
-                        self.aggregator.add_knowledge(result["score"])
-                        self.records.append(result)
-                    progress.update(task, advance=1)
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_knowledge(result["score"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
 
     def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
         """Run execution tests in parallel. See BenchmarkRunner._run_execution_tests."""
@@ -415,32 +506,40 @@ class SingleModelRunner:
         concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
-            prompt = BenchmarkRunner._render_execution_prompt(test)
-            completion = self.model.generate(prompt)
-            code = strip_code_fences(completion)
-            verification_spec = {
-                "static_checks": test.static_checks,
-                "runtime_checks": test.runtime_checks,
-                "judge_config": test.judge_config,
-            }
-            env_result = self.environment.execute_code(code, verification_spec)
-            correctness = BenchmarkRunner._score_assertions(env_result.raw)
-            quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
-            return {
-                "test_id": test.id,
-                "type": "execution",
-                "code": code,
-                "correctness": correctness,
-                "quality": quality,
-            }
+            try:
+                prompt = BenchmarkRunner._render_execution_prompt(test)
+                completion = self.model.generate(prompt)
+                code = strip_code_fences(completion)
+                verification_spec = {
+                    "static_checks": test.static_checks,
+                    "runtime_checks": test.runtime_checks,
+                    "judge_config": test.judge_config,
+                }
+                env_result = self.environment.execute_code(code, verification_spec)
+                correctness = BenchmarkRunner._score_assertions(env_result.raw)
+                quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
+                return {
+                    "test_id": test.id,
+                    "type": "execution",
+                    "code": code,
+                    "correctness": correctness,
+                    "quality": quality,
+                }
+            except Exception as e:
+                raise TestError(test.id, "execution", e) from e
 
         with Progress() as progress:
             task = progress.add_task("Execution", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
                 for future in as_completed(futures):
-                    result = future.result()
-                    with self._lock:
-                        self.aggregator.add_execution(result["correctness"], result["quality"])
-                        self.records.append(result)
-                    progress.update(task, advance=1)
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
