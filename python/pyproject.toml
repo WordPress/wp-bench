@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wp-bench"
+version = "0.1.0"
+description = "Python-native harness for the WordPress AI Benchmark"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "WordPress.org", email = "wp-aisystems@wordpress.org" }
+]
+license = { text = "GPL-2.0-or-later" }
+keywords = ["wordpress", "benchmark", "llm", "evaluation", "ai"]
+dependencies = [
+  "typer[all]>=0.12",
+  "rich>=13.7",
+  "pydantic>=2.8",
+  "litellm>=1.37",
+  "datasets>=2.19",
+  "huggingface_hub>=0.24",
+  "docker>=7.1",
+  "httpx>=0.27",
+  "tqdm>=4.66",
+  "pyyaml>=6.0",
+  "orjson>=3.10",
+  "tenacity>=8.2"
+]
+
+[project.optional-dependencies]
+http = ["uvicorn>=0.30", "fastapi>=0.111"]
+dev = ["pytest>=8.3", "ruff>=0.6", "mypy>=1.10"]
+
+[project.scripts]
+wp-bench = "wp_bench.cli:app"
+
+[tool.hatch.metadata]
+allow-direct-references = true

@@ -1,0 +1,59 @@
+# Dependencies
+/vendor/
+/node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Benchmark outputs
+/output/
+/artifacts/
+
+# Generated dataset exports (run `python datasets/export_dataset.py` to regenerate)
+/datasets/data/
+
+# Local config (copy from wp-bench.example.yaml)
+wp-bench.yaml
+
+# Environment secrets
+.env
+
+# wp-env
+/.wp-env/
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Composer
+composer.lock
+
+# PHPUnit
+/phpunit.xml
+/.phpunit.result.cache
+
+# PHPCS
+/phpcs.xml
+
+# PHPStan
+/phpstan.neon
+
+# Coverage
+/coverage/
+/.coverage/
+
+# Logs
+*.log
+debug.log
+
+# Build artifacts
+/build/
+/dist/
+
+# Local configuration
+.claude/
+.wp-env.override.json
+CLAUDE.md

@@ -1,0 +1,11 @@
+{
+  "core": "WordPress/WordPress#6.9",
+  "phpVersion": "8.2",
+  "plugins": [
+    "./"
+  ],
+  "config": {
+    "WP_DEBUG": true,
+    "WP_ENVIRONMENT_TYPE": "local"
+  }
+}

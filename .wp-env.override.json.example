@@ -1,0 +1,8 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/wp-env.json",
+	"config": {
+		"OPENAI_API_KEY": "sk-...",
+		"ANTHROPIC_API_KEY": "sk-ant-...",
+		"GOOGLE_API_KEY": "..."
+	}
+}

@@ -1,0 +1,38 @@
+# WP-Bench Configuration
+# Copy to wp-bench.yaml and customize. API keys loaded from .env file.
+
+dataset:
+  source: local          # 'local' or 'huggingface'
+  name: wp-core-v1       # suite name or HF dataset path
+
+# Multiple models to benchmark (runs sequentially, outputs comparison table)
+models:
+  # OpenAI
+  - name: gpt-4o
+  - name: gpt-4o-mini
+  # Google Gemini
+  - name: gemini/gemini-2.5-pro
+  - name: gemini/gemini-2.5-flash
+  # Anthropic Claude
+  - name: claude-sonnet-4-20250514
+  - name: claude-opus-4-5-20251101
+
+# Or use single model (legacy format):
+# model:
+#   name: gpt-4o
+
+# WordPress runtime grader
+grader:
+  kind: docker
+  wp_env_dir: ./runtime  # path to wp-env project
+
+# Run configuration
+run:
+  suite: wp-core-v1
+  # limit: 10            # limit tests per model (null = all)
+  concurrency: 4
+
+# Output paths
+output:
+  path: output/results.json
+  jsonl_path: output/results.jsonl
