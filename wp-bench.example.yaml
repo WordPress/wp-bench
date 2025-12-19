@@ -3,7 +3,7 @@
 
 dataset:
   source: local          # 'local' or 'huggingface'
-  name: wp-core-v1       # suite name or HF dataset path
+  name: wp-core-v0.0.1   # suite name or HF dataset path
 
 # Multiple models to benchmark (runs sequentially, outputs comparison table)
 models:
@@ -28,7 +28,7 @@ grader:
 
 # Run configuration
 run:
-  suite: wp-core-v1
+  suite: wp-core-v0.0.1
   # limit: 10            # limit tests per model (null = all)
   concurrency: 4
 

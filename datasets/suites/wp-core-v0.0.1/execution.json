@@ -1,0 +1,1045 @@
+{
+  "id": "wp-core-execution-v0.0.1",
+  "version": "0.0.1",
+  "metadata": {
+    "name": "WordPress Core Execution Tests",
+    "description": "Code generation tasks for modern WordPress development including hooks, queries, block bindings, and the Abilities API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-shortcode-001",
+      "category": "shortcodes",
+      "difficulty": "basic",
+      "prompt": "Create a WordPress shortcode called 'greeting' that accepts a 'name' attribute and outputs 'Hello, {name}!' where {name} is the attribute value. If no name is provided, default to 'World'.",
+      "expected_behavior": "A shortcode [greeting name=\"Alice\"] outputs 'Hello, Alice!' and [greeting] outputs 'Hello, World!'",
+      "requirements": [
+        "Register a shortcode with the tag 'greeting'",
+        "Accept a 'name' attribute with default value 'World'",
+        "Output must be properly escaped using esc_html()",
+        "Return the greeting string, do not echo"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_shortcode\\s*\\(\\s*['\"]greeting['\"]",
+            "description": "Must register shortcode with tag 'greeting'",
+            "weight": 1.0
+          },
+          {
+            "pattern": "esc_html|esc_attr|wp_kses",
+            "description": "Must use WordPress escaping",
+            "weight": 0.5
+          },
+          {
+            "pattern": "shortcode_atts",
+            "description": "Should use shortcode_atts for attribute defaults",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "\\becho\\b",
+            "description": "Should return, not echo",
+            "severity": "warning"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "",
+        "assertions": [
+          {
+            "type": "shortcode_exists",
+            "target": "greeting",
+            "description": "Shortcode must be registered",
+            "weight": 1.0
+          },
+          {
+            "type": "output_equals",
+            "target": "echo do_shortcode('[greeting name=\"Alice\"]');",
+            "expected": "Hello, Alice!",
+            "description": "Shortcode with name attribute",
+            "weight": 1.0
+          },
+          {
+            "type": "output_equals",
+            "target": "echo do_shortcode('[greeting]');",
+            "expected": "Hello, World!",
+            "description": "Shortcode with default name",
+            "weight": 1.0
+          }
+        ],
+        "teardown": "remove_shortcode('greeting');"
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1"
+      },
+      "reference_solution": "function greeting_shortcode( $atts ) {\n    $atts = shortcode_atts( array( 'name' => 'World' ), $atts, 'greeting' );\n    return 'Hello, ' . esc_html( $atts['name'] ) . '!';\n}\nadd_shortcode( 'greeting', 'greeting_shortcode' );"
+    },
+    {
+      "id": "e-wpquery-001",
+      "category": "wp_query",
+      "difficulty": "intermediate",
+      "prompt": "Write a function called 'get_recent_news_posts' that returns the 5 most recently published posts from the 'news' category. The function should return an array of post objects.",
+      "expected_behavior": "Function returns up to 5 published posts from the 'news' category, ordered by date descending",
+      "requirements": [
+        "Use WP_Query for the database query",
+        "Filter to 'post' post type",
+        "Filter to 'publish' status only",
+        "Filter to 'news' category by slug",
+        "Limit to 5 posts",
+        "Order by date descending",
+        "Return array of post objects",
+        "Reset post data after query using wp_reset_postdata()"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "new\\s+WP_Query",
+            "description": "Must use WP_Query class",
+            "weight": 1.0
+          },
+          {
+            "pattern": "posts_per_page",
+            "description": "Must specify posts_per_page",
+            "weight": 0.5
+          },
+          {
+            "pattern": "category_name|cat\\s*=>",
+            "description": "Must filter by category",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_reset_postdata",
+            "description": "Should reset post data after query",
+            "weight": 0.3
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "\\$wpdb->",
+            "description": "Should use WP_Query, not direct database queries",
+            "severity": "warning"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "function_exists",
+            "target": "get_recent_news_posts",
+            "description": "Function must exist",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$result = get_recent_news_posts(); return is_array($result);",
+            "description": "Must return an array",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1",
+        "context_for_judge": "This function will be used in a theme to display recent news posts on the homepage. Consider query efficiency and proper WordPress patterns."
+      }
+    },
+    {
+      "id": "e-hooks-001",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Create code that adds a custom column called 'Featured' to the Posts admin list table. The column should display 'Yes' if the post has a meta key '_is_featured' with value '1', otherwise display 'No'.",
+      "expected_behavior": "Admin posts list shows a 'Featured' column with Yes/No values based on post meta",
+      "requirements": [
+        "Add column header using 'manage_posts_columns' filter",
+        "Populate column content using 'manage_posts_custom_column' action",
+        "Check post meta '_is_featured' for value '1'",
+        "Display 'Yes' or 'No' appropriately",
+        "Escape all output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_filter.*manage_posts_columns",
+            "description": "Must hook into manage_posts_columns",
+            "weight": 1.0
+          },
+          {
+            "pattern": "add_action.*manage_posts_custom_column",
+            "description": "Must hook into manage_posts_custom_column",
+            "weight": 1.0
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Must use get_post_meta to check meta value",
+            "weight": 0.5
+          },
+          {
+            "pattern": "_is_featured",
+            "description": "Must reference the correct meta key",
+            "weight": 0.5
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "hook_registered",
+            "target": "manage_posts_columns",
+            "description": "Column filter must be registered",
+            "weight": 1.0
+          },
+          {
+            "type": "hook_registered",
+            "target": "manage_posts_custom_column",
+            "description": "Column action must be registered",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1"
+      }
+    },
+    {
+      "id": "e-rest-001",
+      "category": "rest_api",
+      "difficulty": "intermediate",
+      "prompt": "Create a REST API endpoint at '/wp-json/myplugin/v1/status' that returns a JSON object with a 'status' key set to 'ok' and a 'timestamp' key with the current Unix timestamp. The endpoint should be publicly accessible without authentication.",
+      "expected_behavior": "GET request to /wp-json/myplugin/v1/status returns {\"status\": \"ok\", \"timestamp\": <unix_timestamp>}",
+      "requirements": [
+        "Use register_rest_route() to register the endpoint",
+        "Use namespace 'myplugin/v1'",
+        "Route should be 'status'",
+        "Accept GET requests",
+        "Return WP_REST_Response with status and timestamp",
+        "Endpoint should be publicly accessible (permission_callback returns true)"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Must use register_rest_route()",
+            "weight": 1.0
+          },
+          {
+            "pattern": "myplugin/v1",
+            "description": "Must use correct namespace",
+            "weight": 0.5
+          },
+          {
+            "pattern": "permission_callback",
+            "description": "Must include permission_callback",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_REST_Response|rest_ensure_response",
+            "description": "Should return proper REST response",
+            "weight": 0.3
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "hook_registered",
+            "target": "rest_api_init",
+            "description": "REST route registration hook must be used",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1",
+        "context_for_judge": "This is a simple status endpoint for a health check. Security is important - ensure permission_callback is properly defined."
+      }
+    },
+    {
+      "id": "e-meta-001",
+      "category": "post_meta",
+      "difficulty": "basic",
+      "prompt": "Write a function called 'save_view_count' that takes a post ID and increments a post meta value '_view_count' by 1. If the meta doesn't exist, initialize it to 1. The function should return the new view count.",
+      "expected_behavior": "Calling save_view_count(123) increments _view_count meta for post 123 and returns the new count",
+      "requirements": [
+        "Accept post ID as parameter",
+        "Get current _view_count meta value",
+        "If meta doesn't exist, treat as 0",
+        "Increment by 1 and save using update_post_meta()",
+        "Return the new count as an integer"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "function\\s+save_view_count",
+            "description": "Must define function save_view_count",
+            "weight": 1.0
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Must use get_post_meta to read current value",
+            "weight": 0.5
+          },
+          {
+            "pattern": "update_post_meta",
+            "description": "Must use update_post_meta to save value",
+            "weight": 0.5
+          },
+          {
+            "pattern": "_view_count",
+            "description": "Must use correct meta key",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "\\$wpdb->",
+            "description": "Should use WordPress meta functions, not direct queries",
+            "severity": "warning"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "function_exists",
+            "target": "save_view_count",
+            "description": "Function must exist",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1"
+      }
+    },
+    {
+      "id": "e-bindings-001",
+      "category": "block_bindings",
+      "difficulty": "intermediate",
+      "prompt": "Register a custom block bindings source named 'myplugin/meta-caption' that returns the post meta value 'featured_image_caption'. The source should require post context, be registered on 'init', and be usable by blocks like core/image captions.",
+      "expected_behavior": "A bindings source 'myplugin/meta-caption' exists; when invoked with a post context containing meta 'featured_image_caption', it returns that value.",
+      "requirements": [
+        "Hook registration into the 'init' action",
+        "Call register_block_bindings_source('myplugin/meta-caption', ...)",
+        "Provide label and get_value_callback",
+        "Include uses_context with postId",
+        "Callback reads get_post_meta( $post_id, 'featured_image_caption', true )"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_block_bindings_source",
+            "description": "Must register a custom bindings source",
+            "weight": 1.0
+          },
+          {
+            "pattern": "myplugin/meta-caption",
+            "description": "Uses the correct source name",
+            "weight": 0.6
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Retrieves meta for the caption",
+            "weight": 0.6
+          },
+          {
+            "pattern": "uses_context",
+            "description": "Declares context needed for callback",
+            "weight": 0.3
+          },
+          {
+            "pattern": "add_action\\s*\\(\\s*['\"]init['\"]",
+            "description": "Registers source during init",
+            "weight": 0.3
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Bindings_Registry::get_instance(); if ( ! method_exists( $registry, 'is_registered' ) ) { return false; } return $registry->is_registered('myplugin/meta-caption');",
+            "description": "Bindings source is registered",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$post_id = wp_insert_post(['post_title' => 'Caption Test', 'post_status' => 'publish']);\\nupdate_post_meta($post_id, 'featured_image_caption', 'Bound Caption');\\n$registry = WP_Block_Bindings_Registry::get_instance();\\n$source = method_exists( $registry, 'get_registered' ) ? $registry->get_registered('myplugin/meta-caption') : null;\\n$callback = $source['get_value_callback'] ?? null;\\n$value = $callback ? call_user_func($callback, [], (object)['context' => ['postId' => $post_id]], 'caption') : null;\\nwp_delete_post($post_id, true);\\nreturn $value === 'Bound Caption';",
+            "description": "Callback returns stored caption meta",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1",
+        "context_for_judge": "Ensure bindings source uses post context and returns the 'featured_image_caption' meta value."
+      }
+    },
+    {
+      "id": "e-abilities-001",
+      "category": "abilities_api",
+      "difficulty": "intermediate",
+      "prompt": "Register an ability category 'site-tools' and an ability 'site-tools/clear-cache' that clears caches. The ability should require manage_options, expose itself over REST, and return an array with status 'cleared'.",
+      "expected_behavior": "After registration, wp_has_ability('site-tools/clear-cache') is true; executing the ability returns ['status' => 'cleared'].",
+      "requirements": [
+        "Register category on 'wp_abilities_api_categories_init'",
+        "Register ability on 'wp_abilities_api_init'",
+        "Ability has label and description",
+        "Permission callback checks current_user_can('manage_options')",
+        "Execute callback returns ['status' => 'cleared']",
+        "Enable REST exposure via meta.show_in_rest = true"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_register_ability_category",
+            "description": "Registers ability category",
+            "weight": 1.0
+          },
+          {
+            "pattern": "wp_register_ability",
+            "description": "Registers ability",
+            "weight": 1.0
+          },
+          {
+            "pattern": "wp_abilities_api_init",
+            "description": "Uses correct init hook",
+            "weight": 0.6
+          },
+          {
+            "pattern": "permission_callback",
+            "description": "Declares permission callback",
+            "weight": 0.4
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Opt-in to REST exposure",
+            "weight": 0.3
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "return function_exists('wp_has_ability_category') && wp_has_ability_category('site-tools');",
+            "description": "Category exists",
+            "weight": 0.8
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return function_exists('wp_has_ability') && wp_has_ability('site-tools/clear-cache');",
+            "description": "Ability is registered",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$ability = function_exists('wp_get_ability') ? wp_get_ability('site-tools/clear-cache') : null; if ( ! $ability ) { return false; } $result = $ability->execute( array( 'force' => true ) ); return is_array( $result ) && isset( $result['status'] ) && 'cleared' === $result['status'];",
+            "description": "Ability executes and returns expected payload",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1",
+        "context_for_judge": "Focus on correct hooks, permissions, REST exposure, and execution payload."
+      }
+    },
+    {
+      "id": "e-abilities-cache-001",
+      "category": "abilities_api",
+      "difficulty": "hard",
+      "prompt": "Register an Abilities API ability that returns a cached list of published 'movie' titles, uses salted cache keys, and stays discoverable via REST.",
+      "expected_behavior": "GET /wp-abilities/v1/abilities/demo/get-movies/run returns titles; second call is a cache hit; inserting a new movie causes the next call to reflect the new title without changing the cache key.",
+      "requirements": [
+        "Register the ability on wp_abilities_api_init; category on wp_abilities_api_categories_init",
+        "Ability name demo/get-movies with input schema allowing optional 'genre' string; output is array of strings",
+        "Use wp_cache_get_salted/wp_cache_set_salted with post last_changed as salt; group 'post-queries'",
+        "Permission callback requires read for logged-in users; ability has meta.show_in_rest=true"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_register_ability", "description": "Ability registration", "weight": 1.0 },
+          { "pattern": "wp_cache_get_salted", "description": "Uses new cache helpers", "weight": 0.8 },
+          { "pattern": "show_in_rest", "description": "REST exposure enabled", "weight": 0.4 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "transient", "description": "Do not use transients for this cache", "severity": "error" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type('movie'); wp_insert_post(['post_type'=>'movie','post_title'=>'First']);",
+        "assertions": [
+          { "type": "http_body_contains", "target": "/wp-abilities/v1/abilities/demo/get-movies/run", "expected": "First", "description": "Ability returns data", "weight": 1.0 },
+          { "type": "cache_miss_then_hit", "target": "/wp-abilities/v1/abilities/demo/get-movies/run", "description": "Second call reuses salted cache", "weight": 1.0 },
+          { "type": "cache_invalidated_on_hook", "target": "save_post_movie", "description": "Adding a movie causes refreshed data but same cache key", "weight": 1.0 }
+        ],
+        "teardown": "unregister_post_type('movie');"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_action( 'wp_abilities_api_categories_init', function() {\n    wp_register_ability_category( 'demo', array( 'label' => 'Demo' ) );\n} );\nadd_action( 'wp_abilities_api_init', function() {\n    wp_register_ability( 'demo/get-movies', array(\n        'label'               => 'Get Movies',\n        'category'            => 'demo',\n        'input_schema'        => array(\n            'type'       => 'object',\n            'properties' => array( 'genre' => array( 'type' => 'string' ) ),\n        ),\n        'output_schema'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),\n        'permission_callback' => fn() => is_user_logged_in() && current_user_can( 'read' ),\n        'callback'            => function () {\n            $salt   = wp_cache_get_last_changed( 'posts' );\n            $group  = 'post-queries';\n            $key    = 'movies:list';\n            $cached = wp_cache_get_salted( $key, $group, $salt, $found );\n            if ( $found ) {\n                return $cached;\n            }\n            $q      = new WP_Query( array( 'post_type' => 'movie', 'post_status' => 'publish', 'fields' => 'titles', 'nopaging' => true ) );\n            $titles = wp_list_pluck( $q->posts, 'post_title' );\n            wp_cache_set_salted( $key, $titles, $group, $salt );\n            return $titles;\n        },\n        'meta'                => array( 'show_in_rest' => true ),\n    ) );\n} );\nadd_action( 'save_post_movie', fn() => wp_cache_delete( 'movies:list', 'post-queries' ) );\nadd_action( 'trashed_post', fn( $pid ) => wp_cache_delete( 'movies:list', 'post-queries' ) );"
+    },
+    {
+      "id": "e-block-bindings-aria-001",
+      "category": "block_bindings",
+      "difficulty": "hard",
+      "prompt": "Extend Block Bindings so the core/button block can bind its ariaLabel attribute to post meta, then prove the bound value renders on the front end.",
+      "expected_behavior": "A page containing a button bound to meta key 'cta_label' renders with aria-label='Draft CTA' pulled from post meta.",
+      "requirements": [
+        "Use block_bindings_supported_attributes_core/button filter to allow ariaLabel binding",
+        "Bind both text and ariaLabel to the same meta key via core/post-meta source",
+        "Sanitize the ariaLabel before output",
+        "Do not modify block.json; use PHP filters only"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "block_bindings_supported_attributes_core/button", "description": "Attribute extension hook", "weight": 1.0 },
+          { "pattern": "ariaLabel", "description": "Targets ariaLabel attribute", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "register_block_type_from_metadata", "description": "No block.json fork", "severity": "error" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "create page with postmeta cta_label='Draft CTA' and content containing bound button",
+        "assertions": [
+          { "type": "http_body_contains", "target": "/?page_id={created_page_id}", "expected": "aria-label=\"Draft CTA\"", "description": "Front-end renders bound aria-label", "weight": 1.0 },
+          { "type": "http_body_contains", "target": "/?page_id={created_page_id}", "expected": ">Draft CTA<", "description": "Button text also bound", "weight": 0.8 }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_filter( 'block_bindings_supported_attributes_core/button', function( $attrs ) {\n    if ( ! in_array( 'ariaLabel', $attrs, true ) ) {\n        $attrs[] = 'ariaLabel';\n    }\n    return $attrs;\n} );\nadd_filter( 'render_block', function( $content, $block ) {\n    if ( ( $block['blockName'] ?? '' ) !== 'core/button' ) {\n        return $content;\n    }\n    if ( empty( $block['attrs']['ariaLabel'] ) ) {\n        return $content;\n    }\n    $aria = esc_attr( $block['attrs']['ariaLabel'] );\n    // Ensure sanitized aria-label is present even if theme filters markup.\n    if ( str_contains( $content, 'aria-label=' ) ) {\n        return preg_replace( '/aria-label=\"[^\"]*\"/', 'aria-label=\"' . $aria . '\"', $content );\n    }\n    return str_replace( '<a ', '<a aria-label=\"' . $aria . '\" ', $content );\n}, 10, 2 );"
+    },
+    {
+      "id": "e-block-processor-count-001",
+      "category": "block_api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_count_block_types($html) that uses the WP_Block_Processor streaming parser (not parse_blocks) to count each block type in the provided content, including nested blocks.",
+      "expected_behavior": "Returns an associative array like ['core/group' => 1, 'core/paragraph' => 2, 'core/buttons' => 1, 'core/button' => 1] for nested block content; ignores freeform HTML chunks.",
+      "requirements": [
+        "Use WP_Block_Processor to iterate blocks; do not call parse_blocks()",
+        "Count nested blocks and merge counts",
+        "Skip blocks with empty block_name or core/freeform fallback",
+        "Return associative array keyed by block name with integer counts"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_Block_Processor", "description": "Uses streaming block parser", "weight": 1.0 },
+          { "pattern": "extract_full_block_and_advance", "description": "Extracts blocks while advancing", "weight": 0.7 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "parse_blocks", "description": "Must avoid full parse for performance", "severity": "error" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_count_block_types') ) { return false; } $html = '<!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>One</p><!-- /wp:paragraph --><!-- wp:buttons --><div class=\"wp-block-buttons\"><!-- wp:button --><div class=\"wp-block-button\"><a class=\"wp-block-button__link\">Go</a></div><!-- /wp:button --></div><!-- /wp:buttons --><!-- wp:paragraph --><p>Two</p><!-- /wp:paragraph --></div><!-- /wp:group --> Raw text outside blocks'; $result = wpbp_count_block_types( $html ); $expected = array( 'core/group' => 1, 'core/paragraph' => 2, 'core/buttons' => 1, 'core/button' => 1 ); foreach ( $expected as $key => $val ) { if ( ! isset( $result[ $key ] ) || (int) $result[ $key ] !== $val ) { return false; } } return empty( $result[''] ?? null );",
+            "description": "Counts nested blocks correctly and ignores freeform HTML",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_count_block_types( string $html ): array {\n    $counts     = array();\n    $processor  = new WP_Block_Processor( $html );\n    while ( $block = $processor->extract_full_block_and_advance() ) {\n        $name = $block->block_name;\n        if ( ! $name || $name === 'core/freeform' ) {\n            continue;\n        }\n        $counts[ $name ] = ($counts[ $name ] ?? 0) + 1;\n        if ( ! empty( $block->inner_html ) ) {\n            foreach ( wpbp_count_block_types( $block->inner_html ) as $k => $v ) {\n                $counts[ $k ] = ($counts[ $k ] ?? 0) + $v;\n            }\n        }\n    }\n    return $counts;\n}"
+    },
+    {
+      "id": "e-html-serialize-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_first_paragraph_html($html) that returns the normalized outer HTML of the first <p> element using WP_HTML_Processor::serialize_token(), not regex or DOMDocument.",
+      "expected_behavior": "Given messy HTML like '<div><p>First <strong>two</strong></p><p>Second', it returns '<p>First <strong>two</strong></p>' with well-formed tags.",
+      "requirements": [
+        "Instantiate WP_HTML_Processor and loop with next_token()",
+        "Detect the first p start tag and serialize it with serialize_token()",
+        "Stop after the first paragraph; return empty string if none",
+        "Do not use regex or DOMDocument for parsing"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Processor", "description": "Uses HTML API", "weight": 1.0 },
+          { "pattern": "serialize_token", "description": "Serializes current token", "weight": 0.8 },
+          { "pattern": "next_token", "description": "Iterates tokens", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_match", "description": "No regex parsing", "severity": "warning" },
+          { "pattern": "DOMDocument", "description": "Must rely on HTML API", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_paragraph_html') ) { return false; } $html = '<div><p>First <strong>two</strong></p><p>Second'; $out = wpbp_first_paragraph_html( $html ); return '<p>First <strong>two</strong></p>' === $out;",
+            "description": "Returns normalized first paragraph",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_paragraph_html') ) { return false; } $html = '<div><span>No p here</span></div>'; $out = wpbp_first_paragraph_html( $html ); return $out === '';",
+            "description": "Gracefully handles missing paragraphs",
+            "weight": 0.5
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_first_paragraph_html( string $html ): string {\n    $processor = WP_HTML_Processor::create_fragment( $html );\n    $capturing = false;\n    $depth     = 0;\n    $buffer    = '';\n    while ( $processor->next_token() ) {\n        $type = $processor->get_token_type();\n        if ( ! $capturing && 'start tag' === $type && 'p' === $processor->get_tag() ) {\n            $capturing = true;\n            $depth     = 1;\n            $buffer   .= $processor->serialize_token();\n            continue;\n        }\n        if ( ! $capturing ) {\n            continue;\n        }\n        // While capturing, append every token until the matching </p> closes.\n        $buffer .= $processor->serialize_token();\n        if ( 'start tag' === $type && $processor->get_tag() === 'p' ) {\n            $depth++;\n        } elseif ( 'end tag' === $type && $processor->get_tag() === 'p' ) {\n            $depth--;\n            if ( $depth === 0 ) {\n                return $buffer;\n            }\n        }\n    }\n    return '';\n}"
+    },
+    {
+      "id": "e-block-hooks-conditional-001",
+      "category": "block_hooks",
+      "difficulty": "hard",
+      "prompt": "Register a hooked block that inserts a call-to-action paragraph after the first core/post-title block, but only on single posts (not pages).",
+      "expected_behavior": "Viewing a single post shows the CTA paragraph right after the title; viewing a page shows no CTA.",
+      "requirements": [
+        "Use the block hooks API (hooked_block_types filter) to attach a core/paragraph block with text 'Hooked CTA' after core/post-title",
+        "Conditionally enable the hook only when rendering is_single() and post type is 'post'",
+        "Hook must not appear on pages or other post types",
+        "Do not alter existing templates directly; rely on block hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "hooked_block_types", "description": "Registers block hook", "weight": 1.0 },
+          { "pattern": "core/post-title", "description": "Targets post title anchor", "weight": 0.8 },
+          { "pattern": "is_single", "description": "Conditional context check", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "parse_blocks", "description": "Should not rewrite content manually", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": " $post_id = wp_insert_post(['post_title'=>'Hook Target','post_status'=>'publish']); $page_id = wp_insert_post(['post_title'=>'Page Target','post_status'=>'publish','post_type'=>'page']); return true; ",
+        "assertions": [
+          { "type": "http_body_contains", "target": "/?p={post_id}", "expected": "Hooked CTA", "description": "CTA appears on single post", "weight": 1.0 },
+          { "type": "http_body_not_contains", "target": "/?page_id={page_id}", "expected": "Hooked CTA", "description": "CTA absent on page", "weight": 1.0 }
+        ],
+        "teardown": "wp_delete_post({post_id}, true); wp_delete_post({page_id}, true);"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_action( 'wp', function () {\n    if ( ! is_single() || get_post_type() !== 'post' ) {\n        return;\n    }\n    add_filter( 'hooked_block_types', function( $hooks ) {\n        $hooks['core/post-title'][] = array(\n            'blockName'  => 'core/paragraph',\n            'attributes' => array( 'content' => 'Hooked CTA' ),\n            'position'   => 'after',\n        );\n        return $hooks;\n    } );\n} );"
+    },
+    {
+      "id": "e-meta-query-zero-001",
+      "category": "database",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_zero_price_products() that returns a WP_Query for 'product' posts whose numeric meta key 'price_cents' equals 0 without missing results due to type coercion.",
+      "expected_behavior": "Function returns one post when a product has meta price_cents stored as integer 0; does not return posts with null/missing meta.",
+      "requirements": [
+        "Query post_type=product and post_status=publish",
+        "Use a meta_query with key price_cents, compare '=' and type 'NUMERIC'; do not rely on meta_value=0 string",
+        "Meta results must include rows where meta_value is 0",
+        "Return the WP_Query object"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "meta_query", "description": "Uses meta_query", "weight": 1.0 },
+          { "pattern": "type['\"]?\\s*=>\\s*['\"]NUMERIC['\"]", "description": "Numeric type coercion", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "meta_value\\s*=>\\s*0", "description": "Avoid direct meta_value=0 string shortcut", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$id = wp_insert_post(['post_title'=>'Zero Product','post_type'=>'product','post_status'=>'publish']); update_post_meta($id,'price_cents', 0); return true;",
+        "assertions": [
+          { "type": "custom_assertion", "code": "return function_exists('wpbp_zero_price_products') && wpbp_zero_price_products()->post_count === 1;", "description": "Finds zero-priced product", "weight": 1.0 }
+        ],
+        "teardown": "wp_delete_post({id}, true);"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_zero_price_products(): WP_Query {\n    return new WP_Query( array(\n        'post_type'      => 'product',\n        'post_status'    => 'publish',\n        'fields'         => 'ids',\n        'meta_query'     => array(\n            array(\n                'key'     => 'price_cents',\n                'value'   => 0,\n                'compare' => '=',\n                'type'    => 'NUMERIC',\n            ),\n        ),\n    ) );\n}"
+    },
+    {
+      "id": "e-rest-cache-salted-001",
+      "category": "rest_api",
+      "difficulty": "hard",
+      "prompt": "Create a REST endpoint /wp-json/demo/v1/books that returns published 'book' titles and uses wp_cache_get_salted/wp_cache_set_salted keyed by the posts last_changed value. Invalidate cache on save_post_book and deleted_post.",
+      "expected_behavior": "First call computes and caches list; second call is a cache hit; after inserting a new book, subsequent call reflects new title and cache resets.",
+      "requirements": [
+        "Register route on rest_api_init with namespace demo/v1 and route books",
+        "Use wp_cache_get_salted/wp_cache_set_salted with group 'books-list' and salt from wp_cache_get_last_changed('posts')",
+        "Capability: read for logged-in users, otherwise error",
+        "Add actions on save_post_book and deleted_post to delete the salted cache entry"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "register_rest_route", "description": "Registers REST route", "weight": 1.0 },
+          { "pattern": "wp_cache_get_salted", "description": "Uses salted cache get", "weight": 0.8 },
+          { "pattern": "save_post_book", "description": "Cache invalidation hook", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "transient", "description": "Do not use transients", "severity": "error" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type('book'); wp_insert_post(['post_type'=>'book','post_title'=>'Alpha','post_status'=>'publish']);",
+        "assertions": [
+          { "type": "http_body_contains", "target": "/wp-json/demo/v1/books", "expected": "Alpha", "description": "Endpoint returns cached data", "weight": 1.0 },
+          { "type": "cache_miss_then_hit", "target": "/wp-json/demo/v1/books", "description": "Second call hits cache", "weight": 1.0 },
+          { "type": "cache_invalidated_on_hook", "target": "save_post_book", "description": "Cache clears when book updated", "weight": 1.0 }
+        ],
+        "teardown": "unregister_post_type('book');"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'demo/v1', '/books', array(\n        'methods'             => 'GET',\n        'permission_callback' => fn() => is_user_logged_in() && current_user_can( 'read' ),\n        'callback'            => function () {\n            $salt  = wp_cache_get_last_changed( 'posts' );\n            $group = 'books-list';\n            $key   = 'titles';\n            $data  = wp_cache_get_salted( $key, $group, $salt, $found );\n            if ( $found ) {\n                return rest_ensure_response( $data );\n            }\n            $q     = new WP_Query( array( 'post_type' => 'book', 'post_status' => 'publish', 'fields' => 'titles', 'nopaging' => true ) );\n            $titles = wp_list_pluck( $q->posts, 'post_title' );\n            wp_cache_set_salted( $key, $titles, $group, $salt );\n            return rest_ensure_response( $titles );\n        },\n    ) );\n} );\nadd_action( 'save_post_book', fn() => wp_cache_delete( 'titles', 'books-list' ) );\nadd_action( 'deleted_post', function ( $pid ) {\n    if ( get_post_type( $pid ) === 'book' ) {\n        wp_cache_delete( 'titles', 'books-list' );\n    }\n} );"
+    },
+    {
+      "id": "e-font-library-disable-001",
+      "category": "font_library",
+      "difficulty": "hard",
+      "prompt": "Disable the Font Library UI everywhere via block_editor_settings_all so editors never see the Font Library panel.",
+      "expected_behavior": "Applying block_editor_settings_all yields fontLibraryEnabled=false.",
+      "requirements": [
+        "Add a filter on block_editor_settings_all that sets fontLibraryEnabled to false",
+        "Avoid unregistering post types or removing menus",
+        "Filter must run in both site editor and post editor contexts"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "block_editor_settings_all", "description": "Global editor settings filter", "weight": 1.0 },
+          { "pattern": "fontLibraryEnabled", "description": "Sets flag to false", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "remove_menu_page", "description": "Should not hide via admin menu", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$settings = apply_filters( 'block_editor_settings_all', array(), array() ); return isset( $settings['fontLibraryEnabled'] ) && $settings['fontLibraryEnabled'] === false;",
+            "description": "Font Library disabled in editor settings",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_filter( 'block_editor_settings_all', function( $settings, $context ) {\n    $settings['fontLibraryEnabled'] = false;\n    return $settings;\n}, 10, 2 );"
+    },
+    {
+      "id": "e-cache-false-hit-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_cached_flag() that caches a computed boolean false and returns the cached false on subsequent calls using the $found parameter to distinguish cache hits from misses.",
+      "expected_behavior": "First call computes false; second call returns false from cache without recomputing.",
+      "requirements": [
+        "Use wp_cache_get with $found to detect cached false values",
+        "Store results in cache group 'wpbp-cache-flag' with key 'flag'",
+        "Ensure recomputation does not occur on cache hit even when value is false"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_cache_get\\s*\\(.*\\$found", "description": "Uses found flag on cache get", "weight": 1.0 },
+          { "pattern": "wp_cache_set", "description": "Writes to cache", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "wp_cache_delete", "description": "No explicit deletes needed", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_cached_flag') ) { return false; } $a = wpbp_cached_flag(); $b = wpbp_cached_flag(); return $a === false && $b === false;",
+            "description": "Returns cached false without recompute",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_cached_flag(): bool {\n    $cached = wp_cache_get( 'flag', 'wpbp-cache-flag', false, $found );\n    if ( $found ) {\n        return (bool) $cached;\n    }\n    // Simulate expensive computation that yields false first time.\n    $value = false;\n    wp_cache_set( 'flag', $value, 'wpbp-cache-flag' );\n    return $value;\n}"
+    },
+    {
+      "id": "e-interactivity-client-nav-001",
+      "category": "interactivity_api",
+      "difficulty": "hard",
+      "prompt": "Register a script module 'demo/nav' and mark it as client-navigation-compatible so it loads on SPA transitions. Prove the script tag contains data-wp-router-options with loadOnClientNavigation true.",
+      "expected_behavior": "Enqueuing the module prints a script tag with data-wp-router-options including \\\"loadOnClientNavigation\\\":true.",
+      "requirements": [
+        "Call wp_register_script_module to register 'demo/nav' with a placeholder file",
+        "Use wp_interactivity()->add_client_navigation_support_to_script_module('demo/nav')",
+        "Enqueue the module so wp_print_script_modules outputs it",
+        "Script tag must include data-wp-router-options with loadOnClientNavigation true"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_register_script_module", "description": "Registers script module", "weight": 1.0 },
+          { "pattern": "add_client_navigation_support_to_script_module", "description": "Marks module for client navigation", "weight": 0.8 },
+          { "pattern": "wp_enqueue_script_module", "description": "Enqueues module", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "wp_enqueue_script\\s*\\(", "description": "Must use module API, not classic scripts", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wp_register_script_module') ) { return false; } ob_start(); wp_enqueue_script_module( 'demo/nav' ); wp_print_script_modules(); $html = ob_get_clean(); return str_contains( $html, 'demo/nav' ) && str_contains( $html, 'data-wp-router-options' ) && str_contains( $html, 'loadOnClientNavigation' );",
+            "description": "Script tag contains client navigation directive",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_action( 'init', function() {\n    wp_register_script_module( 'demo/nav', includes_url( 'js/wp-util.js' ) ); // placeholder URL available in core.\n    wp_interactivity()->add_client_navigation_support_to_script_module( 'demo/nav' );\n    wp_enqueue_script_module( 'demo/nav' );\n} );"
+    },
+    {
+      "id": "e-html-strip-scripts-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_strip_scripts($html) that removes all <script> tags (inline and external) using WP_HTML_Tag_Processor, while preserving other markup such as <svg> and <p>.",
+      "expected_behavior": "Returns HTML without any script tags; keeps other elements intact.",
+      "requirements": [
+        "Use WP_HTML_Tag_Processor (or WP_HTML_Processor) to iterate and skip scripts",
+        "Handle both inline and external script tags",
+        "Return the cleaned HTML string",
+        "Do not use regex or DOMDocument"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor", "description": "Uses HTML API", "weight": 1.0 },
+          { "pattern": "next_tag|next_token", "description": "Iterates tokens", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_replace", "description": "No regex stripping", "severity": "warning" },
+          { "pattern": "DOMDocument", "description": "Avoid DOMDocument", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_strip_scripts') ) { return false; } $html = '<div><script>alert(1)</script><p>Keep</p><svg><title>X</title></svg><script src=\"/x.js\"></script></div>'; $out = wpbp_strip_scripts( $html ); return ! str_contains( $out, '<script' ) && str_contains( $out, '<p>Keep</p>' ) && str_contains( $out, '<svg>' );",
+            "description": "Scripts removed, other tags kept",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_strip_scripts( string $html ): string {\n    $processor = WP_HTML_Tag_Processor::create_fragment( $html );\n    $output    = '';\n    while ( $processor->next_tag() ) {\n        if ( 'script' === $processor->get_tag() ) {\n            $processor->remove_tag();\n        }\n    }\n    return $processor->get_updated_html();\n}"
+    },
+    {
+      "id": "e-cache-get-multiple-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_get_options_cached(array $keys) that uses wp_cache_get_multiple to fetch options and fills misses from get_option without overwriting cached falsey values.",
+      "expected_behavior": "Returns associative array of option values; cached false is preserved; misses are saved back to cache.",
+      "requirements": [
+        "Call wp_cache_get_multiple with a custom group (e.g., 'options') and capture missing keys via the miss list",
+        "For misses, call get_option and wp_cache_set_multiple",
+        "Do not treat falsey cached values as misses"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_cache_get_multiple", "description": "Batch cache get", "weight": 1.0 },
+          { "pattern": "wp_cache_set_multiple", "description": "Batch cache set for misses", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "wp_cache_delete", "description": "No deletes necessary", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option('opt_false', false); update_option('opt_one', 'one');",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_get_options_cached') ) { return false; } $res = wpbp_get_options_cached( array( 'opt_false', 'opt_one', 'missing_opt' ) ); return array_key_exists('opt_false',$res) && $res['opt_false'] === false && $res['opt_one'] === 'one' && $res['missing_opt'] === null;",
+            "description": "Preserves cached false, fetches existing and missing options",
+            "weight": 1.0
+          }
+        ],
+        "teardown": "delete_option('opt_false'); delete_option('opt_one'); delete_option('missing_opt');"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_get_options_cached( array $keys ): array {\n    $group = 'wpbp-options';\n    $fetched = wp_cache_get_multiple( $keys, $group );\n    $misses  = array();\n    foreach ( $keys as $k ) {\n        if ( ! array_key_exists( $k, $fetched ) ) {\n            $misses[] = $k;\n        }\n    }\n    if ( $misses ) {\n        $fill = array();\n        foreach ( $misses as $k ) {\n            $val       = get_option( $k, null );\n            $fill[ $k ] = $val;\n            $fetched[ $k ] = $val;\n        }\n        wp_cache_set_multiple( $fill, $group );\n    }\n    return $fetched;\n}"
+    },
+    {
+      "id": "e-interactivity-router-replace-001",
+      "category": "interactivity_api",
+      "difficulty": "hard",
+      "prompt": "Create wpbp_router_link($url, $text) that outputs an anchor using the Interactivity API router with history replacement and intent prefetch.",
+      "expected_behavior": "Returns <a> with data-wp-router-replace=\"true\", data-wp-router-prefetch=\"intent\", href set to $url, and inner text.",
+      "requirements": [
+        "Return the HTML string (do not echo)",
+        "Include data-wp-router-replace=\"true\" and data-wp-router-prefetch=\"intent\" attributes",
+        "Escape URL and text",
+        "Include rel=\"nofollow\" when URL is external (scheme not matching home_url scheme/host)"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "data-wp-router-replace", "description": "Uses router replace attribute", "weight": 1.0 },
+          { "pattern": "data-wp-router-prefetch", "description": "Prefetch intent attribute", "weight": 0.6 },
+          { "pattern": "esc_url", "description": "Escapes URL", "weight": 0.6 }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_router_link') ) { return false; } $html = wpbp_router_link( 'https://example.com/path', 'Go' ); return str_contains($html,'data-wp-router-replace=\"true\"') && str_contains($html,'data-wp-router-prefetch=\"intent\"') && str_contains($html,'href=\"https://example.com/path\"') && str_contains($html,'>Go<') && str_contains($html,'rel=\"nofollow\"');",
+            "description": "Has router attrs and rel on external",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_router_link( string $url, string $text ): string {\n    $home    = wp_parse_url( home_url() );\n    $target  = wp_parse_url( $url );\n    $is_external = $target && ( ($target['host'] ?? '') !== ($home['host'] ?? '') || ($target['scheme'] ?? '') !== ($home['scheme'] ?? '') );\n    $rel = $is_external ? ' rel=\"nofollow\"' : '';\n    return sprintf(\n        '<a href=\"%s\" data-wp-router-replace=\"true\" data-wp-router-prefetch=\"intent\"%s>%s</a>',\n        esc_url( $url ),\n        $rel,\n        esc_html( $text )\n    );\n}"
+    },
+    {
+      "id": "e-html-safe-script-text-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_replace_script_text($html, $replacement) that replaces the text content of the first <script> tag using WP_HTML_Tag_Processor::set_modifiable_text(). If $replacement contains '<script' or '</script', the function must refuse to change the tag and return false.",
+      "expected_behavior": "Returns updated HTML string when replacement is safe; returns false when replacement contains nested script markup.",
+      "requirements": [
+        "Use WP_HTML_Tag_Processor to locate the first script tag",
+        "Call set_modifiable_text() and respect its return boolean",
+        "If set_modifiable_text() fails (due to '<script'), return false",
+        "On success, return the updated HTML string via get_updated_html()"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Tag_Processor", "description": "Uses Tag Processor", "weight": 1.0 },
+          { "pattern": "set_modifiable_text", "description": "Uses safe script text setter", "weight": 0.8 },
+          { "pattern": "get_updated_html", "description": "Returns updated HTML", "weight": 0.5 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_replace", "description": "Must not regex replace", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_replace_script_text') ) { return false; } $html = '<script>old()</script>'; $res = wpbp_replace_script_text( $html, 'new()' ); return is_string($res) && str_contains($res, 'new()') && ! str_contains($res, 'old()');",
+            "description": "Replaces script text when safe",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_replace_script_text') ) { return false; } $html = '<script>old()</script>'; $res = wpbp_replace_script_text( $html, 'x</script><script>alert(1)' ); return $res === false;",
+            "description": "Rejects replacement containing script markup",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_replace_script_text( string $html, string $replacement ) {\n    $tp = WP_HTML_Tag_Processor::create_fragment( $html );\n    if ( ! $tp->next_tag( 'script' ) ) {\n        return false;\n    }\n    if ( ! $tp->set_modifiable_text( $replacement ) ) {\n        return false;\n    }\n    return $tp->get_updated_html();\n}"
+    },
+    {
+      "id": "e-js-dataset-roundtrip-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_dataset_roundtrip($prop) that converts a dataset property name to a data-* attribute and back using wp_html_custom_data_attribute_name() and wp_js_dataset_name().",
+      "expected_behavior": "For input 'myValue', returns ['attr' => 'data-my-value', 'prop' => 'myValue']; handles uppercase and numbers correctly.",
+      "requirements": [
+        "Use wp_html_custom_data_attribute_name to produce the attribute",
+        "Use wp_js_dataset_name to convert back to a dataset property",
+        "Return an associative array with keys attr and prop",
+        "Must not hardcode string transforms"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_html_custom_data_attribute_name", "description": "Builds data-* attribute", "weight": 1.0 },
+          { "pattern": "wp_js_dataset_name", "description": "Converts to dataset property", "weight": 1.0 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "str_replace\\(", "description": "Avoid manual replacements", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_dataset_roundtrip') ) { return false; } $res = wpbp_dataset_roundtrip('myValue'); return $res['attr'] === 'data-my-value' && $res['prop'] === 'myValue';",
+            "description": "Roundtrips camelCase correctly",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_dataset_roundtrip') ) { return false; } $res = wpbp_dataset_roundtrip('userID2'); return $res['attr'] === 'data-user-id2' && $res['prop'] === 'userId2';",
+            "description": "Handles mixed case and digits",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_dataset_roundtrip( string $prop ): array {\n    $attr = wp_html_custom_data_attribute_name( $prop );\n    $back = wp_js_dataset_name( $attr );\n    return array( 'attr' => $attr, 'prop' => $back );\n}"
+    },
+    {
+      "id": "e-html-first-url-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_first_url($html) that returns the first URL in HTML content using get_url_in_content(), not regex.",
+      "expected_behavior": "Returns the first anchor href when present; returns empty string if none.",
+      "requirements": [
+        "Call get_url_in_content to extract the URL",
+        "Return string (or empty string on none)",
+        "Must not use regex or DOMDocument"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "get_url_in_content", "description": "Uses core helper", "weight": 1.0 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_match", "description": "No regex", "severity": "warning" },
+          { "pattern": "DOMDocument", "description": "Do not use DOMDocument", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_url') ) { return false; } $html = '<p>See <a href=\"https://example.com/a\">A</a> and <a href=\"https://example.com/b\">B</a></p>'; return wpbp_first_url( $html ) === 'https://example.com/a';",
+            "description": "Gets first URL",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_url') ) { return false; } return wpbp_first_url('<p>No links</p>') === '';",
+            "description": "Empty when none",
+            "weight": 0.5
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_first_url( string $html ): string {\n    $url = get_url_in_content( $html );\n    return $url ? $url : '';\n}"
+    },
+    {
+      "id": "e-html-ie-conditional-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "Using WP_HTML_Tag_Processor, strip legacy IE conditional comments (<!--[if IE]> ... <![endif]-->) from HTML while leaving other comments intact.",
+      "expected_behavior": "Returns HTML with IE conditionals removed; other comments and markup remain.",
+      "requirements": [
+        "Identify conditional comments by pattern <!--[if",
+        "Remove the entire conditional comment block",
+        "Do not remove standard HTML comments",
+        "Do not use regex"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor", "description": "Uses HTML API", "weight": 1.0 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_replace", "description": "No regex stripping", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_strip_ie_conditionals') ) { return false; } $html = '<!--[if IE]>old<![endif]--><p>Keep</p><!-- normal -->'; $out = wpbp_strip_ie_conditionals( $html ); return ! str_contains( $out, 'old' ) && str_contains( $out, '<p>Keep</p>' ) && str_contains( $out, '<!-- normal -->' );",
+            "description": "IE conditionals removed, other comments kept",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_strip_ie_conditionals( string $html ): string {\n    $processor = WP_HTML_Processor::create_fragment( $html );\n    $output = '';\n    while ( $processor->next_token() ) {\n        if ( 'comment' === $processor->get_token_type() && str_starts_with( $processor->get_comment_text(), '[if' ) ) {\n            $processor->remove_token();\n        }\n    }\n    return $processor->get_updated_html();\n}"
+    }
+  ]
+}

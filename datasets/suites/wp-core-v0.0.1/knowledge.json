@@ -1,0 +1,723 @@
+{
+  "id": "wp-core-knowledge-v0.0.1",
+  "version": "0.0.1",
+  "metadata": {
+    "name": "WordPress Core Knowledge",
+    "description": "Tests fundamental and modern WordPress API knowledge including hooks, REST, block bindings, visibility, and the Abilities API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-hooks-001",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "basic",
+      "prompt": "Which WordPress hook fires after all plugins have been loaded?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "plugins_loaded" },
+        { "key": "C", "text": "after_setup_theme" },
+        { "key": "D", "text": "wp_loaded" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The 'plugins_loaded' action fires once all must-use, network-activated and regular plugins have loaded.",
+      "references": ["https://developer.wordpress.org/reference/hooks/plugins_loaded/"]
+    },
+    {
+      "id": "k-hooks-002",
+      "category": "hooks",
+      "subcategory": "filters",
+      "difficulty": "intermediate",
+      "prompt": "What is the correct hook to modify the main WordPress query before it executes?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "the_posts" },
+        { "key": "B", "text": "pre_get_posts" },
+        { "key": "C", "text": "posts_where" },
+        { "key": "D", "text": "query_vars" }
+      ],
+      "correct_answer": "B",
+      "explanation": "pre_get_posts fires before the query is executed and allows modification of query variables.",
+      "references": ["https://developer.wordpress.org/reference/hooks/pre_get_posts/"]
+    },
+    {
+      "id": "k-hooks-003",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "intermediate",
+      "prompt": "Which action hook should be used to enqueue scripts and styles for the front-end of a WordPress site?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "admin_enqueue_scripts" },
+        { "key": "B", "text": "wp_head" },
+        { "key": "C", "text": "wp_enqueue_scripts" },
+        { "key": "D", "text": "init" }
+      ],
+      "correct_answer": "C",
+      "explanation": "wp_enqueue_scripts is the proper hook for enqueueing scripts and styles on the front-end.",
+      "references": ["https://developer.wordpress.org/reference/hooks/wp_enqueue_scripts/"]
+    },
+    {
+      "id": "k-queries-001",
+      "category": "queries",
+      "difficulty": "basic",
+      "prompt": "What WordPress function should be used to safely insert data into the database?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "$wpdb->query()" },
+        { "key": "B", "text": "$wpdb->insert()" },
+        { "key": "C", "text": "mysql_query()" },
+        { "key": "D", "text": "wp_insert_data()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "$wpdb->insert() handles data escaping and provides a safe way to insert rows.",
+      "references": ["https://developer.wordpress.org/reference/classes/wpdb/insert/"]
+    },
+    {
+      "id": "k-queries-002",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "In WP_Query, which parameter limits the number of posts returned?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "limit" },
+        { "key": "B", "text": "max_posts" },
+        { "key": "C", "text": "posts_per_page" },
+        { "key": "D", "text": "numberposts" }
+      ],
+      "correct_answer": "C",
+      "explanation": "posts_per_page is the WP_Query parameter that limits the number of posts returned per page.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-security-001",
+      "category": "security",
+      "difficulty": "basic",
+      "prompt": "Which function should be used to escape HTML output in WordPress?",
+      "type": "short_answer",
+      "correct_answer": "esc_html",
+      "answer_type": "contains",
+      "explanation": "esc_html() escapes HTML entities for safe output in HTML context."
+    },
+    {
+      "id": "k-security-002",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "What function should be used to verify a nonce in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "check_nonce()" },
+        { "key": "B", "text": "wp_verify_nonce()" },
+        { "key": "C", "text": "validate_nonce()" },
+        { "key": "D", "text": "nonce_check()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "wp_verify_nonce() is the WordPress function to verify a nonce value.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_verify_nonce/"]
+    },
+    {
+      "id": "k-roles-001",
+      "category": "roles_caps",
+      "difficulty": "intermediate",
+      "prompt": "What capability is required by default to install plugins in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "manage_options" },
+        { "key": "B", "text": "install_plugins" },
+        { "key": "C", "text": "activate_plugins" },
+        { "key": "D", "text": "edit_plugins" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The 'install_plugins' capability controls who can install new plugins."
+    },
+    {
+      "id": "k-rest-001",
+      "category": "rest_api",
+      "difficulty": "intermediate",
+      "prompt": "What is the default namespace prefix for WordPress core REST API endpoints?",
+      "type": "short_answer",
+      "correct_answer": "wp/v2",
+      "answer_type": "exact",
+      "explanation": "WordPress core REST API uses the 'wp/v2' namespace for all built-in endpoints."
+    },
+    {
+      "id": "k-rest-002",
+      "category": "rest_api",
+      "difficulty": "intermediate",
+      "prompt": "Which function is used to register a custom REST API route in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "add_rest_route()" },
+        { "key": "B", "text": "register_rest_route()" },
+        { "key": "C", "text": "wp_register_route()" },
+        { "key": "D", "text": "rest_api_init()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "register_rest_route() is the function used to register custom REST API endpoints.",
+      "references": ["https://developer.wordpress.org/reference/functions/register_rest_route/"]
+    },
+    {
+      "id": "k-blocks-001",
+      "category": "block_editor",
+      "difficulty": "basic",
+      "prompt": "What function is used to register a block type in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_register_block()" },
+        { "key": "B", "text": "add_block_type()" },
+        { "key": "C", "text": "register_block_type()" },
+        { "key": "D", "text": "create_block()" }
+      ],
+      "correct_answer": "C",
+      "explanation": "register_block_type() is the PHP function to register a block type.",
+      "references": ["https://developer.wordpress.org/reference/functions/register_block_type/"]
+    },
+    {
+      "id": "k-transients-001",
+      "category": "caching",
+      "difficulty": "basic",
+      "prompt": "What function retrieves a transient value in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_get_transient()" },
+        { "key": "B", "text": "get_transient()" },
+        { "key": "C", "text": "fetch_transient()" },
+        { "key": "D", "text": "transient_get()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "get_transient() retrieves the value of a transient.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_transient/"]
+    },
+    {
+      "id": "k-abilities-001",
+      "category": "abilities_api",
+      "difficulty": "intermediate",
+      "prompt": "Which hook should plugins use to register abilities with the WordPress Abilities API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_loaded" },
+        { "key": "C", "text": "wp_abilities_api_init" },
+        { "key": "D", "text": "rest_api_init" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Abilities are registered during the wp_abilities_api_init hook.",
+      "references": ["https://make.wordpress.org/core/2024/07/03/wordpress-6-8-field-guide/#abilities-api"]
+    },
+    {
+      "id": "k-abilities-002",
+      "category": "abilities_api",
+      "difficulty": "basic",
+      "prompt": "How do you expose a custom ability over the REST API when calling wp_register_ability()?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set 'rest' => true in the args" },
+        { "key": "B", "text": "Add a REST route manually" },
+        { "key": "C", "text": "Pass 'show_in_rest' => true in the meta array" },
+        { "key": "D", "text": "It is always exposed automatically" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Abilities are opt-in to REST; set show_in_rest => true when registering.",
+      "references": ["https://developer.wordpress.org/news/2024/10/16/abilities-api-coming-to-wordpress-core-6-9/"]
+    },
+    {
+      "id": "k-bindings-001",
+      "category": "block_bindings",
+      "difficulty": "basic",
+      "prompt": "Which function registers a custom block bindings source?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "register_block_source()" },
+        { "key": "B", "text": "register_block_bindings_source()" },
+        { "key": "C", "text": "add_block_binding()" },
+        { "key": "D", "text": "wp_register_binding()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "register_block_bindings_source() adds a new source to the Block Bindings Registry.",
+      "references": ["https://developer.wordpress.org/news/2024/04/16/block-bindings-api-in-core/"]
+    },
+    {
+      "id": "k-bindings-002",
+      "category": "block_bindings",
+      "difficulty": "intermediate",
+      "prompt": "Which filter lets you declare which attributes of a specific block type can be bound via the Block Bindings API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "block_bindings_attributes" },
+        { "key": "B", "text": "block_bindings_supported_attributes_{block_type}" },
+        { "key": "C", "text": "block_supported_attributes" },
+        { "key": "D", "text": "block_attributes_whitelist" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Use block_bindings_supported_attributes_{block_type} to opt specific attributes into bindings.",
+      "references": ["https://github.com/WordPress/gutenberg/blob/trunk/docs/reference-guides/block-bindings.md#supported-attributes"]
+    },
+    {
+      "id": "k-visibility-001",
+      "category": "block_editor",
+      "difficulty": "basic",
+      "prompt": "Which block support flag enables the built-in \"Hide block\" toggle introduced in recent WordPress versions?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "supports.lock" },
+        { "key": "B", "text": "supports.visibility" },
+        { "key": "C", "text": "supports.hidden" },
+        { "key": "D", "text": "supports.render" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Setting supports.visibility to true enables the Hide/Show control for the block.",
+      "references": ["https://wptavern.com/wordpress-6-7-beta-1-brings-enhanced-block-visibility"]
+    },
+    {
+      "id": "k-blockapi-001",
+      "category": "block_editor",
+      "difficulty": "intermediate",
+      "prompt": "For blocks that run inside the iframe-backed editor in WordPress 6.9+, which Block API version must block.json declare?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "apiVersion: 1" },
+        { "key": "B", "text": "apiVersion: 2" },
+        { "key": "C", "text": "apiVersion: 3" },
+        { "key": "D", "text": "Any version is accepted" }
+      ],
+      "correct_answer": "C",
+      "explanation": "apiVersion 3 is required for iframe-compatible block.json validation.",
+      "references": ["https://make.wordpress.org/core/2024/12/05/whats-new-in-gutenberg-19-5-0/"]
+    },
+    {
+      "id": "k-accordion-001",
+      "category": "block_editor",
+      "difficulty": "basic",
+      "prompt": "Which new core block introduced in WordPress 6.9 provides collapsible content sections?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Tabs" },
+        { "key": "B", "text": "Details" },
+        { "key": "C", "text": "Accordion" },
+        { "key": "D", "text": "Summary" }
+      ],
+      "correct_answer": "C",
+      "explanation": "WordPress 6.9 ships with a native Accordion block for collapsible sections.",
+      "references": ["https://developer.wordpress.org/news/2024/12/wordpress-6-9-beta-1/"]
+    },
+    {
+      "id": "k-abilities-003",
+      "category": "abilities_api",
+      "subcategory": "registration",
+      "difficulty": "hard",
+      "prompt": "Which hook must you use to register ability categories so WordPress 6.9 persists them without a _doing_it_wrong notice?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_abilities_api_init" },
+        { "key": "C", "text": "wp_abilities_api_categories_init" },
+        { "key": "D", "text": "rest_api_init" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Categories are validated separately from abilities; WordPress 6.9 only saves them when registered on wp_abilities_api_categories_init.",
+      "references": ["https://make.wordpress.org/core/2025/11/10/abilities-api-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-interactivity-attach-001",
+      "category": "interactivity_api",
+      "difficulty": "hard",
+      "prompt": "In WordPress 6.9, what does the Interactivity API router option attachTo solve?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Persisting server state across page loads" },
+        { "key": "B", "text": "Choosing the DOM parent where a router region renders to avoid collisions" },
+        { "key": "C", "text": "Deferring hydration until window.onload" },
+        { "key": "D", "text": "Forcing interactivity scripts into the footer" }
+      ],
+      "correct_answer": "B",
+      "explanation": "attachTo is a selector telling the router which parent node to render into, preventing conflicting renders when multiple router regions share a page.",
+      "references": ["https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"]
+    },
+    {
+      "id": "k-cache-salted-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Which helper should you use to reuse WP_Query cache keys while still invalidating when last_changed updates in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_cache_flush_group()" },
+        { "key": "B", "text": "wp_cache_get_salted() / wp_cache_set_salted()" },
+        { "key": "C", "text": "Define WP_CACHE_KEY_SALT" },
+        { "key": "D", "text": "Set cache_results to false on WP_Query" }
+      ],
+      "correct_answer": "B",
+      "explanation": "New salted cache helpers embed last_changed into stored values so keys can be reused while stale data is rejected.",
+      "references": ["https://make.wordpress.org/core/2025/11/17/consistent-cache-keys-for-query-groups-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-meta-gotcha-001",
+      "category": "gotchas",
+      "difficulty": "hard",
+      "prompt": "What does get_post_meta($post_id, 'missing_key', true) return when the meta key does not exist?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "null" },
+        { "key": "B", "text": "false" },
+        { "key": "C", "text": "An empty string" },
+        { "key": "D", "text": "WP_Error" }
+      ],
+      "correct_answer": "C",
+      "explanation": "With $single=true and no row present, get_post_meta returns an empty string—easy to misread as a real value with loose checks.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_post_meta/"]
+    },
+    {
+      "id": "k-blockprocessor-001",
+      "category": "block_api",
+      "difficulty": "hard",
+      "prompt": "In WordPress 6.9, which WP_Block_Processor method replaced extract_block() to return a parsed block and advance the cursor?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "extract_block()" },
+        { "key": "B", "text": "extract_current_block()" },
+        { "key": "C", "text": "extract_full_block_and_advance()" },
+        { "key": "D", "text": "get_block_and_seek()" }
+      ],
+      "correct_answer": "C",
+      "explanation": "The RC renamed extract_block() to extract_full_block_and_advance() before the 6.9 release; older names now fail.",
+      "references": ["https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-blockprocessor-attrs-001",
+      "category": "block_api",
+      "difficulty": "hard",
+      "prompt": "When using WP_Block_Processor in 6.9, which method triggers JSON parsing of the current block's attributes (and is intentionally verbose about its cost)?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "get_block_attributes()" },
+        { "key": "B", "text": "allocate_and_return_parsed_attributes()" },
+        { "key": "C", "text": "parse_attributes()" },
+        { "key": "D", "text": "get_attributes_json()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "allocate_and_return_parsed_attributes() is the costly, explicitly named method that parses JSON attributes on demand in WP_Block_Processor.",
+      "references": ["https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-html-serialize-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "What does WP_HTML_Processor::serialize_token() return now that the method is public in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The raw substring of the original HTML" },
+        { "key": "B", "text": "A normalized, well‑formed serialization of the currently matched token" },
+        { "key": "C", "text": "Only the tag name of the current element" },
+        { "key": "D", "text": "A DOMDocument node" }
+      ],
+      "correct_answer": "B",
+      "explanation": "serialize_token() emits a fully normalized, well‑formed representation of the current token, useful for safe extraction/rewriting.",
+      "references": ["https://make.wordpress.org/core/2025/11/21/updates-to-the-html-api-in-6-9/"]
+    },
+    {
+      "id": "k-bindings-editor-001",
+      "category": "block_bindings",
+      "difficulty": "hard",
+      "prompt": "How do you expose a custom Block Bindings source in the 6.9 editor UI so its fields appear in the binding dropdown?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Add supports.bindings UI flags to block.json" },
+        { "key": "B", "text": "Provide a getFieldsList() method on the source registration" },
+        { "key": "C", "text": "Register the source on enqueue_block_editor_assets" },
+        { "key": "D", "text": "Set show_in_rest true when registering the source" }
+      ],
+      "correct_answer": "B",
+      "explanation": "6.9 surfaces custom sources in the editor when the registration function returns getFieldsList() with label/type definitions.",
+      "references": ["https://make.wordpress.org/core/2025/11/12/block-bindings-improvements-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-blockhooks-context-001",
+      "category": "block_hooks",
+      "difficulty": "hard",
+      "prompt": "Why might a hooked block fail to appear when a user adds a new anchor block after activating the plugin in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Hooked blocks only work on classic themes" },
+        { "key": "B", "text": "Hooks only fire for dynamic blocks" },
+        { "key": "C", "text": "Hooked blocks are applied to templates present at activation; anchors added later are not auto-filled" },
+        { "key": "D", "text": "Block hooks require a REST request to refresh" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Current block hooks implementation auto-inserts into existing templates at activation time; anchors created afterward are not backfilled, so the hooked block stays missing until manually added.",
+      "references": ["https://core.trac.wordpress.org/ticket/63608"]
+    },
+    {
+      "id": "k-object-cache-found-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "When storing falsey values in an object cache group, how do you distinguish a cached false from a cache miss with WordPress 6.9 APIs?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Check is_wp_error() on the return" },
+        { "key": "B", "text": "Inspect the $found out parameter (or miss list in wp_cache_get_multiple*) to see if the key was present" },
+        { "key": "C", "text": "Use wp_cache_exists()" },
+        { "key": "D", "text": "Cache falsey values are not allowed; they are always misses" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_Object_Cache::get and wp_cache_get_multiple* report hits through the passed-by-reference $found flag/miss list, allowing false or 0 values to be distinguished from absent keys.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_object_cache/get/"]
+    },
+    {
+      "id": "k-font-library-disable-001",
+      "category": "font_library",
+      "difficulty": "hard",
+      "prompt": "What is the supported way to hide the Font Library UI across editors in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Remove the Fonts menu via remove_menu_page()" },
+        { "key": "B", "text": "Set fontLibraryEnabled=false in the block_editor_settings_all filter" },
+        { "key": "C", "text": "Define DISABLE_FONT_LIBRARY in wp-config.php" },
+        { "key": "D", "text": "Unregister wp_font_family post type" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Filtering block_editor_settings_all and setting fontLibraryEnabled to false disables the Font Library UI globally without unregistering post types.",
+      "references": ["https://developer.wordpress.org/news/snippets/how-to-disable-the-font-library/"]
+    },
+    {
+      "id": "k-interactivity-module-001",
+      "category": "interactivity_api",
+      "difficulty": "hard",
+      "prompt": "When manually registering a script module for the Interactivity API in WordPress 6.9, how do you mark it as compatible with client navigation so it loads on SPA transitions?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set supports.interactivity=true in block.json" },
+        { "key": "B", "text": "Pass 'client_navigation' => true to wp_register_script_module()" },
+        { "key": "C", "text": "Call wp_interactivity()->add_client_navigation_support_to_script_module( 'module-id' )" },
+        { "key": "D", "text": "Prefix the handle with 'interactivity-'" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Manually enqueued script modules must be flagged with add_client_navigation_support_to_script_module so router navigation imports them and adds the data-wp-router-options directive.",
+      "references": ["https://make.wordpress.org/core/2025/11/12/interactivity-apis-client-navigation-improvements-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-blockhooks-postcontent-001",
+      "category": "block_hooks",
+      "difficulty": "hard",
+      "prompt": "Why won’t a block hook that targets core/post-content appear inside regular post content in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Block hooks only work on classic themes" },
+        { "key": "B", "text": "Hooks are limited to templates, template parts, and patterns—not per-post content" },
+        { "key": "C", "text": "core/post-content is a static block so hooks are skipped" },
+        { "key": "D", "text": "Hooks require REST context" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Block hooks are applied to theme templates, template parts, and patterns when registered; user-authored post content isn’t rewritten, so the hooked block never appears there.",
+      "references": ["https://make.wordpress.org/core/2023/10/15/introducing-block-hooks-for-dynamic-blocks/"]
+    },
+    {
+      "id": "k-blockhooks-multiple-001",
+      "category": "block_hooks",
+      "difficulty": "hard",
+      "prompt": "What happens when a hooked block declares \"multiple\": false and an instance already exists in the current context?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Another instance is inserted after the anchor" },
+        { "key": "B", "text": "The hook is skipped for that context" },
+        { "key": "C", "text": "The hook throws a block validation error" },
+        { "key": "D", "text": "The hook is deferred to render time" }
+      ],
+      "correct_answer": "B",
+      "explanation": "With multiple:false, block hooks insert at most one instance per context; if one already exists, no new instance is injected.",
+      "references": ["https://core.trac.wordpress.org/ticket/61902"]
+    },
+    {
+      "id": "k-blockhooks-ignored-001",
+      "category": "block_hooks",
+      "difficulty": "hard",
+      "prompt": "How do user-modified templates prevent auto-insertion of a hooked block after removal?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set multiple:false on the hooked block" },
+        { "key": "B", "text": "Add the block to ignoredHookedBlocks on the anchor block" },
+        { "key": "C", "text": "Disable block hooks in theme.json" },
+        { "key": "D", "text": "Rename the anchor block" }
+      ],
+      "correct_answer": "B",
+      "explanation": "User edits persist by storing the removed block type in the anchor’s ignoredHookedBlocks array, which stops re-insertion on render.",
+      "references": ["https://make.wordpress.org/core/2024/03/04/updates-to-block-hooks-in-6-5/"]
+    },
+    {
+      "id": "k-dataviews-locked-001",
+      "category": "dataviews",
+      "difficulty": "hard",
+      "prompt": "In WordPress 6.9 DataViews, how do you make a filter visible but non-editable by users?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set editable:false on the view" },
+        { "key": "B", "text": "Use isLocked:true on the filter definition" },
+        { "key": "C", "text": "Omit the operator field" },
+        { "key": "D", "text": "Register the filter server-side only" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Locked filters are defined with isLocked:true, keeping them applied while preventing user edits or removal.",
+      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-dataviews-groupby-001",
+      "category": "dataviews",
+      "difficulty": "hard",
+      "prompt": "Which view option groups items by a field in the enhanced DataViews API in 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "group" },
+        { "key": "B", "text": "groupByField" },
+        { "key": "C", "text": "aggregateBy" },
+        { "key": "D", "text": "clusterField" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Set groupByField to a field ID to have table, grid, or list layouts group items by that field.",
+      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-blockhooks-context-002",
+      "category": "block_hooks",
+      "difficulty": "hard",
+      "prompt": "Where are block hooks applied by default as of WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Only classic template files" },
+        { "key": "B", "text": "Templates, template parts, patterns, and navigation posts" },
+        { "key": "C", "text": "Post content and reusable blocks only" },
+        { "key": "D", "text": "Widgets and sidebars only" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Block hooks run in layout contexts (templates, template parts, patterns, navigation posts), not inside post content.",
+      "references": ["https://make.wordpress.org/core/2023/10/15/introducing-block-hooks-for-dynamic-blocks/"]
+    },
+    {
+      "id": "k-html-script-reject-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "What does WP_HTML_Tag_Processor::set_modifiable_text() do when you try to set script contents that include '<script' or '</script' in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Silently escapes the angle brackets" },
+        { "key": "B", "text": "Throws a fatal error" },
+        { "key": "C", "text": "Returns false and leaves the SCRIPT tag unchanged" },
+        { "key": "D", "text": "Strips the nested script tags and proceeds" }
+      ],
+      "correct_answer": "C",
+      "explanation": "6.9 hardens set_modifiable_text() for SCRIPT nodes by rejecting updates containing '<script' or '</script', returning false so callers can abort safely.",
+      "references": ["https://make.wordpress.org/core/2025/11/21/updates-to-the-html-api-in-6-9/"]
+    },
+    {
+      "id": "k-dataviews-readonly-001",
+      "category": "dataviews",
+      "difficulty": "hard",
+      "prompt": "Which property marks a DataViews field as display-only in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "locked" },
+        { "key": "B", "text": "readOnly" },
+        { "key": "C", "text": "editable:false" },
+        { "key": "D", "text": "viewOnly" }
+      ],
+      "correct_answer": "B",
+      "explanation": "DataViews fields accept readOnly:true to render a non-editable value while still showing in the UI.",
+      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-dataviews-getelements-001",
+      "category": "dataviews",
+      "difficulty": "hard",
+      "prompt": "What does the new getElements() hook in DataViews 6.9 do?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Groups table rows by a field" },
+        { "key": "B", "text": "Fetches filter option values lazily on demand" },
+        { "key": "C", "text": "Locks filters from user edits" },
+        { "key": "D", "text": "Persists user layouts to theme.json" }
+      ],
+      "correct_answer": "B",
+      "explanation": "getElements returns options asynchronously when a user opens a filter/edit control, avoiding upfront fetches.",
+      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-interactivity-router-attr-001",
+      "category": "interactivity_api",
+      "difficulty": "hard",
+      "prompt": "After marking a script module as client-navigation compatible in 6.9, what attribute appears on its script tag?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "data-wp-interactive" },
+        { "key": "B", "text": "data-wp-router-options='{\"loadOnClientNavigation\":true}'" },
+        { "key": "C", "text": "data-wp-client-nav" },
+        { "key": "D", "text": "type=\"module/nav\"" }
+      ],
+      "correct_answer": "B",
+      "explanation": "add_client_navigation_support_to_script_module injects data-wp-router-options with loadOnClientNavigation true so the router imports the module on SPA transitions.",
+      "references": ["https://make.wordpress.org/core/2025/11/12/interactivity-apis-client-navigation-improvements-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-html-script-reject-001",
+      "category": "html_api",
+      "difficulty": "hard",
+      "prompt": "What does WP_HTML_Tag_Processor::set_modifiable_text() do when you try to set SCRIPT contents that include '<script' or '</script' in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Silently escapes the angle brackets" },
+        { "key": "B", "text": "Throws a fatal error" },
+        { "key": "C", "text": "Returns false and leaves the SCRIPT tag unchanged" },
+        { "key": "D", "text": "Strips the nested script tags and proceeds" }
+      ],
+      "correct_answer": "C",
+      "explanation": "6.9 hardens set_modifiable_text() for SCRIPT nodes by rejecting updates containing '<script' or '</script', returning false so callers can abort safely.",
+      "references": ["https://make.wordpress.org/core/2025/11/21/updates-to-the-html-api-in-6-9/"]
+    },
+    {
+      "id": "k-dataviews-readonly-001",
+      "category": "dataviews",
+      "difficulty": "hard",
+      "prompt": "Which property marks a DataViews field as display-only in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "locked" },
+        { "key": "B", "text": "readOnly" },
+        { "key": "C", "text": "editable:false" },
+        { "key": "D", "text": "viewOnly" }
+      ],
+      "correct_answer": "B",
+      "explanation": "DataViews fields accept readOnly:true to render a non-editable value while still showing in the UI.",
+      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-dataviews-getelements-001",
+      "category": "dataviews",
+      "difficulty": "hard",
+      "prompt": "What does the new getElements() hook in DataViews 6.9 do?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Groups table rows by a field" },
+        { "key": "B", "text": "Fetches filter option values lazily on demand" },
+        { "key": "C", "text": "Locks filters from user edits" },
+        { "key": "D", "text": "Persists user layouts to theme.json" }
+      ],
+      "correct_answer": "B",
+      "explanation": "getElements returns options asynchronously when a user opens a filter/edit control, avoiding upfront fetches.",
+      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-utf8-fallback-001",
+      "category": "internationalization",
+      "difficulty": "hard",
+      "prompt": "How does WordPress 6.9 handle UTF-8 detection when the hosting environment lacks mbstring or iconv?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It falls back to ISO-8859-1" },
+        { "key": "B", "text": "It loads a new PHP-based UTF-8 detection pipeline bundled with core" },
+        { "key": "C", "text": "It disables all non-ASCII content" },
+        { "key": "D", "text": "It calls out to an external ICU service" }
+      ],
+      "correct_answer": "B",
+      "explanation": "6.9 ships a self-contained UTF-8 detection/handling layer in PHP so WordPress can reliably process UTF-8 even without mbstring or iconv.",
+      "references": ["https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"]
+    }
+  ]
+}
