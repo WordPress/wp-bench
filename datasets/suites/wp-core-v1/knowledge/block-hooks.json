@@ -1,0 +1,92 @@
+{
+  "id": "wp-core-knowledge-v1-block_hooks",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Block Hooks",
+    "description": "Tests knowledge of WordPress Block Hooks API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-blockhooks-context-001",
+      "category": "block-hooks",
+      "difficulty": "hard",
+      "prompt": "Why might a hooked block fail to appear when a user adds a new anchor block after activating the plugin in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Hooked blocks only work on classic themes" },
+        { "key": "B", "text": "Hooks only fire for dynamic blocks" },
+        { "key": "C", "text": "Hooked blocks are applied to templates present at activation; anchors added later are not auto-filled" },
+        { "key": "D", "text": "Block hooks require a REST request to refresh" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Current block hooks implementation auto-inserts into existing templates at activation time; anchors created afterward are not backfilled, so the hooked block stays missing until manually added.",
+      "references": ["https://core.trac.wordpress.org/ticket/63608"]
+    },
+    {
+      "id": "k-blockhooks-postcontent-001",
+      "category": "block-hooks",
+      "difficulty": "hard",
+      "prompt": "Why won't a block hook that targets core/post-content appear inside regular post content in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Block hooks only work on classic themes" },
+        { "key": "B", "text": "Hooks are limited to templates, template parts, and patterns—not per-post content" },
+        { "key": "C", "text": "core/post-content is a static block so hooks are skipped" },
+        { "key": "D", "text": "Hooks require REST context" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Block hooks are applied to theme templates, template parts, and patterns when registered; user-authored post content isn't rewritten, so the hooked block never appears there.",
+      "references": ["https://make.wordpress.org/core/2023/10/15/introducing-block-hooks-for-dynamic-blocks/"]
+    },
+    {
+      "id": "k-blockhooks-multiple-001",
+      "category": "block-hooks",
+      "difficulty": "hard",
+      "prompt": "What happens when a hooked block declares \"multiple\": false and an instance already exists in the current context?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Another instance is inserted after the anchor" },
+        { "key": "B", "text": "The hook is skipped for that context" },
+        { "key": "C", "text": "The hook throws a block validation error" },
+        { "key": "D", "text": "The hook is deferred to render time" }
+      ],
+      "correct_answer": "B",
+      "explanation": "With multiple:false, block hooks insert at most one instance per context; if one already exists, no new instance is injected.",
+      "references": ["https://core.trac.wordpress.org/ticket/61902"]
+    },
+    {
+      "id": "k-blockhooks-ignored-001",
+      "category": "block-hooks",
+      "difficulty": "hard",
+      "prompt": "How do user-modified templates prevent auto-insertion of a hooked block after removal?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set multiple:false on the hooked block" },
+        { "key": "B", "text": "Add the block to ignoredHookedBlocks on the anchor block" },
+        { "key": "C", "text": "Disable block hooks in theme.json" },
+        { "key": "D", "text": "Rename the anchor block" }
+      ],
+      "correct_answer": "B",
+      "explanation": "User edits persist by storing the removed block type in the anchor's ignoredHookedBlocks array, which stops re-insertion on render.",
+      "references": ["https://make.wordpress.org/core/2024/03/04/updates-to-block-hooks-in-6-5/"]
+    },
+    {
+      "id": "k-blockhooks-context-002",
+      "category": "block-hooks",
+      "difficulty": "hard",
+      "prompt": "Where are block hooks applied by default as of WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Only classic template files" },
+        { "key": "B", "text": "Templates, template parts, patterns, and navigation posts" },
+        { "key": "C", "text": "Post content and reusable blocks only" },
+        { "key": "D", "text": "Widgets and sidebars only" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Block hooks run in layout contexts (templates, template parts, patterns, navigation posts), not inside post content.",
+      "references": ["https://make.wordpress.org/core/2023/10/15/introducing-block-hooks-for-dynamic-blocks/"]
+    }
+  ]
+}

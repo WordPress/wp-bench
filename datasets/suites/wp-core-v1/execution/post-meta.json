@@ -1,0 +1,70 @@
+{
+  "id": "wp-core-execution-v1-post_meta",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Post Meta",
+    "description": "Code generation tasks for WordPress post meta operations",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-meta-001",
+      "category": "post-meta",
+      "difficulty": "basic",
+      "prompt": "Write a function called 'save_view_count' that takes a post ID and increments a post meta value '_view_count' by 1. If the meta doesn't exist, initialize it to 1. The function should return the new view count.",
+      "expected_behavior": "Calling save_view_count(123) increments _view_count meta for post 123 and returns the new count",
+      "requirements": [
+        "Accept post ID as parameter",
+        "Get current _view_count meta value",
+        "If meta doesn't exist, treat as 0",
+        "Increment by 1 and save using update_post_meta()",
+        "Return the new count as an integer"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "function\\s+save_view_count",
+            "description": "Must define function save_view_count",
+            "weight": 1.0
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Must use get_post_meta to read current value",
+            "weight": 0.5
+          },
+          {
+            "pattern": "update_post_meta",
+            "description": "Must use update_post_meta to save value",
+            "weight": 0.5
+          },
+          {
+            "pattern": "_view_count",
+            "description": "Must use correct meta key",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "\\$wpdb->",
+            "description": "Should use WordPress meta functions, not direct queries",
+            "severity": "warning"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "function_exists",
+            "target": "save_view_count",
+            "description": "Function must exist",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1"
+      }
+    }
+  ]
+}

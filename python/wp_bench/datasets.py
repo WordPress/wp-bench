@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
 
 import orjson
 from datasets import load_dataset as hf_load_dataset
@@ -116,11 +116,23 @@ def _parse_json_field(value: Any) -> Any:
 
 def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
     suite = config.name.split("/")[-1]
-    execution_file = DATASET_SUITES_DIR / suite / "execution.json"
-    knowledge_file = DATASET_SUITES_DIR / suite / "knowledge.json"
+    suite_dir = DATASET_SUITES_DIR / suite
 
-    execution = _parse_execution_suite(execution_file)
-    knowledge = _parse_knowledge_suite(knowledge_file)
+    execution: List[ExecutionTest] = []
+    knowledge: List[KnowledgeTest] = []
+
+    # Load all execution test files from execution/ directory
+    execution_dir = suite_dir / "execution"
+    if execution_dir.is_dir():
+        for path in sorted(execution_dir.glob("*.json")):
+            execution.extend(_parse_execution_suite(path))
+
+    # Load all knowledge test files from knowledge/ directory
+    knowledge_dir = suite_dir / "knowledge"
+    if knowledge_dir.is_dir():
+        for path in sorted(knowledge_dir.glob("*.json")):
+            knowledge.extend(_parse_knowledge_suite(path))
+
     if config.split != "test":
         raise ValueError("Local dataset loader only supports the 'test' split")
     return {"execution": execution, "knowledge": knowledge}

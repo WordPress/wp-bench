@@ -1,0 +1,15 @@
+{
+  "name": "wp-bench-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WordPress runtime for WP-Bench grading",
+  "scripts": {
+    "start": "wp-env start",
+    "stop": "wp-env stop",
+    "destroy": "wp-env destroy",
+    "wp-bench": "wp-env run cli wp bench"
+  },
+  "devDependencies": {
+    "@wordpress/env": "^10.0.0"
+  }
+}

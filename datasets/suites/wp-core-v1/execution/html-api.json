@@ -1,0 +1,242 @@
+{
+  "id": "wp-core-execution-v1-html_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - HTML API",
+    "description": "Code generation tasks for WordPress HTML API (WP_HTML_Tag_Processor, WP_HTML_Processor)",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-html-serialize-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_first_paragraph_html($html) that returns the normalized outer HTML of the first <p> element using WP_HTML_Processor::serialize_token(), not regex or DOMDocument.",
+      "expected_behavior": "Given messy HTML like '<div><p>First <strong>two</strong></p><p>Second', it returns '<p>First <strong>two</strong></p>' with well-formed tags.",
+      "requirements": [
+        "Instantiate WP_HTML_Processor and loop with next_token()",
+        "Detect the first p start tag and serialize it with serialize_token()",
+        "Stop after the first paragraph; return empty string if none",
+        "Do not use regex or DOMDocument for parsing"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Processor", "description": "Uses HTML API", "weight": 1.0 },
+          { "pattern": "serialize_token", "description": "Serializes current token", "weight": 0.8 },
+          { "pattern": "next_token", "description": "Iterates tokens", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_match", "description": "No regex parsing", "severity": "warning" },
+          { "pattern": "DOMDocument", "description": "Must rely on HTML API", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_paragraph_html') ) { return false; } $html = '<div><p>First <strong>two</strong></p><p>Second'; $out = wpbp_first_paragraph_html( $html ); return '<p>First <strong>two</strong></p>' === $out;",
+            "description": "Returns normalized first paragraph",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_paragraph_html') ) { return false; } $html = '<div><span>No p here</span></div>'; $out = wpbp_first_paragraph_html( $html ); return $out === '';",
+            "description": "Gracefully handles missing paragraphs",
+            "weight": 0.5
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_first_paragraph_html( string $html ): string {\n    $processor = WP_HTML_Processor::create_fragment( $html );\n    $capturing = false;\n    $depth     = 0;\n    $buffer    = '';\n    while ( $processor->next_token() ) {\n        $type = $processor->get_token_type();\n        if ( ! $capturing && 'start tag' === $type && 'p' === $processor->get_tag() ) {\n            $capturing = true;\n            $depth     = 1;\n            $buffer   .= $processor->serialize_token();\n            continue;\n        }\n        if ( ! $capturing ) {\n            continue;\n        }\n        // While capturing, append every token until the matching </p> closes.\n        $buffer .= $processor->serialize_token();\n        if ( 'start tag' === $type && $processor->get_tag() === 'p' ) {\n            $depth++;\n        } elseif ( 'end tag' === $type && $processor->get_tag() === 'p' ) {\n            $depth--;\n            if ( $depth === 0 ) {\n                return $buffer;\n            }\n        }\n    }\n    return '';\n}"
+    },
+    {
+      "id": "e-html-strip-scripts-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_strip_scripts($html) that removes all <script> tags (inline and external) using WP_HTML_Tag_Processor, while preserving other markup such as <svg> and <p>.",
+      "expected_behavior": "Returns HTML without any script tags; keeps other elements intact.",
+      "requirements": [
+        "Use WP_HTML_Tag_Processor (or WP_HTML_Processor) to iterate and skip scripts",
+        "Handle both inline and external script tags",
+        "Return the cleaned HTML string",
+        "Do not use regex or DOMDocument"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor", "description": "Uses HTML API", "weight": 1.0 },
+          { "pattern": "next_tag|next_token", "description": "Iterates tokens", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_replace", "description": "No regex stripping", "severity": "warning" },
+          { "pattern": "DOMDocument", "description": "Avoid DOMDocument", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_strip_scripts') ) { return false; } $html = '<div><script>alert(1)</script><p>Keep</p><svg><title>X</title></svg><script src=\"/x.js\"></script></div>'; $out = wpbp_strip_scripts( $html ); return ! str_contains( $out, '<script' ) && str_contains( $out, '<p>Keep</p>' ) && str_contains( $out, '<svg>' );",
+            "description": "Scripts removed, other tags kept",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_strip_scripts( string $html ): string {\n    $processor = WP_HTML_Tag_Processor::create_fragment( $html );\n    $output    = '';\n    while ( $processor->next_tag() ) {\n        if ( 'script' === $processor->get_tag() ) {\n            $processor->remove_tag();\n        }\n    }\n    return $processor->get_updated_html();\n}"
+    },
+    {
+      "id": "e-html-safe-script-text-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_replace_script_text($html, $replacement) that replaces the text content of the first <script> tag using WP_HTML_Tag_Processor::set_modifiable_text(). If $replacement contains '<script' or '</script', the function must refuse to change the tag and return false.",
+      "expected_behavior": "Returns updated HTML string when replacement is safe; returns false when replacement contains nested script markup.",
+      "requirements": [
+        "Use WP_HTML_Tag_Processor to locate the first script tag",
+        "Call set_modifiable_text() and respect its return boolean",
+        "If set_modifiable_text() fails (due to '<script'), return false",
+        "On success, return the updated HTML string via get_updated_html()"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Tag_Processor", "description": "Uses Tag Processor", "weight": 1.0 },
+          { "pattern": "set_modifiable_text", "description": "Uses safe script text setter", "weight": 0.8 },
+          { "pattern": "get_updated_html", "description": "Returns updated HTML", "weight": 0.5 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_replace", "description": "Must not regex replace", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_replace_script_text') ) { return false; } $html = '<script>old()</script>'; $res = wpbp_replace_script_text( $html, 'new()' ); return is_string($res) && str_contains($res, 'new()') && ! str_contains($res, 'old()');",
+            "description": "Replaces script text when safe",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_replace_script_text') ) { return false; } $html = '<script>old()</script>'; $res = wpbp_replace_script_text( $html, 'x</script><script>alert(1)' ); return $res === false;",
+            "description": "Rejects replacement containing script markup",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_replace_script_text( string $html, string $replacement ) {\n    $tp = WP_HTML_Tag_Processor::create_fragment( $html );\n    if ( ! $tp->next_tag( 'script' ) ) {\n        return false;\n    }\n    if ( ! $tp->set_modifiable_text( $replacement ) ) {\n        return false;\n    }\n    return $tp->get_updated_html();\n}"
+    },
+    {
+      "id": "e-js-dataset-roundtrip-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_dataset_roundtrip($prop) that converts a dataset property name to a data-* attribute and back using wp_html_custom_data_attribute_name() and wp_js_dataset_name().",
+      "expected_behavior": "For input 'myValue', returns ['attr' => 'data-my-value', 'prop' => 'myValue']; handles uppercase and numbers correctly.",
+      "requirements": [
+        "Use wp_html_custom_data_attribute_name to produce the attribute",
+        "Use wp_js_dataset_name to convert back to a dataset property",
+        "Return an associative array with keys attr and prop",
+        "Must not hardcode string transforms"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_html_custom_data_attribute_name", "description": "Builds data-* attribute", "weight": 1.0 },
+          { "pattern": "wp_js_dataset_name", "description": "Converts to dataset property", "weight": 1.0 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "str_replace\\(", "description": "Avoid manual replacements", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_dataset_roundtrip') ) { return false; } $res = wpbp_dataset_roundtrip('myValue'); return $res['attr'] === 'data-my-value' && $res['prop'] === 'myValue';",
+            "description": "Roundtrips camelCase correctly",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_dataset_roundtrip') ) { return false; } $res = wpbp_dataset_roundtrip('userID2'); return $res['attr'] === 'data-user-id2' && $res['prop'] === 'userId2';",
+            "description": "Handles mixed case and digits",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_dataset_roundtrip( string $prop ): array {\n    $attr = wp_html_custom_data_attribute_name( $prop );\n    $back = wp_js_dataset_name( $attr );\n    return array( 'attr' => $attr, 'prop' => $back );\n}"
+    },
+    {
+      "id": "e-html-first-url-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_first_url($html) that returns the first URL in HTML content using get_url_in_content(), not regex.",
+      "expected_behavior": "Returns the first anchor href when present; returns empty string if none.",
+      "requirements": [
+        "Call get_url_in_content to extract the URL",
+        "Return string (or empty string on none)",
+        "Must not use regex or DOMDocument"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "get_url_in_content", "description": "Uses core helper", "weight": 1.0 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_match", "description": "No regex", "severity": "warning" },
+          { "pattern": "DOMDocument", "description": "Do not use DOMDocument", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_url') ) { return false; } $html = '<p>See <a href=\"https://example.com/a\">A</a> and <a href=\"https://example.com/b\">B</a></p>'; return wpbp_first_url( $html ) === 'https://example.com/a';",
+            "description": "Gets first URL",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_first_url') ) { return false; } return wpbp_first_url('<p>No links</p>') === '';",
+            "description": "Empty when none",
+            "weight": 0.5
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_first_url( string $html ): string {\n    $url = get_url_in_content( $html );\n    return $url ? $url : '';\n}"
+    },
+    {
+      "id": "e-html-ie-conditional-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "Using WP_HTML_Tag_Processor, strip legacy IE conditional comments (<!--[if IE]> ... <![endif]-->) from HTML while leaving other comments intact.",
+      "expected_behavior": "Returns HTML with IE conditionals removed; other comments and markup remain.",
+      "requirements": [
+        "Identify conditional comments by pattern <!--[if",
+        "Remove the entire conditional comment block",
+        "Do not remove standard HTML comments",
+        "Do not use regex"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor", "description": "Uses HTML API", "weight": 1.0 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "preg_replace", "description": "No regex stripping", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_strip_ie_conditionals') ) { return false; } $html = '<!--[if IE]>old<![endif]--><p>Keep</p><!-- normal -->'; $out = wpbp_strip_ie_conditionals( $html ); return ! str_contains( $out, 'old' ) && str_contains( $out, '<p>Keep</p>' ) && str_contains( $out, '<!-- normal -->' );",
+            "description": "IE conditionals removed, other comments kept",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_strip_ie_conditionals( string $html ): string {\n    $processor = WP_HTML_Processor::create_fragment( $html );\n    $output = '';\n    while ( $processor->next_token() ) {\n        if ( 'comment' === $processor->get_token_type() && str_starts_with( $processor->get_comment_text(), '[if' ) ) {\n            $processor->remove_token();\n        }\n    }\n    return $processor->get_updated_html();\n}"
+    }
+  ]
+}

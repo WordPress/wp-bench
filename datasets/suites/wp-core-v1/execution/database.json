@@ -1,0 +1,43 @@
+{
+  "id": "wp-core-execution-v1-database",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Database",
+    "description": "Code generation tasks for WordPress database operations and meta queries",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-meta-query-zero-001",
+      "category": "database",
+      "difficulty": "hard",
+      "prompt": "Write wpbp_zero_price_products() that returns a WP_Query for 'product' posts whose numeric meta key 'price_cents' equals 0 without missing results due to type coercion.",
+      "expected_behavior": "Function returns one post when a product has meta price_cents stored as integer 0; does not return posts with null/missing meta.",
+      "requirements": [
+        "Query post_type=product and post_status=publish",
+        "Use a meta_query with key price_cents, compare '=' and type 'NUMERIC'; do not rely on meta_value=0 string",
+        "Meta results must include rows where meta_value is 0",
+        "Return the WP_Query object"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "meta_query", "description": "Uses meta_query", "weight": 1.0 },
+          { "pattern": "type['\"]?\\s*=>\\s*['\"]NUMERIC['\"]", "description": "Numeric type coercion", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "meta_value\\s*=>\\s*0", "description": "Avoid direct meta_value=0 string shortcut", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$id = wp_insert_post(['post_title'=>'Zero Product','post_type'=>'product','post_status'=>'publish']); update_post_meta($id,'price_cents', 0); return true;",
+        "assertions": [
+          { "type": "custom_assertion", "code": "return function_exists('wpbp_zero_price_products') && wpbp_zero_price_products()->post_count === 1;", "description": "Finds zero-priced product", "weight": 1.0 }
+        ],
+        "teardown": "wp_delete_post({id}, true);"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_zero_price_products(): WP_Query {\n    return new WP_Query( array(\n        'post_type'      => 'product',\n        'post_status'    => 'publish',\n        'fields'         => 'ids',\n        'meta_query'     => array(\n            array(\n                'key'     => 'price_cents',\n                'value'   => 0,\n                'compare' => '=',\n                'type'    => 'NUMERIC',\n            ),\n        ),\n    ) );\n}"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "id": "wp-core-knowledge-v1-queries",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Queries",
+    "description": "Tests knowledge of WordPress database queries",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-queries-001",
+      "category": "queries",
+      "difficulty": "basic",
+      "prompt": "What WordPress function should be used to safely insert data into the database?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "$wpdb->query()" },
+        { "key": "B", "text": "$wpdb->insert()" },
+        { "key": "C", "text": "mysql_query()" },
+        { "key": "D", "text": "wp_insert_data()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "$wpdb->insert() handles data escaping and provides a safe way to insert rows.",
+      "references": ["https://developer.wordpress.org/reference/classes/wpdb/insert/"]
+    },
+    {
+      "id": "k-queries-002",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "In WP_Query, which parameter limits the number of posts returned?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "limit" },
+        { "key": "B", "text": "max_posts" },
+        { "key": "C", "text": "posts_per_page" },
+        { "key": "D", "text": "numberposts" }
+      ],
+      "correct_answer": "C",
+      "explanation": "posts_per_page is the WP_Query parameter that limits the number of posts returned per page.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "id": "wp-core-execution-v1-shortcodes",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Shortcodes",
+    "description": "Code generation tasks for WordPress shortcode development",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-shortcode-001",
+      "category": "shortcodes",
+      "difficulty": "basic",
+      "prompt": "Create a WordPress shortcode called 'greeting' that accepts a 'name' attribute and outputs 'Hello, {name}!' where {name} is the attribute value. If no name is provided, default to 'World'.",
+      "expected_behavior": "A shortcode [greeting name=\"Alice\"] outputs 'Hello, Alice!' and [greeting] outputs 'Hello, World!'",
+      "requirements": [
+        "Register a shortcode with the tag 'greeting'",
+        "Accept a 'name' attribute with default value 'World'",
+        "Output must be properly escaped using esc_html()",
+        "Return the greeting string, do not echo"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_shortcode\\s*\\(\\s*['\"]greeting['\"]",
+            "description": "Must register shortcode with tag 'greeting'",
+            "weight": 1.0
+          },
+          {
+            "pattern": "esc_html|esc_attr|wp_kses",
+            "description": "Must use WordPress escaping",
+            "weight": 0.5
+          },
+          {
+            "pattern": "shortcode_atts",
+            "description": "Should use shortcode_atts for attribute defaults",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "\\becho\\b",
+            "description": "Should return, not echo",
+            "severity": "warning"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "",
+        "assertions": [
+          {
+            "type": "shortcode_exists",
+            "target": "greeting",
+            "description": "Shortcode must be registered",
+            "weight": 1.0
+          },
+          {
+            "type": "output_equals",
+            "target": "echo do_shortcode('[greeting name=\"Alice\"]');",
+            "expected": "Hello, Alice!",
+            "description": "Shortcode with name attribute",
+            "weight": 1.0
+          },
+          {
+            "type": "output_equals",
+            "target": "echo do_shortcode('[greeting]');",
+            "expected": "Hello, World!",
+            "description": "Shortcode with default name",
+            "weight": 1.0
+          }
+        ],
+        "teardown": "remove_shortcode('greeting');"
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1"
+      },
+      "reference_solution": "function greeting_shortcode( $atts ) {\n    $atts = shortcode_atts( array( 'name' => 'World' ), $atts, 'greeting' );\n    return 'Hello, ' . esc_html( $atts['name'] ) . '!';\n}\nadd_shortcode( 'greeting', 'greeting_shortcode' );"
+    }
+  ]
+}

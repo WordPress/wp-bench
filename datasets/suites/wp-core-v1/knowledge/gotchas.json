@@ -1,0 +1,28 @@
+{
+  "id": "wp-core-knowledge-v1-gotchas",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Gotchas",
+    "description": "Tests knowledge of common WordPress pitfalls and edge cases",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-meta-gotcha-001",
+      "category": "gotchas",
+      "difficulty": "hard",
+      "prompt": "What does get_post_meta($post_id, 'missing_key', true) return when the meta key does not exist?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "null" },
+        { "key": "B", "text": "false" },
+        { "key": "C", "text": "An empty string" },
+        { "key": "D", "text": "WP_Error" }
+      ],
+      "correct_answer": "C",
+      "explanation": "With $single=true and no row present, get_post_meta returns an empty string—easy to misread as a real value with loose checks.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_post_meta/"]
+    }
+  ]
+}

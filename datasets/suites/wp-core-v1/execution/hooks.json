@@ -1,0 +1,69 @@
+{
+  "id": "wp-core-execution-v1-hooks",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Hooks",
+    "description": "Code generation tasks for WordPress hooks (actions and filters)",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-hooks-001",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Create code that adds a custom column called 'Featured' to the Posts admin list table. The column should display 'Yes' if the post has a meta key '_is_featured' with value '1', otherwise display 'No'.",
+      "expected_behavior": "Admin posts list shows a 'Featured' column with Yes/No values based on post meta",
+      "requirements": [
+        "Add column header using 'manage_posts_columns' filter",
+        "Populate column content using 'manage_posts_custom_column' action",
+        "Check post meta '_is_featured' for value '1'",
+        "Display 'Yes' or 'No' appropriately",
+        "Escape all output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_filter.*manage_posts_columns",
+            "description": "Must hook into manage_posts_columns",
+            "weight": 1.0
+          },
+          {
+            "pattern": "add_action.*manage_posts_custom_column",
+            "description": "Must hook into manage_posts_custom_column",
+            "weight": 1.0
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Must use get_post_meta to check meta value",
+            "weight": 0.5
+          },
+          {
+            "pattern": "_is_featured",
+            "description": "Must reference the correct meta key",
+            "weight": 0.5
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "hook_registered",
+            "target": "manage_posts_columns",
+            "description": "Column filter must be registered",
+            "weight": 1.0
+          },
+          {
+            "type": "hook_registered",
+            "target": "manage_posts_custom_column",
+            "description": "Column action must be registered",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1"
+      }
+    }
+  ]
+}

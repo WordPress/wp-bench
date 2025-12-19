@@ -1,0 +1,28 @@
+{
+  "id": "wp-core-knowledge-v1-internationalization",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Internationalization",
+    "description": "Tests knowledge of WordPress internationalization (i18n)",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-utf8-fallback-001",
+      "category": "internationalization",
+      "difficulty": "hard",
+      "prompt": "How does WordPress 6.9 handle UTF-8 detection when the hosting environment lacks mbstring or iconv?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It falls back to ISO-8859-1" },
+        { "key": "B", "text": "It loads a new PHP-based UTF-8 detection pipeline bundled with core" },
+        { "key": "C", "text": "It disables all non-ASCII content" },
+        { "key": "D", "text": "It calls out to an external ICU service" }
+      ],
+      "correct_answer": "B",
+      "explanation": "6.9 ships a self-contained UTF-8 detection/handling layer in PHP so WordPress can reliably process UTF-8 even without mbstring or iconv.",
+      "references": ["https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"]
+    }
+  ]
+}

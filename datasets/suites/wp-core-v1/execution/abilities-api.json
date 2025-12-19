@@ -1,0 +1,116 @@
+{
+  "id": "wp-core-execution-v1-abilities_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Abilities API",
+    "description": "Code generation tasks for WordPress Abilities API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-abilities-001",
+      "category": "abilities-api",
+      "difficulty": "intermediate",
+      "prompt": "Register an ability category 'site-tools' and an ability 'site-tools/clear-cache' that clears caches. The ability should require manage_options, expose itself over REST, and return an array with status 'cleared'.",
+      "expected_behavior": "After registration, wp_has_ability('site-tools/clear-cache') is true; executing the ability returns ['status' => 'cleared'].",
+      "requirements": [
+        "Register category on 'wp_abilities_api_categories_init'",
+        "Register ability on 'wp_abilities_api_init'",
+        "Ability has label and description",
+        "Permission callback checks current_user_can('manage_options')",
+        "Execute callback returns ['status' => 'cleared']",
+        "Enable REST exposure via meta.show_in_rest = true"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_register_ability_category",
+            "description": "Registers ability category",
+            "weight": 1.0
+          },
+          {
+            "pattern": "wp_register_ability",
+            "description": "Registers ability",
+            "weight": 1.0
+          },
+          {
+            "pattern": "wp_abilities_api_init",
+            "description": "Uses correct init hook",
+            "weight": 0.6
+          },
+          {
+            "pattern": "permission_callback",
+            "description": "Declares permission callback",
+            "weight": 0.4
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Opt-in to REST exposure",
+            "weight": 0.3
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "return function_exists('wp_has_ability_category') && wp_has_ability_category('site-tools');",
+            "description": "Category exists",
+            "weight": 0.8
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return function_exists('wp_has_ability') && wp_has_ability('site-tools/clear-cache');",
+            "description": "Ability is registered",
+            "weight": 1.0
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$ability = function_exists('wp_get_ability') ? wp_get_ability('site-tools/clear-cache') : null; if ( ! $ability ) { return false; } $result = $ability->execute( array( 'force' => true ) ); return is_array( $result ) && isset( $result['status'] ) && 'cleared' === $result['status'];",
+            "description": "Ability executes and returns expected payload",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1",
+        "context_for_judge": "Focus on correct hooks, permissions, REST exposure, and execution payload."
+      }
+    },
+    {
+      "id": "e-abilities-cache-001",
+      "category": "abilities-api",
+      "difficulty": "hard",
+      "prompt": "Register an Abilities API ability that returns a cached list of published 'movie' titles, uses salted cache keys, and stays discoverable via REST.",
+      "expected_behavior": "GET /wp-abilities/v1/abilities/demo/get-movies/run returns titles; second call is a cache hit; inserting a new movie causes the next call to reflect the new title without changing the cache key.",
+      "requirements": [
+        "Register the ability on wp_abilities_api_init; category on wp_abilities_api_categories_init",
+        "Ability name demo/get-movies with input schema allowing optional 'genre' string; output is array of strings",
+        "Use wp_cache_get_salted/wp_cache_set_salted with post last_changed as salt; group 'post-queries'",
+        "Permission callback requires read for logged-in users; ability has meta.show_in_rest=true"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_register_ability", "description": "Ability registration", "weight": 1.0 },
+          { "pattern": "wp_cache_get_salted", "description": "Uses new cache helpers", "weight": 0.8 },
+          { "pattern": "show_in_rest", "description": "REST exposure enabled", "weight": 0.4 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "transient", "description": "Do not use transients for this cache", "severity": "error" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type('movie'); wp_insert_post(['post_type'=>'movie','post_title'=>'First']);",
+        "assertions": [
+          { "type": "http_body_contains", "target": "/wp-abilities/v1/abilities/demo/get-movies/run", "expected": "First", "description": "Ability returns data", "weight": 1.0 },
+          { "type": "cache_miss_then_hit", "target": "/wp-abilities/v1/abilities/demo/get-movies/run", "description": "Second call reuses salted cache", "weight": 1.0 },
+          { "type": "cache_invalidated_on_hook", "target": "save_post_movie", "description": "Adding a movie causes refreshed data but same cache key", "weight": 1.0 }
+        ],
+        "teardown": "unregister_post_type('movie');"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_action( 'wp_abilities_api_categories_init', function() {\n    wp_register_ability_category( 'demo', array( 'label' => 'Demo' ) );\n} );\nadd_action( 'wp_abilities_api_init', function() {\n    wp_register_ability( 'demo/get-movies', array(\n        'label'               => 'Get Movies',\n        'category'            => 'demo',\n        'input_schema'        => array(\n            'type'       => 'object',\n            'properties' => array( 'genre' => array( 'type' => 'string' ) ),\n        ),\n        'output_schema'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),\n        'permission_callback' => fn() => is_user_logged_in() && current_user_can( 'read' ),\n        'callback'            => function () {\n            $salt   = wp_cache_get_last_changed( 'posts' );\n            $group  = 'post-queries';\n            $key    = 'movies:list';\n            $cached = wp_cache_get_salted( $key, $group, $salt, $found );\n            if ( $found ) {\n                return $cached;\n            }\n            $q      = new WP_Query( array( 'post_type' => 'movie', 'post_status' => 'publish', 'fields' => 'titles', 'nopaging' => true ) );\n            $titles = wp_list_pluck( $q->posts, 'post_title' );\n            wp_cache_set_salted( $key, $titles, $group, $salt );\n            return $titles;\n        },\n        'meta'                => array( 'show_in_rest' => true ),\n    ) );\n} );\nadd_action( 'save_post_movie', fn() => wp_cache_delete( 'movies:list', 'post-queries' ) );\nadd_action( 'trashed_post', fn( $pid ) => wp_cache_delete( 'movies:list', 'post-queries' ) );"
+    }
+  ]
+}

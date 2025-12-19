@@ -1,0 +1,45 @@
+{
+  "id": "wp-core-execution-v1-font_library",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Font Library",
+    "description": "Code generation tasks for WordPress Font Library API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-font-library-disable-001",
+      "category": "font-library",
+      "difficulty": "hard",
+      "prompt": "Disable the Font Library UI everywhere via block_editor_settings_all so editors never see the Font Library panel.",
+      "expected_behavior": "Applying block_editor_settings_all yields fontLibraryEnabled=false.",
+      "requirements": [
+        "Add a filter on block_editor_settings_all that sets fontLibraryEnabled to false",
+        "Avoid unregistering post types or removing menus",
+        "Filter must run in both site editor and post editor contexts"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "block_editor_settings_all", "description": "Global editor settings filter", "weight": 1.0 },
+          { "pattern": "fontLibraryEnabled", "description": "Sets flag to false", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "remove_menu_page", "description": "Should not hide via admin menu", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$settings = apply_filters( 'block_editor_settings_all', array(), array() ); return isset( $settings['fontLibraryEnabled'] ) && $settings['fontLibraryEnabled'] === false;",
+            "description": "Font Library disabled in editor settings",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_filter( 'block_editor_settings_all', function( $settings, $context ) {\n    $settings['fontLibraryEnabled'] = false;\n    return $settings;\n}, 10, 2 );"
+    }
+  ]
+}
