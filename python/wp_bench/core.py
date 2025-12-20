@@ -69,6 +69,19 @@ def print_test_error(error: TestError) -> None:
     console.print(panel)
 
 
+def print_abort_message() -> None:
+    """Display a message when the benchmark is aborted by the user."""
+    panel = Panel(
+        Text("Benchmark interrupted by user (Ctrl+C)", style="yellow"),
+        title="[yellow bold]Aborted[/yellow bold]",
+        border_style="yellow",
+        box=box.HEAVY,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+
+
 def _timestamped_path(path: Path) -> Path:
     """Add timestamp to filename: results.json -> results_20231216_143052.json"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -115,6 +128,9 @@ class BenchmarkRunner:
         except TestError as e:
             print_test_error(e)
             raise SystemExit(1) from e
+        except KeyboardInterrupt:
+            print_abort_message()
+            raise SystemExit(130) from None
         summary = self.aggregator.finalize()
         payload = {
             "metadata": {
@@ -362,6 +378,9 @@ class MultiModelRunner:
         except TestError as e:
             print_test_error(e)
             raise SystemExit(1) from e
+        except KeyboardInterrupt:
+            print_abort_message()
+            raise SystemExit(130) from None
 
         self._print_comparison_table()
         self._write_outputs()
