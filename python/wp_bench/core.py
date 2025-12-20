@@ -9,21 +9,21 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import orjson
-from rich import box
-from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress
-from rich.table import Table
-from rich.text import Text
 
 from .config import HarnessConfig, ModelConfig
 from .datasets import ExecutionTest, KnowledgeTest, load_tests
 from .environment import WordPressEnvironment
 from .models import ModelInterface
+from .output import (
+    create_progress,
+    print_abort_message,
+    print_comparison_table,
+    print_model_header,
+    print_results_path,
+    print_test_error,
+)
 from .scoring import ScoreAggregator
 from .utils import ensure_dir, sha256, strip_code_fences
-
-console = Console()
 
 
 class TestError(Exception):
@@ -35,51 +35,6 @@ class TestError(Exception):
         self.original_error = original_error
         self.traceback_str = traceback.format_exc()
         super().__init__(str(original_error))
-
-
-def print_test_error(error: TestError) -> None:
-    """Display a detailed error panel for a failed test."""
-    content = Text()
-    content.append("Test ID\n", style="bold")
-    content.append(f"  {error.test_id}\n\n", style="cyan")
-
-    content.append("Test Type\n", style="bold")
-    content.append(f"  {error.test_type}\n\n", style="magenta")
-
-    content.append("Error Type\n", style="bold")
-    content.append(f"  {type(error.original_error).__name__}\n\n", style="red")
-
-    content.append("Message\n", style="bold")
-    content.append(f"  {error.original_error}\n\n", style="yellow")
-
-    content.append("Traceback\n", style="bold")
-    for line in error.traceback_str.strip().split("\n"):
-        content.append(f"  {line}\n", style="bright_black")
-
-    panel = Panel(
-        content,
-        title="[red bold]Benchmark Failed[/red bold]",
-        subtitle="[dim]Fix the error and re-run[/dim]",
-        border_style="red",
-        box=box.HEAVY,
-        padding=(1, 2),
-    )
-
-    console.print()
-    console.print(panel)
-
-
-def print_abort_message() -> None:
-    """Display a message when the benchmark is aborted by the user."""
-    panel = Panel(
-        Text("Benchmark interrupted by user (Ctrl+C)", style="yellow"),
-        title="[yellow bold]Aborted[/yellow bold]",
-        border_style="yellow",
-        box=box.HEAVY,
-        padding=(1, 2),
-    )
-    console.print()
-    console.print(panel)
 
 
 def _timestamped_path(path: Path) -> Path:
@@ -182,7 +137,7 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
 
-        with Progress() as progress:
+        with create_progress() as progress:
             task = progress.add_task("Knowledge", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
@@ -242,7 +197,7 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        with Progress() as progress:
+        with create_progress() as progress:
             task = progress.add_task("Execution", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
@@ -319,7 +274,7 @@ class BenchmarkRunner:
         output_path = _timestamped_path(self.config.output.path)
         ensure_dir(output_path.parent)
         output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        console.print(f"Results written to: {output_path}")
+        print_results_path(output_path)
         if self.config.output.jsonl_path:
             jsonl_path = _timestamped_path(self.config.output.jsonl_path)
             ensure_dir(jsonl_path.parent)
@@ -365,7 +320,7 @@ class MultiModelRunner:
         try:
             for model_config in models:
                 model_name = model_config.name
-                console.print(f"\n[bold blue]Running: {model_name}[/bold blue]")
+                print_model_header(model_name)
 
                 runner = SingleModelRunner(
                     config=self.config,
@@ -382,30 +337,9 @@ class MultiModelRunner:
             print_abort_message()
             raise SystemExit(130) from None
 
-        self._print_comparison_table()
+        print_comparison_table(self.results)
         self._write_outputs()
         return self.results
-
-    def _print_comparison_table(self) -> None:
-        """Print a formatted table comparing scores across all models."""
-        table = Table(title="WP-Bench Results")
-        table.add_column("Model", style="cyan")
-        table.add_column("Knowledge", justify="right")
-        table.add_column("Correctness", justify="right")
-        table.add_column("Quality", justify="right")
-        table.add_column("Overall", justify="right", style="bold")
-
-        for model_name, result in self.results.items():
-            scores = result["scores"]
-            table.add_row(
-                model_name,
-                f"{scores['knowledge']*100:.1f}%",
-                f"{scores['correctness']*100:.1f}%",
-                f"{scores['quality']*100:.1f}%" if scores['quality'] else "N/A",
-                f"{scores['overall']*100:.1f}%",
-            )
-
-        console.print(table)
 
     def _write_outputs(self) -> None:
         """Write combined results to output files."""
@@ -427,7 +361,7 @@ class MultiModelRunner:
         output_path = _timestamped_path(self.config.output.path)
         ensure_dir(output_path.parent)
         output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        console.print(f"Results written to: {output_path}")
+        print_results_path(output_path)
 
 
 class SingleModelRunner:
@@ -502,7 +436,7 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
 
-        with Progress() as progress:
+        with create_progress() as progress:
             task = progress.add_task("Knowledge", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
@@ -547,7 +481,7 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        with Progress() as progress:
+        with create_progress() as progress:
             task = progress.add_task("Execution", total=len(tests_to_run))
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 futures = {executor.submit(process_test, test): test for test in tests_to_run}
