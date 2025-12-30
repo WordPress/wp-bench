@@ -53,7 +53,7 @@ class RunConfig(BaseModel):
     suite: str = "wp-core-v1"
     limit: Optional[int] = None
     seed: int = 1337
-    concurrency: int = 4
+    concurrency: int = 5
     dry_run: bool = False
     skip_judge: bool = False
     skip_runtime: bool = False
