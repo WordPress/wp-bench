@@ -1,0 +1,38 @@
+{
+  "id": "wp-core-knowledge-v1-security",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Security",
+    "description": "Tests knowledge of WordPress security practices",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-security-001",
+      "category": "security",
+      "difficulty": "basic",
+      "prompt": "Which function should be used to escape HTML output in WordPress?",
+      "type": "short_answer",
+      "correct_answer": "esc_html",
+      "answer_type": "contains",
+      "explanation": "esc_html() escapes HTML entities for safe output in HTML context."
+    },
+    {
+      "id": "k-security-002",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "What function should be used to verify a nonce in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "check_nonce()" },
+        { "key": "B", "text": "wp_verify_nonce()" },
+        { "key": "C", "text": "validate_nonce()" },
+        { "key": "D", "text": "nonce_check()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "wp_verify_nonce() is the WordPress function to verify a nonce value.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_verify_nonce/"]
+    }
+  ]
+}

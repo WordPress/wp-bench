@@ -1,0 +1,44 @@
+{
+  "id": "wp-core-knowledge-v1-block_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Block API",
+    "description": "Tests knowledge of WordPress Block API internals",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-blockprocessor-001",
+      "category": "block-api",
+      "difficulty": "hard",
+      "prompt": "In WordPress 6.9, which WP_Block_Processor method replaced extract_block() to return a parsed block and advance the cursor?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "extract_block()" },
+        { "key": "B", "text": "extract_current_block()" },
+        { "key": "C", "text": "extract_full_block_and_advance()" },
+        { "key": "D", "text": "get_block_and_seek()" }
+      ],
+      "correct_answer": "C",
+      "explanation": "The RC renamed extract_block() to extract_full_block_and_advance() before the 6.9 release; older names now fail.",
+      "references": ["https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-blockprocessor-attrs-001",
+      "category": "block-api",
+      "difficulty": "hard",
+      "prompt": "When using WP_Block_Processor in 6.9, which method triggers JSON parsing of the current block's attributes (and is intentionally verbose about its cost)?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "get_block_attributes()" },
+        { "key": "B", "text": "allocate_and_return_parsed_attributes()" },
+        { "key": "C", "text": "parse_attributes()" },
+        { "key": "D", "text": "get_attributes_json()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "allocate_and_return_parsed_attributes() is the costly, explicitly named method that parses JSON attributes on demand in WP_Block_Processor.",
+      "references": ["https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"]
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "id": "wp-core-execution-v1-rest_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - REST API",
+    "description": "Code generation tasks for WordPress REST API development",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-rest-001",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Create a REST API endpoint at '/wp-json/myplugin/v1/status' that returns a JSON object with a 'status' key set to 'ok' and a 'timestamp' key with the current Unix timestamp. The endpoint should be publicly accessible without authentication.",
+      "expected_behavior": "GET request to /wp-json/myplugin/v1/status returns {\"status\": \"ok\", \"timestamp\": <unix_timestamp>}",
+      "requirements": [
+        "Use register_rest_route() to register the endpoint",
+        "Use namespace 'myplugin/v1'",
+        "Route should be 'status'",
+        "Accept GET requests",
+        "Return WP_REST_Response with status and timestamp",
+        "Endpoint should be publicly accessible (permission_callback returns true)"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Must use register_rest_route()",
+            "weight": 1.0
+          },
+          {
+            "pattern": "myplugin/v1",
+            "description": "Must use correct namespace",
+            "weight": 0.5
+          },
+          {
+            "pattern": "permission_callback",
+            "description": "Must include permission_callback",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_REST_Response|rest_ensure_response",
+            "description": "Should return proper REST response",
+            "weight": 0.3
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "hook_registered",
+            "target": "rest_api_init",
+            "description": "REST route registration hook must be used",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": {
+        "rubric_id": "wp-judge-rubric-v1",
+        "context_for_judge": "This is a simple status endpoint for a health check. Security is important - ensure permission_callback is properly defined."
+      }
+    },
+    {
+      "id": "e-rest-cache-salted-001",
+      "category": "rest-api",
+      "difficulty": "hard",
+      "prompt": "Create a REST endpoint /wp-json/demo/v1/books that returns published 'book' titles and uses wp_cache_get_salted/wp_cache_set_salted keyed by the posts last_changed value. Invalidate cache on save_post_book and deleted_post.",
+      "expected_behavior": "First call computes and caches list; second call is a cache hit; after inserting a new book, subsequent call reflects new title and cache resets.",
+      "requirements": [
+        "Register route on rest_api_init with namespace demo/v1 and route books",
+        "Use wp_cache_get_salted/wp_cache_set_salted with group 'books-list' and salt from wp_cache_get_last_changed('posts')",
+        "Capability: read for logged-in users, otherwise error",
+        "Add actions on save_post_book and deleted_post to delete the salted cache entry"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "register_rest_route", "description": "Registers REST route", "weight": 1.0 },
+          { "pattern": "wp_cache_get_salted", "description": "Uses salted cache get", "weight": 0.8 },
+          { "pattern": "save_post_book", "description": "Cache invalidation hook", "weight": 0.6 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "transient", "description": "Do not use transients", "severity": "error" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type('book'); wp_insert_post(['post_type'=>'book','post_title'=>'Alpha','post_status'=>'publish']);",
+        "assertions": [
+          { "type": "http_body_contains", "target": "/wp-json/demo/v1/books", "expected": "Alpha", "description": "Endpoint returns cached data", "weight": 1.0 },
+          { "type": "cache_miss_then_hit", "target": "/wp-json/demo/v1/books", "description": "Second call hits cache", "weight": 1.0 },
+          { "type": "cache_invalidated_on_hook", "target": "save_post_book", "description": "Cache clears when book updated", "weight": 1.0 }
+        ],
+        "teardown": "unregister_post_type('book');"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'demo/v1', '/books', array(\n        'methods'             => 'GET',\n        'permission_callback' => fn() => is_user_logged_in() && current_user_can( 'read' ),\n        'callback'            => function () {\n            $salt  = wp_cache_get_last_changed( 'posts' );\n            $group = 'books-list';\n            $key   = 'titles';\n            $data  = wp_cache_get_salted( $key, $group, $salt, $found );\n            if ( $found ) {\n                return rest_ensure_response( $data );\n            }\n            $q     = new WP_Query( array( 'post_type' => 'book', 'post_status' => 'publish', 'fields' => 'titles', 'nopaging' => true ) );\n            $titles = wp_list_pluck( $q->posts, 'post_title' );\n            wp_cache_set_salted( $key, $titles, $group, $salt );\n            return rest_ensure_response( $titles );\n        },\n    ) );\n} );\nadd_action( 'save_post_book', fn() => wp_cache_delete( 'titles', 'books-list' ) );\nadd_action( 'deleted_post', function ( $pid ) {\n    if ( get_post_type( $pid ) === 'book' ) {\n        wp_cache_delete( 'titles', 'books-list' );\n    }\n} );"
+    }
+  ]
+}

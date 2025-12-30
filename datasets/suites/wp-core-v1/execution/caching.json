@@ -1,0 +1,80 @@
+{
+  "id": "wp-core-execution-v1-caching",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Caching",
+    "description": "Code generation tasks for WordPress object caching",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "e-cache-false-hit-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_cached_flag() that caches a computed boolean false and returns the cached false on subsequent calls using the $found parameter to distinguish cache hits from misses.",
+      "expected_behavior": "First call computes false; second call returns false from cache without recomputing.",
+      "requirements": [
+        "Use wp_cache_get with $found to detect cached false values",
+        "Store results in cache group 'wpbp-cache-flag' with key 'flag'",
+        "Ensure recomputation does not occur on cache hit even when value is false"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_cache_get\\s*\\(.*\\$found", "description": "Uses found flag on cache get", "weight": 1.0 },
+          { "pattern": "wp_cache_set", "description": "Writes to cache", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "wp_cache_delete", "description": "No explicit deletes needed", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_cached_flag') ) { return false; } $a = wpbp_cached_flag(); $b = wpbp_cached_flag(); return $a === false && $b === false;",
+            "description": "Returns cached false without recompute",
+            "weight": 1.0
+          }
+        ]
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_cached_flag(): bool {\n    $cached = wp_cache_get( 'flag', 'wpbp-cache-flag', false, $found );\n    if ( $found ) {\n        return (bool) $cached;\n    }\n    // Simulate expensive computation that yields false first time.\n    $value = false;\n    wp_cache_set( 'flag', $value, 'wpbp-cache-flag' );\n    return $value;\n}"
+    },
+    {
+      "id": "e-cache-get-multiple-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_get_options_cached(array $keys) that uses wp_cache_get_multiple to fetch options and fills misses from get_option without overwriting cached falsey values.",
+      "expected_behavior": "Returns associative array of option values; cached false is preserved; misses are saved back to cache.",
+      "requirements": [
+        "Call wp_cache_get_multiple with a custom group (e.g., 'options') and capture missing keys via the miss list",
+        "For misses, call get_option and wp_cache_set_multiple",
+        "Do not treat falsey cached values as misses"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          { "pattern": "wp_cache_get_multiple", "description": "Batch cache get", "weight": 1.0 },
+          { "pattern": "wp_cache_set_multiple", "description": "Batch cache set for misses", "weight": 0.8 }
+        ],
+        "forbidden_patterns": [
+          { "pattern": "wp_cache_delete", "description": "No deletes necessary", "severity": "warning" }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option('opt_false', false); update_option('opt_one', 'one');",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists('wpbp_get_options_cached') ) { return false; } $res = wpbp_get_options_cached( array( 'opt_false', 'opt_one', 'missing_opt' ) ); return array_key_exists('opt_false',$res) && $res['opt_false'] === false && $res['opt_one'] === 'one' && $res['missing_opt'] === null;",
+            "description": "Preserves cached false, fetches existing and missing options",
+            "weight": 1.0
+          }
+        ],
+        "teardown": "delete_option('opt_false'); delete_option('opt_one'); delete_option('missing_opt');"
+      },
+      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
+      "reference_solution": "function wpbp_get_options_cached( array $keys ): array {\n    $group = 'wpbp-options';\n    $fetched = wp_cache_get_multiple( $keys, $group );\n    $misses  = array();\n    foreach ( $keys as $k ) {\n        if ( ! array_key_exists( $k, $fetched ) ) {\n            $misses[] = $k;\n        }\n    }\n    if ( $misses ) {\n        $fill = array();\n        foreach ( $misses as $k ) {\n            $val       = get_option( $k, null );\n            $fill[ $k ] = $val;\n            $fetched[ $k ] = $val;\n        }\n        wp_cache_set_multiple( $fill, $group );\n    }\n    return $fetched;\n}"
+    }
+  ]
+}

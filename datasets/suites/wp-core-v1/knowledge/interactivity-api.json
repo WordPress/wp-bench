@@ -1,0 +1,60 @@
+{
+  "id": "wp-core-knowledge-v1-interactivity_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Interactivity API",
+    "description": "Tests knowledge of WordPress Interactivity API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-interactivity-attach-001",
+      "category": "interactivity-api",
+      "difficulty": "hard",
+      "prompt": "In WordPress 6.9, what does the Interactivity API router option attachTo solve?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Persisting server state across page loads" },
+        { "key": "B", "text": "Choosing the DOM parent where a router region renders to avoid collisions" },
+        { "key": "C", "text": "Deferring hydration until window.onload" },
+        { "key": "D", "text": "Forcing interactivity scripts into the footer" }
+      ],
+      "correct_answer": "B",
+      "explanation": "attachTo is a selector telling the router which parent node to render into, preventing conflicting renders when multiple router regions share a page.",
+      "references": ["https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"]
+    },
+    {
+      "id": "k-interactivity-module-001",
+      "category": "interactivity-api",
+      "difficulty": "hard",
+      "prompt": "When manually registering a script module for the Interactivity API in WordPress 6.9, how do you mark it as compatible with client navigation so it loads on SPA transitions?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set supports.interactivity=true in block.json" },
+        { "key": "B", "text": "Pass 'client_navigation' => true to wp_register_script_module()" },
+        { "key": "C", "text": "Call wp_interactivity()->add_client_navigation_support_to_script_module( 'module-id' )" },
+        { "key": "D", "text": "Prefix the handle with 'interactivity-'" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Manually enqueued script modules must be flagged with add_client_navigation_support_to_script_module so router navigation imports them and adds the data-wp-router-options directive.",
+      "references": ["https://make.wordpress.org/core/2025/11/12/interactivity-apis-client-navigation-improvements-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-interactivity-router-attr-001",
+      "category": "interactivity-api",
+      "difficulty": "hard",
+      "prompt": "After marking a script module as client-navigation compatible in 6.9, what attribute appears on its script tag?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "data-wp-interactive" },
+        { "key": "B", "text": "data-wp-router-options='{\"loadOnClientNavigation\":true}'" },
+        { "key": "C", "text": "data-wp-client-nav" },
+        { "key": "D", "text": "type=\"module/nav\"" }
+      ],
+      "correct_answer": "B",
+      "explanation": "add_client_navigation_support_to_script_module injects data-wp-router-options with loadOnClientNavigation true so the router imports the module on SPA transitions.",
+      "references": ["https://make.wordpress.org/core/2025/11/12/interactivity-apis-client-navigation-improvements-in-wordpress-6-9/"]
+    }
+  ]
+}

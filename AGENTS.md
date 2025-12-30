@@ -5,7 +5,7 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 ## Project Structure
 - `python/`: Typer CLI (`wp-bench`), config loader, LiteLLM adapters, scoring.
 - `runtime/`: WordPress 6.9 plugin and Docker/wp-env assets that execute `wp bench verify`.
-- `datasets/`: Canonical suites (`suites/<suite>/execution.json` + `knowledge.json`), HF builder (`wp_bench.py`), export helper.
+- `datasets/`: Canonical suites (`suites/<suite>/execution/*.json` + `knowledge/*.json`), HF builder (`wp_bench.py`), export helper.
 - `legacy/wp-cli-runner/`: Archived PHP-first runner; avoid changes unless documenting history.
 - `notebooks/` and `staging/`: Scratch space for experiments; avoid committing large artifacts to git.
 

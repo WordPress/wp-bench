@@ -1,0 +1,61 @@
+{
+  "id": "wp-core-knowledge-v1-abilities_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Abilities API",
+    "description": "Tests knowledge of WordPress Abilities API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-abilities-001",
+      "category": "abilities-api",
+      "difficulty": "intermediate",
+      "prompt": "Which hook should plugins use to register abilities with the WordPress Abilities API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_loaded" },
+        { "key": "C", "text": "wp_abilities_api_init" },
+        { "key": "D", "text": "rest_api_init" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Abilities are registered during the wp_abilities_api_init hook.",
+      "references": ["https://make.wordpress.org/core/2024/07/03/wordpress-6-8-field-guide/#abilities-api"]
+    },
+    {
+      "id": "k-abilities-002",
+      "category": "abilities-api",
+      "difficulty": "basic",
+      "prompt": "How do you expose a custom ability over the REST API when calling wp_register_ability()?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Set 'rest' => true in the args" },
+        { "key": "B", "text": "Add a REST route manually" },
+        { "key": "C", "text": "Pass 'show_in_rest' => true in the meta array" },
+        { "key": "D", "text": "It is always exposed automatically" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Abilities are opt-in to REST; set show_in_rest => true when registering.",
+      "references": ["https://developer.wordpress.org/news/2024/10/16/abilities-api-coming-to-wordpress-core-6-9/"]
+    },
+    {
+      "id": "k-abilities-003",
+      "category": "abilities-api",
+      "subcategory": "registration",
+      "difficulty": "hard",
+      "prompt": "Which hook must you use to register ability categories so WordPress 6.9 persists them without a _doing_it_wrong notice?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_abilities_api_init" },
+        { "key": "C", "text": "wp_abilities_api_categories_init" },
+        { "key": "D", "text": "rest_api_init" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Categories are validated separately from abilities; WordPress 6.9 only saves them when registered on wp_abilities_api_categories_init.",
+      "references": ["https://make.wordpress.org/core/2025/11/10/abilities-api-in-wordpress-6-9/"]
+    }
+  ]
+}

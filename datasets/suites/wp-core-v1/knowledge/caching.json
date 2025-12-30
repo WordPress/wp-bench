@@ -1,0 +1,60 @@
+{
+  "id": "wp-core-knowledge-v1-caching",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Caching",
+    "description": "Tests knowledge of WordPress caching APIs",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-transients-001",
+      "category": "caching",
+      "difficulty": "basic",
+      "prompt": "What function retrieves a transient value in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_get_transient()" },
+        { "key": "B", "text": "get_transient()" },
+        { "key": "C", "text": "fetch_transient()" },
+        { "key": "D", "text": "transient_get()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "get_transient() retrieves the value of a transient.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_transient/"]
+    },
+    {
+      "id": "k-cache-salted-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Which helper should you use to reuse WP_Query cache keys while still invalidating when last_changed updates in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_cache_flush_group()" },
+        { "key": "B", "text": "wp_cache_get_salted() / wp_cache_set_salted()" },
+        { "key": "C", "text": "Define WP_CACHE_KEY_SALT" },
+        { "key": "D", "text": "Set cache_results to false on WP_Query" }
+      ],
+      "correct_answer": "B",
+      "explanation": "New salted cache helpers embed last_changed into stored values so keys can be reused while stale data is rejected.",
+      "references": ["https://make.wordpress.org/core/2025/11/17/consistent-cache-keys-for-query-groups-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-object-cache-found-001",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "When storing falsey values in an object cache group, how do you distinguish a cached false from a cache miss with WordPress 6.9 APIs?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Check is_wp_error() on the return" },
+        { "key": "B", "text": "Inspect the $found out parameter (or miss list in wp_cache_get_multiple*) to see if the key was present" },
+        { "key": "C", "text": "Use wp_cache_exists()" },
+        { "key": "D", "text": "Cache falsey values are not allowed; they are always misses" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_Object_Cache::get and wp_cache_get_multiple* report hits through the passed-by-reference $found flag/miss list, allowing false or 0 values to be distinguished from absent keys.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_object_cache/get/"]
+    }
+  ]
+}

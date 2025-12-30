@@ -34,13 +34,14 @@ GOOGLE_API_KEY=...
 
 ```bash
 cd runtime
-npm install --global @wordpress/env
-npx wp-env start
+npm install
+npm start
 ```
 
 ### 4. Run the Benchmark
 
 ```bash
+cd ..
 wp-bench run --config wp-bench.example.yaml
 ```
 
@@ -91,6 +92,7 @@ output:
 ### CLI Options
 
 ```bash
+# Run from project root
 wp-bench run --config wp-bench.yaml          # run with config file
 wp-bench run --model-name gpt-4o --limit 5   # quick single-model test
 wp-bench dry-run --config wp-bench.yaml      # validate config without calling models
@@ -109,10 +111,10 @@ wp-bench dry-run --config wp-bench.yaml      # validate config without calling m
 
 ## Test Suites
 
-Test suites live in `datasets/suites/` with two categories per suite:
+Test suites live in `datasets/suites/<suite-name>/` with two directories per suite:
 
-- `execution.json` — Code generation tasks with assertions
-- `knowledge.json` — Multiple-choice knowledge questions
+- `execution/` — Code generation tasks with assertions (one JSON file per category)
+- `knowledge/` — Multiple-choice knowledge questions (one JSON file per category)
 
 The default suite `wp-core-v1` covers WordPress core APIs, hooks, database operations, and security patterns.
 
@@ -148,8 +150,8 @@ The notebook generates:
 5. Results return as JSON with scores and detailed feedback
 
 ```bash
-# Manual grading example
-npx wp-env run cli wp bench verify --payload=$(echo '{"code":"<?php echo 1;"}' | base64)
+# Manual grading example (run from runtime/ directory)
+npm run wp-bench -- verify --payload=$(echo '{"code":"<?php echo 1;"}' | base64)
 ```
 
 ## Development

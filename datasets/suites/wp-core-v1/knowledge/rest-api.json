@@ -1,0 +1,38 @@
+{
+  "id": "wp-core-knowledge-v1-rest_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - REST API",
+    "description": "Tests knowledge of WordPress REST API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-rest-001",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "What is the default namespace prefix for WordPress core REST API endpoints?",
+      "type": "short_answer",
+      "correct_answer": "wp/v2",
+      "answer_type": "exact",
+      "explanation": "WordPress core REST API uses the 'wp/v2' namespace for all built-in endpoints."
+    },
+    {
+      "id": "k-rest-002",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Which function is used to register a custom REST API route in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "add_rest_route()" },
+        { "key": "B", "text": "register_rest_route()" },
+        { "key": "C", "text": "wp_register_route()" },
+        { "key": "D", "text": "rest_api_init()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "register_rest_route() is the function used to register custom REST API endpoints.",
+      "references": ["https://developer.wordpress.org/reference/functions/register_rest_route/"]
+    }
+  ]
+}

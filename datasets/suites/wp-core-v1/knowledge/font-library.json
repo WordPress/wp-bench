@@ -1,0 +1,28 @@
+{
+  "id": "wp-core-knowledge-v1-font_library",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Font Library",
+    "description": "Tests knowledge of WordPress Font Library API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-font-library-disable-001",
+      "category": "font-library",
+      "difficulty": "hard",
+      "prompt": "What is the supported way to hide the Font Library UI across editors in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Remove the Fonts menu via remove_menu_page()" },
+        { "key": "B", "text": "Set fontLibraryEnabled=false in the block_editor_settings_all filter" },
+        { "key": "C", "text": "Define DISABLE_FONT_LIBRARY in wp-config.php" },
+        { "key": "D", "text": "Unregister wp_font_family post type" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Filtering block_editor_settings_all and setting fontLibraryEnabled to false disables the Font Library UI globally without unregistering post types.",
+      "references": ["https://developer.wordpress.org/news/snippets/how-to-disable-the-font-library/"]
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "id": "wp-core-knowledge-v1-block_bindings",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Block Bindings",
+    "description": "Tests knowledge of WordPress Block Bindings API",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-bindings-001",
+      "category": "block-bindings",
+      "difficulty": "basic",
+      "prompt": "Which function registers a custom block bindings source?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "register_block_source()" },
+        { "key": "B", "text": "register_block_bindings_source()" },
+        { "key": "C", "text": "add_block_binding()" },
+        { "key": "D", "text": "wp_register_binding()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "register_block_bindings_source() adds a new source to the Block Bindings Registry.",
+      "references": ["https://developer.wordpress.org/news/2024/04/16/block-bindings-api-in-core/"]
+    },
+    {
+      "id": "k-bindings-002",
+      "category": "block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Which filter lets you declare which attributes of a specific block type can be bound via the Block Bindings API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "block_bindings_attributes" },
+        { "key": "B", "text": "block_bindings_supported_attributes_{block_type}" },
+        { "key": "C", "text": "block_supported_attributes" },
+        { "key": "D", "text": "block_attributes_whitelist" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Use block_bindings_supported_attributes_{block_type} to opt specific attributes into bindings.",
+      "references": ["https://github.com/WordPress/gutenberg/blob/trunk/docs/reference-guides/block-bindings.md#supported-attributes"]
+    },
+    {
+      "id": "k-bindings-editor-001",
+      "category": "block-bindings",
+      "difficulty": "hard",
+      "prompt": "How do you expose a custom Block Bindings source in the 6.9 editor UI so its fields appear in the binding dropdown?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Add supports.bindings UI flags to block.json" },
+        { "key": "B", "text": "Provide a getFieldsList() method on the source registration" },
+        { "key": "C", "text": "Register the source on enqueue_block_editor_assets" },
+        { "key": "D", "text": "Set show_in_rest true when registering the source" }
+      ],
+      "correct_answer": "B",
+      "explanation": "6.9 surfaces custom sources in the editor when the registration function returns getFieldsList() with label/type definitions.",
+      "references": ["https://make.wordpress.org/core/2025/11/12/block-bindings-improvements-in-wordpress-6-9/"]
+    }
+  ]
+}

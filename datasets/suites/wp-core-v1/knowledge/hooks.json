@@ -1,0 +1,63 @@
+{
+  "id": "wp-core-knowledge-v1-hooks",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - Hooks",
+    "description": "Tests knowledge of WordPress hooks (actions and filters)",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-hooks-001",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "basic",
+      "prompt": "Which WordPress hook fires after all plugins have been loaded?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "plugins_loaded" },
+        { "key": "C", "text": "after_setup_theme" },
+        { "key": "D", "text": "wp_loaded" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The 'plugins_loaded' action fires once all must-use, network-activated and regular plugins have loaded.",
+      "references": ["https://developer.wordpress.org/reference/hooks/plugins_loaded/"]
+    },
+    {
+      "id": "k-hooks-002",
+      "category": "hooks",
+      "subcategory": "filters",
+      "difficulty": "intermediate",
+      "prompt": "What is the correct hook to modify the main WordPress query before it executes?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "the_posts" },
+        { "key": "B", "text": "pre_get_posts" },
+        { "key": "C", "text": "posts_where" },
+        { "key": "D", "text": "query_vars" }
+      ],
+      "correct_answer": "B",
+      "explanation": "pre_get_posts fires before the query is executed and allows modification of query variables.",
+      "references": ["https://developer.wordpress.org/reference/hooks/pre_get_posts/"]
+    },
+    {
+      "id": "k-hooks-003",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "intermediate",
+      "prompt": "Which action hook should be used to enqueue scripts and styles for the front-end of a WordPress site?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "admin_enqueue_scripts" },
+        { "key": "B", "text": "wp_head" },
+        { "key": "C", "text": "wp_enqueue_scripts" },
+        { "key": "D", "text": "init" }
+      ],
+      "correct_answer": "C",
+      "explanation": "wp_enqueue_scripts is the proper hook for enqueueing scripts and styles on the front-end.",
+      "references": ["https://developer.wordpress.org/reference/hooks/wp_enqueue_scripts/"]
+    }
+  ]
+}

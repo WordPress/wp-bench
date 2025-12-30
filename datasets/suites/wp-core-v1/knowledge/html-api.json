@@ -1,0 +1,44 @@
+{
+  "id": "wp-core-knowledge-v1-html_api",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - HTML API",
+    "description": "Tests knowledge of WordPress HTML API (WP_HTML_Tag_Processor, WP_HTML_Processor)",
+    "wp_version": "6.9",
+    "created_at": "2025-12-16"
+  },
+  "tests": [
+    {
+      "id": "k-html-serialize-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "What does WP_HTML_Processor::serialize_token() return now that the method is public in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The raw substring of the original HTML" },
+        { "key": "B", "text": "A normalized, well-formed serialization of the currently matched token" },
+        { "key": "C", "text": "Only the tag name of the current element" },
+        { "key": "D", "text": "A DOMDocument node" }
+      ],
+      "correct_answer": "B",
+      "explanation": "serialize_token() emits a fully normalized, well-formed representation of the current token, useful for safe extraction/rewriting.",
+      "references": ["https://make.wordpress.org/core/2025/11/21/updates-to-the-html-api-in-6-9/"]
+    },
+    {
+      "id": "k-html-script-reject-001",
+      "category": "html-api",
+      "difficulty": "hard",
+      "prompt": "What does WP_HTML_Tag_Processor::set_modifiable_text() do when you try to set script contents that include '<script' or '</script' in WordPress 6.9?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Silently escapes the angle brackets" },
+        { "key": "B", "text": "Throws a fatal error" },
+        { "key": "C", "text": "Returns false and leaves the SCRIPT tag unchanged" },
+        { "key": "D", "text": "Strips the nested script tags and proceeds" }
+      ],
+      "correct_answer": "C",
+      "explanation": "6.9 hardens set_modifiable_text() for SCRIPT nodes by rejecting updates containing '<script' or '</script', returning false so callers can abort safely.",
+      "references": ["https://make.wordpress.org/core/2025/11/21/updates-to-the-html-api-in-6-9/"]
+    }
+  ]
+}
