@@ -165,4 +165,4 @@ pytest python/                  # test
 
 ## License
 
-GPL-2.0-or-later
+[GPL-2.0-or-later](https://github.com/WordPress/wp-bench/blob/trunk/LICENSE.md)
