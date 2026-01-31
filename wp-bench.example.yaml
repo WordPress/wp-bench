@@ -36,3 +36,6 @@ run:
 output:
   path: output/results.json
   jsonl_path: output/results.jsonl
+  # Test execution logging (useful for debugging hanging tests)
+  enable_test_logging: false       # set to true to enable
+  test_log_path: output/test_execution.log
