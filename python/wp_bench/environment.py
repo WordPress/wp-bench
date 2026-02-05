@@ -18,6 +18,14 @@ class ExecutionResult:
     stderr: str
 
 
+@dataclass
+class AbilityResult:
+    success: bool
+    raw: Dict[str, Any]
+    stdout: str
+    stderr: str
+
+
 class WordPressEnvironment:
     """Shells out to wp-env/docker runtime to execute verification."""
 
@@ -61,6 +69,43 @@ class WordPressEnvironment:
                 data = {"success": False, "fatal_error": "Invalid JSON"}
         success = data.get("success", False) and rc == 0
         return ExecutionResult(success=success, raw=data, stdout=stdout, stderr=stderr)
+
+    def execute_ability(
+        self,
+        ability: str,
+        input_data: Any | None = None,
+        method: str | None = None,
+        setup: str | None = None,
+        teardown: str | None = None,
+    ) -> AbilityResult:
+        payload: Dict[str, Any] = {
+            "ability": ability,
+            "input": input_data,
+        }
+        if method:
+            payload["method"] = method
+        if setup:
+            payload["setup"] = setup
+        if teardown:
+            payload["teardown"] = teardown
+
+        encoded = base64.b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
+        cmd = [
+            "wp",
+            "bench",
+            "ability",
+            f"--payload={encoded}",
+            "--format=json",
+        ]
+        stdout, stderr, rc = self._exec(cmd)
+        data: Dict[str, Any] = {}
+        if stdout.strip():
+            try:
+                data = json.loads(stdout)
+            except json.JSONDecodeError:
+                data = {"success": False, "fatal_error": "Invalid JSON"}
+        success = data.get("success", False) and rc == 0
+        return AbilityResult(success=success, raw=data, stdout=stdout, stderr=stderr)
 
     # Internal helpers --------------------------------------------------
     def _container_exists(self) -> bool:

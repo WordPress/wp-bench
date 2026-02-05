@@ -44,6 +44,12 @@ def load_suite(suite_name: str) -> list[dict]:
                     "runtime_checks": orjson.dumps(t.get("runtime_checks", {})).decode(),
                     "judge_config": orjson.dumps(t.get("judge_config", {})).decode(),
                     "reference_solution": t.get("reference_solution", ""),
+                    "allowed_abilities": "[]",
+                    "max_steps": 0,
+                    "fixtures": "{}",
+                    "verifiers": "[]",
+                    "expected_outputs": "[]",
+                    "expected_state": "{}",
                 })
 
     # Load all knowledge tests from knowledge/ directory
@@ -66,6 +72,40 @@ def load_suite(suite_name: str) -> list[dict]:
                     "runtime_checks": "{}",
                     "judge_config": "{}",
                     "reference_solution": "",
+                    "allowed_abilities": "[]",
+                    "max_steps": 0,
+                    "fixtures": "{}",
+                    "verifiers": "[]",
+                    "expected_outputs": "[]",
+                    "expected_state": "{}",
+                })
+
+    # Load all abilities tests from abilities/ directory
+    abilities_dir = suite_dir / "abilities"
+    if abilities_dir.is_dir():
+        for path in sorted(abilities_dir.glob("*.json")):
+            data = orjson.loads(path.read_bytes())
+            for t in data.get("tests", []):
+                rows.append({
+                    "id": t["id"],
+                    "suite": suite_name,
+                    "test_kind": "abilities",
+                    "prompt": t["prompt"],
+                    "category": t.get("category", "general"),
+                    "difficulty": t.get("difficulty", "unknown"),
+                    "choices": "[]",
+                    "correct_answer": "",
+                    "requirements": orjson.dumps(t.get("requirements", [])).decode(),
+                    "static_checks": "{}",
+                    "runtime_checks": "{}",
+                    "judge_config": "{}",
+                    "reference_solution": "",
+                    "allowed_abilities": orjson.dumps(t.get("allowed_abilities", [])).decode(),
+                    "max_steps": t.get("max_steps", 1),
+                    "fixtures": orjson.dumps(t.get("fixtures", {})).decode(),
+                    "verifiers": orjson.dumps(t.get("verifiers", [])).decode(),
+                    "expected_outputs": orjson.dumps(t.get("expected_outputs", [])).decode(),
+                    "expected_state": orjson.dumps(t.get("expected_state", {})).decode(),
                 })
 
     return rows

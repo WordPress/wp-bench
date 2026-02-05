@@ -62,8 +62,14 @@ def dry_run(config: Optional[Path] = typer.Option(None, help="Config file")) -> 
     """Load dataset and render prompt statistics without hitting models."""
     harness_config = HarnessConfig.from_file(config) if config else HarnessConfig()
     tests = load_tests(harness_config.dataset)
+    abilities_count = len(tests.get("abilities", []))
     console.print(
-        f"Execution tests: {len(tests['execution'])}, Knowledge tests: {len(tests['knowledge'])}"
+        "Execution tests: "
+        f"{len(tests['execution'])}, "
+        "Knowledge tests: "
+        f"{len(tests['knowledge'])}, "
+        "Abilities tests: "
+        f"{abilities_count}"
     )
 
 

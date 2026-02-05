@@ -44,8 +44,26 @@ class KnowledgeTest:
     metadata: Optional[Dict[str, Any]] = None
 
 
+@dataclass
+class AbilityTest:
+    id: str
+    suite: str
+    prompt: str
+    test_type: str
+    category: str
+    difficulty: str
+    allowed_abilities: List[str]
+    max_steps: int
+    fixtures: Dict[str, Any]
+    verifiers: List[str]
+    expected_outputs: Optional[List[Any]] = None
+    expected_state: Optional[Dict[str, Any]] = None
+    requirements: Optional[List[str]] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
 def load_tests(config: DatasetConfig) -> Dict[str, List[Any]]:
-    """Load both execution and knowledge tests for a suite."""
+    """Load execution, knowledge, and ability tests for a suite."""
     if config.source == "huggingface":
         return _load_from_huggingface(config)
     return _load_from_local_files(config)
@@ -61,6 +79,7 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
     )
     execution: List[ExecutionTest] = []
     knowledge: List[KnowledgeTest] = []
+    abilities: List[AbilityTest] = []
 
     for row in dataset:
         # Parse JSON-encoded fields from Parquet format
@@ -87,6 +106,45 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     metadata={},
                 )
             )
+        elif row.get("test_kind") == "knowledge":
+            knowledge.append(
+                KnowledgeTest(
+                    id=row["id"],
+                    suite=row.get("suite", config.name),
+                    prompt=row["prompt"],
+                    test_type="knowledge",
+                    category=row.get("category", "general"),
+                    difficulty=row.get("difficulty", "unknown"),
+                    choices=choices if isinstance(choices, list) else None,
+                    correct_answer=row.get("correct_answer"),
+                    metadata={},
+                )
+            )
+        elif row.get("test_kind") == "abilities":
+            allowed = _parse_json_field(row.get("allowed_abilities", "[]"))
+            fixtures = _parse_json_field(row.get("fixtures", "{}"))
+            verifiers = _parse_json_field(row.get("verifiers", "[]"))
+            expected_outputs = _parse_json_field(row.get("expected_outputs", "[]"))
+            expected_state = _parse_json_field(row.get("expected_state", "{}"))
+            requirements = _parse_json_field(row.get("requirements", "[]"))
+            abilities.append(
+                AbilityTest(
+                    id=row["id"],
+                    suite=row.get("suite", config.name),
+                    prompt=row["prompt"],
+                    test_type="abilities",
+                    category=row.get("category", "general"),
+                    difficulty=row.get("difficulty", "unknown"),
+                    allowed_abilities=allowed if isinstance(allowed, list) else [],
+                    max_steps=int(row.get("max_steps", 1)),
+                    fixtures=fixtures if isinstance(fixtures, dict) else {},
+                    verifiers=verifiers if isinstance(verifiers, list) else [],
+                    expected_outputs=expected_outputs if isinstance(expected_outputs, list) else None,
+                    expected_state=expected_state if isinstance(expected_state, dict) else None,
+                    requirements=requirements if isinstance(requirements, list) else None,
+                    metadata={},
+                )
+            )
         else:
             knowledge.append(
                 KnowledgeTest(
@@ -101,7 +159,7 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     metadata={},
                 )
             )
-    return {"execution": execution, "knowledge": knowledge}
+    return {"execution": execution, "knowledge": knowledge, "abilities": abilities}
 
 
 def _parse_json_field(value: Any) -> Any:
@@ -120,6 +178,7 @@ def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
 
     execution: List[ExecutionTest] = []
     knowledge: List[KnowledgeTest] = []
+    abilities: List[AbilityTest] = []
 
     # Load all execution test files from execution/ directory
     execution_dir = suite_dir / "execution"
@@ -133,9 +192,14 @@ def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
         for path in sorted(knowledge_dir.glob("*.json")):
             knowledge.extend(_parse_knowledge_suite(path))
 
+    abilities_dir = suite_dir / "abilities"
+    if abilities_dir.is_dir():
+        for path in sorted(abilities_dir.glob("*.json")):
+            abilities.extend(_parse_abilities_suite(path))
+
     if config.split != "test":
         raise ValueError("Local dataset loader only supports the 'test' split")
-    return {"execution": execution, "knowledge": knowledge}
+    return {"execution": execution, "knowledge": knowledge, "abilities": abilities}
 
 
 def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
@@ -179,6 +243,33 @@ def _parse_knowledge_suite(path: Path) -> List[KnowledgeTest]:
                 difficulty=test.get("difficulty", "unknown"),
                 choices=test.get("choices"),
                 correct_answer=test.get("correct_answer"),
+                metadata={"suite_metadata": metadata},
+            )
+        )
+    return tests
+
+
+def _parse_abilities_suite(path: Path) -> List[AbilityTest]:
+    data = _read_json(path)
+    suite_id = data.get("id", path.stem)
+    metadata = data.get("metadata", {})
+    tests = []
+    for test in data.get("tests", []):
+        tests.append(
+            AbilityTest(
+                id=test["id"],
+                suite=suite_id,
+                prompt=test["prompt"],
+                test_type="abilities",
+                category=test.get("category", "general"),
+                difficulty=test.get("difficulty", "unknown"),
+                allowed_abilities=test.get("allowed_abilities", []),
+                max_steps=int(test.get("max_steps", 1)),
+                fixtures=test.get("fixtures", {}),
+                verifiers=test.get("verifiers", []),
+                expected_outputs=test.get("expected_outputs"),
+                expected_state=test.get("expected_state"),
+                requirements=test.get("requirements"),
                 metadata={"suite_metadata": metadata},
             )
         )

@@ -1,0 +1,30 @@
+{
+  "id": "wp-abilities-v1-abilities-core",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WP Abilities v1 - Core Tool Tasks",
+    "description": "Minimal tool-use tasks for Abilities API",
+    "wp_version": "6.9",
+    "created_at": "2026-01-26"
+  },
+  "tests": [
+    {
+      "id": "a-abilities-001",
+      "category": "read-only",
+      "difficulty": "basic",
+      "prompt": "Fetch the site name and URL using the appropriate ability.",
+      "allowed_abilities": [
+        "wpbench/get_site_info"
+      ],
+      "max_steps": 2,
+      "fixtures": {},
+      "verifiers": [
+        "tool_calls_present",
+        "schema_validity",
+        "ability_success",
+        "allowed_abilities_only",
+        "max_steps_respected"
+      ]
+    }
+  ]
+}
