@@ -9,6 +9,11 @@ WP-Bench measures AI model capabilities across two dimensions:
 - **Knowledge** — Multiple-choice questions testing WordPress concepts, APIs, and best practices
 - **Execution** — Code generation tasks graded by a real WordPress runtime for correctness and quality
 
+Optional (experimental):
+
+- **Abilities (Tool Use)** — Multi-step tasks that call WordPress abilities via typed, permissioned tool schemas
+  - Requires the Abilities API (WordPress 6.9+ or the Abilities API plugin)
+
 The benchmark uses WordPress itself as the grader, running generated code in a sandboxed environment with static analysis and runtime assertions.
 
 ## Quick Start
@@ -116,7 +121,10 @@ Test suites live in `datasets/suites/<suite-name>/` with two directories per sui
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 - `knowledge/` — Multiple-choice knowledge questions (one JSON file per category)
 
+An optional `abilities/` directory can be added for tool-use tasks. The harness will load and run these tests when present.
+
 The default suite `wp-core-v1` covers WordPress core APIs, hooks, database operations, and security patterns.
+An experimental `wp-abilities-v1` suite adds Abilities API knowledge + tool-use tasks (requires Abilities API support in the runtime).
 
 ### Loading from Hugging Face
 
@@ -152,6 +160,9 @@ The notebook generates:
 ```bash
 # Manual grading example (run from runtime/ directory)
 npm run wp-bench -- verify --payload=$(echo '{"code":"<?php echo 1;"}' | base64)
+
+# Manual ability execution example (run from runtime/ directory)
+npm run wp-bench -- ability --payload=$(echo '{"ability":"wpbench/get_site_info","input":{}}' | base64)
 ```
 
 ## Development

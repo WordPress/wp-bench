@@ -1,0 +1,26 @@
+{
+  "id": "wp-abilities-v1-knowledge-abilities",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WP Abilities v1 - Knowledge",
+    "description": "Abilities API knowledge checks",
+    "wp_version": "6.9",
+    "created_at": "2026-01-26"
+  },
+  "tests": [
+    {
+      "id": "k-abilities-001",
+      "category": "abilities-api",
+      "difficulty": "basic",
+      "prompt": "Which hook should plugins use to register abilities with the WordPress Abilities API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_loaded" },
+        { "key": "C", "text": "wp_abilities_api_init" },
+        { "key": "D", "text": "rest_api_init" }
+      ],
+      "correct_answer": "C"
+    }
+  ]
+}

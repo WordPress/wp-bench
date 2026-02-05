@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 import orjson
 
 from .config import HarnessConfig, ModelConfig
-from .datasets import ExecutionTest, KnowledgeTest, load_tests
+from .datasets import AbilityTest, ExecutionTest, KnowledgeTest, load_tests
 from .environment import WordPressEnvironment
 from .models import ModelInterface
 from .output import (
@@ -35,6 +35,287 @@ class TestError(Exception):
         self.original_error = original_error
         self.traceback_str = traceback.format_exc()
         super().__init__(str(original_error))
+
+
+def render_abilities_prompt(test: AbilityTest, history: List[str] | None = None) -> str:
+    prompt = [test.prompt]
+    prompt.append(
+        'Return a tool call as JSON: {"ability": "name", "input": {...}}'
+    )
+    prompt.append(f"Allowed abilities: {', '.join(test.allowed_abilities)}")
+    if history:
+        prompt.append("History:")
+        prompt.extend(history)
+    prompt.append("If no tool is needed, answer normally.")
+    return "\n".join(prompt)
+
+
+def parse_tool_call(completion: str) -> Dict[str, Any] | None:
+    text = strip_code_fences(completion).strip()
+    if not text:
+        return None
+    if not text.startswith("{"):
+        start = text.find("{")
+        if start == -1:
+            return None
+        text = text[start:]
+    try:
+        data = orjson.loads(text)
+        if not isinstance(data, dict):
+            return None
+        if "ability" not in data:
+            return None
+        return data
+    except orjson.JSONDecodeError:
+        end = text.rfind("}")
+        if end == -1:
+            return None
+        try:
+            data = orjson.loads(text[: end + 1])
+            if not isinstance(data, dict):
+                return None
+            if "ability" not in data:
+                return None
+            return data
+        except orjson.JSONDecodeError:
+            return None
+
+
+def _tool_call_schema_valid(call: Dict[str, Any]) -> bool:
+    if not isinstance(call, dict):
+        return False
+    ability = call.get("ability")
+    if not isinstance(ability, str) or not ability:
+        return False
+    if "input" in call and call["input"] is not None and not isinstance(call["input"], dict):
+        return False
+    if "method" in call and call["method"] is not None and not isinstance(call["method"], str):
+        return False
+    return True
+
+
+def _looks_like_permission_error(value: Any) -> bool:
+    if value is None:
+        return False
+    text = str(value).lower()
+    return any(token in text for token in ("permission", "forbidden", "rest_forbidden", "rest_cannot"))
+
+
+def _observation_bool(observation: Dict[str, Any], key: str) -> bool | None:
+    if key not in observation:
+        return None
+    return bool(observation.get(key))
+
+
+def _observation_ability_found(observation: Dict[str, Any]) -> bool:
+    value = _observation_bool(observation, "ability_found")
+    if value is not None:
+        return value
+    if observation.get("error") == "ability_not_found":
+        return False
+    return bool(observation.get("success"))
+
+
+def _observation_method_valid(observation: Dict[str, Any]) -> bool:
+    value = _observation_bool(observation, "method_valid")
+    if value is not None:
+        return value
+    if observation.get("error") == "invalid_method":
+        return False
+    return True
+
+
+def _observation_permission_ok(observation: Dict[str, Any]) -> bool:
+    value = _observation_bool(observation, "permission_ok")
+    if value is not None:
+        return value
+    if _looks_like_permission_error(observation.get("error")):
+        return False
+    if observation.get("success") is True:
+        return True
+    return True
+
+
+def _observation_confirmation_ok(observation: Dict[str, Any]) -> bool:
+    value = _observation_bool(observation, "confirmation_ok")
+    if value is not None:
+        return value
+    if observation.get("confirmation_required"):
+        return False
+    return True
+
+
+def _all_observations(
+    observations: List[Dict[str, Any]],
+    predicate,
+    require: bool = True,
+) -> bool:
+    if not observations:
+        return False if require else True
+    return all(predicate(obs) for obs in observations)
+
+
+def _match_subset(expected: Any, actual: Any) -> bool:
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        for key, value in expected.items():
+            if key not in actual:
+                return False
+            if not _match_subset(value, actual[key]):
+                return False
+        return True
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            return False
+        if len(expected) > len(actual):
+            return False
+        for idx, value in enumerate(expected):
+            if not _match_subset(value, actual[idx]):
+                return False
+        return True
+    return expected == actual
+
+
+def _extract_expected_match(expected_entry: Any, observation: Dict[str, Any]) -> bool:
+    if isinstance(expected_entry, dict):
+        if "match" in expected_entry:
+            expected_value = expected_entry["match"]
+            target = observation.get("result", observation)
+            return _match_subset(expected_value, target)
+        if "result" in expected_entry:
+            expected_value = expected_entry["result"]
+            target = observation.get("result")
+            return _match_subset(expected_value, target)
+        if "equals" in expected_entry:
+            return _match_subset(expected_entry["equals"], observation)
+    return _match_subset(expected_entry, observation.get("result", observation))
+
+
+def _check_expected_outputs(
+    expected_outputs: Any,
+    tool_calls: List[Dict[str, Any]],
+    observations: List[Dict[str, Any]],
+) -> bool:
+    if expected_outputs is None:
+        return True
+    if not isinstance(expected_outputs, list):
+        return False
+    if not expected_outputs:
+        return True
+    if not observations:
+        return False
+    for idx, expected_entry in enumerate(expected_outputs):
+        if idx >= len(observations):
+            return False
+        observation = observations[idx]
+        if isinstance(expected_entry, dict) and "ability" in expected_entry:
+            if idx >= len(tool_calls):
+                return False
+            if tool_calls[idx].get("ability") != expected_entry.get("ability"):
+                return False
+        if not _extract_expected_match(expected_entry, observation):
+            return False
+    return True
+
+
+def _normalize_state_checks(expected_state: Any) -> List[Dict[str, Any]]:
+    if expected_state is None:
+        return []
+    if isinstance(expected_state, list):
+        return [item for item in expected_state if isinstance(item, dict)]
+    if isinstance(expected_state, dict):
+        checks = expected_state.get("checks")
+        if isinstance(checks, list):
+            return [item for item in checks if isinstance(item, dict)]
+        if "ability" in expected_state:
+            return [expected_state]
+    return []
+
+
+def _run_state_checks(
+    expected_state: Any, environment: WordPressEnvironment
+) -> List[Dict[str, Any]]:
+    checks = _normalize_state_checks(expected_state)
+    results: List[Dict[str, Any]] = []
+    for check in checks:
+        ability = check.get("ability")
+        if not isinstance(ability, str) or not ability:
+            results.append(
+                {
+                    "ability": None,
+                    "success": False,
+                    "match": False,
+                    "error": "missing_ability",
+                }
+            )
+            continue
+        input_data = check.get("input")
+        method = check.get("method")
+        env_result = environment.execute_ability(
+            ability=ability,
+            input_data=input_data,
+            method=method if isinstance(method, str) else None,
+        )
+        observation = env_result.raw if env_result.raw else {"success": False, "error": "no_result"}
+        if "match" in check:
+            match_ok = _match_subset(check["match"], observation.get("result", observation))
+        elif "result" in check:
+            match_ok = _match_subset(check["result"], observation.get("result"))
+        elif "equals" in check:
+            match_ok = _match_subset(check["equals"], observation)
+        else:
+            match_ok = bool(observation.get("success"))
+        results.append(
+            {
+                "ability": ability,
+                "input": input_data,
+                "method": method,
+                "observation": observation,
+                "match": match_ok,
+            }
+        )
+    return results
+
+
+def score_abilities(
+    test: AbilityTest,
+    tool_calls: List[Dict[str, Any]],
+    observations: List[Dict[str, Any]],
+    final_answer: str,
+    state_checks: List[Dict[str, Any]] | None = None,
+) -> tuple[float, Dict[str, Any]]:
+    results: Dict[str, Any] = {}
+    has_tool_calls = len(tool_calls) > 0
+    results["tool_calls_present"] = has_tool_calls
+    results["schema_validity"] = has_tool_calls and all(_tool_call_schema_valid(t) for t in tool_calls)
+    results["allowed_abilities_only"] = all(t.get("ability") in test.allowed_abilities for t in tool_calls)
+    results["max_steps_respected"] = len(tool_calls) <= test.max_steps
+    results["ability_success"] = _all_observations(observations, lambda obs: bool(obs.get("success")))
+    results["ability_found"] = _all_observations(observations, _observation_ability_found)
+    results["method_valid"] = _all_observations(observations, _observation_method_valid)
+    results["permission_ok"] = _all_observations(observations, _observation_permission_ok)
+    results["confirmation_ok"] = _all_observations(observations, _observation_confirmation_ok)
+
+    results["expected_outputs_match"] = _check_expected_outputs(
+        test.expected_outputs, tool_calls, observations
+    )
+    if "expected_output_match" in test.verifiers:
+        results["expected_output_match"] = results["expected_outputs_match"]
+
+    if test.expected_state is not None:
+        if state_checks:
+            results["expected_state_match"] = all(check.get("match") for check in state_checks)
+        else:
+            results["expected_state_match"] = False
+    else:
+        results["expected_state_match"] = True
+
+    enabled = [k for k in results.keys() if k in test.verifiers]
+    if not enabled:
+        return (1.0, results)
+    score = sum(1.0 if results[k] else 0.0 for k in enabled) / len(enabled)
+    return (round(score, 4), results)
 
 
 def _timestamped_path(path: Path) -> Path:
@@ -80,6 +361,8 @@ class BenchmarkRunner:
         try:
             self._run_knowledge_tests(tests["knowledge"])
             self._run_execution_tests(tests["execution"])
+            if "abilities" in tests:
+                self._run_abilities_tests(tests["abilities"])
         except TestError as e:
             print_test_error(e)
             raise SystemExit(1) from e
@@ -97,6 +380,7 @@ class BenchmarkRunner:
                     "knowledge": summary.knowledge,
                     "correctness": summary.correctness,
                     "quality": summary.quality,
+                    "abilities": summary.abilities,
                     "overall": summary.overall(),
                 },
             },
@@ -206,6 +490,99 @@ class BenchmarkRunner:
                         result = future.result()
                         with self._lock:
                             self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
+
+    def _run_abilities_tests(self, tests: List[AbilityTest]) -> None:
+        """Run tool-use ability tests in parallel."""
+        if not tests:
+            return
+
+        limit = self.config.run.limit or len(tests)
+        tests_to_run = tests[:limit]
+        concurrency = self.config.run.concurrency
+
+        def process_test(test: AbilityTest) -> Dict[str, Any]:
+            try:
+                history: List[str] = []
+                tool_calls: List[Dict[str, Any]] = []
+                observations: List[Dict[str, Any]] = []
+                trace: List[Dict[str, Any]] = []
+                final_answer = ""
+
+                setup = test.fixtures.get("setup") if isinstance(test.fixtures, dict) else None
+                teardown = test.fixtures.get("teardown") if isinstance(test.fixtures, dict) else None
+
+                for step in range(test.max_steps):
+                    prompt = render_abilities_prompt(test, history=history)
+                    completion = self.model.generate(prompt)
+                    trace_step: Dict[str, Any] = {
+                        "step": step,
+                        "prompt": prompt,
+                        "completion": completion,
+                    }
+                    parsed = parse_tool_call(completion)
+                    if parsed is None:
+                        final_answer = completion
+                        trace_step["tool_call"] = None
+                        trace.append(trace_step)
+                        break
+
+                    tool_calls.append(parsed)
+                    result = self.environment.execute_ability(
+                        ability=parsed.get("ability", ""),
+                        input_data=parsed.get("input"),
+                        method=parsed.get("method"),
+                        setup=setup if step == 0 else None,
+                        teardown=teardown if step == test.max_steps - 1 else None,
+                    )
+                    observation = result.raw if result.raw else {"success": False, "error": "no_result"}
+                    observations.append(observation)
+                    trace_step["tool_call"] = parsed
+                    trace_step["observation"] = observation
+                    trace.append(trace_step)
+                    history.append(f"TOOL_CALL: {parsed}")
+                    history.append(f"OBSERVATION: {observation}")
+                else:
+                    final_answer = ""
+
+                state_checks = _run_state_checks(test.expected_state, self.environment) if test.expected_state else []
+                score, verifier_results = score_abilities(
+                    test,
+                    tool_calls,
+                    observations,
+                    final_answer,
+                    state_checks=state_checks,
+                )
+
+                return {
+                    "test_id": test.id,
+                    "type": "abilities",
+                    "prompt_hash": sha256(render_abilities_prompt(test)),
+                    "tool_calls": tool_calls,
+                    "observations": observations,
+                    "trace": trace,
+                    "state_checks": state_checks,
+                    "final_answer": final_answer,
+                    "verifiers": verifier_results,
+                    "score": score,
+                }
+            except Exception as e:
+                raise TestError(test.id, "abilities", e) from e
+
+        with create_progress() as progress:
+            task = progress.add_task("Abilities", total=len(tests_to_run))
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {executor.submit(process_test, test): test for test in tests_to_run}
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_abilities(result["score"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -403,6 +780,8 @@ class SingleModelRunner:
         """
         self._run_knowledge_tests(self.tests["knowledge"])
         self._run_execution_tests(self.tests["execution"])
+        if "abilities" in self.tests:
+            self._run_abilities_tests(self.tests["abilities"])
         summary = self.aggregator.finalize()
         return {
             "model_config": self.model_config.model_dump(mode="json"),
@@ -410,6 +789,7 @@ class SingleModelRunner:
                 "knowledge": summary.knowledge,
                 "correctness": summary.correctness,
                 "quality": summary.quality,
+                "abilities": summary.abilities,
                 "overall": summary.overall(),
             },
             "results": self.records,
@@ -490,6 +870,99 @@ class SingleModelRunner:
                         result = future.result()
                         with self._lock:
                             self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
+
+    def _run_abilities_tests(self, tests: List[AbilityTest]) -> None:
+        """Run tool-use ability tests in parallel."""
+        if not tests:
+            return
+
+        limit = self.config.run.limit or len(tests)
+        tests_to_run = tests[:limit]
+        concurrency = self.config.run.concurrency
+
+        def process_test(test: AbilityTest) -> Dict[str, Any]:
+            try:
+                history: List[str] = []
+                tool_calls: List[Dict[str, Any]] = []
+                observations: List[Dict[str, Any]] = []
+                trace: List[Dict[str, Any]] = []
+                final_answer = ""
+
+                setup = test.fixtures.get("setup") if isinstance(test.fixtures, dict) else None
+                teardown = test.fixtures.get("teardown") if isinstance(test.fixtures, dict) else None
+
+                for step in range(test.max_steps):
+                    prompt = render_abilities_prompt(test, history=history)
+                    completion = self.model.generate(prompt)
+                    trace_step: Dict[str, Any] = {
+                        "step": step,
+                        "prompt": prompt,
+                        "completion": completion,
+                    }
+                    parsed = parse_tool_call(completion)
+                    if parsed is None:
+                        final_answer = completion
+                        trace_step["tool_call"] = None
+                        trace.append(trace_step)
+                        break
+
+                    tool_calls.append(parsed)
+                    result = self.environment.execute_ability(
+                        ability=parsed.get("ability", ""),
+                        input_data=parsed.get("input"),
+                        method=parsed.get("method"),
+                        setup=setup if step == 0 else None,
+                        teardown=teardown if step == test.max_steps - 1 else None,
+                    )
+                    observation = result.raw if result.raw else {"success": False, "error": "no_result"}
+                    observations.append(observation)
+                    trace_step["tool_call"] = parsed
+                    trace_step["observation"] = observation
+                    trace.append(trace_step)
+                    history.append(f"TOOL_CALL: {parsed}")
+                    history.append(f"OBSERVATION: {observation}")
+                else:
+                    final_answer = ""
+
+                state_checks = _run_state_checks(test.expected_state, self.environment) if test.expected_state else []
+                score, verifier_results = score_abilities(
+                    test,
+                    tool_calls,
+                    observations,
+                    final_answer,
+                    state_checks=state_checks,
+                )
+
+                return {
+                    "test_id": test.id,
+                    "type": "abilities",
+                    "prompt_hash": sha256(render_abilities_prompt(test)),
+                    "tool_calls": tool_calls,
+                    "observations": observations,
+                    "trace": trace,
+                    "state_checks": state_checks,
+                    "final_answer": final_answer,
+                    "verifiers": verifier_results,
+                    "score": score,
+                }
+            except Exception as e:
+                raise TestError(test.id, "abilities", e) from e
+
+        with create_progress() as progress:
+            task = progress.add_task("Abilities", total=len(tests_to_run))
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {executor.submit(process_test, test): test for test in tests_to_run}
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_abilities(result["score"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:

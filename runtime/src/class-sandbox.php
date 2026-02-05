@@ -124,6 +124,29 @@ class Sandbox {
 	}
 
 	/**
+	 * Execute a PHP snippet safely (used for ability fixtures).
+	 *
+	 * @param string $code PHP code to execute.
+	 * @return array{success: bool, error: string|null, trace: array<int,string>}
+	 */
+	public function execute_snippet( string $code ): array {
+		try {
+			$this->safe_eval( $code );
+			return [
+				'success' => true,
+				'error'   => null,
+				'trace'   => [],
+			];
+		} catch ( \Throwable $e ) {
+			return [
+				'success' => false,
+				'error'   => $e->getMessage(),
+				'trace'   => $this->get_safe_trace( $e ),
+			];
+		}
+	}
+
+	/**
 	 * Run a single assertion.
 	 *
 	 * @param array<string, mixed> $assertion Assertion configuration.
