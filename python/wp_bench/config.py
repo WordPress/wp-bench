@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, validator
 
@@ -51,6 +51,7 @@ class GraderConfig(BaseModel):
 
 class RunConfig(BaseModel):
     suite: str = "wp-core-v1"
+    test_type: Optional[Literal["knowledge", "execution"]] = None
     limit: Optional[int] = None
     seed: int = 1337
     concurrency: int = 5
