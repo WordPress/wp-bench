@@ -3,23 +3,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 @dataclass
 class ScoreBreakdown:
-    knowledge: float = 0.0
-    correctness: float = 0.0
-    quality: float = 0.0
+    knowledge: Optional[float] = None
+    correctness: Optional[float] = None
+    quality: Optional[float] = None
     weights: Dict[str, float] = field(
         default_factory=lambda: {"knowledge": 0.3, "correctness": 0.4, "quality": 0.3}
     )
 
     def overall(self) -> float:
-        total = 0.0
-        for key, weight in self.weights.items():
-            total += getattr(self, key, 0.0) * weight
-        return round(total, 4)
+        active = {k: w for k, w in self.weights.items() if getattr(self, k) is not None}
+        if not active:
+            return 0.0
+        total_weight = sum(active.values())
+        total = sum(getattr(self, k) * w for k, w in active.items())
+        return round(total / total_weight, 4)
 
 
 class ScoreAggregator:
@@ -44,6 +46,4 @@ class ScoreAggregator:
             breakdown.correctness = mean(self.correctness_scores)
         if self.quality_scores:
             breakdown.quality = mean(self.quality_scores)
-        else:
-            breakdown.quality = 0.0
         return breakdown

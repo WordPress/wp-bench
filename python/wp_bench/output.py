@@ -85,13 +85,16 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
     table.add_column("Quality", justify="right")
     table.add_column("Overall", justify="right", style="bold")
 
+    def _fmt_score(value: float | None) -> str:
+        return f"{value*100:.1f}%" if value is not None else "N/A"
+
     for model_name, result in results.items():
         scores = result["scores"]
         table.add_row(
             model_name,
-            f"{scores['knowledge']*100:.1f}%",
-            f"{scores['correctness']*100:.1f}%",
-            f"{scores['quality']*100:.1f}%" if scores["quality"] else "N/A",
+            _fmt_score(scores["knowledge"]),
+            _fmt_score(scores["correctness"]),
+            _fmt_score(scores["quality"]),
             f"{scores['overall']*100:.1f}%",
         )
 
