@@ -11,6 +11,7 @@
     {
       "id": "k-rest-001",
       "category": "rest-api",
+      "subcategory": "namespaces",
       "difficulty": "intermediate",
       "prompt": "What is the default namespace prefix for WordPress core REST API endpoints?",
       "type": "short_answer",
@@ -21,6 +22,7 @@
     {
       "id": "k-rest-002",
       "category": "rest-api",
+      "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "Which function is used to register a custom REST API route in WordPress?",
       "type": "multiple_choice",

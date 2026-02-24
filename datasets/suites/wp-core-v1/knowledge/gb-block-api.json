@@ -10,58 +10,100 @@
   "tests": [
     {
       "id": "k-blockprocessor-001",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "streaming-parser",
       "difficulty": "hard",
       "prompt": "In WordPress 6.9, which WP_Block_Processor method replaced extract_block() to return a parsed block and advance the cursor?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "extract_block()" },
-        { "key": "B", "text": "extract_current_block()" },
-        { "key": "C", "text": "extract_full_block_and_advance()" },
-        { "key": "D", "text": "get_block_and_seek()" }
+        {
+          "key": "A",
+          "text": "extract_block()"
+        },
+        {
+          "key": "B",
+          "text": "extract_current_block()"
+        },
+        {
+          "key": "C",
+          "text": "extract_full_block_and_advance()"
+        },
+        {
+          "key": "D",
+          "text": "get_block_and_seek()"
+        }
       ],
       "correct_answer": "C",
       "explanation": "The RC renamed extract_block() to extract_full_block_and_advance() before the 6.9 release; older names now fail.",
-      "references": ["https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"]
+      "references": [
+        "https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"
+      ]
     },
     {
       "id": "k-blockprocessor-attrs-001",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "streaming-parser",
       "difficulty": "hard",
       "prompt": "When using WP_Block_Processor in 6.9, which method triggers JSON parsing of the current block's attributes (and is intentionally verbose about its cost)?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "get_block_attributes()" },
-        { "key": "B", "text": "allocate_and_return_parsed_attributes()" },
-        { "key": "C", "text": "parse_attributes()" },
-        { "key": "D", "text": "get_attributes_json()" }
+        {
+          "key": "A",
+          "text": "get_block_attributes()"
+        },
+        {
+          "key": "B",
+          "text": "allocate_and_return_parsed_attributes()"
+        },
+        {
+          "key": "C",
+          "text": "parse_attributes()"
+        },
+        {
+          "key": "D",
+          "text": "get_attributes_json()"
+        }
       ],
       "correct_answer": "B",
       "explanation": "allocate_and_return_parsed_attributes() is the costly, explicitly named method that parses JSON attributes on demand in WP_Block_Processor.",
-      "references": ["https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"]
+      "references": [
+        "https://make.wordpress.org/core/2025/11/19/introducing-the-streaming-block-parser-in-wordpress-6-9/"
+      ]
     },
     {
       "id": "k-blockapi-003",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "registration",
       "difficulty": "basic",
       "prompt": "WordPress block type names must match a specific pattern. Which of these is a valid block type name?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "my-plugin/my-block" },
-        { "key": "B", "text": "MyPlugin/MyBlock" },
-        { "key": "C", "text": "my_plugin_my_block" },
-        { "key": "D", "text": "my-plugin:my-block" }
+        {
+          "key": "A",
+          "text": "my-plugin/my-block"
+        },
+        {
+          "key": "B",
+          "text": "MyPlugin/MyBlock"
+        },
+        {
+          "key": "C",
+          "text": "my_plugin_my_block"
+        },
+        {
+          "key": "D",
+          "text": "my-plugin:my-block"
+        }
       ],
       "correct_answer": "A",
       "explanation": "Block type names must match the regex /^[a-z0-9-]+\\/[a-z0-9-]+$/ -- lowercase alphanumeric and dashes, with a required forward slash separator between namespace and name. No uppercase, underscores, or colons.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block_type_registry/register/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block_type_registry/register/"
+      ]
     },
     {
       "id": "k-blockapi-004",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "parsing",
       "difficulty": "basic",
       "prompt": "When WP_Block_Parser encounters a block comment like <!-- wp:paragraph --> with no explicit namespace prefix, what namespace does it assign?",
@@ -69,62 +111,106 @@
       "correct_answer": "core",
       "answer_type": "contains",
       "explanation": "WP_Block_Parser defaults the namespace to 'core/' when none is present. So <!-- wp:paragraph --> produces blockName 'core/paragraph'.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block_parser/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block_parser/"
+      ]
     },
     {
       "id": "k-blockapi-005",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "parsing",
       "difficulty": "basic",
       "prompt": "What does parse_blocks() set as blockName for freeform HTML content that isn't inside a block comment delimiter?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "core/freeform" },
-        { "key": "B", "text": "null" },
-        { "key": "C", "text": "An empty string" },
-        { "key": "D", "text": "core/html" }
+        {
+          "key": "A",
+          "text": "core/freeform"
+        },
+        {
+          "key": "B",
+          "text": "null"
+        },
+        {
+          "key": "C",
+          "text": "An empty string"
+        },
+        {
+          "key": "D",
+          "text": "core/html"
+        }
       ],
       "correct_answer": "B",
       "explanation": "Freeform HTML (content not inside block delimiters) is represented as a WP_Block_Parser_Block with blockName set to null. The freeform() method creates new WP_Block_Parser_Block( null, ... ).",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block_parser/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block_parser/"
+      ]
     },
     {
       "id": "k-blockapi-006",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "WP_Block_Type defines a GLOBAL_ATTRIBUTES constant that adds attributes to every registered block. What are these two global attributes?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "lock (object) and metadata (object)" },
-        { "key": "B", "text": "className (string) and anchor (string)" },
-        { "key": "C", "text": "align (string) and style (object)" },
-        { "key": "D", "text": "id (string) and className (string)" }
+        {
+          "key": "A",
+          "text": "lock (object) and metadata (object)"
+        },
+        {
+          "key": "B",
+          "text": "className (string) and anchor (string)"
+        },
+        {
+          "key": "C",
+          "text": "align (string) and style (object)"
+        },
+        {
+          "key": "D",
+          "text": "id (string) and className (string)"
+        }
       ],
       "correct_answer": "A",
       "explanation": "WP_Block_Type::GLOBAL_ATTRIBUTES contains 'lock' (type: object) and 'metadata' (type: object). These are merged into every block's attributes in set_props(), giving all blocks locking and metadata capabilities.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block_type/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block_type/"
+      ]
     },
     {
       "id": "k-blockapi-007",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "rendering",
       "difficulty": "intermediate",
       "prompt": "When block.json specifies a 'render' PHP template file (since 6.1), which three variables are available inside that template?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "$attributes, $content, $block" },
-        { "key": "B", "text": "$args, $inner_content, $context" },
-        { "key": "C", "text": "$block_attributes, $block_content, $block_type" },
-        { "key": "D", "text": "$attributes, $inner_html, $instance" }
+        {
+          "key": "A",
+          "text": "$attributes, $content, $block"
+        },
+        {
+          "key": "B",
+          "text": "$args, $inner_content, $context"
+        },
+        {
+          "key": "C",
+          "text": "$block_attributes, $block_content, $block_type"
+        },
+        {
+          "key": "D",
+          "text": "$attributes, $inner_html, $instance"
+        }
       ],
       "correct_answer": "A",
       "explanation": "The render_callback closure created from the 'render' field in block.json receives $attributes (array), $content (string of inner HTML), and $block (WP_Block instance), and makes them available inside the required PHP file.",
-      "references": ["https://developer.wordpress.org/reference/functions/register_block_type_from_metadata/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/register_block_type_from_metadata/"
+      ]
     },
     {
       "id": "k-blockapi-008",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "What filter allows plugins to modify the raw block.json metadata array before it is processed into registration settings?",
@@ -132,11 +218,13 @@
       "correct_answer": "block_type_metadata",
       "answer_type": "contains",
       "explanation": "The block_type_metadata filter fires in register_block_type_from_metadata() on the raw metadata array. A second filter, block_type_metadata_settings, fires later on the processed settings before final registration.",
-      "references": ["https://developer.wordpress.org/reference/hooks/block_type_metadata/"]
+      "references": [
+        "https://developer.wordpress.org/reference/hooks/block_type_metadata/"
+      ]
     },
     {
       "id": "k-blockapi-009",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "parsing",
       "difficulty": "intermediate",
       "prompt": "What filter allows plugins to replace the default WP_Block_Parser class used by parse_blocks()?",
@@ -144,62 +232,106 @@
       "correct_answer": "block_parser_class",
       "answer_type": "contains",
       "explanation": "parse_blocks() applies the block_parser_class filter with default value 'WP_Block_Parser'. Plugins can return a different class name to use a custom parser implementation.",
-      "references": ["https://developer.wordpress.org/reference/functions/parse_blocks/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/parse_blocks/"
+      ]
     },
     {
       "id": "k-blockapi-010",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "WP_Block_Type_Registry is declared as a final class using which design pattern?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Singleton with a static get_instance() method" },
-        { "key": "B", "text": "Factory with a static create() method" },
-        { "key": "C", "text": "Service locator with dependency injection" },
-        { "key": "D", "text": "Registry with an event-driven observer pattern" }
+        {
+          "key": "A",
+          "text": "Singleton with a static get_instance() method"
+        },
+        {
+          "key": "B",
+          "text": "Factory with a static create() method"
+        },
+        {
+          "key": "C",
+          "text": "Service locator with dependency injection"
+        },
+        {
+          "key": "D",
+          "text": "Registry with an event-driven observer pattern"
+        }
       ],
       "correct_answer": "A",
       "explanation": "WP_Block_Type_Registry is a final class that uses the singleton pattern. The only way to obtain it is via the static get_instance() method, which returns the single shared instance.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block_type_registry/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block_type_registry/"
+      ]
     },
     {
       "id": "k-blockapi-011",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "rendering",
       "difficulty": "hard",
       "prompt": "WP_Block_Type::is_dynamic() determines if a block is dynamic. What does it check?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Whether the block has a 'render' field in block.json" },
-        { "key": "B", "text": "is_callable( $this->render_callback )" },
-        { "key": "C", "text": "Whether the block's supports include 'dynamic' => true" },
-        { "key": "D", "text": "Whether the block type was registered with register_block_type_from_metadata()" }
+        {
+          "key": "A",
+          "text": "Whether the block has a 'render' field in block.json"
+        },
+        {
+          "key": "B",
+          "text": "is_callable( $this->render_callback )"
+        },
+        {
+          "key": "C",
+          "text": "Whether the block's supports include 'dynamic' => true"
+        },
+        {
+          "key": "D",
+          "text": "Whether the block type was registered with register_block_type_from_metadata()"
+        }
       ],
       "correct_answer": "B",
       "explanation": "is_dynamic() simply returns is_callable( $this->render_callback ). If the render_callback property is a valid callable, the block is dynamic. This is true whether the callback was set directly or generated from the 'render' field in block.json.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block_type/is_dynamic/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block_type/is_dynamic/"
+      ]
     },
     {
       "id": "k-blockapi-012",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "serialization",
       "difficulty": "hard",
       "prompt": "serialize_block_attributes() escapes the character sequence '--' to '\\u002d\\u002d' in JSON output. What does this prevent?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Accidental closing of block comment delimiters (<!-- wp:name -->)" },
-        { "key": "B", "text": "CSS custom property injection via block attributes" },
-        { "key": "C", "text": "JavaScript template literal interpolation" },
-        { "key": "D", "text": "HTML entity decoding in attribute values" }
+        {
+          "key": "A",
+          "text": "Accidental closing of block comment delimiters (<!-- wp:name -->)"
+        },
+        {
+          "key": "B",
+          "text": "CSS custom property injection via block attributes"
+        },
+        {
+          "key": "C",
+          "text": "JavaScript template literal interpolation"
+        },
+        {
+          "key": "D",
+          "text": "HTML entity decoding in attribute values"
+        }
       ],
       "correct_answer": "A",
       "explanation": "Block attributes are embedded inside HTML comments (<!-- wp:name {\"attrs\":...} -->). The '--' sequence inside HTML comments would prematurely close the comment, so it must be escaped to \\u002d\\u002d. Similar escaping applies to <, >, &, \\\\ and \\\".",
-      "references": ["https://developer.wordpress.org/reference/functions/serialize_block_attributes/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/serialize_block_attributes/"
+      ]
     },
     {
       "id": "k-blockapi-013",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "rendering",
       "difficulty": "hard",
       "prompt": "When WP_Block::render() calls a dynamic block's render_callback, how many arguments does it pass?",
@@ -207,58 +339,102 @@
       "correct_answer": "3",
       "answer_type": "exact",
       "explanation": "WP_Block::render() passes 3 arguments: $this->attributes (array), $block_content (string), and $this (the WP_Block instance). Note this differs from WP_Block_Type::render(), which only passes 2 arguments.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block/render/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block/render/"
+      ]
     },
     {
       "id": "k-blockapi-014",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "rendering",
       "difficulty": "hard",
       "prompt": "Some block types set skip_inner_blocks to true. What effect does this have during WP_Block::render()?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Inner blocks are removed from the parsed block tree entirely" },
-        { "key": "B", "text": "Inner blocks are not pre-rendered; the render_callback handles them itself" },
-        { "key": "C", "text": "Inner blocks are rendered but their output is discarded" },
-        { "key": "D", "text": "Inner block scripts and styles are not enqueued" }
+        {
+          "key": "A",
+          "text": "Inner blocks are removed from the parsed block tree entirely"
+        },
+        {
+          "key": "B",
+          "text": "Inner blocks are not pre-rendered; the render_callback handles them itself"
+        },
+        {
+          "key": "C",
+          "text": "Inner blocks are rendered but their output is discarded"
+        },
+        {
+          "key": "D",
+          "text": "Inner block scripts and styles are not enqueued"
+        }
       ],
       "correct_answer": "B",
       "explanation": "When skip_inner_blocks is true, WP_Block::render() skips the normal pre-rendering of inner blocks. The dynamic render_callback is expected to iterate and render them itself. Blocks like core/post-template use this to control inner block rendering context.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_block/render/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_block/render/"
+      ]
     },
     {
       "id": "k-blockapi-015",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "serialization",
       "difficulty": "basic",
       "prompt": "What CSS class is automatically generated for a block based on its block type name?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "wp-block-{name} (with the namespace prefix stripped)" },
-        { "key": "B", "text": "block-{namespace}-{name}" },
-        { "key": "C", "text": "wp-{namespace}--{name}" },
-        { "key": "D", "text": "gutenberg-block-{name}" }
+        {
+          "key": "A",
+          "text": "wp-block-{name} (with the namespace prefix stripped)"
+        },
+        {
+          "key": "B",
+          "text": "block-{namespace}-{name}"
+        },
+        {
+          "key": "C",
+          "text": "wp-{namespace}--{name}"
+        },
+        {
+          "key": "D",
+          "text": "gutenberg-block-{name}"
+        }
       ],
       "correct_answer": "A",
       "explanation": "WordPress generates a default CSS class by stripping the 'core/' namespace prefix and prepending 'wp-block-'. For example, 'core/button' becomes 'wp-block-button', and 'my-plugin/my-block' becomes 'wp-block-my-plugin-my-block'. This can be disabled with supports.className: false.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-supports/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-supports/"
+      ]
     },
     {
       "id": "k-blockapi-016",
-      "category": "block-api",
+      "category": "gb-block-api",
       "subcategory": "deprecation",
       "difficulty": "intermediate",
       "prompt": "What are the six valid keys allowed in a block type deprecation entry?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "attributes, supports, save, migrate, isEligible, apiVersion" },
-        { "key": "B", "text": "attributes, edit, save, transform, validate, version" },
-        { "key": "C", "text": "name, attributes, save, migrate, deprecated, category" },
-        { "key": "D", "text": "attributes, supports, render, migrate, isEligible, title" }
+        {
+          "key": "A",
+          "text": "attributes, supports, save, migrate, isEligible, apiVersion"
+        },
+        {
+          "key": "B",
+          "text": "attributes, edit, save, transform, validate, version"
+        },
+        {
+          "key": "C",
+          "text": "name, attributes, save, migrate, deprecated, category"
+        },
+        {
+          "key": "D",
+          "text": "attributes, supports, render, migrate, isEligible, title"
+        }
       ],
       "correct_answer": "A",
       "explanation": "Block deprecation entries support exactly six keys defined in DEPRECATED_ENTRY_KEYS: 'attributes' (old attribute schema), 'supports' (old supports), 'save' (old save function), 'migrate' (transforms old attributes/inner blocks to new), 'isEligible' (checks if block needs migration), and 'apiVersion' (API version for the deprecated save).",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-deprecation/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-deprecation/"
+      ]
     }
   ]
 }

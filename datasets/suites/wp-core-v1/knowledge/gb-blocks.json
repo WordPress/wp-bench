@@ -1,0 +1,324 @@
+{
+  "id": "wp-core-knowledge-v1-wp_blocks",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - @wordpress/blocks",
+    "description": "Tests knowledge of the @wordpress/blocks JavaScript block API",
+    "wp_version": "6.9",
+    "created_at": "2026-02-24"
+  },
+  "tests": [
+    {
+      "id": "k-wpblocks-001",
+      "category": "gb-blocks",
+      "subcategory": "store",
+      "difficulty": "basic",
+      "prompt": "What is the @wordpress/data store name for the @wordpress/blocks package?",
+      "type": "short_answer",
+      "correct_answer": "core/blocks",
+      "answer_type": "exact",
+      "explanation": "The blocks store is registered under the name 'core/blocks' (STORE_NAME constant). It holds the registry of block types, categories, collections, styles, and variations. Accessed via select('core/blocks') or dispatch('core/blocks').",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-002",
+      "category": "gb-blocks",
+      "subcategory": "factory",
+      "difficulty": "basic",
+      "prompt": "What function creates a new block instance in the JavaScript block editor?",
+      "type": "short_answer",
+      "correct_answer": "createBlock",
+      "answer_type": "contains",
+      "explanation": "createBlock(name, attributes, innerBlocks) returns a block object with a UUID v4 clientId, the block name, sanitized attributes, innerBlocks array, and isValid set to true. Attributes are validated against the block type's attribute schema.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-003",
+      "category": "gb-blocks",
+      "subcategory": "constants",
+      "difficulty": "basic",
+      "prompt": "What is the value of the BLOCK_ICON_DEFAULT constant in @wordpress/blocks?",
+      "type": "short_answer",
+      "correct_answer": "block-default",
+      "answer_type": "exact",
+      "explanation": "BLOCK_ICON_DEFAULT is 'block-default', which is the Dashicon slug used when a block type does not specify a custom icon. The icon system also supports SVG elements and React components.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-004",
+      "category": "gb-blocks",
+      "subcategory": "variations",
+      "difficulty": "intermediate",
+      "prompt": "What are the three scope values that control where a block variation appears?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "block, inserter, transform"
+        },
+        {
+          "key": "B",
+          "text": "editor, frontend, api"
+        },
+        {
+          "key": "C",
+          "text": "global, local, inline"
+        },
+        {
+          "key": "D",
+          "text": "view, edit, preview"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "WPBlockVariationScope has three values: 'block' (shown in block-level contexts), 'inserter' (appears in the block inserter UI), and 'transform' (available as a block transformation option). If scope is not specified, the variation appears in all scopes.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-variations/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-005",
+      "category": "gb-blocks",
+      "subcategory": "transforms",
+      "difficulty": "intermediate",
+      "prompt": "What are the two direction values for getBlockTransforms()?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "'to' and 'from'"
+        },
+        {
+          "key": "B",
+          "text": "'source' and 'target'"
+        },
+        {
+          "key": "C",
+          "text": "'input' and 'output'"
+        },
+        {
+          "key": "D",
+          "text": "'up' and 'down'"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "getBlockTransforms(direction, blockTypeOrName) accepts 'to' (transforms this block can convert into) or 'from' (transforms other blocks can use to become this block). Each returned transform has a blockName property added automatically.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-transforms/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-006",
+      "category": "gb-blocks",
+      "subcategory": "serialization",
+      "difficulty": "intermediate",
+      "prompt": "What is the HTML comment delimiter format used to serialize a block with content?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "<!-- wp:name {attrs} -->content<!-- /wp:name -->"
+        },
+        {
+          "key": "B",
+          "text": "<wp-block name=\"name\" attrs=\"{}\">content</wp-block>"
+        },
+        {
+          "key": "C",
+          "text": "[wp:name {attrs}]content[/wp:name]"
+        },
+        {
+          "key": "D",
+          "text": "{{wp name attrs}}content{{/wp name}}"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Blocks are serialized as HTML comments: opening delimiter <!-- wp:{blockName} {serializedAttributes} -->, followed by the HTML content, followed by closing delimiter <!-- /wp:{blockName} -->. Self-closing blocks (no content) use <!-- wp:{blockName} {attrs} /-->.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-007",
+      "category": "gb-blocks",
+      "subcategory": "registration",
+      "difficulty": "intermediate",
+      "prompt": "What function registers a visual style variant for an existing block type?",
+      "type": "short_answer",
+      "correct_answer": "registerBlockStyle",
+      "answer_type": "contains",
+      "explanation": "registerBlockStyle(blockNames, styleVariation) adds a style variant to one or more blocks (blockNames can be a string or array). Each style variation has a name and label, and optionally isDefault. The corresponding CSS class is 'is-style-{name}'.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-styles/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-008",
+      "category": "gb-blocks",
+      "subcategory": "registration",
+      "difficulty": "intermediate",
+      "prompt": "What function registers a namespace collection of blocks with a shared title and icon?",
+      "type": "short_answer",
+      "correct_answer": "registerBlockCollection",
+      "answer_type": "contains",
+      "explanation": "registerBlockCollection(namespace, { title, icon }) groups all blocks from a namespace under a collection label in the inserter. For example, registerBlockCollection('my-plugin', { title: 'My Plugin' }) groups all 'my-plugin/*' blocks.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-009",
+      "category": "gb-blocks",
+      "subcategory": "templates",
+      "difficulty": "intermediate",
+      "prompt": "What function checks whether a set of blocks matches a template structure?",
+      "type": "short_answer",
+      "correct_answer": "doBlocksMatchTemplate",
+      "answer_type": "contains",
+      "explanation": "doBlocksMatchTemplate(blocks, template) recursively compares block names and inner block structure against a template array. Templates are arrays of [blockName, attributes, innerBlocksTemplate] tuples. Returns a boolean.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-010",
+      "category": "gb-blocks",
+      "subcategory": "transforms",
+      "difficulty": "hard",
+      "prompt": "What does isWildcardBlockTransform check?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Whether a transform targets '*' — meaning it accepts any block type"
+        },
+        {
+          "key": "B",
+          "text": "Whether a transform uses glob patterns in block names"
+        },
+        {
+          "key": "C",
+          "text": "Whether a transform matches blocks by regex"
+        },
+        {
+          "key": "D",
+          "text": "Whether a transform applies to all blocks in a group"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "isWildcardBlockTransform(transform) returns true if the transform's blocks array contains '*', indicating it can accept any block type as input. This is used for universal transforms like the 'Group' block which can wrap any selection.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-011",
+      "category": "gb-blocks",
+      "subcategory": "parsing",
+      "difficulty": "hard",
+      "prompt": "What are the attribute source types available for extracting block attribute values from saved HTML?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "attribute, property, text, html, query, rich-text"
+        },
+        {
+          "key": "B",
+          "text": "dom, css, xpath, regex, json"
+        },
+        {
+          "key": "C",
+          "text": "selector, content, meta, comment, style"
+        },
+        {
+          "key": "D",
+          "text": "innerHTML, textContent, dataset, className, value"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Block attributes can be sourced from saved HTML via: 'attribute' (reads an HTML attribute via selector), 'property' (reads a DOM property), 'text' (text content), 'html' (innerHTML), 'query' (repeating fields via selector), and 'rich-text' (returns RichTextData). Without a source, attributes are stored in the block comment delimiter.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-attributes/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-012",
+      "category": "gb-blocks",
+      "subcategory": "variations",
+      "difficulty": "hard",
+      "prompt": "What property on a block variation makes it the one selected by default when inserting the parent block?",
+      "type": "short_answer",
+      "correct_answer": "isDefault",
+      "answer_type": "contains",
+      "explanation": "Setting isDefault: true on a variation makes it the default when the parent block is inserted. Only one variation should have isDefault set to true. The isActive property (function or string array) determines which variation matches the current block attributes.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-api/block-variations/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-013",
+      "category": "gb-blocks",
+      "subcategory": "store",
+      "difficulty": "hard",
+      "prompt": "What selector checks whether a block type supports a specific feature like 'color' or 'typography'?",
+      "type": "short_answer",
+      "correct_answer": "hasBlockSupport",
+      "answer_type": "contains",
+      "explanation": "hasBlockSupport(state, nameOrType, feature, defaultSupports) returns a boolean. A related selector getBlockSupport returns the actual support configuration value. Both accept the feature as a dot-separated path (e.g., 'color.text').",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-014",
+      "category": "gb-blocks",
+      "subcategory": "factory",
+      "difficulty": "hard",
+      "prompt": "What does switchToBlockType return when transforming blocks?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "An array of the resulting blocks, or null if no valid transform exists"
+        },
+        {
+          "key": "B",
+          "text": "A single transformed block instance"
+        },
+        {
+          "key": "C",
+          "text": "A Promise that resolves to the transformed blocks"
+        },
+        {
+          "key": "D",
+          "text": "A boolean indicating success or failure"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "switchToBlockType(blocks, name) applies the matching transform and returns an array of resulting blocks (transforms can produce multiple blocks). It returns null if no valid transform exists between the source blocks and the target block type.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    },
+    {
+      "id": "k-wpblocks-015",
+      "category": "gb-blocks",
+      "subcategory": "registration",
+      "difficulty": "intermediate",
+      "prompt": "What function registers a block bindings source on the JavaScript side?",
+      "type": "short_answer",
+      "correct_answer": "registerBlockBindingsSource",
+      "answer_type": "contains",
+      "explanation": "registerBlockBindingsSource(source) registers a client-side block bindings source. The source object requires a name (namespaced, e.g., 'my-plugin/my-source') and can include label, usesContext, getValues, setValues, canUserEditValue, and getFieldsList. Introduced in WordPress 6.7.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-blocks/"
+      ]
+    }
+  ]
+}

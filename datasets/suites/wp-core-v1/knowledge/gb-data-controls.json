@@ -1,0 +1,226 @@
+{
+  "id": "wp-core-knowledge-v1-wp_data_controls",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - @wordpress/data-controls",
+    "description": "Tests knowledge of the @wordpress/data-controls async side-effect controls",
+    "wp_version": "6.9",
+    "created_at": "2026-02-24"
+  },
+  "tests": [
+    {
+      "id": "k-datacontrols-001",
+      "category": "gb-data-controls",
+      "subcategory": "purpose",
+      "difficulty": "basic",
+      "prompt": "What pattern does the @wordpress/data-controls package enable in @wordpress/data store action creators?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Generator functions that yield control descriptors for async side effects"
+        },
+        {
+          "key": "B",
+          "text": "Decorator functions that wrap actions with logging"
+        },
+        {
+          "key": "C",
+          "text": "Observable streams that emit action sequences"
+        },
+        {
+          "key": "D",
+          "text": "Proxy objects that intercept action dispatches"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "data-controls enables generator-based action creators (function*) that yield control descriptor objects. The @wordpress/data middleware intercepts these yields, executes the corresponding async operation (API fetch, select, dispatch), and returns the result to the generator.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-002",
+      "category": "gb-data-controls",
+      "subcategory": "exports",
+      "difficulty": "basic",
+      "prompt": "What is the primary non-deprecated control function exported by @wordpress/data-controls?",
+      "type": "short_answer",
+      "correct_answer": "apiFetch",
+      "answer_type": "contains",
+      "explanation": "apiFetch(request) is the main active export. It creates a control descriptor with type 'API_FETCH' that triggers a @wordpress/api-fetch call. The select, syncSelect, and dispatch exports are all deprecated since version 5.7 in favor of @wordpress/data built-ins.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-003",
+      "category": "gb-data-controls",
+      "subcategory": "controls",
+      "difficulty": "intermediate",
+      "prompt": "What control action type does the apiFetch control return?",
+      "type": "short_answer",
+      "correct_answer": "API_FETCH",
+      "answer_type": "exact",
+      "explanation": "apiFetch(request) returns a descriptor object with type: 'API_FETCH' and the request options. The controls handler then calls @wordpress/api-fetch's triggerFetch with the request, returning a Promise of the API response.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-004",
+      "category": "gb-data-controls",
+      "subcategory": "deprecation",
+      "difficulty": "intermediate",
+      "prompt": "The select, syncSelect, and dispatch exports from @wordpress/data-controls are deprecated. What replaces them?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Built-in controls with the same names in @wordpress/data itself"
+        },
+        {
+          "key": "B",
+          "text": "React hooks (useSelect, useDispatch) from @wordpress/data"
+        },
+        {
+          "key": "C",
+          "text": "Direct REST API calls via @wordpress/api-fetch"
+        },
+        {
+          "key": "D",
+          "text": "The @wordpress/data-async package"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Since @wordpress/data version 5.7, the data package ships built-in controls for select, resolveSelect, and dispatch (with action types @@data/SELECT, @@data/RESOLVE_SELECT, @@data/DISPATCH). The @wordpress/data-controls versions now just alias these and emit deprecation warnings.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-005",
+      "category": "gb-data-controls",
+      "subcategory": "controls",
+      "difficulty": "intermediate",
+      "prompt": "What was the key difference between the deprecated select and syncSelect controls in @wordpress/data-controls?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "select waits for resolvers to complete (async); syncSelect returns the current value immediately (sync)"
+        },
+        {
+          "key": "B",
+          "text": "select works with Redux stores; syncSelect works with generic stores"
+        },
+        {
+          "key": "C",
+          "text": "select returns a Promise; syncSelect returns an Observable"
+        },
+        {
+          "key": "D",
+          "text": "select reads from cache; syncSelect bypasses cache"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "select was mapped to resolveSelect (waits for the selector's resolver to finish fetching async data before returning). syncSelect was mapped to the synchronous select that returns the current state value immediately, even if a resolver hasn't completed.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-006",
+      "category": "gb-data-controls",
+      "subcategory": "migration",
+      "difficulty": "hard",
+      "prompt": "What modern @wordpress/data pattern largely replaces generator-based controls for async action creators?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Thunks — action creators that return async functions receiving { dispatch, select, resolveSelect, registry }"
+        },
+        {
+          "key": "B",
+          "text": "Sagas — long-running background processes that watch for actions"
+        },
+        {
+          "key": "C",
+          "text": "Middleware — custom Redux middleware for each async operation"
+        },
+        {
+          "key": "D",
+          "text": "Observables — RxJS-based reactive action streams"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Thunks are the modern replacement. Instead of function* generators yielding control descriptors, action creators return async functions that receive { dispatch, select, resolveSelect, registry }. Thunks support standard async/await syntax and don't require control registration.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-007",
+      "category": "gb-data-controls",
+      "subcategory": "controls",
+      "difficulty": "hard",
+      "prompt": "What does the __unstableAwaitPromise control in @wordpress/data-controls do?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Yields to await any arbitrary Promise in a generator-based action creator"
+        },
+        {
+          "key": "B",
+          "text": "Blocks the Redux store until a Promise resolves"
+        },
+        {
+          "key": "C",
+          "text": "Converts a callback-based API to a Promise"
+        },
+        {
+          "key": "D",
+          "text": "Cancels a pending Promise when a new action is dispatched"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "__unstableAwaitPromise(promise) creates a control descriptor with type 'AWAIT_PROMISE'. When yielded in a generator action, the middleware resolves the Promise and returns its value to the generator. The __unstable prefix indicates the API may change.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    },
+    {
+      "id": "k-datacontrols-008",
+      "category": "gb-data-controls",
+      "subcategory": "usage",
+      "difficulty": "intermediate",
+      "prompt": "How are @wordpress/data-controls handlers registered with a store?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Pass the exported controls object as the controls property in createReduxStore options"
+        },
+        {
+          "key": "B",
+          "text": "Call registerControls() after store creation"
+        },
+        {
+          "key": "C",
+          "text": "Import them and they auto-register globally"
+        },
+        {
+          "key": "D",
+          "text": "Add them as middleware via applyMiddleware()"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "The package exports a controls object (its default export) containing handler functions keyed by control type. This object is passed as the 'controls' property when creating a store: createReduxStore('my-store', { reducer, controls, actions }).",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data-controls/"
+      ]
+    }
+  ]
+}

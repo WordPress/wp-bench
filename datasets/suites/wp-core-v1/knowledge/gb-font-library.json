@@ -10,24 +10,38 @@
   "tests": [
     {
       "id": "k-font-001",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "post-types",
       "difficulty": "basic",
       "prompt": "What are the two post types used by the WordPress Font Library?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "wp_font_family and wp_font_face" },
-        { "key": "B", "text": "wp_font and wp_font_style" },
-        { "key": "C", "text": "wp_typography and wp_font_variant" },
-        { "key": "D", "text": "font_family and font_face" }
+        {
+          "key": "A",
+          "text": "wp_font_family and wp_font_face"
+        },
+        {
+          "key": "B",
+          "text": "wp_font and wp_font_style"
+        },
+        {
+          "key": "C",
+          "text": "wp_typography and wp_font_variant"
+        },
+        {
+          "key": "D",
+          "text": "font_family and font_face"
+        }
       ],
       "correct_answer": "A",
       "explanation": "The Font Library uses two custom post types: wp_font_family (representing a font family) and wp_font_face (representing individual font faces within a family). Both require edit_theme_options capability.",
-      "references": ["https://developer.wordpress.org/reference/functions/create_initial_post_types/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/create_initial_post_types/"
+      ]
     },
     {
       "id": "k-font-002",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "storage",
       "difficulty": "basic",
       "prompt": "In which directory are uploaded fonts stored by default in WordPress?",
@@ -35,11 +49,13 @@
       "correct_answer": "uploads/fonts",
       "answer_type": "contains",
       "explanation": "Uploaded fonts are stored in wp-content/uploads/fonts/. The wp_font_dir() function returns this path, computed by appending '/fonts' to the base upload directory. The location is filterable via the font_dir filter.",
-      "references": ["https://developer.wordpress.org/reference/functions/wp_font_dir/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/wp_font_dir/"
+      ]
     },
     {
       "id": "k-font-003",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "css-generation",
       "difficulty": "intermediate",
       "prompt": "What is the default font-display value used by WordPress's WP_Font_Face class?",
@@ -47,11 +63,13 @@
       "correct_answer": "fallback",
       "answer_type": "exact",
       "explanation": "WP_Font_Face defaults font-display to 'fallback', not 'swap'. This means the browser uses a short block period followed by a swap period, providing a balance between avoiding invisible text and layout shifts.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_font_face/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_font_face/"
+      ]
     },
     {
       "id": "k-font-004",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "collections",
       "difficulty": "intermediate",
       "prompt": "What function registers a font collection with the Font Library?",
@@ -59,75 +77,133 @@
       "correct_answer": "wp_register_font_collection",
       "answer_type": "contains",
       "explanation": "wp_register_font_collection() accepts a slug and an args array (with required name and font_families keys). It delegates to WP_Font_Library::get_instance()->register_font_collection().",
-      "references": ["https://developer.wordpress.org/reference/functions/wp_register_font_collection/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/wp_register_font_collection/"
+      ]
     },
     {
       "id": "k-font-005",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "rest-api",
       "difficulty": "intermediate",
       "prompt": "The Font Library's font face REST routes have a unique nested structure. What is the REST base for font faces?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "font-families/(?P<font_family_id>[\\d]+)/font-faces" },
-        { "key": "B", "text": "font-faces" },
-        { "key": "C", "text": "fonts/faces" },
-        { "key": "D", "text": "typography/font-faces" }
+        {
+          "key": "A",
+          "text": "font-families/(?P<font_family_id>[\\d]+)/font-faces"
+        },
+        {
+          "key": "B",
+          "text": "font-faces"
+        },
+        {
+          "key": "C",
+          "text": "fonts/faces"
+        },
+        {
+          "key": "D",
+          "text": "typography/font-faces"
+        }
       ],
       "correct_answer": "A",
       "explanation": "Font face routes are nested under their parent font family: font-families/{font_family_id}/font-faces. This is one of the few REST API endpoints in WordPress that uses a nested parent-child route structure.",
-      "references": ["https://developer.wordpress.org/rest-api/reference/font-faces/"]
+      "references": [
+        "https://developer.wordpress.org/rest-api/reference/font-faces/"
+      ]
     },
     {
       "id": "k-font-006",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "collections",
       "difficulty": "hard",
       "prompt": "When a WP_Font_Collection loads font data from a remote URL, how is the fetched JSON cached?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Site transient with DAY_IN_SECONDS TTL" },
-        { "key": "B", "text": "Object cache with no expiration" },
-        { "key": "C", "text": "File-based cache in wp-content/cache/" },
-        { "key": "D", "text": "Browser localStorage via REST response headers" }
+        {
+          "key": "A",
+          "text": "Site transient with DAY_IN_SECONDS TTL"
+        },
+        {
+          "key": "B",
+          "text": "Object cache with no expiration"
+        },
+        {
+          "key": "C",
+          "text": "File-based cache in wp-content/cache/"
+        },
+        {
+          "key": "D",
+          "text": "Browser localStorage via REST response headers"
+        }
       ],
       "correct_answer": "A",
       "explanation": "WP_Font_Collection uses set_site_transient() with DAY_IN_SECONDS TTL to cache remote JSON data. The transient key is limited to 167 characters to fit the database column constraint.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_font_collection/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_font_collection/"
+      ]
     },
     {
       "id": "k-font-007",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "css-generation",
       "difficulty": "hard",
       "prompt": "Which of these CSS properties is accepted by WP_Font_Face for @font-face declarations?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "size-adjust" },
-        { "key": "B", "text": "font-kerning" },
-        { "key": "C", "text": "letter-spacing" },
-        { "key": "D", "text": "text-rendering" }
+        {
+          "key": "A",
+          "text": "size-adjust"
+        },
+        {
+          "key": "B",
+          "text": "font-kerning"
+        },
+        {
+          "key": "C",
+          "text": "letter-spacing"
+        },
+        {
+          "key": "D",
+          "text": "text-rendering"
+        }
       ],
       "correct_answer": "A",
       "explanation": "WP_Font_Face validates a specific set of @font-face CSS properties including size-adjust, ascent-override, descent-override, font-display, font-family, font-stretch, font-style, font-weight, font-variant, font-feature-settings, font-variation-settings, line-gap-override, src, and unicode-range. Properties like font-kerning, letter-spacing, and text-rendering are not valid @font-face properties.",
-      "references": ["https://developer.wordpress.org/reference/classes/wp_font_face/"]
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_font_face/"
+      ]
     },
     {
       "id": "k-font-008",
-      "category": "font-library",
+      "category": "gb-font-library",
       "subcategory": "ui",
       "difficulty": "hard",
       "prompt": "What is the supported way to hide the Font Library UI across editors in WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Remove the Fonts menu via remove_menu_page()" },
-        { "key": "B", "text": "Set fontLibraryEnabled=false in the block_editor_settings_all filter" },
-        { "key": "C", "text": "Define DISABLE_FONT_LIBRARY in wp-config.php" },
-        { "key": "D", "text": "Unregister wp_font_family post type" }
+        {
+          "key": "A",
+          "text": "Remove the Fonts menu via remove_menu_page()"
+        },
+        {
+          "key": "B",
+          "text": "Set fontLibraryEnabled=false in the block_editor_settings_all filter"
+        },
+        {
+          "key": "C",
+          "text": "Define DISABLE_FONT_LIBRARY in wp-config.php"
+        },
+        {
+          "key": "D",
+          "text": "Unregister wp_font_family post type"
+        }
       ],
       "correct_answer": "B",
       "explanation": "Filtering block_editor_settings_all and setting fontLibraryEnabled to false disables the Font Library UI globally without unregistering post types.",
-      "references": ["https://developer.wordpress.org/news/snippets/how-to-disable-the-font-library/"]
+      "references": [
+        "https://developer.wordpress.org/news/snippets/how-to-disable-the-font-library/"
+      ]
     }
   ]
 }

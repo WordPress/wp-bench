@@ -1,0 +1,341 @@
+{
+  "id": "wp-core-knowledge-v1-wp_data",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - @wordpress/data",
+    "description": "Tests knowledge of the @wordpress/data state management library",
+    "wp_version": "6.9",
+    "created_at": "2026-02-24"
+  },
+  "tests": [
+    {
+      "id": "k-wpdata-001",
+      "category": "gb-data",
+      "subcategory": "store-creation",
+      "difficulty": "basic",
+      "prompt": "What function creates a store descriptor in the modern @wordpress/data API?",
+      "type": "short_answer",
+      "correct_answer": "createReduxStore",
+      "answer_type": "contains",
+      "explanation": "createReduxStore(key, options) creates a StoreDescriptor with a namespace key and configuration (reducer, actions, selectors, resolvers). The descriptor is then passed to register(). The older registerStore() is deprecated.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-002",
+      "category": "gb-data",
+      "subcategory": "hooks",
+      "difficulty": "basic",
+      "prompt": "What React hook reads data from a @wordpress/data store?",
+      "type": "short_answer",
+      "correct_answer": "useSelect",
+      "answer_type": "contains",
+      "explanation": "useSelect(mapSelect, deps) subscribes a component to store data. It accepts a mapping function receiving (select, registry), or a StoreDescriptor for static mode. It uses React 18's useSyncExternalStore internally.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-003",
+      "category": "gb-data",
+      "subcategory": "hooks",
+      "difficulty": "basic",
+      "prompt": "What React hook dispatches actions to a @wordpress/data store?",
+      "type": "short_answer",
+      "correct_answer": "useDispatch",
+      "answer_type": "contains",
+      "explanation": "useDispatch(storeNameOrDescriptor) returns the action creators for a store. If called without arguments, it returns the registry's dispatch function. It must be used within a RegistryProvider context.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-004",
+      "category": "gb-data",
+      "subcategory": "store-creation",
+      "difficulty": "basic",
+      "prompt": "Which state management library does @wordpress/data use internally?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Redux"
+        },
+        {
+          "key": "B",
+          "text": "MobX"
+        },
+        {
+          "key": "C",
+          "text": "Zustand"
+        },
+        {
+          "key": "D",
+          "text": "A custom reactive system with no external dependency"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "@wordpress/data uses Redux (version 5) as its underlying state container. It adds WordPress-specific features on top: resolvers for async data fetching, registry for multi-store management, controls/thunks for side effects, and persistence plugins.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-005",
+      "category": "gb-data",
+      "subcategory": "selectors",
+      "difficulty": "intermediate",
+      "prompt": "What does resolveSelect() do differently from select() in @wordpress/data?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Returns promise-wrapped selectors that wait for resolvers to complete before returning values"
+        },
+        {
+          "key": "B",
+          "text": "Validates selector arguments against a schema before calling"
+        },
+        {
+          "key": "C",
+          "text": "Caches selector results in localStorage for persistence"
+        },
+        {
+          "key": "D",
+          "text": "Runs selectors on a Web Worker for better performance"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "select() returns the current state value synchronously. resolveSelect() returns Promise-wrapped selectors that wait for the selector's resolver to finish fetching data before returning. This is useful when you need to ensure async data is loaded.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-006",
+      "category": "gb-data",
+      "subcategory": "thunks",
+      "difficulty": "intermediate",
+      "prompt": "What properties does the argument object passed to a thunk action creator contain?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "registry, dispatch, select, resolveSelect"
+        },
+        {
+          "key": "B",
+          "text": "state, dispatch, getState"
+        },
+        {
+          "key": "C",
+          "text": "store, actions, selectors"
+        },
+        {
+          "key": "D",
+          "text": "context, next, action"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Thunk action creators receive an object with: registry (full registry instance), dispatch (bound action creators for the store), select (bound selectors), and resolveSelect (promise-wrapped selectors). The dispatch, select, and resolveSelect properties are lazy-evaluated getters.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-007",
+      "category": "gb-data",
+      "subcategory": "registry",
+      "difficulty": "intermediate",
+      "prompt": "What does the batch() function in @wordpress/data do?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Groups multiple store updates and notifies listeners only once at the end"
+        },
+        {
+          "key": "B",
+          "text": "Sends multiple REST API requests in a single HTTP call"
+        },
+        {
+          "key": "C",
+          "text": "Queues actions to run sequentially in a Web Worker"
+        },
+        {
+          "key": "D",
+          "text": "Defers all dispatches until the next animation frame"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "batch(callback) pauses all store emitters during the callback, preventing selector recomputation and component re-renders. Once the callback completes, listeners are notified once. This enables atomic operations across multiple stores.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-008",
+      "category": "gb-data",
+      "subcategory": "selectors",
+      "difficulty": "intermediate",
+      "prompt": "What function creates a selector that can access other stores via the registry?",
+      "type": "short_answer",
+      "correct_answer": "createRegistrySelector",
+      "answer_type": "contains",
+      "explanation": "createRegistrySelector((select) => (state, ...args) => result) creates a selector with cross-store access. The returned selector is marked with isRegistrySelector: true and its select binding is cached per registry using WeakMap.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-009",
+      "category": "gb-data",
+      "subcategory": "persistence",
+      "difficulty": "intermediate",
+      "prompt": "What is the default localStorage key used by the @wordpress/data persistence plugin?",
+      "type": "short_answer",
+      "correct_answer": "WP_DATA",
+      "answer_type": "exact",
+      "explanation": "The persistence plugin stores data under the 'WP_DATA' key by default. This can be changed via the storageKey option when registering the plugin with registry.use(persistencePlugin, { storageKey }).",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-010",
+      "category": "gb-data",
+      "subcategory": "store-creation",
+      "difficulty": "intermediate",
+      "prompt": "Which property is the only required field in a createReduxStore configuration object?",
+      "type": "short_answer",
+      "correct_answer": "reducer",
+      "answer_type": "contains",
+      "explanation": "The reducer function is the only required property. Optional properties include actions, selectors, resolvers, controls (deprecated), and initialState. The reducer accepts (state, action) and returns the new state.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-011",
+      "category": "gb-data",
+      "subcategory": "resolvers",
+      "difficulty": "hard",
+      "prompt": "What are the three possible resolution status values for a resolver in @wordpress/data?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "resolving, finished, error"
+        },
+        {
+          "key": "B",
+          "text": "pending, fulfilled, rejected"
+        },
+        {
+          "key": "C",
+          "text": "loading, success, failure"
+        },
+        {
+          "key": "D",
+          "text": "idle, running, complete"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "The resolution metadata reducer tracks three status values: 'resolving' (resolver started), 'finished' (resolver completed), and 'error' (resolver failed with an error). These are checked via selectors like hasStartedResolution, hasFinishedResolution, and hasResolutionFailed.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-012",
+      "category": "gb-data",
+      "subcategory": "hooks",
+      "difficulty": "hard",
+      "prompt": "What React hook in @wordpress/data supports React Suspense by throwing promises for unresolved selectors?",
+      "type": "short_answer",
+      "correct_answer": "useSuspenseSelect",
+      "answer_type": "contains",
+      "explanation": "useSuspenseSelect(mapSelect, deps) works like useSelect but uses registry.suspendSelect internally. If a selector's resolver hasn't completed, it throws a Promise, which React Suspense catches to show a fallback UI.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-013",
+      "category": "gb-data",
+      "subcategory": "middleware",
+      "difficulty": "hard",
+      "prompt": "What is the correct order of middleware in the @wordpress/data redux store stack?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "resolvers-cache, promise, redux-routine (generators), thunk"
+        },
+        {
+          "key": "B",
+          "text": "thunk, promise, resolvers-cache, redux-routine"
+        },
+        {
+          "key": "C",
+          "text": "promise, thunk, resolvers-cache, redux-routine"
+        },
+        {
+          "key": "D",
+          "text": "redux-routine, promise, thunk, resolvers-cache"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "The middleware stack is applied in this order: (1) resolvers-cache middleware handles resolver invalidation via shouldInvalidate, (2) promise middleware handles Promise-valued actions, (3) redux-routine middleware handles generator-based controls, (4) thunk middleware handles function-based action creators.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-014",
+      "category": "gb-data",
+      "subcategory": "components",
+      "difficulty": "hard",
+      "prompt": "What does the AsyncModeProvider component do in @wordpress/data?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Makes useSelect component updates asynchronous, deferring re-renders until the browser is idle"
+        },
+        {
+          "key": "B",
+          "text": "Enables server-side rendering of data stores"
+        },
+        {
+          "key": "C",
+          "text": "Switches all API requests to use async/await instead of generators"
+        },
+        {
+          "key": "D",
+          "text": "Wraps the store in a React concurrent mode boundary"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "AsyncModeProvider is a React context provider that, when set to true, makes useSelect updates asynchronous using @wordpress/priority-queue. Re-renders are deferred until the browser becomes idle, improving performance for components that don't need immediate updates.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    },
+    {
+      "id": "k-wpdata-015",
+      "category": "gb-data",
+      "subcategory": "resolvers",
+      "difficulty": "hard",
+      "prompt": "What action invalidates the cached resolution state for a specific selector call in @wordpress/data?",
+      "type": "short_answer",
+      "correct_answer": "invalidateResolution",
+      "answer_type": "contains",
+      "explanation": "invalidateResolution(selectorName, args) clears the cached resolution for a specific selector and arguments, forcing the resolver to re-run on next access. Related actions include invalidateResolutionForStore() (clears all) and invalidateResolutionForStoreSelector(selectorName) (clears all for one selector).",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-data/"
+      ]
+    }
+  ]
+}

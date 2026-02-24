@@ -10,92 +10,162 @@
   "tests": [
     {
       "id": "k-bindings-001",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "registration",
       "difficulty": "basic",
       "prompt": "Which function registers a custom block bindings source?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "register_block_source()" },
-        { "key": "B", "text": "register_block_bindings_source()" },
-        { "key": "C", "text": "add_block_binding()" },
-        { "key": "D", "text": "wp_register_binding()" }
+        {
+          "key": "A",
+          "text": "register_block_source()"
+        },
+        {
+          "key": "B",
+          "text": "register_block_bindings_source()"
+        },
+        {
+          "key": "C",
+          "text": "add_block_binding()"
+        },
+        {
+          "key": "D",
+          "text": "wp_register_binding()"
+        }
       ],
       "correct_answer": "B",
       "explanation": "register_block_bindings_source() adds a new source to the WP_Block_Bindings_Registry. It requires a namespaced source name, a label, and a get_value_callback.",
-      "references": ["https://developer.wordpress.org/reference/functions/register_block_bindings_source/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/register_block_bindings_source/"
+      ]
     },
     {
       "id": "k-bindings-002",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "sources",
       "difficulty": "basic",
       "prompt": "How many built-in block binding sources ship with WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "2 (post-meta, pattern-overrides)" },
-        { "key": "B", "text": "3 (post-meta, pattern-overrides, post-data)" },
-        { "key": "C", "text": "4 (post-meta, pattern-overrides, post-data, term-data)" },
-        { "key": "D", "text": "5 (post-meta, pattern-overrides, post-data, term-data, site-data)" }
+        {
+          "key": "A",
+          "text": "2 (post-meta, pattern-overrides)"
+        },
+        {
+          "key": "B",
+          "text": "3 (post-meta, pattern-overrides, post-data)"
+        },
+        {
+          "key": "C",
+          "text": "4 (post-meta, pattern-overrides, post-data, term-data)"
+        },
+        {
+          "key": "D",
+          "text": "5 (post-meta, pattern-overrides, post-data, term-data, site-data)"
+        }
       ],
       "correct_answer": "C",
       "explanation": "WordPress 6.9 ships with four built-in binding sources: core/post-meta (since 6.5), core/pattern-overrides (since 6.5), core/post-data (since 6.9), and core/term-data (since 6.9).",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     },
     {
       "id": "k-bindings-003",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "supported-blocks",
       "difficulty": "basic",
       "prompt": "Which of these blocks supports bindings by default in WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "core/paragraph, core/heading, core/image, and core/button" },
-        { "key": "B", "text": "All core blocks support bindings" },
-        { "key": "C", "text": "Only core/paragraph and core/heading" },
-        { "key": "D", "text": "Only blocks with supports.bindings in block.json" }
+        {
+          "key": "A",
+          "text": "core/paragraph, core/heading, core/image, and core/button"
+        },
+        {
+          "key": "B",
+          "text": "All core blocks support bindings"
+        },
+        {
+          "key": "C",
+          "text": "Only core/paragraph and core/heading"
+        },
+        {
+          "key": "D",
+          "text": "Only blocks with supports.bindings in block.json"
+        }
       ],
       "correct_answer": "A",
       "explanation": "The default supported blocks are core/paragraph (content), core/heading (content), core/image (id, url, title, alt, caption), core/button (url, text, linkTarget, rel), plus core/post-date, core/navigation-link, and core/navigation-submenu.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     },
     {
       "id": "k-bindings-004",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "What is the callback signature for a block binding source's get_value_callback?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "function($source_args, $block_instance, $attribute_name)" },
-        { "key": "B", "text": "function($block_instance, $attribute_name)" },
-        { "key": "C", "text": "function($source_name, $source_args)" },
-        { "key": "D", "text": "function($attribute_name, $value, $context)" }
+        {
+          "key": "A",
+          "text": "function($source_args, $block_instance, $attribute_name)"
+        },
+        {
+          "key": "B",
+          "text": "function($block_instance, $attribute_name)"
+        },
+        {
+          "key": "C",
+          "text": "function($source_name, $source_args)"
+        },
+        {
+          "key": "D",
+          "text": "function($attribute_name, $value, $context)"
+        }
       ],
       "correct_answer": "A",
       "explanation": "The get_value_callback receives three arguments: $source_args (binding-specific arguments like the meta key), $block_instance (the WP_Block being rendered), and $attribute_name (the bound attribute name like 'content' or 'url').",
-      "references": ["https://developer.wordpress.org/reference/functions/register_block_bindings_source/"]
+      "references": [
+        "https://developer.wordpress.org/reference/functions/register_block_bindings_source/"
+      ]
     },
     {
       "id": "k-bindings-005",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "storage",
       "difficulty": "intermediate",
       "prompt": "Where in a block's attributes structure are bindings defined?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "attrs.metadata.bindings" },
-        { "key": "B", "text": "attrs.bindings" },
-        { "key": "C", "text": "attrs.supports.bindings" },
-        { "key": "D", "text": "attrs.data.bindings" }
+        {
+          "key": "A",
+          "text": "attrs.metadata.bindings"
+        },
+        {
+          "key": "B",
+          "text": "attrs.bindings"
+        },
+        {
+          "key": "C",
+          "text": "attrs.supports.bindings"
+        },
+        {
+          "key": "D",
+          "text": "attrs.data.bindings"
+        }
       ],
       "correct_answer": "A",
       "explanation": "Bindings are stored in the block's attrs.metadata.bindings object. The 'metadata' attribute is one of WP_Block_Type's GLOBAL_ATTRIBUTES, available on every block. Each key maps an attribute name to a binding source and args.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     },
     {
       "id": "k-bindings-006",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "filters",
       "difficulty": "intermediate",
       "prompt": "What filter fires after a binding source's get_value_callback returns a value, allowing plugins to modify any bound value?",
@@ -103,11 +173,13 @@
       "correct_answer": "block_bindings_source_value",
       "answer_type": "contains",
       "explanation": "The block_bindings_source_value filter (since 6.7) fires in WP_Block_Bindings_Source::get_value() with five arguments: the value, source name, source args, block instance, and attribute name.",
-      "references": ["https://developer.wordpress.org/reference/hooks/block_bindings_source_value/"]
+      "references": [
+        "https://developer.wordpress.org/reference/hooks/block_bindings_source_value/"
+      ]
     },
     {
       "id": "k-bindings-007",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "Which filter lets you declare which attributes of a specific block type can be bound via the Block Bindings API?",
@@ -115,58 +187,102 @@
       "correct_answer": "block_bindings_supported_attributes",
       "answer_type": "contains",
       "explanation": "The block_bindings_supported_attributes filter and its dynamic variant block_bindings_supported_attributes_{$block_type} (both since 6.9) control which attributes can be bound per block type.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     },
     {
       "id": "k-bindings-008",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "sources",
       "difficulty": "hard",
       "prompt": "For the core/post-meta binding source to return a value, which condition must the meta key satisfy?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "It must be registered with show_in_rest set to true" },
-        { "key": "B", "text": "It must be of type string" },
-        { "key": "C", "text": "It must be prefixed with _wp_" },
-        { "key": "D", "text": "It must have a non-null default value" }
+        {
+          "key": "A",
+          "text": "It must be registered with show_in_rest set to true"
+        },
+        {
+          "key": "B",
+          "text": "It must be of type string"
+        },
+        {
+          "key": "C",
+          "text": "It must be prefixed with _wp_"
+        },
+        {
+          "key": "D",
+          "text": "It must have a non-null default value"
+        }
       ],
       "correct_answer": "A",
       "explanation": "core/post-meta checks multiple conditions: the meta key must exist in source_args, the post must be publicly viewable or the user must have read_post cap, the meta key must not be protected, and the meta key must be registered with show_in_rest.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     },
     {
       "id": "k-bindings-009",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "sources",
       "difficulty": "hard",
       "prompt": "Which two block binding sources were added new in WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "core/post-data and core/term-data" },
-        { "key": "B", "text": "core/site-data and core/user-data" },
-        { "key": "C", "text": "core/custom-field and core/taxonomy" },
-        { "key": "D", "text": "core/widget-data and core/nav-data" }
+        {
+          "key": "A",
+          "text": "core/post-data and core/term-data"
+        },
+        {
+          "key": "B",
+          "text": "core/site-data and core/user-data"
+        },
+        {
+          "key": "C",
+          "text": "core/custom-field and core/taxonomy"
+        },
+        {
+          "key": "D",
+          "text": "core/widget-data and core/nav-data"
+        }
       ],
       "correct_answer": "A",
       "explanation": "WordPress 6.9 added core/post-data (supports date, modified, link fields) and core/term-data (supports id, name, link, slug, description, parent, count). Both complement the original 6.5 sources: core/post-meta and core/pattern-overrides.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     },
     {
       "id": "k-bindings-010",
-      "category": "block-bindings",
+      "category": "gb-block-bindings",
       "subcategory": "rendering",
       "difficulty": "hard",
       "prompt": "When core/pattern-overrides encounters a binding with the key '__default', what does it do?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Uses the block's default attribute values" },
-        { "key": "B", "text": "Expands the binding to all supported attributes of that block type" },
-        { "key": "C", "text": "Falls back to the post meta with that key" },
-        { "key": "D", "text": "Skips the binding entirely" }
+        {
+          "key": "A",
+          "text": "Uses the block's default attribute values"
+        },
+        {
+          "key": "B",
+          "text": "Expands the binding to all supported attributes of that block type"
+        },
+        {
+          "key": "C",
+          "text": "Falls back to the post meta with that key"
+        },
+        {
+          "key": "D",
+          "text": "Skips the binding entirely"
+        }
       ],
       "correct_answer": "B",
       "explanation": "The '__default' key in core/pattern-overrides is a shorthand that expands to cover all supported attributes of the current block type. This is handled in WP_Block::process_block_bindings(), which maps the __default source to each individual supported attribute.",
-      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"]
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/block-bindings/"
+      ]
     }
   ]
 }

@@ -9,7 +9,7 @@
   },
   "tests": [
     {
-      "id": "k-meta-gotcha-001",
+      "id": "k-gotchas-001",
       "category": "gotchas",
       "subcategory": "meta",
       "difficulty": "hard",
@@ -22,25 +22,25 @@
         { "key": "D", "text": "WP_Error" }
       ],
       "correct_answer": "C",
-      "explanation": "With $single=true and no row present, get_post_meta returns an empty string — easy to misread as a real value with loose checks.",
+      "explanation": "With $single=true and no row present, get_post_meta returns an empty string — easy to misread as a real value with loose checks. With $single=false (the default), it returns an empty array instead. This inconsistency between the two modes is a common source of bugs.",
       "references": ["https://developer.wordpress.org/reference/functions/get_post_meta/"]
     },
     {
       "id": "k-gotchas-002",
       "category": "gotchas",
-      "subcategory": "meta",
+      "subcategory": "queries",
       "difficulty": "intermediate",
-      "prompt": "What does get_post_meta($post_id, 'missing_key', false) return when the meta key does not exist?",
+      "prompt": "After running a secondary WP_Query loop, what function must you call to restore the global $post to the main query's current post?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "null" },
-        { "key": "B", "text": "false" },
-        { "key": "C", "text": "An empty string" },
-        { "key": "D", "text": "An empty array" }
+        { "key": "A", "text": "wp_reset_query()" },
+        { "key": "B", "text": "wp_reset_postdata()" },
+        { "key": "C", "text": "rewind_posts()" },
+        { "key": "D", "text": "wp_reset_post()" }
       ],
-      "correct_answer": "D",
-      "explanation": "With $single=false (the default), get_post_meta returns an empty array when the meta key doesn't exist. With $single=true, it returns an empty string instead. This inconsistency is a common source of bugs.",
-      "references": ["https://developer.wordpress.org/reference/functions/get_post_meta/"]
+      "correct_answer": "B",
+      "explanation": "wp_reset_postdata() restores the global $post to the main query's current post. wp_reset_query() is for undoing query_posts() (which should be avoided). Calling wp_reset_query() after a WP_Query loop destroys the main query's state. This is one of the most common WordPress loop mistakes.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_reset_postdata/"]
     },
     {
       "id": "k-gotchas-003",
