@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-gotchas",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Gotchas",
     "description": "Tests knowledge of common WordPress pitfalls and edge cases",
@@ -9,8 +9,9 @@
   },
   "tests": [
     {
-      "id": "k-meta-gotcha-001",
+      "id": "k-gotchas-001",
       "category": "gotchas",
+      "subcategory": "meta",
       "difficulty": "hard",
       "prompt": "What does get_post_meta($post_id, 'missing_key', true) return when the meta key does not exist?",
       "type": "multiple_choice",
@@ -21,8 +22,185 @@
         { "key": "D", "text": "WP_Error" }
       ],
       "correct_answer": "C",
-      "explanation": "With $single=true and no row present, get_post_meta returns an empty string—easy to misread as a real value with loose checks.",
+      "explanation": "With $single=true and no row present, get_post_meta returns an empty string — easy to misread as a real value with loose checks. With $single=false (the default), it returns an empty array instead. This inconsistency between the two modes is a common source of bugs.",
       "references": ["https://developer.wordpress.org/reference/functions/get_post_meta/"]
+    },
+    {
+      "id": "k-gotchas-002",
+      "category": "gotchas",
+      "subcategory": "queries",
+      "difficulty": "intermediate",
+      "prompt": "After running a secondary WP_Query loop, what function must you call to restore the global $post to the main query's current post?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_reset_query()" },
+        { "key": "B", "text": "wp_reset_postdata()" },
+        { "key": "C", "text": "rewind_posts()" },
+        { "key": "D", "text": "wp_reset_post()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "wp_reset_postdata() restores the global $post to the main query's current post. wp_reset_query() is for undoing query_posts() (which should be avoided). Calling wp_reset_query() after a WP_Query loop destroys the main query's state. This is one of the most common WordPress loop mistakes.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_reset_postdata/"]
+    },
+    {
+      "id": "k-gotchas-003",
+      "category": "gotchas",
+      "subcategory": "meta",
+      "difficulty": "intermediate",
+      "prompt": "update_post_meta() returns false in two different situations. Besides database failure, when else does it return false?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "When the meta key doesn't exist yet" },
+        { "key": "B", "text": "When the new value is identical to the existing value" },
+        { "key": "C", "text": "When the post doesn't exist" },
+        { "key": "D", "text": "When the meta value exceeds the column size" }
+      ],
+      "correct_answer": "B",
+      "explanation": "update_post_meta() (via update_metadata) returns false when the new value is identical to the existing value, since no update is needed. This makes it impossible to distinguish 'no change needed' from 'update failed' using the return value alone.",
+      "references": ["https://developer.wordpress.org/reference/functions/update_post_meta/"]
+    },
+    {
+      "id": "k-gotchas-004",
+      "category": "gotchas",
+      "subcategory": "functions",
+      "difficulty": "basic",
+      "prompt": "What does is_admin() actually check in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Whether the current user has the Administrator role" },
+        { "key": "B", "text": "Whether the current request is for an administrative interface page (URL path)" },
+        { "key": "C", "text": "Whether the current user has the manage_options capability" },
+        { "key": "D", "text": "Whether the current user is a super admin on multisite" }
+      ],
+      "correct_answer": "B",
+      "explanation": "is_admin() checks if the current request is for an admin page (WP_ADMIN constant), NOT whether the user is an administrator. It returns true on admin-ajax.php too. Use current_user_can() to check user roles.",
+      "references": ["https://developer.wordpress.org/reference/functions/is_admin/"]
+    },
+    {
+      "id": "k-gotchas-005",
+      "category": "gotchas",
+      "subcategory": "redirects",
+      "difficulty": "basic",
+      "prompt": "What must you call immediately after wp_redirect() or wp_safe_redirect()?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "return" },
+        { "key": "B", "text": "wp_die()" },
+        { "key": "C", "text": "exit" },
+        { "key": "D", "text": "Nothing — they terminate execution automatically" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Neither wp_redirect() nor wp_safe_redirect() call exit or die. They only set the Location header and return. If you don't call exit afterward, PHP continues executing the rest of the script.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_redirect/"]
+    },
+    {
+      "id": "k-gotchas-006",
+      "category": "gotchas",
+      "subcategory": "options",
+      "difficulty": "intermediate",
+      "prompt": "What is the key behavioral difference between add_option() and update_option() when the option already exists?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "add_option() silently does nothing and returns false; update_option() overwrites the value" },
+        { "key": "B", "text": "add_option() throws an error; update_option() succeeds" },
+        { "key": "C", "text": "Both overwrite the existing value" },
+        { "key": "D", "text": "add_option() appends to the value; update_option() replaces it" }
+      ],
+      "correct_answer": "A",
+      "explanation": "add_option() returns false without modifying existing options. update_option() creates the option if it doesn't exist and updates it if it does. This makes update_option() the more common choice for most use cases.",
+      "references": ["https://developer.wordpress.org/reference/functions/add_option/"]
+    },
+    {
+      "id": "k-gotchas-007",
+      "category": "gotchas",
+      "subcategory": "database",
+      "difficulty": "intermediate",
+      "prompt": "$wpdb->insert() does NOT return the new row's auto-increment ID. Where is the insert ID stored?",
+      "type": "short_answer",
+      "correct_answer": "insert_id",
+      "answer_type": "contains",
+      "explanation": "$wpdb->insert() returns int|false (rows affected count, typically 1). The auto-increment ID is stored in $wpdb->insert_id, which is set after any successful query via mysqli_insert_id().",
+      "references": ["https://developer.wordpress.org/reference/classes/wpdb/insert/"]
+    },
+    {
+      "id": "k-gotchas-008",
+      "category": "gotchas",
+      "subcategory": "urls",
+      "difficulty": "intermediate",
+      "prompt": "What is the difference between home_url() and site_url() in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "home_url() returns where visitors access the site; site_url() returns where WordPress files are installed" },
+        { "key": "B", "text": "home_url() includes the port; site_url() does not" },
+        { "key": "C", "text": "home_url() is for the front-end only; site_url() works everywhere" },
+        { "key": "D", "text": "They always return the same value" }
+      ],
+      "correct_answer": "A",
+      "explanation": "home_url() returns the public-facing URL (option 'home'). site_url() returns where WordPress application files live (option 'siteurl'). They differ when WordPress is installed in a subdirectory — e.g., home_url() = example.com, site_url() = example.com/wp.",
+      "references": ["https://developer.wordpress.org/reference/functions/home_url/"]
+    },
+    {
+      "id": "k-gotchas-009",
+      "category": "gotchas",
+      "subcategory": "filters",
+      "difficulty": "intermediate",
+      "prompt": "In the the_content filter chain, does wpautop run before or after do_shortcode?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wpautop runs BEFORE do_shortcode (priority 10 vs 11)" },
+        { "key": "B", "text": "do_shortcode runs BEFORE wpautop" },
+        { "key": "C", "text": "They run at the same priority" },
+        { "key": "D", "text": "do_shortcode is not hooked to the_content" }
+      ],
+      "correct_answer": "A",
+      "explanation": "wpautop runs at default priority 10, do_shortcode at priority 11. This means paragraph tags are inserted BEFORE shortcodes are processed, which can cause unwanted <p> and <br> tags around shortcode output.",
+      "references": ["https://developer.wordpress.org/reference/hooks/the_content/"]
+    },
+    {
+      "id": "k-gotchas-010",
+      "category": "gotchas",
+      "subcategory": "http",
+      "difficulty": "basic",
+      "prompt": "What does wp_remote_get() return on failure?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "false" },
+        { "key": "B", "text": "null" },
+        { "key": "C", "text": "A WP_Error object" },
+        { "key": "D", "text": "An empty array" }
+      ],
+      "correct_answer": "C",
+      "explanation": "wp_remote_get() returns array|WP_Error. On failure (connection timeout, DNS failure, etc.), it returns a WP_Error object, NOT false. Always check with is_wp_error() before accessing the response.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_remote_get/"]
+    },
+    {
+      "id": "k-gotchas-011",
+      "category": "gotchas",
+      "subcategory": "functions",
+      "difficulty": "intermediate",
+      "prompt": "wp_update_post() is implemented by calling which function internally?",
+      "type": "short_answer",
+      "correct_answer": "wp_insert_post",
+      "answer_type": "contains",
+      "explanation": "wp_update_post() merges the provided data with the existing post and then calls wp_insert_post() to save. This means all the same hooks (save_post, wp_insert_post, etc.) fire on both create and update.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_update_post/"]
+    },
+    {
+      "id": "k-gotchas-012",
+      "category": "gotchas",
+      "subcategory": "functions",
+      "difficulty": "hard",
+      "prompt": "The __return_* utility functions were not all introduced in the same version. Which one was added later than the others?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "__return_false (3.0.0)" },
+        { "key": "B", "text": "__return_zero (3.0.0)" },
+        { "key": "C", "text": "__return_empty_string (3.7.0)" },
+        { "key": "D", "text": "__return_empty_array (3.0.0)" }
+      ],
+      "correct_answer": "C",
+      "explanation": "__return_true, __return_false, __return_zero, and __return_empty_array were all introduced in 3.0.0. __return_null was added in 3.4.0 and __return_empty_string in 3.7.0.",
+      "references": ["https://developer.wordpress.org/reference/functions/__return_empty_string/"]
     }
   ]
 }

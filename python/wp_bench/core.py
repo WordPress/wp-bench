@@ -76,10 +76,16 @@ class BenchmarkRunner:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
         tests = load_tests(self.config.dataset)
-        self.environment.setup()
+        test_type = self.config.run.test_type
+        run_knowledge = test_type in (None, "knowledge")
+        run_execution = test_type in (None, "execution")
+        if run_execution:
+            self.environment.setup()
         try:
-            self._run_knowledge_tests(tests["knowledge"])
-            self._run_execution_tests(tests["execution"])
+            if run_knowledge:
+                self._run_knowledge_tests(tests["knowledge"])
+            if run_execution:
+                self._run_execution_tests(tests["execution"])
         except TestError as e:
             print_test_error(e)
             raise SystemExit(1) from e
@@ -315,7 +321,8 @@ class MultiModelRunner:
         """
         models = self.config.get_models()
         tests = load_tests(self.config.dataset)
-        self.environment.setup()
+        if self.config.run.test_type != "knowledge":
+            self.environment.setup()
 
         try:
             for model_config in models:
@@ -401,8 +408,11 @@ class SingleModelRunner:
         Returns:
             Dict with model config, aggregate scores, and individual results.
         """
-        self._run_knowledge_tests(self.tests["knowledge"])
-        self._run_execution_tests(self.tests["execution"])
+        test_type = self.config.run.test_type
+        if test_type in (None, "knowledge"):
+            self._run_knowledge_tests(self.tests["knowledge"])
+        if test_type in (None, "execution"):
+            self._run_execution_tests(self.tests["execution"])
         summary = self.aggregator.finalize()
         return {
             "model_config": self.model_config.model_dump(mode="json"),

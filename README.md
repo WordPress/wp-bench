@@ -95,6 +95,8 @@ output:
 # Run from project root
 wp-bench run --config wp-bench.yaml          # run with config file
 wp-bench run --model-name gpt-4o --limit 5   # quick single-model test
+wp-bench run --test-type knowledge           # run only knowledge tests (no WordPress env needed)
+wp-bench run --test-type execution           # run only execution tests
 wp-bench dry-run --config wp-bench.yaml      # validate config without calling models
 ```
 

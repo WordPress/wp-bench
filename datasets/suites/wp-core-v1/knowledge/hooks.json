@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-hooks",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Hooks",
     "description": "Tests knowledge of WordPress hooks (actions and filters)",
@@ -39,7 +39,7 @@
         { "key": "D", "text": "query_vars" }
       ],
       "correct_answer": "B",
-      "explanation": "pre_get_posts fires before the query is executed and allows modification of query variables.",
+      "explanation": "pre_get_posts fires after query vars are parsed but before the SQL query is built, allowing modification of query variables.",
       "references": ["https://developer.wordpress.org/reference/hooks/pre_get_posts/"]
     },
     {
@@ -58,6 +58,265 @@
       "correct_answer": "C",
       "explanation": "wp_enqueue_scripts is the proper hook for enqueueing scripts and styles on the front-end.",
       "references": ["https://developer.wordpress.org/reference/hooks/wp_enqueue_scripts/"]
+    },
+    {
+      "id": "k-hooks-004",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "basic",
+      "prompt": "In WordPress core, add_action() is implemented as a wrapper around which function?",
+      "type": "short_answer",
+      "correct_answer": "add_filter",
+      "answer_type": "contains",
+      "explanation": "add_action() literally calls add_filter() with the same arguments. Internally, actions and filters use the same registration mechanism in the $wp_filter global.",
+      "references": ["https://developer.wordpress.org/reference/functions/add_action/"]
+    },
+    {
+      "id": "k-hooks-005",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "basic",
+      "prompt": "What is the default priority when registering a hook callback with add_action() or add_filter()?",
+      "type": "short_answer",
+      "correct_answer": "10",
+      "answer_type": "exact",
+      "explanation": "Both add_action() and add_filter() default to priority 10. Lower numbers execute earlier.",
+      "references": ["https://developer.wordpress.org/reference/functions/add_filter/"]
+    },
+    {
+      "id": "k-hooks-006",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "basic",
+      "prompt": "How many arguments does a hook callback receive by default if $accepted_args is not specified?",
+      "type": "short_answer",
+      "correct_answer": "1",
+      "answer_type": "exact",
+      "explanation": "The default $accepted_args parameter in add_filter() and add_action() is 1. Callbacks receive only the first argument unless a higher value is specified.",
+      "references": ["https://developer.wordpress.org/reference/functions/add_filter/"]
+    },
+    {
+      "id": "k-hooks-007",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "intermediate",
+      "prompt": "When you call has_filter($hook, $callback), what does it return if the callback IS registered?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "true" },
+        { "key": "B", "text": "The priority (int) at which the callback is registered" },
+        { "key": "C", "text": "The callback function itself" },
+        { "key": "D", "text": "The number of times the callback is registered" }
+      ],
+      "correct_answer": "B",
+      "explanation": "has_filter() with a callback argument returns the priority (int) if found, or false if not. Since priority 0 is valid and loosely equals false, you must use === false to check for absence.",
+      "references": ["https://developer.wordpress.org/reference/functions/has_filter/"]
+    },
+    {
+      "id": "k-hooks-008",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "basic",
+      "prompt": "Does do_action() return a value?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Yes, it returns the filtered value like apply_filters()" },
+        { "key": "B", "text": "No, it returns void" },
+        { "key": "C", "text": "It returns the number of callbacks executed" },
+        { "key": "D", "text": "It returns true on success, false on failure" }
+      ],
+      "correct_answer": "B",
+      "explanation": "do_action() returns void. Unlike apply_filters() which returns a filtered value, do_action() simply executes callbacks without tracking a return value.",
+      "references": ["https://developer.wordpress.org/reference/functions/do_action/"]
+    },
+    {
+      "id": "k-hooks-009",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "intermediate",
+      "prompt": "What does did_action() return?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "true if the action has fired at least once" },
+        { "key": "B", "text": "The number of times the action has fired during the current request" },
+        { "key": "C", "text": "The timestamp of when the action last fired" },
+        { "key": "D", "text": "An array of callbacks that were executed" }
+      ],
+      "correct_answer": "B",
+      "explanation": "did_action() returns the number of times the action has fired during the current request (from the $wp_actions global), or 0 if it has never fired.",
+      "references": ["https://developer.wordpress.org/reference/functions/did_action/"]
+    },
+    {
+      "id": "k-hooks-010",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "intermediate",
+      "prompt": "In which WordPress version was the WP_Hook class introduced to replace the plain array-based hook system?",
+      "type": "short_answer",
+      "correct_answer": "4.7",
+      "answer_type": "contains",
+      "explanation": "WP_Hook was introduced in WordPress 4.7.0 as a proper class implementing Iterator and ArrayAccess interfaces, replacing the old $wp_filter plain array system while maintaining backward compatibility.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_hook/"]
+    },
+    {
+      "id": "k-hooks-011",
+      "category": "hooks",
+      "subcategory": "loading_sequence",
+      "difficulty": "intermediate",
+      "prompt": "Which is the correct order of these WordPress loading sequence hooks?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "plugins_loaded → init → after_setup_theme → wp_loaded" },
+        { "key": "B", "text": "plugins_loaded → after_setup_theme → init → wp_loaded" },
+        { "key": "C", "text": "init → plugins_loaded → after_setup_theme → wp_loaded" },
+        { "key": "D", "text": "after_setup_theme → plugins_loaded → init → wp_loaded" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The correct loading order in wp-settings.php is: muplugins_loaded → plugins_loaded → setup_theme → after_setup_theme → init → wp_loaded.",
+      "references": ["https://developer.wordpress.org/reference/hooks/wp_loaded/"]
+    },
+    {
+      "id": "k-hooks-012",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "intermediate",
+      "prompt": "What is the relationship between doing_action() and doing_filter() in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "doing_action() is an alias that calls doing_filter() — they check the same $wp_current_filter stack" },
+        { "key": "B", "text": "They check separate stacks: doing_action() uses $wp_actions, doing_filter() uses $wp_filters" },
+        { "key": "C", "text": "doing_action() only works for do_action hooks, doing_filter() only for apply_filters hooks" },
+        { "key": "D", "text": "doing_action() returns an action name, doing_filter() returns a boolean" }
+      ],
+      "correct_answer": "A",
+      "explanation": "doing_action() literally calls doing_filter(). Both check the $wp_current_filter stack. Since actions and filters share the same internal mechanism, there is no separate tracking.",
+      "references": ["https://developer.wordpress.org/reference/functions/doing_action/"]
+    },
+    {
+      "id": "k-hooks-013",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "hard",
+      "prompt": "What does the special 'all' hook do in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It fires once after all hooks have been processed at the end of the request" },
+        { "key": "B", "text": "It fires for every single action and filter, receiving the hook name as the first argument" },
+        { "key": "C", "text": "It registers a callback that runs for all hooks of a specific type (action or filter)" },
+        { "key": "D", "text": "It returns a list of all registered hooks and their callbacks" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Both apply_filters() and do_action() check for isset($wp_filter['all']). If present, callbacks on the 'all' hook fire for every hook invocation, receiving all arguments with the hook name prepended as the first argument.",
+      "references": ["https://developer.wordpress.org/reference/functions/_wp_call_all_hook/"]
+    },
+    {
+      "id": "k-hooks-014",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "hard",
+      "prompt": "The pre_get_posts action uses do_action_ref_array instead of do_action. What is the practical significance of this?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It allows callbacks to receive multiple arguments instead of just one" },
+        { "key": "B", "text": "The WP_Query object is passed by reference, so callbacks can modify it directly" },
+        { "key": "C", "text": "It makes the hook fire asynchronously" },
+        { "key": "D", "text": "It ensures the hook fires before all other actions" }
+      ],
+      "correct_answer": "B",
+      "explanation": "do_action_ref_array passes arguments as an array, preserving PHP references. For pre_get_posts, this means the WP_Query instance is passed by reference (&$this), allowing callbacks to modify query variables directly on the original object.",
+      "references": ["https://developer.wordpress.org/reference/functions/do_action_ref_array/"]
+    },
+    {
+      "id": "k-hooks-015",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "hard",
+      "prompt": "When wp_insert_post() fires post-save hooks, in what order do save_post_{$post_type}, save_post, and wp_insert_post fire?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "save_post → save_post_{$post_type} → wp_insert_post" },
+        { "key": "B", "text": "wp_insert_post → save_post → save_post_{$post_type}" },
+        { "key": "C", "text": "save_post_{$post_type} → save_post → wp_insert_post" },
+        { "key": "D", "text": "save_post → wp_insert_post → save_post_{$post_type}" }
+      ],
+      "correct_answer": "C",
+      "explanation": "The dynamic save_post_{$post_type} fires first (line 5212 in post.php), then save_post (line 5223), then wp_insert_post (line 5234). The most specific hook fires first.",
+      "references": ["https://developer.wordpress.org/reference/hooks/save_post/"]
+    },
+    {
+      "id": "k-hooks-016",
+      "category": "hooks",
+      "subcategory": "filters",
+      "difficulty": "hard",
+      "prompt": "The cron_schedules filter is unusual because core schedules are merged AFTER the filter runs. What initial value do callbacks receive?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "An array containing the three built-in schedules (hourly, twicedaily, daily)" },
+        { "key": "B", "text": "An empty array" },
+        { "key": "C", "text": "null" },
+        { "key": "D", "text": "The previously registered custom schedules only" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The cron_schedules filter passes an empty array: apply_filters('cron_schedules', array()). Core schedules (hourly, twicedaily, daily, weekly) are merged in AFTER the filter via array_merge. Callbacks should return their additional schedules, not the core ones.",
+      "references": ["https://developer.wordpress.org/reference/hooks/cron_schedules/"]
+    },
+    {
+      "id": "k-hooks-017",
+      "category": "hooks",
+      "subcategory": "filters",
+      "difficulty": "intermediate",
+      "prompt": "How many arguments does the 'the_title' filter pass to callbacks?",
+      "type": "short_answer",
+      "correct_answer": "2",
+      "answer_type": "exact",
+      "explanation": "the_title passes 2 arguments: the title string and the post ID. Callbacks must set $accepted_args to 2 in add_filter() to receive both. The the_content filter, by contrast, passes only 1 argument.",
+      "references": ["https://developer.wordpress.org/reference/hooks/the_title/"]
+    },
+    {
+      "id": "k-hooks-018",
+      "category": "hooks",
+      "subcategory": "internals",
+      "difficulty": "hard",
+      "prompt": "In which WordPress version was did_filter() introduced, allowing you to count how many times a filter has been applied?",
+      "type": "short_answer",
+      "correct_answer": "6.1",
+      "answer_type": "contains",
+      "explanation": "did_filter() was introduced in WordPress 6.1.0, much later than did_action() which has existed since 2.1.0. They use separate globals: $wp_filters for filters and $wp_actions for actions.",
+      "references": ["https://developer.wordpress.org/reference/functions/did_filter/"]
+    },
+    {
+      "id": "k-hooks-019",
+      "category": "hooks",
+      "subcategory": "actions",
+      "difficulty": "intermediate",
+      "prompt": "The wp_enqueue_scripts action is itself hooked to which other hook to fire at the right time?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_head at priority 1" },
+        { "key": "C", "text": "template_redirect" },
+        { "key": "D", "text": "wp_loaded" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The wp_enqueue_scripts() function is hooked to wp_head at priority 1 in default-filters.php. This function then fires the 'wp_enqueue_scripts' action, allowing plugins and themes to enqueue their assets.",
+      "references": ["https://developer.wordpress.org/reference/hooks/wp_enqueue_scripts/"]
+    },
+    {
+      "id": "k-hooks-020",
+      "category": "hooks",
+      "subcategory": "filters",
+      "difficulty": "hard",
+      "prompt": "The 'authenticate' filter starts with what initial value before any callback processes it?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "false" },
+        { "key": "B", "text": "null" },
+        { "key": "C", "text": "An empty WP_User object" },
+        { "key": "D", "text": "A WP_Error object" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The authenticate filter starts with null: apply_filters('authenticate', null, $username, $password). Callbacks return WP_User on success, WP_Error on failure, or null to pass to the next handler in the chain.",
+      "references": ["https://developer.wordpress.org/reference/hooks/authenticate/"]
     }
   ]
 }

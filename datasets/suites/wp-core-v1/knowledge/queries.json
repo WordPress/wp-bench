@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-queries",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Queries",
     "description": "Tests knowledge of WordPress database queries",
@@ -11,6 +11,7 @@
     {
       "id": "k-queries-001",
       "category": "queries",
+      "subcategory": "wpdb",
       "difficulty": "basic",
       "prompt": "What WordPress function should be used to safely insert data into the database?",
       "type": "multiple_choice",
@@ -27,6 +28,7 @@
     {
       "id": "k-queries-002",
       "category": "queries",
+      "subcategory": "wp_query",
       "difficulty": "intermediate",
       "prompt": "In WP_Query, which parameter limits the number of posts returned?",
       "type": "multiple_choice",
@@ -37,8 +39,419 @@
         { "key": "D", "text": "numberposts" }
       ],
       "correct_answer": "C",
-      "explanation": "posts_per_page is the WP_Query parameter that limits the number of posts returned per page.",
+      "explanation": "posts_per_page is the WP_Query parameter that limits the number of posts returned per page. numberposts is a get_posts() alias that maps to posts_per_page.",
       "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-003",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "basic",
+      "prompt": "What happens when you set posts_per_page to -1 in WP_Query?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It triggers a fatal error" },
+        { "key": "B", "text": "It returns all matching posts with no limit" },
+        { "key": "C", "text": "It returns a single post" },
+        { "key": "D", "text": "It uses the value from Settings > Reading" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Setting posts_per_page to -1 sets the nopaging flag to true, which removes the LIMIT clause from the SQL query and returns all matching posts.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-004",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "basic",
+      "prompt": "What is the default sort direction (order) in WP_Query?",
+      "type": "short_answer",
+      "correct_answer": "DESC",
+      "answer_type": "exact",
+      "explanation": "WP_Query defaults to 'DESC' (descending) order, sorting newest posts first.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-005",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "basic",
+      "prompt": "What function should you call after a custom WP_Query loop to restore the global $post variable?",
+      "type": "short_answer",
+      "correct_answer": "wp_reset_postdata",
+      "answer_type": "contains",
+      "explanation": "wp_reset_postdata() restores the global $post to the current post in the main query. It should be called after every secondary WP_Query loop.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_reset_postdata/"]
+    },
+    {
+      "id": "k-queries-006",
+      "category": "queries",
+      "subcategory": "get_posts",
+      "difficulty": "basic",
+      "prompt": "What is the default value of the suppress_filters parameter in get_posts()?",
+      "type": "short_answer",
+      "correct_answer": "true",
+      "answer_type": "exact",
+      "explanation": "get_posts() defaults suppress_filters to true, unlike WP_Query which defaults it to false. This means get_posts() skips all query modification filters (posts_where, posts_join, posts_clauses, etc.) by default.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_posts/"]
+    },
+    {
+      "id": "k-queries-007",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "basic",
+      "prompt": "What expensive SQL feature does setting no_found_rows to true in WP_Query skip?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "SQL_CALC_FOUND_ROWS and the subsequent SELECT FOUND_ROWS() query" },
+        { "key": "B", "text": "The JOIN against the postmeta table" },
+        { "key": "C", "text": "Post meta and term cache priming" },
+        { "key": "D", "text": "The WHERE clause for post_status filtering" }
+      ],
+      "correct_answer": "A",
+      "explanation": "When no_found_rows is true, WP_Query omits SQL_CALC_FOUND_ROWS from the SELECT and skips the follow-up SELECT FOUND_ROWS() query. This improves performance when you do not need pagination totals.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-008",
+      "category": "queries",
+      "subcategory": "meta_query",
+      "difficulty": "basic",
+      "prompt": "What is the default CAST type for meta_value comparisons in WP_Meta_Query?",
+      "type": "short_answer",
+      "correct_answer": "CHAR",
+      "answer_type": "exact",
+      "explanation": "WP_Meta_Query::get_cast_for_type() returns 'CHAR' when no type is specified. This means meta_value is compared as a string by default.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_meta_query/"]
+    },
+    {
+      "id": "k-queries-009",
+      "category": "queries",
+      "subcategory": "tax_query",
+      "difficulty": "basic",
+      "prompt": "What is the default value of the 'field' parameter in a WP_Tax_Query clause?",
+      "type": "short_answer",
+      "correct_answer": "term_id",
+      "answer_type": "exact",
+      "explanation": "WP_Tax_Query defaults the 'field' parameter to 'term_id'. Other valid options are 'slug', 'name', and 'term_taxonomy_id'.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_tax_query/"]
+    },
+    {
+      "id": "k-queries-010",
+      "category": "queries",
+      "subcategory": "get_posts",
+      "difficulty": "basic",
+      "prompt": "What is the default numberposts value in the get_posts() function?",
+      "type": "short_answer",
+      "correct_answer": "5",
+      "answer_type": "exact",
+      "explanation": "get_posts() defaults numberposts to 5, which is mapped to posts_per_page internally. This differs from WP_Query, which defaults to the value in Settings > Reading (typically 10).",
+      "references": ["https://developer.wordpress.org/reference/functions/get_posts/"]
+    },
+    {
+      "id": "k-queries-011",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "intermediate",
+      "prompt": "Which set correctly lists all valid values for the WP_Query 'fields' parameter?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "'ids', 'id=>parent', and '' (empty string for full post objects)" },
+        { "key": "B", "text": "'ids', 'titles', 'id=>parent', and '' (empty string)" },
+        { "key": "C", "text": "'all', 'ids', 'id=>parent', and 'id=>slug'" },
+        { "key": "D", "text": "'ids', 'id=>parent', 'id=>type', and '' (empty string)" }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_Query's fields parameter accepts exactly three values: '' (empty string, returns full WP_Post objects), 'ids' (returns an array of post IDs), and 'id=>parent' (returns an associative array of parent IDs keyed by post ID).",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-012",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "intermediate",
+      "prompt": "Why is query_posts() discouraged in WordPress development?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It was deprecated in WordPress 5.0 and will be removed" },
+        { "key": "B", "text": "It replaces the global $wp_query with a new WP_Query, destroying the original main query" },
+        { "key": "C", "text": "It does not support custom post types or taxonomies" },
+        { "key": "D", "text": "It bypasses the object cache and always hits the database" }
+      ],
+      "correct_answer": "B",
+      "explanation": "query_posts() creates a new WP_Query and assigns it to $GLOBALS['wp_query'], completely overriding the original main query. This breaks conditional tags, pagination, and other features that depend on the main query. Using pre_get_posts or a secondary WP_Query is preferred.",
+      "references": ["https://developer.wordpress.org/reference/functions/query_posts/"]
+    },
+    {
+      "id": "k-queries-013",
+      "category": "queries",
+      "subcategory": "user_query",
+      "difficulty": "intermediate",
+      "prompt": "In WP_User_Query, what is the difference between the 'role' and 'role__in' parameters?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "'role' requires users to match ALL listed roles (AND); 'role__in' requires at least one (OR)" },
+        { "key": "B", "text": "'role' accepts a single role string; 'role__in' accepts an array" },
+        { "key": "C", "text": "'role' matches by role slug; 'role__in' matches by display name" },
+        { "key": "D", "text": "'role' is for the current site only; 'role__in' searches across all sites" }
+      ],
+      "correct_answer": "A",
+      "explanation": "'role' is an inclusive list where users must match each role (AND logic). 'role__in' requires users to have at least one of the listed roles (OR logic). Both accept arrays of role slugs.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_user_query/"]
+    },
+    {
+      "id": "k-queries-014",
+      "category": "queries",
+      "subcategory": "query_filters",
+      "difficulty": "intermediate",
+      "prompt": "What does the 'posts_pre_query' filter allow you to do in WP_Query?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Modify the query arguments before they are parsed" },
+        { "key": "B", "text": "Short-circuit the database query entirely by returning a non-null array of posts" },
+        { "key": "C", "text": "Add custom SQL clauses to the WHERE portion of the query" },
+        { "key": "D", "text": "Filter post objects after they are fetched but before template tags work" }
+      ],
+      "correct_answer": "B",
+      "explanation": "posts_pre_query (since 4.6.0) lets you return a non-null value to bypass WordPress's default post queries entirely. When used, the filtering function should also set found_posts and max_num_pages on the WP_Query object.",
+      "references": ["https://developer.wordpress.org/reference/hooks/posts_pre_query/"]
+    },
+    {
+      "id": "k-queries-015",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "intermediate",
+      "prompt": "Under what conditions does WP_Query prepend sticky posts to the results?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "On any archive page when post_type is 'post'" },
+        { "key": "B", "text": "On the home page (is_home), on the first page only, and when ignore_sticky_posts is false" },
+        { "key": "C", "text": "Whenever sticky posts exist, regardless of query context" },
+        { "key": "D", "text": "On the home page and category archives, on any page" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Sticky post prepending requires three conditions: is_home must be true, the page must be 1 or less, and ignore_sticky_posts must be false. On subsequent pages or non-home queries, sticky posts are not given special treatment.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-016",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "intermediate",
+      "prompt": "After using query_posts(), which function must you call to restore the global $wp_query to its original state?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_reset_postdata()" },
+        { "key": "B", "text": "wp_reset_query()" },
+        { "key": "C", "text": "rewind_posts()" },
+        { "key": "D", "text": "wp_restore_query()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "wp_reset_query() restores $wp_query to the original $wp_the_query and then calls wp_reset_postdata(). wp_reset_postdata() alone only restores the global $post but does NOT restore $wp_query, making it insufficient after query_posts().",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_reset_query/"]
+    },
+    {
+      "id": "k-queries-017",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "intermediate",
+      "prompt": "When post_type is set to 'any' in WP_Query, post types with which registration property set to true are excluded from the results?",
+      "type": "short_answer",
+      "correct_answer": "exclude_from_search",
+      "answer_type": "contains",
+      "explanation": "post_type => 'any' queries all post types returned by get_post_types( array( 'exclude_from_search' => false ) ), excluding types like 'revision' and 'nav_menu_item' that have exclude_from_search set to true.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-018",
+      "category": "queries",
+      "subcategory": "date_query",
+      "difficulty": "intermediate",
+      "prompt": "In WP_Date_Query, what number represents Sunday in the 'dayofweek' parameter?",
+      "type": "short_answer",
+      "correct_answer": "1",
+      "answer_type": "exact",
+      "explanation": "In WP_Date_Query, 'dayofweek' uses MySQL's DAYOFWEEK() convention where 1 = Sunday and 7 = Saturday. This differs from 'dayofweek_iso' where 1 = Monday and 7 = Sunday.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_date_query/"]
+    },
+    {
+      "id": "k-queries-019",
+      "category": "queries",
+      "subcategory": "tax_query",
+      "difficulty": "intermediate",
+      "prompt": "What is the default value of the 'relation' parameter in a WP_Tax_Query?",
+      "type": "short_answer",
+      "correct_answer": "AND",
+      "answer_type": "exact",
+      "explanation": "WP_Tax_Query defaults the relation to 'AND', meaning all taxonomy clauses must match. The only other accepted value is 'OR'.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_tax_query/"]
+    },
+    {
+      "id": "k-queries-020",
+      "category": "queries",
+      "subcategory": "tax_query",
+      "difficulty": "intermediate",
+      "prompt": "What is the default value of 'include_children' in a WP_Tax_Query clause?",
+      "type": "short_answer",
+      "correct_answer": "true",
+      "answer_type": "exact",
+      "explanation": "WP_Tax_Query defaults include_children to true. When the taxonomy is hierarchical, child terms are automatically included in the query. Set it to false to match only the exact terms specified.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_tax_query/"]
+    },
+    {
+      "id": "k-queries-021",
+      "category": "queries",
+      "subcategory": "comment_query",
+      "difficulty": "intermediate",
+      "prompt": "What is the default value of no_found_rows in WP_Comment_Query?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "false, same as WP_Query" },
+        { "key": "B", "text": "true, unlike WP_Query which defaults to false" },
+        { "key": "C", "text": "It depends on the 'count' parameter" },
+        { "key": "D", "text": "WP_Comment_Query does not support no_found_rows" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_Comment_Query defaults no_found_rows to true, unlike WP_Query which defaults to false. This means pagination totals are not calculated by default for comment queries.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_comment_query/"]
+    },
+    {
+      "id": "k-queries-022",
+      "category": "queries",
+      "subcategory": "get_posts",
+      "difficulty": "hard",
+      "prompt": "Which set of parameters have DIFFERENT default values in get_posts() compared to a direct WP_Query?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "suppress_filters (true vs false), no_found_rows (true vs false), ignore_sticky_posts (true vs false)" },
+        { "key": "B", "text": "cache_results (false vs true), suppress_filters (true vs false), post_status ('any' vs 'publish')" },
+        { "key": "C", "text": "orderby ('title' vs 'date'), no_found_rows (true vs false), post_type ('any' vs 'post')" },
+        { "key": "D", "text": "suppress_filters (true vs false), update_post_meta_cache (false vs true), fields ('ids' vs '')" }
+      ],
+      "correct_answer": "A",
+      "explanation": "get_posts() differs from WP_Query in three key defaults: suppress_filters is true (WP_Query: false), no_found_rows is true (WP_Query: false), and ignore_sticky_posts is true (WP_Query: false). It also defaults numberposts to 5 instead of the Reading setting.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_posts/"]
+    },
+    {
+      "id": "k-queries-023",
+      "category": "queries",
+      "subcategory": "query_filters",
+      "difficulty": "hard",
+      "prompt": "Which WP_Query filter fires BEFORE sticky post handling and post status checks: 'posts_results' or 'the_posts'?",
+      "type": "short_answer",
+      "correct_answer": "posts_results",
+      "answer_type": "contains",
+      "explanation": "'posts_results' filters the raw post results array prior to status checks and sticky post handling. 'the_posts' fires after all internal processing including sticky post prepending and status checks.",
+      "references": ["https://developer.wordpress.org/reference/hooks/posts_results/", "https://developer.wordpress.org/reference/hooks/the_posts/"]
+    },
+    {
+      "id": "k-queries-024",
+      "category": "queries",
+      "subcategory": "query_filters",
+      "difficulty": "hard",
+      "prompt": "The 'posts_clauses' filter receives an associative array of SQL clause strings. Which set lists all seven keys in that array?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "where, groupby, join, orderby, distinct, fields, limits" },
+        { "key": "B", "text": "where, groupby, join, orderby, having, fields, limits" },
+        { "key": "C", "text": "select, where, groupby, join, orderby, distinct, limits" },
+        { "key": "D", "text": "where, groupby, join, orderby, distinct, fields, offset" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The posts_clauses filter receives compact($pieces) where $pieces = array('where', 'groupby', 'join', 'orderby', 'distinct', 'fields', 'limits'). There is no 'having', 'select', or 'offset' key.",
+      "references": ["https://developer.wordpress.org/reference/hooks/posts_clauses/"]
+    },
+    {
+      "id": "k-queries-025",
+      "category": "queries",
+      "subcategory": "tax_query",
+      "difficulty": "hard",
+      "prompt": "Which two WP_Tax_Query operators were added in WordPress 4.1?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "LIKE and NOT LIKE" },
+        { "key": "B", "text": "EXISTS and NOT EXISTS" },
+        { "key": "C", "text": "BETWEEN and NOT BETWEEN" },
+        { "key": "D", "text": "REGEXP and NOT REGEXP" }
+      ],
+      "correct_answer": "B",
+      "explanation": "EXISTS and NOT EXISTS were added to WP_Tax_Query in WordPress 4.1. They check whether a post has any term in a given taxonomy (EXISTS) or no terms (NOT EXISTS), without specifying particular terms. The original operators are IN, NOT IN, and AND.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_tax_query/"]
+    },
+    {
+      "id": "k-queries-026",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "hard",
+      "prompt": "How does the WP_Query::is_main_query() method determine whether the current instance is the main query?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It checks an internal $is_main boolean property set during construction" },
+        { "key": "B", "text": "It compares $this to the global $wp_the_query using strict identity (===)" },
+        { "key": "C", "text": "It checks whether the query was initiated by the 'wp' action hook" },
+        { "key": "D", "text": "It compares the query vars against the original request URI parsed by WP_Rewrite" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_Query::is_main_query() simply returns $wp_the_query === $this, checking whether the current instance is the exact same object as the global $wp_the_query that was set during WordPress initialization.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/is_main_query/"]
+    },
+    {
+      "id": "k-queries-027",
+      "category": "queries",
+      "subcategory": "meta_query",
+      "difficulty": "hard",
+      "prompt": "In WP_Meta_Query, which group of compare operators are classified as numeric-only (not available for non-numeric comparisons)?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": ">, >=, <, <=, BETWEEN, NOT BETWEEN" },
+        { "key": "B", "text": ">, >=, <, <=, IN, NOT IN" },
+        { "key": "C", "text": "BETWEEN, NOT BETWEEN, LIKE, NOT LIKE" },
+        { "key": "D", "text": ">, >=, <, <=, REGEXP, NOT REGEXP" }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_Meta_Query separates operators into two groups: non-numeric (=, !=, LIKE, NOT LIKE, IN, NOT IN, EXISTS, NOT EXISTS, RLIKE, REGEXP, NOT REGEXP) and numeric-only (>, >=, <, <=, BETWEEN, NOT BETWEEN). The numeric operators are validated separately.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_meta_query/"]
+    },
+    {
+      "id": "k-queries-028",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "hard",
+      "prompt": "What happens when posts_per_page is set to 0 in WP_Query?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It returns an empty result set" },
+        { "key": "B", "text": "It is silently forced to 1, returning a single post" },
+        { "key": "C", "text": "It behaves the same as -1, returning all posts" },
+        { "key": "D", "text": "It falls back to the posts_per_page option from Settings > Reading" }
+      ],
+      "correct_answer": "B",
+      "explanation": "When posts_per_page is 0, WP_Query forces it to 1. The code checks: if 0 === $q['posts_per_page'], set it to 1. This prevents a zero-limit query from being issued.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-029",
+      "category": "queries",
+      "subcategory": "wp_query",
+      "difficulty": "hard",
+      "prompt": "What object cache group does WP_Query use for storing cached query results in WordPress 6.9?",
+      "type": "short_answer",
+      "correct_answer": "post-queries",
+      "answer_type": "contains",
+      "explanation": "WP_Query stores cached results using wp_cache_set_salted() with the cache group 'post-queries'. The cache key is generated by the generate_cache_key() method and salted with last_changed timestamps from the 'posts' and optionally 'terms' groups.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_query/"]
+    },
+    {
+      "id": "k-queries-030",
+      "category": "queries",
+      "subcategory": "meta_query",
+      "difficulty": "hard",
+      "prompt": "In WP_Meta_Query, what MySQL type is 'NUMERIC' aliased to by the get_cast_for_type() method?",
+      "type": "short_answer",
+      "correct_answer": "SIGNED",
+      "answer_type": "exact",
+      "explanation": "WP_Meta_Query::get_cast_for_type() converts 'NUMERIC' to 'SIGNED' before using it in a CAST() expression. This is because MySQL's CAST does not accept NUMERIC directly; SIGNED is the equivalent integer type.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_meta_query/"]
     }
   ]
 }

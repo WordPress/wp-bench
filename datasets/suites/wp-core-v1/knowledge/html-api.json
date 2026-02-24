@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-html_api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - HTML API",
     "description": "Tests knowledge of WordPress HTML API (WP_HTML_Tag_Processor, WP_HTML_Processor)",
@@ -11,6 +11,7 @@
     {
       "id": "k-html-serialize-001",
       "category": "html-api",
+      "subcategory": "processor",
       "difficulty": "hard",
       "prompt": "What does WP_HTML_Processor::serialize_token() return now that the method is public in WordPress 6.9?",
       "type": "multiple_choice",
@@ -27,6 +28,7 @@
     {
       "id": "k-html-script-reject-001",
       "category": "html-api",
+      "subcategory": "tag_processor",
       "difficulty": "hard",
       "prompt": "What does WP_HTML_Tag_Processor::set_modifiable_text() do when you try to set script contents that include '<script' or '</script' in WordPress 6.9?",
       "type": "multiple_choice",
@@ -39,6 +41,151 @@
       "correct_answer": "C",
       "explanation": "6.9 hardens set_modifiable_text() for SCRIPT nodes by rejecting updates containing '<script' or '</script', returning false so callers can abort safely.",
       "references": ["https://make.wordpress.org/core/2025/11/21/updates-to-the-html-api-in-6-9/"]
+    },
+    {
+      "id": "k-html-003",
+      "category": "html-api",
+      "subcategory": "tag_processor",
+      "difficulty": "basic",
+      "prompt": "In which WordPress version was WP_HTML_Tag_Processor introduced?",
+      "type": "short_answer",
+      "correct_answer": "6.2",
+      "answer_type": "contains",
+      "explanation": "WP_HTML_Tag_Processor was introduced in WordPress 6.2.0 as a streaming HTML tokenizer that can find tags and modify their attributes without building a DOM tree.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_tag_processor/"]
+    },
+    {
+      "id": "k-html-004",
+      "category": "html-api",
+      "subcategory": "processor",
+      "difficulty": "basic",
+      "prompt": "In which WordPress version was WP_HTML_Processor introduced?",
+      "type": "short_answer",
+      "correct_answer": "6.4",
+      "answer_type": "contains",
+      "explanation": "WP_HTML_Processor was introduced in WordPress 6.4.0 as a tree-aware HTML parser that follows the HTML5 specification's parsing algorithm, building on top of WP_HTML_Tag_Processor.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_processor/"]
+    },
+    {
+      "id": "k-html-005",
+      "category": "html-api",
+      "subcategory": "architecture",
+      "difficulty": "basic",
+      "prompt": "What is the relationship between WP_HTML_Processor and WP_HTML_Tag_Processor?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "WP_HTML_Processor extends WP_HTML_Tag_Processor, adding tree construction" },
+        { "key": "B", "text": "WP_HTML_Tag_Processor extends WP_HTML_Processor" },
+        { "key": "C", "text": "They are unrelated classes with similar APIs" },
+        { "key": "D", "text": "WP_HTML_Processor wraps WP_HTML_Tag_Processor via composition" }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_HTML_Processor extends WP_HTML_Tag_Processor. It inherits all tokenization and attribute modification methods but adds tree construction logic per the WHATWG HTML5 specification.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_processor/"]
+    },
+    {
+      "id": "k-html-006",
+      "category": "html-api",
+      "subcategory": "tag_processor",
+      "difficulty": "intermediate",
+      "prompt": "What does WP_HTML_Tag_Processor::get_attribute() return for a boolean HTML attribute like 'disabled' in <button disabled>?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The string 'disabled'" },
+        { "key": "B", "text": "The string 'true'" },
+        { "key": "C", "text": "The PHP boolean true" },
+        { "key": "D", "text": "An empty string" }
+      ],
+      "correct_answer": "C",
+      "explanation": "get_attribute() returns the PHP boolean true for boolean/valueless attributes (e.g., <div disabled>). It returns null if the attribute is missing, and the decoded string value for attributes with values.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_tag_processor/get_attribute/"]
+    },
+    {
+      "id": "k-html-007",
+      "category": "html-api",
+      "subcategory": "tag_processor",
+      "difficulty": "intermediate",
+      "prompt": "What is the maximum number of bookmarks allowed at one time in WP_HTML_Tag_Processor?",
+      "type": "short_answer",
+      "correct_answer": "10",
+      "answer_type": "exact",
+      "explanation": "WP_HTML_Tag_Processor::MAX_BOOKMARKS is 10. WP_HTML_Processor overrides this to 100 to accommodate the more complex tree-aware parsing.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_tag_processor/"]
+    },
+    {
+      "id": "k-html-008",
+      "category": "html-api",
+      "subcategory": "processor",
+      "difficulty": "hard",
+      "prompt": "WP_HTML_Processor overrides MAX_BOOKMARKS from its parent class. What is the new limit?",
+      "type": "short_answer",
+      "correct_answer": "100",
+      "answer_type": "exact",
+      "explanation": "WP_HTML_Processor sets MAX_BOOKMARKS to 100 (vs 10 in WP_HTML_Tag_Processor) because the tree construction algorithm needs more bookmarks to track the stack of open elements.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_processor/"]
+    },
+    {
+      "id": "k-html-009",
+      "category": "html-api",
+      "subcategory": "processor",
+      "difficulty": "intermediate",
+      "prompt": "WP_HTML_Processor::create_fragment() only supports one context element. Which one?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "<html>" },
+        { "key": "B", "text": "<head>" },
+        { "key": "C", "text": "<body>" },
+        { "key": "D", "text": "<div>" }
+      ],
+      "correct_answer": "C",
+      "explanation": "create_fragment() only supports '<body>' as the context element (the default). Passing any other context returns null. This means all fragment parsing assumes the HTML is inside a body element.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_processor/create_fragment/"]
+    },
+    {
+      "id": "k-html-010",
+      "category": "html-api",
+      "subcategory": "processor",
+      "difficulty": "intermediate",
+      "prompt": "When using WP_HTML_Processor::create_fragment() to parse '<p><strong>text</strong></p>', what does get_breadcrumbs() return when positioned on the STRONG tag?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "array( 'P', 'STRONG' )" },
+        { "key": "B", "text": "array( 'HTML', 'BODY', 'P', 'STRONG' )" },
+        { "key": "C", "text": "array( 'BODY', 'P', 'STRONG' )" },
+        { "key": "D", "text": "array( 'STRONG' )" }
+      ],
+      "correct_answer": "B",
+      "explanation": "get_breadcrumbs() always includes the implicit outer elements. In a <body> fragment context, breadcrumbs start with array('HTML', 'BODY', ...) followed by the actual nesting path to the current node.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_processor/get_breadcrumbs/"]
+    },
+    {
+      "id": "k-html-011",
+      "category": "html-api",
+      "subcategory": "processor",
+      "difficulty": "hard",
+      "prompt": "How is WP_HTML_Processor::normalize() implemented internally?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It uses a regex-based cleanup pass over the HTML string" },
+        { "key": "B", "text": "It creates a fragment parser and calls serialize() on it" },
+        { "key": "C", "text": "It delegates to PHP's DOMDocument::normalizeDocument()" },
+        { "key": "D", "text": "It runs the Tag Processor in a loop, fixing each token" }
+      ],
+      "correct_answer": "B",
+      "explanation": "normalize() is simply: static::create_fragment($html)->serialize(). It round-trips the HTML through the full HTML5 parser, producing normalized output with consistent quoting, lowercased names, and invalid UTF-8 replaced.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_processor/normalize/"]
+    },
+    {
+      "id": "k-html-012",
+      "category": "html-api",
+      "subcategory": "tag_processor",
+      "difficulty": "intermediate",
+      "prompt": "In what letter case does WP_HTML_Tag_Processor::get_tag() return tag names?",
+      "type": "short_answer",
+      "correct_answer": "uppercase",
+      "answer_type": "contains",
+      "explanation": "get_tag() always returns tag names in uppercase (e.g., 'DIV', 'SPAN', 'IMG'). This normalization matches how the HTML spec treats tag names as case-insensitive.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_html_tag_processor/get_tag/"]
     }
   ]
 }

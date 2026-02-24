@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-rest_api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - REST API",
     "description": "Tests knowledge of WordPress REST API",
@@ -11,6 +11,7 @@
     {
       "id": "k-rest-001",
       "category": "rest-api",
+      "subcategory": "namespaces",
       "difficulty": "intermediate",
       "prompt": "What is the default namespace prefix for WordPress core REST API endpoints?",
       "type": "short_answer",
@@ -21,6 +22,7 @@
     {
       "id": "k-rest-002",
       "category": "rest-api",
+      "subcategory": "registration",
       "difficulty": "intermediate",
       "prompt": "Which function is used to register a custom REST API route in WordPress?",
       "type": "multiple_choice",
@@ -33,6 +35,434 @@
       "correct_answer": "B",
       "explanation": "register_rest_route() is the function used to register custom REST API endpoints.",
       "references": ["https://developer.wordpress.org/reference/functions/register_rest_route/"]
+    },
+    {
+      "id": "k-rest-003",
+      "category": "rest-api",
+      "subcategory": "core-infrastructure",
+      "difficulty": "basic",
+      "prompt": "What is the default URL prefix used to access the WordPress REST API?",
+      "type": "short_answer",
+      "correct_answer": "wp-json",
+      "answer_type": "exact",
+      "explanation": "The default REST API URL prefix is 'wp-json', making the base URL something like https://example.com/wp-json/. This is filterable via the 'rest_url_prefix' filter. Note that 'wp/v2' is the core namespace, not the URL prefix.",
+      "references": ["https://developer.wordpress.org/reference/functions/rest_get_url_prefix/"]
+    },
+    {
+      "id": "k-rest-004",
+      "category": "rest-api",
+      "subcategory": "core-infrastructure",
+      "difficulty": "basic",
+      "prompt": "Which PHP constant is defined as true when the WordPress REST API is handling a request?",
+      "type": "short_answer",
+      "correct_answer": "REST_REQUEST",
+      "answer_type": "contains",
+      "explanation": "WordPress defines the REST_REQUEST constant as true when the REST API is loaded and processing a request. This can be used to conditionally run code only during REST API requests.",
+      "references": ["https://developer.wordpress.org/reference/functions/rest_api_loaded/"]
+    },
+    {
+      "id": "k-rest-005",
+      "category": "rest-api",
+      "subcategory": "core-infrastructure",
+      "difficulty": "intermediate",
+      "prompt": "What is the value of the REST_API_VERSION constant in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "1.0" },
+        { "key": "B", "text": "2.0" },
+        { "key": "C", "text": "3.0" },
+        { "key": "D", "text": "2.1" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The REST_API_VERSION constant is set to '2.0' in WordPress core. This has been at version 2.0 since the REST API was merged into core from the WP REST API plugin."
+    },
+    {
+      "id": "k-rest-006",
+      "category": "rest-api",
+      "subcategory": "route-registration",
+      "difficulty": "basic",
+      "prompt": "On which WordPress action hook should register_rest_route() be called?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "init" },
+        { "key": "B", "text": "wp_loaded" },
+        { "key": "C", "text": "rest_api_init" },
+        { "key": "D", "text": "plugins_loaded" }
+      ],
+      "correct_answer": "C",
+      "explanation": "REST routes must be registered on the 'rest_api_init' action hook. Registering on 'init' or other hooks will not work because the REST API server has not been initialized yet at those points.",
+      "references": ["https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/"]
+    },
+    {
+      "id": "k-rest-007",
+      "category": "rest-api",
+      "subcategory": "route-registration",
+      "difficulty": "intermediate",
+      "prompt": "Since WordPress 5.5, what happens if you call register_rest_route() without specifying a permission_callback?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The route silently defaults to requiring administrator capabilities" },
+        { "key": "B", "text": "A _doing_it_wrong notice is triggered" },
+        { "key": "C", "text": "The route registration fails and returns false" },
+        { "key": "D", "text": "The endpoint returns a 403 error for all requests" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Since WordPress 5.5, omitting the permission_callback argument from register_rest_route() triggers a _doing_it_wrong notice. The route still registers and functions, but the notice warns that a permission callback should be explicitly defined.",
+      "references": ["https://developer.wordpress.org/reference/functions/register_rest_route/"]
+    },
+    {
+      "id": "k-rest-008",
+      "category": "rest-api",
+      "subcategory": "route-registration",
+      "difficulty": "intermediate",
+      "prompt": "When creating a public REST API endpoint that should be accessible without authentication, what is the WordPress-recommended value for the permission_callback parameter?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "__return_true" },
+        { "key": "B", "text": "__return_false" },
+        { "key": "C", "text": "is_user_logged_in" },
+        { "key": "D", "text": "null" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The WordPress-recommended approach for public endpoints is to use __return_true as the permission callback. This is a built-in WordPress function that simply returns true. Using null causes the _doing_it_wrong notice introduced in WordPress 5.5.",
+      "references": ["https://developer.wordpress.org/rest-api/extending-the-rest-api/adding-custom-endpoints/"]
+    },
+    {
+      "id": "k-rest-009",
+      "category": "rest-api",
+      "subcategory": "server-constants",
+      "difficulty": "intermediate",
+      "prompt": "What HTTP methods are included in the WP_REST_Server::EDITABLE constant?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "PUT, PATCH" },
+        { "key": "B", "text": "POST, PUT, PATCH" },
+        { "key": "C", "text": "POST, PUT" },
+        { "key": "D", "text": "PUT, PATCH, DELETE" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_REST_Server::EDITABLE is defined as 'POST, PUT, PATCH'. It includes POST along with PUT and PATCH because WordPress uses POST as a fallback method for clients that cannot send PUT or PATCH requests natively.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_rest_server/"]
+    },
+    {
+      "id": "k-rest-010",
+      "category": "rest-api",
+      "subcategory": "server-constants",
+      "difficulty": "hard",
+      "prompt": "Which of the following correctly lists ALL HTTP methods in the WP_REST_Server::ALLMETHODS constant?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "GET, POST, PUT, DELETE" },
+        { "key": "B", "text": "GET, POST, PUT, PATCH, DELETE" },
+        { "key": "C", "text": "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
+        { "key": "D", "text": "GET, HEAD, POST, PUT, PATCH, DELETE" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_REST_Server::ALLMETHODS is defined as 'GET, POST, PUT, PATCH, DELETE'. It does not include OPTIONS or HEAD, even though those are valid HTTP methods that the REST API server handles separately.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_rest_server/"]
+    },
+    {
+      "id": "k-rest-011",
+      "category": "rest-api",
+      "subcategory": "pagination",
+      "difficulty": "basic",
+      "prompt": "What is the default number of items returned per page by WordPress REST API collection endpoints?",
+      "type": "short_answer",
+      "correct_answer": "10",
+      "answer_type": "exact",
+      "explanation": "WordPress REST API collection endpoints default to returning 10 items per page. This can be modified with the per_page query parameter, up to a maximum of 100.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_rest_controller/get_collection_params/"]
+    },
+    {
+      "id": "k-rest-012",
+      "category": "rest-api",
+      "subcategory": "pagination",
+      "difficulty": "basic",
+      "prompt": "Which HTTP response headers does the WordPress REST API use to communicate pagination totals?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "X-Total-Count and X-Total-Pages" },
+        { "key": "B", "text": "X-WP-Total and X-WP-TotalPages" },
+        { "key": "C", "text": "X-Pagination-Total and X-Pagination-Pages" },
+        { "key": "D", "text": "X-WP-Count and X-WP-Pages" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WordPress uses X-WP-Total to indicate the total number of records and X-WP-TotalPages to indicate the total number of pages. These are custom headers prefixed with X-WP- to identify them as WordPress-specific.",
+      "references": ["https://developer.wordpress.org/rest-api/using-the-rest-api/pagination/"]
+    },
+    {
+      "id": "k-rest-013",
+      "category": "rest-api",
+      "subcategory": "pagination",
+      "difficulty": "hard",
+      "prompt": "What is the maximum value allowed for the per_page query parameter in standard WordPress REST API collection endpoints?",
+      "type": "short_answer",
+      "correct_answer": "100",
+      "answer_type": "exact",
+      "explanation": "The maximum value for per_page in WordPress REST API endpoints is 100. Requesting more than 100 results in a validation error. This limit is defined in the parameter schema in WP_REST_Controller::get_collection_params()."
+    },
+    {
+      "id": "k-rest-014",
+      "category": "rest-api",
+      "subcategory": "special-parameters",
+      "difficulty": "basic",
+      "prompt": "What query parameter can be added to a WordPress REST API request to include linked resources (such as author and featured media) directly in the response?",
+      "type": "short_answer",
+      "correct_answer": "_embed",
+      "answer_type": "contains",
+      "explanation": "The _embed query parameter tells the REST API to embed linked resources (from _links) directly in the response, reducing the need for additional requests. For example, adding ?_embed to a posts request includes the author and featured media objects.",
+      "references": ["https://developer.wordpress.org/rest-api/using-the-rest-api/linking-and-embedding/"]
+    },
+    {
+      "id": "k-rest-015",
+      "category": "rest-api",
+      "subcategory": "special-parameters",
+      "difficulty": "intermediate",
+      "prompt": "What does the _envelope query parameter do in the WordPress REST API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Encrypts the response payload with a site-specific key" },
+        { "key": "B", "text": "Wraps the response in a JSON object containing body, status, and headers keys" },
+        { "key": "C", "text": "Compresses the response using gzip encoding" },
+        { "key": "D", "text": "Adds a JSONP callback wrapper around the response" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The _envelope parameter wraps the actual response inside a JSON envelope object with body, status, and headers keys. This is useful for environments where reading HTTP headers or status codes directly is not possible, such as some JSONP or restricted clients.",
+      "references": ["https://developer.wordpress.org/rest-api/using-the-rest-api/global-parameters/"]
+    },
+    {
+      "id": "k-rest-016",
+      "category": "rest-api",
+      "subcategory": "request-response",
+      "difficulty": "intermediate",
+      "prompt": "What does the rest_ensure_response() function do?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Validates that a REST response contains no errors before sending" },
+        { "key": "B", "text": "Converts any value into a WP_REST_Response object" },
+        { "key": "C", "text": "Ensures the REST API server is initialized before dispatching" },
+        { "key": "D", "text": "Checks that the response conforms to the endpoint's JSON schema" }
+      ],
+      "correct_answer": "B",
+      "explanation": "rest_ensure_response() takes any value and normalizes it into a WP_REST_Response object. If the value is already a WP_REST_Response, it returns it unchanged. If it is a WP_Error, it converts it to an error response. Otherwise, it wraps the value in a new WP_REST_Response.",
+      "references": ["https://developer.wordpress.org/reference/functions/rest_ensure_response/"]
+    },
+    {
+      "id": "k-rest-017",
+      "category": "rest-api",
+      "subcategory": "request-response",
+      "difficulty": "hard",
+      "prompt": "When a WordPress REST API request includes parameters from multiple sources (JSON body, POST body, query string, URL), what is the priority order from highest to lowest for resolving parameter values?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "GET query string, POST body, JSON body, URL parameters, defaults" },
+        { "key": "B", "text": "URL parameters, JSON body, POST body, GET query string, defaults" },
+        { "key": "C", "text": "JSON body, POST body, GET query string, URL parameters, defaults" },
+        { "key": "D", "text": "POST body, JSON body, GET query string, URL parameters, defaults" }
+      ],
+      "correct_answer": "C",
+      "explanation": "The parameter priority order in WP_REST_Request::get_parameter_order() is: JSON body (highest), POST body, GET query string, URL route parameters, and registered defaults (lowest). This means if the same parameter name exists in the JSON body and the query string, the JSON body value takes precedence."
+    },
+    {
+      "id": "k-rest-018",
+      "category": "rest-api",
+      "subcategory": "authentication",
+      "difficulty": "basic",
+      "prompt": "Which of the following are the valid values for the context parameter in WordPress REST API requests?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "view, edit, admin" },
+        { "key": "B", "text": "public, private, admin" },
+        { "key": "C", "text": "view, edit, embed" },
+        { "key": "D", "text": "read, write, admin" }
+      ],
+      "correct_answer": "C",
+      "explanation": "The three valid context values are 'view' (default, for public-facing data), 'edit' (for edit screens, requires appropriate capabilities), and 'embed' (minimal subset of fields for embedding). These control which fields and values are included in the response.",
+      "references": ["https://developer.wordpress.org/rest-api/using-the-rest-api/global-parameters/"]
+    },
+    {
+      "id": "k-rest-019",
+      "category": "rest-api",
+      "subcategory": "authorization",
+      "difficulty": "intermediate",
+      "prompt": "What HTTP status code does rest_authorization_required_code() return when the user is logged in but lacks the required capability?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "401" },
+        { "key": "B", "text": "403" },
+        { "key": "C", "text": "405" },
+        { "key": "D", "text": "422" }
+      ],
+      "correct_answer": "B",
+      "explanation": "rest_authorization_required_code() returns 403 (Forbidden) for logged-in users who lack the required capability, and 401 (Unauthorized) for logged-out users. This distinction helps clients differentiate between 'you need to log in' and 'you don't have permission'.",
+      "references": ["https://developer.wordpress.org/reference/functions/rest_authorization_required_code/"]
+    },
+    {
+      "id": "k-rest-020",
+      "category": "rest-api",
+      "subcategory": "authentication",
+      "difficulty": "hard",
+      "prompt": "Which filter hook allows you to implement custom authentication for the WordPress REST API, and what must it return to indicate an authentication error?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "rest_authentication_errors — return a WP_Error object" },
+        { "key": "B", "text": "rest_auth_check — return false" },
+        { "key": "C", "text": "rest_cookie_check_errors — return an error code string" },
+        { "key": "D", "text": "authenticate — return null" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The rest_authentication_errors filter is the designated hook for implementing custom REST API authentication. Returning a WP_Error object from this filter short-circuits the request with that error. Returning null passes through to allow other auth methods, and returning true indicates successful authentication.",
+      "references": ["https://developer.wordpress.org/reference/hooks/rest_authentication_errors/"]
+    },
+    {
+      "id": "k-rest-021",
+      "category": "rest-api",
+      "subcategory": "schema-validation",
+      "difficulty": "intermediate",
+      "prompt": "Which JSON Schema specification version does the WordPress REST API use for its endpoint schema definitions?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "JSON Schema Draft 7" },
+        { "key": "B", "text": "JSON Schema Draft 4" },
+        { "key": "C", "text": "JSON Schema Draft 6" },
+        { "key": "D", "text": "OpenAPI 3.0 Schema" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The WordPress REST API uses JSON Schema Draft 4 for defining endpoint schemas. All core controllers reference 'http://json-schema.org/draft-04/schema#' in their schema definitions. This determines which schema keywords and validation features are available.",
+      "references": ["https://developer.wordpress.org/rest-api/extending-the-rest-api/schema/"]
+    },
+    {
+      "id": "k-rest-022",
+      "category": "rest-api",
+      "subcategory": "schema-validation",
+      "difficulty": "hard",
+      "prompt": "What characters are allowed in a JSONP callback function name by the WordPress REST API's validation?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Alphanumeric characters, underscores, hyphens, and periods" },
+        { "key": "B", "text": "Word characters (alphanumeric plus underscore) and periods only" },
+        { "key": "C", "text": "Any characters except parentheses and semicolons" },
+        { "key": "D", "text": "Alphanumeric characters and underscores only (no periods)" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The wp_check_jsonp_callback() function uses the regex /[^\\w\\.]/ to reject invalid characters. This means only word characters (a-z, A-Z, 0-9, underscore) and periods are permitted. Periods are allowed to support namespaced callbacks like jQuery.callback.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_check_jsonp_callback/"]
+    },
+    {
+      "id": "k-rest-023",
+      "category": "rest-api",
+      "subcategory": "batch-processing",
+      "difficulty": "intermediate",
+      "prompt": "What is the default maximum number of requests that can be included in a single WordPress REST API batch request?",
+      "type": "short_answer",
+      "correct_answer": "25",
+      "answer_type": "exact",
+      "explanation": "The default maximum batch size is 25 requests. This limit is filterable via the rest_get_max_batch_size filter. The batch endpoint is available at POST /wp/batch/v1.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_rest_server/serve_batch_request_v1/"]
+    },
+    {
+      "id": "k-rest-024",
+      "category": "rest-api",
+      "subcategory": "batch-processing",
+      "difficulty": "hard",
+      "prompt": "How must a REST API route opt in to being callable via the WordPress batch processing endpoint?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Add 'batch' => true to the route registration args" },
+        { "key": "B", "text": "Add 'allow_batch' => array( 'v1' => true ) to the route registration args" },
+        { "key": "C", "text": "Register the route with WP_REST_Batch_Controller as the base class" },
+        { "key": "D", "text": "Add 'batchable' => true to the route registration args" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Routes must explicitly opt in to batch processing by including 'allow_batch' => array( 'v1' => true ) in their route registration arguments. The versioned array structure allows for future batch API versions.",
+      "references": ["https://developer.wordpress.org/reference/functions/register_rest_route/"]
+    },
+    {
+      "id": "k-rest-025",
+      "category": "rest-api",
+      "subcategory": "embedding-hypermedia",
+      "difficulty": "intermediate",
+      "prompt": "What is the CURIE (Compact URI) namespace prefix used in WordPress REST API _links for custom relation types like 'featuredmedia' and 'attachment'?",
+      "type": "short_answer",
+      "correct_answer": "wp",
+      "answer_type": "exact",
+      "explanation": "WordPress uses the 'wp' CURIE namespace for its custom link relation types. So 'wp:featuredmedia' expands to 'https://api.w.org/featuredmedia'. This follows the HAL (Hypertext Application Language) style used in REST API responses.",
+      "references": ["https://developer.wordpress.org/rest-api/using-the-rest-api/linking-and-embedding/"]
+    },
+    {
+      "id": "k-rest-026",
+      "category": "rest-api",
+      "subcategory": "embedding-hypermedia",
+      "difficulty": "hard",
+      "prompt": "WordPress REST API responses include _links using a hypermedia format. What format standard do these links follow, and what URL template is used for the 'wp' CURIE?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "JSON:API format with template https://wordpress.org/rest/{rel}" },
+        { "key": "B", "text": "HAL (Hypertext Application Language) with template https://api.w.org/{rel}" },
+        { "key": "C", "text": "Siren hypermedia format with template https://wp.org/api/{rel}" },
+        { "key": "D", "text": "Collection+JSON format with template https://api.wordpress.org/{rel}" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WordPress REST API responses use HAL-style _links with CURIEs. The 'wp' CURIE maps to the template 'https://api.w.org/{rel}', where {rel} is replaced with the specific relation type. The api.w.org domain is the canonical short domain for WordPress API relation types.",
+      "references": ["https://developer.wordpress.org/rest-api/using-the-rest-api/linking-and-embedding/"]
+    },
+    {
+      "id": "k-rest-027",
+      "category": "rest-api",
+      "subcategory": "hooks",
+      "difficulty": "basic",
+      "prompt": "Which action hook fires when the WordPress REST API server is initialized and ready for route registration?",
+      "type": "short_answer",
+      "correct_answer": "rest_api_init",
+      "answer_type": "contains",
+      "explanation": "The rest_api_init action fires when the REST API server is initialized. This is the proper hook to use for registering custom REST routes and performing other REST API setup.",
+      "references": ["https://developer.wordpress.org/reference/hooks/rest_api_init/"]
+    },
+    {
+      "id": "k-rest-028",
+      "category": "rest-api",
+      "subcategory": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Which filter hook fires AFTER the REST API route callback has executed but BEFORE the response is sent to the client, allowing you to modify the response object?",
+      "type": "short_answer",
+      "correct_answer": "rest_post_dispatch",
+      "answer_type": "contains",
+      "explanation": "The rest_post_dispatch filter fires after the REST API callback has executed, providing the response object for modification before it is served to the client. rest_pre_dispatch fires before route matching, and rest_pre_serve_request fires at the very end before the HTTP output is sent.",
+      "references": ["https://developer.wordpress.org/reference/hooks/rest_post_dispatch/"]
+    },
+    {
+      "id": "k-rest-029",
+      "category": "rest-api",
+      "subcategory": "hooks",
+      "difficulty": "hard",
+      "prompt": "What is the dynamic action hook name that fires after a post is created or updated via the REST API, where {$this->post_type} is replaced by the post type slug?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "rest_after_save_{post_type}" },
+        { "key": "B", "text": "rest_insert_{post_type}" },
+        { "key": "C", "text": "rest_update_{post_type}" },
+        { "key": "D", "text": "rest_save_{post_type}" }
+      ],
+      "correct_answer": "B",
+      "explanation": "The rest_insert_{post_type} action fires after a post is created or updated via the REST API. For example, rest_insert_post fires for standard posts and rest_insert_page fires for pages. Despite the name containing 'insert', it fires for both creation and updates — the third parameter ($creating) indicates which operation occurred.",
+      "references": ["https://developer.wordpress.org/reference/hooks/rest_insert_this-post_type/"]
+    },
+    {
+      "id": "k-rest-030",
+      "category": "rest-api",
+      "subcategory": "error-handling",
+      "difficulty": "intermediate",
+      "prompt": "What is the structure of a standard WordPress REST API error response body?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "{\"error\": true, \"error_message\": \"...\", \"error_code\": 400}" },
+        { "key": "B", "text": "{\"code\": \"error_code\", \"message\": \"...\", \"data\": {\"status\": 400}}" },
+        { "key": "C", "text": "{\"status\": \"error\", \"errors\": [{\"code\": \"...\", \"detail\": \"...\"}]}" },
+        { "key": "D", "text": "{\"success\": false, \"message\": \"...\", \"statusCode\": 400}" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WordPress REST API error responses follow the format {\"code\": \"error_code\", \"message\": \"Human-readable message\", \"data\": {\"status\": 400}} where 'code' is a machine-readable error identifier, 'message' is human-readable, and 'data.status' contains the HTTP status code.",
+      "references": ["https://developer.wordpress.org/rest-api/extending-the-rest-api/routes-and-endpoints/"]
     }
   ]
 }

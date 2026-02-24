@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-abilities_api",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Abilities API",
     "description": "Tests knowledge of WordPress Abilities API",
@@ -11,51 +11,261 @@
     {
       "id": "k-abilities-001",
       "category": "abilities-api",
-      "difficulty": "intermediate",
-      "prompt": "Which hook should plugins use to register abilities with the WordPress Abilities API?",
-      "type": "multiple_choice",
-      "choices": [
-        { "key": "A", "text": "init" },
-        { "key": "B", "text": "wp_loaded" },
-        { "key": "C", "text": "wp_abilities_api_init" },
-        { "key": "D", "text": "rest_api_init" }
-      ],
-      "correct_answer": "C",
-      "explanation": "Abilities are registered during the wp_abilities_api_init hook.",
-      "references": ["https://make.wordpress.org/core/2024/07/03/wordpress-6-8-field-guide/#abilities-api"]
+      "subcategory": "registration",
+      "difficulty": "basic",
+      "prompt": "What function registers a new ability in WordPress?",
+      "type": "short_answer",
+      "correct_answer": "wp_register_ability",
+      "answer_type": "contains",
+      "explanation": "wp_register_ability() accepts a name (string) and args (array). It must be called during the wp_abilities_api_init action hook.",
+      "references": [
+        "https://developer.wordpress.org/reference/functions/wp_register_ability/"
+      ]
     },
     {
       "id": "k-abilities-002",
       "category": "abilities-api",
+      "subcategory": "core-abilities",
       "difficulty": "basic",
-      "prompt": "How do you expose a custom ability over the REST API when calling wp_register_ability()?",
+      "prompt": "Which of these is a core ability that ships with WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "Set 'rest' => true in the args" },
-        { "key": "B", "text": "Add a REST route manually" },
-        { "key": "C", "text": "Pass 'show_in_rest' => true in the meta array" },
-        { "key": "D", "text": "It is always exposed automatically" }
+        {
+          "key": "A",
+          "text": "core/get-site-info"
+        },
+        {
+          "key": "B",
+          "text": "core/create-post"
+        },
+        {
+          "key": "C",
+          "text": "core/manage-users"
+        },
+        {
+          "key": "D",
+          "text": "core/install-plugin"
+        }
       ],
-      "correct_answer": "C",
-      "explanation": "Abilities are opt-in to REST; set show_in_rest => true when registering.",
-      "references": ["https://developer.wordpress.org/news/2024/10/16/abilities-api-coming-to-wordpress-core-6-9/"]
+      "correct_answer": "A",
+      "explanation": "WordPress 6.9 ships with three initial core abilities: core/get-site-info (returns site information), core/get-user-info (returns current user information), and core/get-environment-info (returns PHP/DB/WP version information). All three are read-only abilities.",
+      "references": [
+        "https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"
+      ]
     },
     {
       "id": "k-abilities-003",
       "category": "abilities-api",
-      "subcategory": "registration",
-      "difficulty": "hard",
-      "prompt": "Which hook must you use to register ability categories so WordPress 6.9 persists them without a _doing_it_wrong notice?",
+      "subcategory": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Which hook should plugins use to register abilities with the WordPress Abilities API?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "init" },
-        { "key": "B", "text": "wp_abilities_api_init" },
-        { "key": "C", "text": "wp_abilities_api_categories_init" },
-        { "key": "D", "text": "rest_api_init" }
+        {
+          "key": "A",
+          "text": "init"
+        },
+        {
+          "key": "B",
+          "text": "wp_loaded"
+        },
+        {
+          "key": "C",
+          "text": "wp_abilities_api_init"
+        },
+        {
+          "key": "D",
+          "text": "rest_api_init"
+        }
       ],
       "correct_answer": "C",
-      "explanation": "Categories are validated separately from abilities; WordPress 6.9 only saves them when registered on wp_abilities_api_categories_init.",
-      "references": ["https://make.wordpress.org/core/2025/11/10/abilities-api-in-wordpress-6-9/"]
+      "explanation": "Abilities must be registered during the wp_abilities_api_init action hook. A separate hook, wp_abilities_api_categories_init, is used for registering ability categories.",
+      "references": [
+        "https://developer.wordpress.org/reference/hooks/wp_abilities_api_init/"
+      ]
+    },
+    {
+      "id": "k-abilities-004",
+      "category": "abilities-api",
+      "subcategory": "categories",
+      "difficulty": "intermediate",
+      "prompt": "What are the two default ability categories registered by WordPress core?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "site and user"
+        },
+        {
+          "key": "B",
+          "text": "admin and public"
+        },
+        {
+          "key": "C",
+          "text": "read and write"
+        },
+        {
+          "key": "D",
+          "text": "content and settings"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "WordPress 6.9 registers two core ability categories: 'site' (abilities that retrieve or modify site information and settings) and 'user' (abilities that retrieve or modify user information and settings).",
+      "references": [
+        "https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"
+      ]
+    },
+    {
+      "id": "k-abilities-005",
+      "category": "abilities-api",
+      "subcategory": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "What is the REST API namespace for the Abilities API?",
+      "type": "short_answer",
+      "correct_answer": "wp-abilities/v1",
+      "answer_type": "contains",
+      "explanation": "The Abilities API uses its own REST namespace wp-abilities/v1, separate from the standard wp/v2. It provides endpoints for listing abilities, running them, and listing categories.",
+      "references": [
+        "https://developer.wordpress.org/rest-api/"
+      ]
+    },
+    {
+      "id": "k-abilities-006",
+      "category": "abilities-api",
+      "subcategory": "registration",
+      "difficulty": "intermediate",
+      "prompt": "Ability names must follow a specific format. What pattern is required?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "2 to 4 lowercase segments separated by forward slashes"
+        },
+        {
+          "key": "B",
+          "text": "A single namespace/name pair like block types"
+        },
+        {
+          "key": "C",
+          "text": "Any valid PHP function name"
+        },
+        {
+          "key": "D",
+          "text": "A dot-separated path like JavaScript modules"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Ability names must match the regex /^[a-z0-9-]+(?:\\/[a-z0-9-]+){1,3}$/ -- 2 to 4 lowercase alphanumeric segments separated by forward slashes. For example: core/get-site-info.",
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_abilities_registry/"
+      ]
+    },
+    {
+      "id": "k-abilities-007",
+      "category": "abilities-api",
+      "subcategory": "annotations",
+      "difficulty": "hard",
+      "prompt": "What are the three annotation properties on a WP_Ability?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "readonly, destructive, idempotent"
+        },
+        {
+          "key": "B",
+          "text": "readable, writable, cacheable"
+        },
+        {
+          "key": "C",
+          "text": "public, private, protected"
+        },
+        {
+          "key": "D",
+          "text": "get, post, delete"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_Ability has three annotation properties: readonly (whether the ability only reads data), destructive (whether it destroys data), and idempotent (whether repeated calls produce the same result). All default to null.",
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_ability/"
+      ]
+    },
+    {
+      "id": "k-abilities-008",
+      "category": "abilities-api",
+      "subcategory": "rest-api",
+      "difficulty": "hard",
+      "prompt": "When a REST API request executes an ability annotated as readonly=true, what HTTP method is required?",
+      "type": "short_answer",
+      "correct_answer": "GET",
+      "answer_type": "exact",
+      "explanation": "The REST run endpoint enforces HTTP methods based on annotations: readonly=true requires GET; destructive=true AND idempotent=true requires DELETE; all other cases require POST.",
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_rest_abilities_v1_run_controller/"
+      ]
+    },
+    {
+      "id": "k-abilities-009",
+      "category": "abilities-api",
+      "subcategory": "execution",
+      "difficulty": "hard",
+      "prompt": "What is the execution flow inside WP_Ability::execute()?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "normalize_input, validate_input, check_permissions, fire wp_before_execute_ability, do_execute, validate_output, fire wp_after_execute_ability"
+        },
+        {
+          "key": "B",
+          "text": "check_permissions, validate_input, do_execute, validate_output"
+        },
+        {
+          "key": "C",
+          "text": "do_execute, validate_output, fire wp_ability_complete"
+        },
+        {
+          "key": "D",
+          "text": "authorize, sanitize, execute, cache_result"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_Ability::execute() follows a strict pipeline: normalize_input -> validate_input -> check_permissions -> fire wp_before_execute_ability action -> do_execute (the actual callback) -> validate_output -> fire wp_after_execute_ability action -> return result.",
+      "references": [
+        "https://developer.wordpress.org/reference/classes/wp_ability/execute/"
+      ]
+    },
+    {
+      "id": "k-abilities-010",
+      "category": "abilities-api",
+      "subcategory": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "How do you expose a custom ability over the REST API when calling wp_register_ability()?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Set 'rest' => true in the args"
+        },
+        {
+          "key": "B",
+          "text": "Add a REST route manually"
+        },
+        {
+          "key": "C",
+          "text": "Pass 'show_in_rest' => true in the meta array"
+        },
+        {
+          "key": "D",
+          "text": "It is always exposed automatically"
+        }
+      ],
+      "correct_answer": "C",
+      "explanation": "Abilities are opt-in to REST; set show_in_rest => true in the meta array when registering. The default is false (WP_Ability::DEFAULT_SHOW_IN_REST = false).",
+      "references": [
+        "https://developer.wordpress.org/reference/functions/wp_register_ability/"
+      ]
     }
   ]
 }

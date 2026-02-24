@@ -1,0 +1,358 @@
+{
+  "id": "wp-core-knowledge-v1-wp_core_data",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Knowledge - @wordpress/core-data",
+    "description": "Tests knowledge of the @wordpress/core-data entity data layer",
+    "wp_version": "6.9",
+    "created_at": "2026-02-24"
+  },
+  "tests": [
+    {
+      "id": "k-coredata-001",
+      "category": "gb-core-data",
+      "subcategory": "store",
+      "difficulty": "basic",
+      "prompt": "What is the store name (namespace) for the @wordpress/core-data package?",
+      "type": "short_answer",
+      "correct_answer": "core",
+      "answer_type": "exact",
+      "explanation": "The @wordpress/core-data store is registered under the name 'core' (exported as STORE_NAME). This is accessed via select('core') or dispatch('core'), or by importing the store descriptor directly.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-002",
+      "category": "gb-core-data",
+      "subcategory": "hooks",
+      "difficulty": "basic",
+      "prompt": "What React hook retrieves a single WordPress entity record with edit and save capabilities?",
+      "type": "short_answer",
+      "correct_answer": "useEntityRecord",
+      "answer_type": "contains",
+      "explanation": "useEntityRecord(kind, name, recordId, options) returns an object with record, editedRecord, edits, edit(), save(), isResolving, hasEdits, hasResolved, and status. It provides a complete CRUD interface for a single entity.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-003",
+      "category": "gb-core-data",
+      "subcategory": "selectors",
+      "difficulty": "basic",
+      "prompt": "What selector retrieves a single entity record from the core-data store?",
+      "type": "short_answer",
+      "correct_answer": "getEntityRecord",
+      "answer_type": "contains",
+      "explanation": "getEntityRecord(state, kind, name, key, query) returns a single record identified by kind (e.g., 'postType'), name (e.g., 'post'), and key (usually the record ID). A related selector, getEditedEntityRecord, returns the record with pending local edits merged in.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-004",
+      "category": "gb-core-data",
+      "subcategory": "actions",
+      "difficulty": "basic",
+      "prompt": "What action saves all pending local edits for an entity record to the server?",
+      "type": "short_answer",
+      "correct_answer": "saveEditedEntityRecord",
+      "answer_type": "contains",
+      "explanation": "saveEditedEntityRecord(kind, name, recordId, options) takes all pending edits made via editEntityRecord and persists them to the server via the REST API. A lower-level alternative is saveEntityRecord which saves a specific record object.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-005",
+      "category": "gb-core-data",
+      "subcategory": "entities",
+      "difficulty": "intermediate",
+      "prompt": "Entities in @wordpress/core-data are identified by a two-part key. What are the two parts called?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "kind and name"
+        },
+        {
+          "key": "B",
+          "text": "type and slug"
+        },
+        {
+          "key": "C",
+          "text": "namespace and resource"
+        },
+        {
+          "key": "D",
+          "text": "group and identifier"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "Entities are identified by 'kind' (grouping like 'root', 'postType', or 'taxonomy') and 'name' (specific entity like 'post', 'page', 'user'). For example, getEntityRecord('postType', 'post', 123) retrieves post ID 123.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-006",
+      "category": "gb-core-data",
+      "subcategory": "entities",
+      "difficulty": "intermediate",
+      "prompt": "What is the DEFAULT_ENTITY_KEY used when an entity config does not specify a custom key property?",
+      "type": "short_answer",
+      "correct_answer": "id",
+      "answer_type": "exact",
+      "explanation": "DEFAULT_ENTITY_KEY is 'id', meaning entity records are identified by their 'id' property by default. Some entities override this: postType and taxonomy use 'slug', menuLocation uses 'name', and theme uses 'stylesheet'.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-007",
+      "category": "gb-core-data",
+      "subcategory": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "What does the useEntityProp hook return?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "A tuple: [value, setValue, fullValue]"
+        },
+        {
+          "key": "B",
+          "text": "Just the property value"
+        },
+        {
+          "key": "C",
+          "text": "An object with { value, onChange, reset }"
+        },
+        {
+          "key": "D",
+          "text": "A tuple: [value, setValue]"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "useEntityProp(kind, name, prop, id) returns a 3-element array: the edited property value, a setter function for local edits, and the full (unedited) property value from the server. The setter calls editEntityRecord internally.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-008",
+      "category": "gb-core-data",
+      "subcategory": "selectors",
+      "difficulty": "intermediate",
+      "prompt": "What selector checks whether the current user has permission to perform a CRUD action on a resource?",
+      "type": "short_answer",
+      "correct_answer": "canUser",
+      "answer_type": "contains",
+      "explanation": "canUser(state, action, resource, id) checks permissions where action is one of 'create', 'read', 'update', or 'delete'. Its resolver makes an OPTIONS request to the REST API endpoint to determine allowed methods.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-009",
+      "category": "gb-core-data",
+      "subcategory": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "What are the four values of the Status enum returned by useEntityRecord and useEntityRecords?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "IDLE, RESOLVING, ERROR, SUCCESS"
+        },
+        {
+          "key": "B",
+          "text": "PENDING, LOADING, FAILED, COMPLETE"
+        },
+        {
+          "key": "C",
+          "text": "INIT, FETCHING, REJECTED, RESOLVED"
+        },
+        {
+          "key": "D",
+          "text": "WAITING, ACTIVE, TIMEOUT, DONE"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "The Status enum defines four states: IDLE (no request made yet), RESOLVING (request in progress), ERROR (request failed), and SUCCESS (data loaded). These are available on the 'status' property of the hook return value.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-010",
+      "category": "gb-core-data",
+      "subcategory": "actions",
+      "difficulty": "intermediate",
+      "prompt": "What is the difference between editEntityRecord and saveEntityRecord?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "editEntityRecord makes local in-memory edits; saveEntityRecord persists to the server via REST API"
+        },
+        {
+          "key": "B",
+          "text": "editEntityRecord validates changes; saveEntityRecord skips validation"
+        },
+        {
+          "key": "C",
+          "text": "editEntityRecord is for post types only; saveEntityRecord works with all entities"
+        },
+        {
+          "key": "D",
+          "text": "editEntityRecord queues changes for batch saving; saveEntityRecord saves immediately without queuing"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "editEntityRecord(kind, name, recordId, edits) stores changes locally in the Redux state with undo support. saveEntityRecord(kind, name, record, options) sends the record data to the server. Typically you call editEntityRecord for each change, then saveEditedEntityRecord to persist.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-011",
+      "category": "gb-core-data",
+      "subcategory": "entities",
+      "difficulty": "hard",
+      "prompt": "What are 'transient edits' in @wordpress/core-data entity configuration?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Edits that don't create undo levels, such as block content and selection state"
+        },
+        {
+          "key": "B",
+          "text": "Edits that expire after a timeout period"
+        },
+        {
+          "key": "C",
+          "text": "Edits stored in sessionStorage instead of Redux state"
+        },
+        {
+          "key": "D",
+          "text": "Edits that are automatically reverted when the user navigates away"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "transientEdits is an entity config property specifying which edit keys should NOT create new undo levels. For example, sidebars and widgets define { blocks: true } as transient, meaning block content changes don't individually stack in the undo history.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-012",
+      "category": "gb-core-data",
+      "subcategory": "entities",
+      "difficulty": "hard",
+      "prompt": "What does the mergedEdits property in an entity configuration control?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "Edits to those keys are deep-merged with existing values instead of replacing them"
+        },
+        {
+          "key": "B",
+          "text": "Edits from multiple users are merged in real-time collaboration"
+        },
+        {
+          "key": "C",
+          "text": "Edits are merged into a single undo level"
+        },
+        {
+          "key": "D",
+          "text": "Edits are merged with the server response after saving"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "mergedEdits specifies keys where editEntityRecord should deep-merge instead of replace. For example, post types define { meta: true }, so editing a single meta key merges with existing meta rather than overwriting the entire meta object.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-013",
+      "category": "gb-core-data",
+      "subcategory": "selectors",
+      "difficulty": "hard",
+      "prompt": "What HTTP method does the canUser resolver use to check permissions against the REST API?",
+      "type": "short_answer",
+      "correct_answer": "OPTIONS",
+      "answer_type": "exact",
+      "explanation": "The canUser resolver sends an OPTIONS request to the entity's REST endpoint. The response's Allow header lists the permitted HTTP methods (GET, POST, PUT, DELETE), which are mapped to CRUD actions to determine what the current user can do.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-014",
+      "category": "gb-core-data",
+      "subcategory": "entities",
+      "difficulty": "hard",
+      "prompt": "How does @wordpress/core-data auto-generate convenience selectors and actions for root entities?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "It creates get<Entity>/get<Entities>/save<Entity>/delete<Entity> methods from the entity plural name"
+        },
+        {
+          "key": "B",
+          "text": "It generates REST API endpoint handlers from the entity baseURL"
+        },
+        {
+          "key": "C",
+          "text": "It creates React hooks for each entity type automatically"
+        },
+        {
+          "key": "D",
+          "text": "It registers a separate Redux store for each entity type"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "For root entities with a plural name, core-data dynamically generates convenience methods: getUser()/getUsers()/saveUser()/deleteUser() for the user entity, etc. These are thin wrappers around getEntityRecord/getEntityRecords/saveEntityRecord/deleteEntityRecord with the kind and name pre-bound.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    },
+    {
+      "id": "k-coredata-015",
+      "category": "gb-core-data",
+      "subcategory": "selectors",
+      "difficulty": "hard",
+      "prompt": "What is the difference between getEntityRecord and getRawEntityRecord?",
+      "type": "multiple_choice",
+      "choices": [
+        {
+          "key": "A",
+          "text": "getEntityRecord returns the record with edits merged; getRawEntityRecord returns the server-state record without local edits"
+        },
+        {
+          "key": "B",
+          "text": "getEntityRecord parses HTML; getRawEntityRecord returns raw HTML strings"
+        },
+        {
+          "key": "C",
+          "text": "getEntityRecord uses cache; getRawEntityRecord always fetches from the server"
+        },
+        {
+          "key": "D",
+          "text": "getEntityRecord returns JSON; getRawEntityRecord returns XML"
+        }
+      ],
+      "correct_answer": "A",
+      "explanation": "getEntityRecord returns the record from the store (server data). getRawEntityRecord returns the same data but explicitly without any pending local edits merged in. For the version with edits merged, use getEditedEntityRecord.",
+      "references": [
+        "https://developer.wordpress.org/block-editor/reference-guides/packages/packages-core-data/"
+      ]
+    }
+  ]
+}
