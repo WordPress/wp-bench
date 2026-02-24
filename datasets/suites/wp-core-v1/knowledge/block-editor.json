@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-block_editor",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Block Editor",
     "description": "Tests knowledge of WordPress Block Editor",
@@ -11,6 +11,7 @@
     {
       "id": "k-blocks-001",
       "category": "block-editor",
+      "subcategory": "registration",
       "difficulty": "basic",
       "prompt": "What function is used to register a block type in WordPress?",
       "type": "multiple_choice",
@@ -21,14 +22,15 @@
         { "key": "D", "text": "create_block()" }
       ],
       "correct_answer": "C",
-      "explanation": "register_block_type() is the PHP function to register a block type.",
+      "explanation": "register_block_type() is the PHP function to register a block type. Since 5.8, it also accepts a path to a block.json file, delegating to register_block_type_from_metadata().",
       "references": ["https://developer.wordpress.org/reference/functions/register_block_type/"]
     },
     {
       "id": "k-visibility-001",
       "category": "block-editor",
+      "subcategory": "supports",
       "difficulty": "basic",
-      "prompt": "Which block support flag enables the built-in \"Hide block\" toggle introduced in recent WordPress versions?",
+      "prompt": "Which block support flag enables the built-in block visibility toggle in the editor?",
       "type": "multiple_choice",
       "choices": [
         { "key": "A", "text": "supports.lock" },
@@ -37,12 +39,13 @@
         { "key": "D", "text": "supports.render" }
       ],
       "correct_answer": "B",
-      "explanation": "Setting supports.visibility to true enables the Hide/Show control for the block.",
-      "references": ["https://wptavern.com/wordpress-6-7-beta-1-brings-enhanced-block-visibility"]
+      "explanation": "Setting supports.visibility to true enables the visibility control for the block. When blockVisibility is set to false, the block's content is suppressed during rendering.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-supports/"]
     },
     {
       "id": "k-blockapi-001",
       "category": "block-editor",
+      "subcategory": "api-version",
       "difficulty": "intermediate",
       "prompt": "For blocks that run inside the iframe-backed editor in WordPress 6.9+, which Block API version must block.json declare?",
       "type": "multiple_choice",
@@ -53,12 +56,13 @@
         { "key": "D", "text": "Any version is accepted" }
       ],
       "correct_answer": "C",
-      "explanation": "apiVersion 3 is required for iframe-compatible block.json validation.",
-      "references": ["https://make.wordpress.org/core/2024/12/05/whats-new-in-gutenberg-19-5-0/"]
+      "explanation": "apiVersion 3 is required for blocks to work correctly in the iframe-backed editor.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-metadata/"]
     },
     {
       "id": "k-accordion-001",
       "category": "block-editor",
+      "subcategory": "core-blocks",
       "difficulty": "basic",
       "prompt": "Which new core block introduced in WordPress 6.9 provides collapsible content sections?",
       "type": "multiple_choice",
@@ -69,8 +73,187 @@
         { "key": "D", "text": "Summary" }
       ],
       "correct_answer": "C",
-      "explanation": "WordPress 6.9 ships with a native Accordion block for collapsible sections.",
-      "references": ["https://developer.wordpress.org/news/2024/12/wordpress-6-9-beta-1/"]
+      "explanation": "WordPress 6.9 ships with a native Accordion block for collapsible content sections, using the Interactivity API for client-side behavior.",
+      "references": ["https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"]
+    },
+    {
+      "id": "k-blockeditor-005",
+      "category": "block-editor",
+      "subcategory": "theme-json",
+      "difficulty": "basic",
+      "prompt": "What is the latest theme.json schema version as defined by WP_Theme_JSON::LATEST_SCHEMA?",
+      "type": "short_answer",
+      "correct_answer": "3",
+      "answer_type": "exact",
+      "explanation": "WP_Theme_JSON::LATEST_SCHEMA is 3. Version 1 was introduced in WP 5.8, version 2 in 5.9, and version 3 in 6.6.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/theme-json-reference/theme-json-living/"]
+    },
+    {
+      "id": "k-blockeditor-006",
+      "category": "block-editor",
+      "subcategory": "categories",
+      "difficulty": "basic",
+      "prompt": "Which of these is NOT a default block category in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "navigation" },
+        { "key": "B", "text": "text" },
+        { "key": "C", "text": "theme" },
+        { "key": "D", "text": "embed" }
+      ],
+      "correct_answer": "A",
+      "explanation": "There is no 'navigation' block category. The default categories registered by get_default_block_categories() are: text, media, design, widgets, theme, embed, and reusable (labeled 'Patterns' in the UI since 6.3). Navigation blocks fall under the 'theme' category.",
+      "references": ["https://developer.wordpress.org/reference/functions/get_default_block_categories/"]
+    },
+    {
+      "id": "k-blockeditor-007",
+      "category": "block-editor",
+      "subcategory": "categories",
+      "difficulty": "basic",
+      "prompt": "What filter allows plugins to modify the list of block categories available in the editor?",
+      "type": "short_answer",
+      "correct_answer": "block_categories_all",
+      "answer_type": "contains",
+      "explanation": "The block_categories_all filter (since 5.8) replaces the deprecated block_categories filter. It receives the array of categories and a WP_Block_Editor_Context object.",
+      "references": ["https://developer.wordpress.org/reference/hooks/block_categories_all/"]
+    },
+    {
+      "id": "k-blockeditor-008",
+      "category": "block-editor",
+      "subcategory": "theme-json",
+      "difficulty": "intermediate",
+      "prompt": "WP_Theme_JSON merges data from four origins. What is the correct merge priority order (lowest to highest)?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "default, blocks, theme, custom" },
+        { "key": "B", "text": "core, plugin, theme, user" },
+        { "key": "C", "text": "global, block, theme, local" },
+        { "key": "D", "text": "base, extension, theme, override" }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_Theme_JSON defines VALID_ORIGINS as: 'default' (core data), 'blocks' (block.json files, since 6.1), 'theme' (theme.json), and 'custom' (user customizations via wp_global_styles). Each subsequent origin overrides the previous.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/theme-json-reference/theme-json-living/"]
+    },
+    {
+      "id": "k-blockeditor-009",
+      "category": "block-editor",
+      "subcategory": "global-styles",
+      "difficulty": "intermediate",
+      "prompt": "What post type stores user global style customizations in WordPress?",
+      "type": "short_answer",
+      "correct_answer": "wp_global_styles",
+      "answer_type": "contains",
+      "explanation": "User customizations from the Global Styles panel are stored in the wp_global_styles custom post type. The post content contains JSON matching the theme.json structure, scoped to the current theme via the wp_theme taxonomy.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_theme_json_resolver/"]
+    },
+    {
+      "id": "k-blockeditor-010",
+      "category": "block-editor",
+      "subcategory": "layout",
+      "difficulty": "intermediate",
+      "prompt": "What are the four layout types available in WordPress block themes?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "flow, constrained, flex, grid" },
+        { "key": "B", "text": "block, inline, flex, grid" },
+        { "key": "C", "text": "flow, fixed, flex, grid" },
+        { "key": "D", "text": "default, wide, flex, grid" }
+      ],
+      "correct_answer": "A",
+      "explanation": "WordPress defines four layout types: 'flow' (default block layout), 'constrained' (enforces content/wide max-widths), 'flex' (CSS flexbox), and 'grid' (CSS grid). Each generates its own layout class (is-layout-flow, is-layout-constrained, etc.).",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/theme-json-reference/theme-json-living/"]
+    },
+    {
+      "id": "k-blockeditor-011",
+      "category": "block-editor",
+      "subcategory": "theme-json",
+      "difficulty": "intermediate",
+      "prompt": "In theme.json, what CSS custom property pattern do color palette presets generate?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "--wp--preset--color--{slug}" },
+        { "key": "B", "text": "--wp-color-{slug}" },
+        { "key": "C", "text": "--theme-color--{slug}" },
+        { "key": "D", "text": "--wp--custom--color--{slug}" }
+      ],
+      "correct_answer": "A",
+      "explanation": "Color palette presets generate CSS custom properties following the pattern --wp--preset--color--{slug}. All preset types follow a similar pattern: --wp--preset--{type}--{slug} (e.g., --wp--preset--font-size--large, --wp--preset--spacing--20).",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/theme-json-reference/theme-json-living/"]
+    },
+    {
+      "id": "k-blockeditor-012",
+      "category": "block-editor",
+      "subcategory": "theme-json",
+      "difficulty": "intermediate",
+      "prompt": "What is the ROOT_BLOCK_SELECTOR constant in WP_Theme_JSON?",
+      "type": "short_answer",
+      "correct_answer": "body",
+      "answer_type": "exact",
+      "explanation": "WP_Theme_JSON::ROOT_BLOCK_SELECTOR is 'body'. This is the CSS selector used for root-level block styles. A separate constant ROOT_CSS_PROPERTIES_SELECTOR is ':root' and is used for CSS custom properties.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_theme_json/"]
+    },
+    {
+      "id": "k-blockeditor-013",
+      "category": "block-editor",
+      "subcategory": "patterns",
+      "difficulty": "hard",
+      "prompt": "When register_block_pattern() specifies a filePath instead of content, how is the pattern content loaded?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The file is included via PHP include at registration time" },
+        { "key": "B", "text": "The file is lazy-loaded via include only when the pattern content is requested" },
+        { "key": "C", "text": "The file path is converted to a URL and fetched via HTTP" },
+        { "key": "D", "text": "The file is read into a string via file_get_contents()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "When filePath is set instead of content, WP_Block_Patterns_Registry lazy-loads the content via include only when get_content() is called. This avoids the cost of loading pattern content for patterns that are never displayed.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_block_patterns_registry/"]
+    },
+    {
+      "id": "k-blockeditor-014",
+      "category": "block-editor",
+      "subcategory": "script-modules",
+      "difficulty": "hard",
+      "prompt": "In the WordPress Script Modules API (since 6.5), what are the two types of dependencies a module can declare?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "static and dynamic" },
+        { "key": "B", "text": "sync and async" },
+        { "key": "C", "text": "required and optional" },
+        { "key": "D", "text": "blocking and deferred" }
+      ],
+      "correct_answer": "A",
+      "explanation": "Script module dependencies can be 'static' or 'dynamic'. Static dependencies are automatically added to the import map and preloaded. Dynamic dependencies are only added to the import map but not preloaded -- they load on demand when imported.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_register_script_module/"]
+    },
+    {
+      "id": "k-blockeditor-015",
+      "category": "block-editor",
+      "subcategory": "theme-json",
+      "difficulty": "hard",
+      "prompt": "In theme.json, which two elements support pseudo selectors like :hover, :focus, and :active for styling?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "link and button" },
+        { "key": "B", "text": "heading and caption" },
+        { "key": "C", "text": "button and input" },
+        { "key": "D", "text": "link and heading" }
+      ],
+      "correct_answer": "A",
+      "explanation": "WP_Theme_JSON::VALID_ELEMENT_PSEUDO_SELECTORS defines only 'link' and 'button' as elements that support pseudo selectors (:link, :any-link, :visited, :hover, :focus, :focus-visible, :active).",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/theme-json-reference/theme-json-living/"]
+    },
+    {
+      "id": "k-blockeditor-016",
+      "category": "block-editor",
+      "subcategory": "layout",
+      "difficulty": "intermediate",
+      "prompt": "What CSS class does the 'constrained' layout type generate on its container element?",
+      "type": "short_answer",
+      "correct_answer": "is-layout-constrained",
+      "answer_type": "contains",
+      "explanation": "Each layout type generates its own CSS class: 'flow' produces is-layout-flow, 'constrained' produces is-layout-constrained, 'flex' produces is-layout-flex, and 'grid' produces is-layout-grid. These classes are added to container elements to apply the corresponding layout styles.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/theme-json-reference/theme-json-living/"]
     }
   ]
 }

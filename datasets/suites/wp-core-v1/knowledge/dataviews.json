@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-dataviews",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "metadata": {
     "name": "WordPress Core Knowledge - DataViews",
     "description": "Tests knowledge of WordPress DataViews API",
@@ -9,9 +9,114 @@
   },
   "tests": [
     {
+      "id": "k-dataviews-001",
+      "category": "dataviews",
+      "subcategory": "architecture",
+      "difficulty": "basic",
+      "prompt": "The DataViews component in WordPress is implemented primarily as what?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "A JavaScript/React component (@wordpress/dataviews) with no dedicated PHP backend API" },
+        { "key": "B", "text": "A PHP class with REST API endpoints" },
+        { "key": "C", "text": "A WordPress admin screen template" },
+        { "key": "D", "text": "A block type registered via block.json" }
+      ],
+      "correct_answer": "A",
+      "explanation": "DataViews is purely a JavaScript/React component in the @wordpress/dataviews package. There are no PHP classes, functions, or dedicated REST endpoints for it. The PHP side provides standard REST API endpoints (posts, templates, etc.) that the JS component consumes.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-002",
+      "category": "dataviews",
+      "subcategory": "exports",
+      "difficulty": "basic",
+      "prompt": "What are the three main components exported by the @wordpress/dataviews package?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "DataViews, DataViewsPicker, and DataForm" },
+        { "key": "B", "text": "DataTable, DataGrid, and DataList" },
+        { "key": "C", "text": "DataViews, DataEditor, and DataFilter" },
+        { "key": "D", "text": "ViewTable, ViewGrid, and ViewList" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The @wordpress/dataviews package exports three main components: DataViews (the primary data display component), DataViewsPicker (a picker variant for item selection), and DataForm (for editing data records). It also exports the filterSortAndPaginate utility function.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-003",
+      "category": "dataviews",
+      "subcategory": "layouts",
+      "difficulty": "basic",
+      "prompt": "What are the three primary layout types for the DataViews component?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "table, grid, list" },
+        { "key": "B", "text": "table, card, detail" },
+        { "key": "C", "text": "list, tree, kanban" },
+        { "key": "D", "text": "rows, columns, tiles" }
+      ],
+      "correct_answer": "A",
+      "explanation": "DataViews supports table, grid, and list as its three primary layout types. Additional layouts include 'activity' (for timeline-style views) and picker variants (pickerGrid, pickerTable) for item selection UIs. The layout constants are LAYOUT_TABLE, LAYOUT_GRID, and LAYOUT_LIST.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-004",
+      "category": "dataviews",
+      "subcategory": "utilities",
+      "difficulty": "intermediate",
+      "prompt": "What utility function does @wordpress/dataviews export for client-side filtering, sorting, and pagination of data?",
+      "type": "short_answer",
+      "correct_answer": "filterSortAndPaginate",
+      "answer_type": "contains",
+      "explanation": "filterSortAndPaginate is a utility function exported by @wordpress/dataviews that applies the current view's filters, sorting, and pagination to a data array on the client side, returning the processed subset of items.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-005",
+      "category": "dataviews",
+      "subcategory": "fields",
+      "difficulty": "intermediate",
+      "prompt": "Which property on a DataViews field definition makes it searchable via the global search bar?",
+      "type": "short_answer",
+      "correct_answer": "enableGlobalSearch",
+      "answer_type": "contains",
+      "explanation": "Setting enableGlobalSearch to true on a field definition includes that field in global search queries. The default is false, so fields must explicitly opt in to be searched.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-006",
+      "category": "dataviews",
+      "subcategory": "layouts",
+      "difficulty": "intermediate",
+      "prompt": "What are the three density options available for the DataViews table layout?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "compact, balanced, comfortable" },
+        { "key": "B", "text": "small, medium, large" },
+        { "key": "C", "text": "tight, normal, loose" },
+        { "key": "D", "text": "dense, default, spacious" }
+      ],
+      "correct_answer": "A",
+      "explanation": "Table, list, and activity layouts support a density property with three values: 'compact', 'balanced', and 'comfortable', controlling the vertical spacing between rows.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-007",
+      "category": "dataviews",
+      "subcategory": "fields",
+      "difficulty": "intermediate",
+      "prompt": "What property on a DataViews field definition specifies validation rules like required, pattern, minLength, and maxLength?",
+      "type": "short_answer",
+      "correct_answer": "isValid",
+      "answer_type": "contains",
+      "explanation": "The isValid property on a field definition accepts a rules object with properties like required, elements, pattern (regex), minLength, maxLength, min, max, and custom (a function returning null or an error string). These rules are enforced when editing items via DataForm.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
       "id": "k-dataviews-locked-001",
       "category": "dataviews",
-      "difficulty": "hard",
+      "subcategory": "filters",
+      "difficulty": "intermediate",
       "prompt": "In WordPress 6.9 DataViews, how do you make a filter visible but non-editable by users?",
       "type": "multiple_choice",
       "choices": [
@@ -25,24 +130,72 @@
       "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
     },
     {
+      "id": "k-dataviews-008",
+      "category": "dataviews",
+      "subcategory": "filters",
+      "difficulty": "hard",
+      "prompt": "Which DataViews filter operator matches items that contain ALL of the specified values?",
+      "type": "short_answer",
+      "correct_answer": "isAll",
+      "answer_type": "exact",
+      "explanation": "DataViews defines set-based filter operators: 'is' (exact single match), 'isNot' (not equal), 'isAny' (includes some), 'isNone' (excludes all), 'isAll' (includes all specified), and 'isNotAll' (excludes all specified). Additional operators include comparison types like 'between', 'lessThan', 'greaterThan', 'contains', 'startsWith', and date-specific operators.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-009",
+      "category": "dataviews",
+      "subcategory": "dataform",
+      "difficulty": "hard",
+      "prompt": "Which of these is a valid set of layout types for the DataForm component?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "regular, panel, card, row, details" },
+        { "key": "B", "text": "form, modal, inline, sidebar, popover" },
+        { "key": "C", "text": "simple, tabbed, accordion, grid, list" },
+        { "key": "D", "text": "basic, advanced, compact, full, custom" }
+      ],
+      "correct_answer": "A",
+      "explanation": "DataForm supports five layout types: 'regular' (standard stacked form), 'panel' (collapsible panels with dropdown/modal options), 'card' (card containers with headers), 'row' (horizontal layout with flex alignment), and 'details' (HTML details/summary style).",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
+      "id": "k-dataviews-010",
+      "category": "dataviews",
+      "subcategory": "actions",
+      "difficulty": "hard",
+      "prompt": "What distinguishes an ActionButton from an ActionModal in the DataViews actions API?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "ActionButton provides a callback function; ActionModal provides a RenderModal component" },
+        { "key": "B", "text": "ActionButton is for primary actions; ActionModal is for secondary actions" },
+        { "key": "C", "text": "ActionButton runs synchronously; ActionModal runs asynchronously" },
+        { "key": "D", "text": "ActionButton operates on single items; ActionModal operates on bulk selections" }
+      ],
+      "correct_answer": "A",
+      "explanation": "ActionButton defines a 'callback' function that executes immediately when triggered. ActionModal defines a 'RenderModal' React component that renders inside a dialog, with optional modalHeader, modalSize (small/medium/large/fill), and hideModalHeader properties.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
+    },
+    {
       "id": "k-dataviews-groupby-001",
       "category": "dataviews",
+      "subcategory": "layout",
       "difficulty": "hard",
-      "prompt": "Which view option groups items by a field in the enhanced DataViews API in 6.9?",
+      "prompt": "Which view option groups items by a field in the DataViews API?",
       "type": "multiple_choice",
       "choices": [
         { "key": "A", "text": "group" },
-        { "key": "B", "text": "groupByField" },
+        { "key": "B", "text": "groupBy" },
         { "key": "C", "text": "aggregateBy" },
         { "key": "D", "text": "clusterField" }
       ],
       "correct_answer": "B",
-      "explanation": "Set groupByField to a field ID to have table, grid, or list layouts group items by that field.",
-      "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+      "explanation": "The groupBy property on a view definition accepts an object with field (the field ID to group by), direction ('asc' or 'desc'), and an optional showLabel boolean. Table, grid, and list layouts all support grouping.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
     },
     {
       "id": "k-dataviews-readonly-001",
       "category": "dataviews",
+      "subcategory": "fields",
       "difficulty": "hard",
       "prompt": "Which property marks a DataViews field as display-only in WordPress 6.9?",
       "type": "multiple_choice",
@@ -53,14 +206,15 @@
         { "key": "D", "text": "viewOnly" }
       ],
       "correct_answer": "B",
-      "explanation": "DataViews fields accept readOnly:true to render a non-editable value while still showing in the UI.",
+      "explanation": "DataViews fields accept readOnly:true to render a non-editable value while still showing in the UI. The default is false.",
       "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
     },
     {
       "id": "k-dataviews-getelements-001",
       "category": "dataviews",
+      "subcategory": "data-loading",
       "difficulty": "hard",
-      "prompt": "What does the new getElements() hook in DataViews 6.9 do?",
+      "prompt": "What does the getElements() hook on a DataViews field do?",
       "type": "multiple_choice",
       "choices": [
         { "key": "A", "text": "Groups table rows by a field" },
@@ -69,8 +223,25 @@
         { "key": "D", "text": "Persists user layouts to theme.json" }
       ],
       "correct_answer": "B",
-      "explanation": "getElements returns options asynchronously when a user opens a filter/edit control, avoiding upfront fetches.",
+      "explanation": "getElements returns a Promise of options asynchronously when a user opens a filter/edit control, avoiding upfront fetches. It serves the same purpose as the static 'elements' array but loads data on demand.",
       "references": ["https://make.wordpress.org/core/2025/11/11/dataviews-dataform-et-al-in-wordpress-6-9/"]
+    },
+    {
+      "id": "k-dataviews-011",
+      "category": "dataviews",
+      "subcategory": "fields",
+      "difficulty": "intermediate",
+      "prompt": "What field properties control whether a DataViews column can be hidden or sorted by the user?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "enableHiding and enableSorting" },
+        { "key": "B", "text": "hideable and sortable" },
+        { "key": "C", "text": "canHide and canSort" },
+        { "key": "D", "text": "visible and orderable" }
+      ],
+      "correct_answer": "A",
+      "explanation": "enableHiding (default: true) controls whether users can toggle the field's visibility. enableSorting (default: true) controls whether users can sort by that field. Both default to true, so fields are hideable and sortable unless explicitly disabled.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/packages/packages-dataviews/"]
     }
   ]
 }

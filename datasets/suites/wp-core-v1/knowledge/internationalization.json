@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-internationalization",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Internationalization",
     "description": "Tests knowledge of WordPress internationalization (i18n)",
@@ -11,6 +11,7 @@
     {
       "id": "k-utf8-fallback-001",
       "category": "internationalization",
+      "subcategory": "encoding",
       "difficulty": "hard",
       "prompt": "How does WordPress 6.9 handle UTF-8 detection when the hosting environment lacks mbstring or iconv?",
       "type": "multiple_choice",
@@ -23,6 +24,190 @@
       "correct_answer": "B",
       "explanation": "6.9 ships a self-contained UTF-8 detection/handling layer in PHP so WordPress can reliably process UTF-8 even without mbstring or iconv.",
       "references": ["https://make.wordpress.org/core/2025/11/25/wordpress-6-9-field-guide/"]
+    },
+    {
+      "id": "k-i18n-001",
+      "category": "internationalization",
+      "subcategory": "functions",
+      "difficulty": "basic",
+      "prompt": "What is the default text domain when calling __() without specifying a domain?",
+      "type": "short_answer",
+      "correct_answer": "default",
+      "answer_type": "exact",
+      "explanation": "All core i18n functions default the $domain parameter to 'default', which is the text domain reserved for WordPress core translations. Plugins and themes must specify their own text domain.",
+      "references": ["https://developer.wordpress.org/reference/functions/__/"]
+    },
+    {
+      "id": "k-i18n-002",
+      "category": "internationalization",
+      "subcategory": "functions",
+      "difficulty": "basic",
+      "prompt": "What does _x() provide that __() does not?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Automatic HTML escaping of the translated string" },
+        { "key": "B", "text": "A gettext context parameter for disambiguating identical source strings" },
+        { "key": "C", "text": "Support for plural forms" },
+        { "key": "D", "text": "Lazy loading of the text domain" }
+      ],
+      "correct_answer": "B",
+      "explanation": "_x() adds a $context parameter that helps translators distinguish identical source strings that need different translations. For example, 'Post' could mean a blog post (noun) or to post something (verb).",
+      "references": ["https://developer.wordpress.org/reference/functions/_x/"]
+    },
+    {
+      "id": "k-i18n-003",
+      "category": "internationalization",
+      "subcategory": "functions",
+      "difficulty": "basic",
+      "prompt": "What is the difference between __() and _e() in WordPress i18n?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "__() returns the translated string; _e() echoes it directly" },
+        { "key": "B", "text": "__() is for themes; _e() is for plugins" },
+        { "key": "C", "text": "__() escapes HTML; _e() does not" },
+        { "key": "D", "text": "__() loads the translation file; _e() uses a cached version" }
+      ],
+      "correct_answer": "A",
+      "explanation": "__() returns the translated string for use in expressions or assignments. _e() echoes the translated string directly, equivalent to echo __().",
+      "references": ["https://developer.wordpress.org/reference/functions/_e/"]
+    },
+    {
+      "id": "k-i18n-004",
+      "category": "internationalization",
+      "subcategory": "functions",
+      "difficulty": "intermediate",
+      "prompt": "What is the correct parameter order for the _n() pluralization function?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "_n( $single, $plural, $number, $domain )" },
+        { "key": "B", "text": "_n( $number, $single, $plural, $domain )" },
+        { "key": "C", "text": "_n( $single, $plural, $domain, $number )" },
+        { "key": "D", "text": "_n( $domain, $single, $plural, $number )" }
+      ],
+      "correct_answer": "A",
+      "explanation": "_n() takes singular form first, then plural, then the count, then the domain. _nx() adds a $context parameter between $number and $domain.",
+      "references": ["https://developer.wordpress.org/reference/functions/_n/"]
+    },
+    {
+      "id": "k-i18n-005",
+      "category": "internationalization",
+      "subcategory": "functions",
+      "difficulty": "intermediate",
+      "prompt": "What does esc_html__() do compared to __() alone?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It translates and then passes the result through esc_html() before returning" },
+        { "key": "B", "text": "It strips all HTML tags from the translated string" },
+        { "key": "C", "text": "It translates and then echoes the escaped result" },
+        { "key": "D", "text": "It only translates strings that contain HTML entities" }
+      ],
+      "correct_answer": "A",
+      "explanation": "esc_html__() returns esc_html(translate(...)). Similarly, esc_attr__() returns esc_attr(translate(...)). The _e variants (esc_html_e, esc_attr_e) echo instead of returning.",
+      "references": ["https://developer.wordpress.org/reference/functions/esc_html__/"]
+    },
+    {
+      "id": "k-i18n-006",
+      "category": "internationalization",
+      "subcategory": "file_formats",
+      "difficulty": "intermediate",
+      "prompt": "Since WordPress 6.5, what translation file format does WordPress prefer to load first?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": ".po (Portable Object) files" },
+        { "key": "B", "text": ".mo (Machine Object) files" },
+        { "key": "C", "text": ".l10n.php (PHP translation) files" },
+        { "key": "D", "text": ".json (JED format) files" }
+      ],
+      "correct_answer": "C",
+      "explanation": "Since 6.5.0, load_textdomain() tries .l10n.php files first, falling back to .mo files. PHP translation files are faster because they can be cached by PHP's opcache.",
+      "references": ["https://developer.wordpress.org/reference/functions/load_textdomain/"]
+    },
+    {
+      "id": "k-i18n-007",
+      "category": "internationalization",
+      "subcategory": "file_formats",
+      "difficulty": "intermediate",
+      "prompt": "In which WordPress version were .l10n.php translation files introduced?",
+      "type": "short_answer",
+      "correct_answer": "6.5",
+      "answer_type": "contains",
+      "explanation": "PHP translation files (.l10n.php) were introduced in WordPress 6.5.0 alongside the WP_Translation_Controller class. They load faster than .mo files because PHP's opcache can cache them.",
+      "references": ["https://developer.wordpress.org/reference/functions/load_textdomain/"]
+    },
+    {
+      "id": "k-i18n-008",
+      "category": "internationalization",
+      "subcategory": "functions",
+      "difficulty": "intermediate",
+      "prompt": "What is the purpose of _n_noop() in WordPress i18n?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It registers plural strings for translation extraction without translating immediately, deferring until the count is known" },
+        { "key": "B", "text": "It silently ignores translation for specific strings" },
+        { "key": "C", "text": "It creates a no-operation fallback when translations are unavailable" },
+        { "key": "D", "text": "It registers a string that should never be translated" }
+      ],
+      "correct_answer": "A",
+      "explanation": "_n_noop() registers singular and plural forms so translation tools can extract them, but defers actual translation until translate_nooped_plural() is called with a known count. This is useful when the count is determined later in code.",
+      "references": ["https://developer.wordpress.org/reference/functions/_n_noop/"]
+    },
+    {
+      "id": "k-i18n-009",
+      "category": "internationalization",
+      "subcategory": "locale",
+      "difficulty": "hard",
+      "prompt": "How does determine_locale() differ from get_locale() on WordPress admin pages?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "determine_locale() returns the user's locale via get_user_locale(); get_locale() returns the site locale" },
+        { "key": "B", "text": "determine_locale() checks the Accept-Language header; get_locale() uses the database" },
+        { "key": "C", "text": "They return the same value on admin pages" },
+        { "key": "D", "text": "determine_locale() returns the network locale on multisite; get_locale() returns the site locale" }
+      ],
+      "correct_answer": "A",
+      "explanation": "determine_locale() is context-aware: on admin screens it returns the user's preferred locale (via get_user_locale()), while on the front-end it returns the site locale. get_locale() always returns the site locale regardless of context.",
+      "references": ["https://developer.wordpress.org/reference/functions/determine_locale/"]
+    },
+    {
+      "id": "k-i18n-010",
+      "category": "internationalization",
+      "subcategory": "loading",
+      "difficulty": "intermediate",
+      "prompt": "In which WordPress version was just-in-time (JIT) translation loading introduced?",
+      "type": "short_answer",
+      "correct_answer": "4.6",
+      "answer_type": "contains",
+      "explanation": "JIT translation loading was introduced in WordPress 4.6.0 via _load_textdomain_just_in_time(). Instead of loading all translation files upfront, domains are loaded on first use when a string is requested.",
+      "references": ["https://developer.wordpress.org/reference/functions/_load_textdomain_just_in_time/"]
+    },
+    {
+      "id": "k-i18n-011",
+      "category": "internationalization",
+      "subcategory": "javascript",
+      "difficulty": "intermediate",
+      "prompt": "What function sets up translations for a JavaScript file in WordPress?",
+      "type": "short_answer",
+      "correct_answer": "wp_set_script_translations",
+      "answer_type": "contains",
+      "explanation": "wp_set_script_translations() associates translated strings with a script handle, enabling the wp.i18n JavaScript API (__(), _x(), _n(), etc.) to work with that script's text domain.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_set_script_translations/"]
+    },
+    {
+      "id": "k-i18n-012",
+      "category": "internationalization",
+      "subcategory": "locale",
+      "difficulty": "basic",
+      "prompt": "The 'default' text domain in WordPress is reserved for which purpose?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "WordPress core translations" },
+        { "key": "B", "text": "The active theme's translations" },
+        { "key": "C", "text": "Untranslated fallback strings" },
+        { "key": "D", "text": "Translation strings from all plugins" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The 'default' text domain is exclusively reserved for WordPress core. JIT loading explicitly skips it since core translations are loaded separately. Plugins and themes must use their own unique text domains.",
+      "references": ["https://developer.wordpress.org/reference/functions/__/"]
     }
   ]
 }

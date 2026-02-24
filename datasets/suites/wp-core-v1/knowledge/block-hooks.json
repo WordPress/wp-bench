@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-block_hooks",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Block Hooks",
     "description": "Tests knowledge of WordPress Block Hooks API",
@@ -9,8 +9,84 @@
   },
   "tests": [
     {
+      "id": "k-blockhooks-001",
+      "category": "block-hooks",
+      "subcategory": "positions",
+      "difficulty": "basic",
+      "prompt": "What are the four valid relative positions for block hooks in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "before, after, first_child, last_child" },
+        { "key": "B", "text": "before, after, prepend, append" },
+        { "key": "C", "text": "top, bottom, before, after" },
+        { "key": "D", "text": "start, end, inside_start, inside_end" }
+      ],
+      "correct_answer": "A",
+      "explanation": "Block hooks support four positions: 'before' (before the anchor), 'after' (after the anchor), 'first_child' (first child inside the anchor), and 'last_child' (last child inside the anchor). In block.json, camelCase (firstChild, lastChild) is mapped to snake_case.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-registration/#block-hooks"]
+    },
+    {
+      "id": "k-blockhooks-002",
+      "category": "block-hooks",
+      "subcategory": "registration",
+      "difficulty": "basic",
+      "prompt": "In block.json, which field declares the anchor blocks and positions for a block hook?",
+      "type": "short_answer",
+      "correct_answer": "blockHooks",
+      "answer_type": "contains",
+      "explanation": "The blockHooks field in block.json is an object mapping anchor block type names to relative positions (e.g., {\"core/navigation\": \"after\"}). It is processed during register_block_type_from_metadata().",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-registration/#block-hooks"]
+    },
+    {
+      "id": "k-blockhooks-003",
+      "category": "block-hooks",
+      "subcategory": "filters",
+      "difficulty": "intermediate",
+      "prompt": "What filter allows plugins to modify which blocks are hooked at a specific position relative to an anchor block?",
+      "type": "short_answer",
+      "correct_answer": "hooked_block_types",
+      "answer_type": "contains",
+      "explanation": "The hooked_block_types filter fires in insert_hooked_blocks() with four arguments: the hooked block types array, relative position, anchor block type, and the context (template/post/pattern).",
+      "references": ["https://developer.wordpress.org/reference/hooks/hooked_block_types/"]
+    },
+    {
+      "id": "k-blockhooks-004",
+      "category": "block-hooks",
+      "subcategory": "rendering",
+      "difficulty": "intermediate",
+      "prompt": "On the_content filter, at what priority does block hooks processing run relative to do_blocks?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Priority 8, before do_blocks at priority 9" },
+        { "key": "B", "text": "Priority 10, after do_blocks at priority 9" },
+        { "key": "C", "text": "Same priority 9, but registered first" },
+        { "key": "D", "text": "Priority 5, much earlier than do_blocks" }
+      ],
+      "correct_answer": "A",
+      "explanation": "apply_block_hooks_to_content_from_post_object is registered on the_content at priority 8, while do_blocks runs at priority 9. This ensures hooked blocks are inserted into the content before blocks are rendered.",
+      "references": ["https://developer.wordpress.org/reference/functions/apply_block_hooks_to_content/"]
+    },
+    {
+      "id": "k-blockhooks-005",
+      "category": "block-hooks",
+      "subcategory": "persistence",
+      "difficulty": "intermediate",
+      "prompt": "For posts, pages, and navigation items, where is the ignoredHookedBlocks metadata persisted?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "In the block's attributes within the serialized post content" },
+        { "key": "B", "text": "In post meta with key _wp_ignored_hooked_blocks" },
+        { "key": "C", "text": "In the wp_options table" },
+        { "key": "D", "text": "In a custom taxonomy term" }
+      ],
+      "correct_answer": "B",
+      "explanation": "For post types (pages, posts, navigation, reusable blocks), ignoredHookedBlocks is stored as JSON-encoded data in post meta under the key _wp_ignored_hooked_blocks. For templates and template parts, it is stored inline in the block's attrs.metadata.ignoredHookedBlocks array.",
+      "references": ["https://developer.wordpress.org/reference/functions/set_ignored_hooked_blocks_metadata/"]
+    },
+    {
       "id": "k-blockhooks-context-001",
       "category": "block-hooks",
+      "subcategory": "context",
       "difficulty": "hard",
       "prompt": "Why might a hooked block fail to appear when a user adds a new anchor block after activating the plugin in WordPress 6.9?",
       "type": "multiple_choice",
@@ -27,12 +103,13 @@
     {
       "id": "k-blockhooks-postcontent-001",
       "category": "block-hooks",
+      "subcategory": "context",
       "difficulty": "hard",
       "prompt": "Why won't a block hook that targets core/post-content appear inside regular post content in WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [
         { "key": "A", "text": "Block hooks only work on classic themes" },
-        { "key": "B", "text": "Hooks are limited to templates, template parts, and patterns—not per-post content" },
+        { "key": "B", "text": "Hooks are limited to templates, template parts, and patterns -- not per-post content" },
         { "key": "C", "text": "core/post-content is a static block so hooks are skipped" },
         { "key": "D", "text": "Hooks require REST context" }
       ],
@@ -43,6 +120,7 @@
     {
       "id": "k-blockhooks-multiple-001",
       "category": "block-hooks",
+      "subcategory": "deduplication",
       "difficulty": "hard",
       "prompt": "What happens when a hooked block declares \"multiple\": false and an instance already exists in the current context?",
       "type": "multiple_choice",
@@ -59,6 +137,7 @@
     {
       "id": "k-blockhooks-ignored-001",
       "category": "block-hooks",
+      "subcategory": "persistence",
       "difficulty": "hard",
       "prompt": "How do user-modified templates prevent auto-insertion of a hooked block after removal?",
       "type": "multiple_choice",
@@ -75,7 +154,8 @@
     {
       "id": "k-blockhooks-context-002",
       "category": "block-hooks",
-      "difficulty": "hard",
+      "subcategory": "context",
+      "difficulty": "intermediate",
       "prompt": "Where are block hooks applied by default as of WordPress 6.9?",
       "type": "multiple_choice",
       "choices": [

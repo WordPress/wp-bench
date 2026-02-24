@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-interactivity_api",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Interactivity API",
     "description": "Tests knowledge of WordPress Interactivity API",
@@ -9,8 +9,164 @@
   },
   "tests": [
     {
+      "id": "k-interactivity-001",
+      "category": "interactivity-api",
+      "subcategory": "directives",
+      "difficulty": "basic",
+      "prompt": "What HTML attribute marks an element as part of an interactive region in the WordPress Interactivity API?",
+      "type": "short_answer",
+      "correct_answer": "data-wp-interactive",
+      "answer_type": "contains",
+      "explanation": "The data-wp-interactive attribute is the entry point for the Interactivity API. It specifies the namespace for the interactive region (e.g., data-wp-interactive=\"core/image\").",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-002",
+      "category": "interactivity-api",
+      "subcategory": "runtime",
+      "difficulty": "basic",
+      "prompt": "What is the script module ID for the WordPress Interactivity API runtime?",
+      "type": "short_answer",
+      "correct_answer": "@wordpress/interactivity",
+      "answer_type": "contains",
+      "explanation": "The Interactivity API runtime is registered as the @wordpress/interactivity script module. It is loaded with fetchpriority 'low' and in_footer true. A companion module @wordpress/interactivity-router provides client-side navigation.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-003",
+      "category": "interactivity-api",
+      "subcategory": "php-api",
+      "difficulty": "basic",
+      "prompt": "What PHP function returns the WP_Interactivity_API singleton instance?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_interactivity()" },
+        { "key": "B", "text": "WP_Interactivity_API::get_instance()" },
+        { "key": "C", "text": "get_interactivity_api()" },
+        { "key": "D", "text": "wp_get_interactivity()" }
+      ],
+      "correct_answer": "A",
+      "explanation": "wp_interactivity() returns the WP_Interactivity_API singleton. Unlike most WordPress registries, it uses a global variable rather than a traditional get_instance() method.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_interactivity/"]
+    },
+    {
+      "id": "k-interactivity-004",
+      "category": "interactivity-api",
+      "subcategory": "directives",
+      "difficulty": "intermediate",
+      "prompt": "What is the purpose of processing Interactivity API directives on the server side in PHP?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "To provide server-rendered initial HTML so interactive regions display correct content before JavaScript loads" },
+        { "key": "B", "text": "To validate directive syntax and catch errors before sending HTML to the client" },
+        { "key": "C", "text": "To compile directives into optimized JavaScript bundles" },
+        { "key": "D", "text": "To generate CSS stylesheets from directive values" }
+      ],
+      "correct_answer": "A",
+      "explanation": "Server-side directive processing (for directives like data-wp-bind, data-wp-text, data-wp-class, data-wp-style, data-wp-context, and data-wp-each) ensures the initial HTML sent to the browser already reflects the correct state. This avoids a flash of incorrect content while waiting for JavaScript to hydrate the page.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-005",
+      "category": "interactivity-api",
+      "subcategory": "directives",
+      "difficulty": "intermediate",
+      "prompt": "Which of these Interactivity API directives is processed server-side in PHP?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "data-wp-on" },
+        { "key": "B", "text": "data-wp-init" },
+        { "key": "C", "text": "data-wp-text" },
+        { "key": "D", "text": "data-wp-watch" }
+      ],
+      "correct_answer": "C",
+      "explanation": "data-wp-text is one of the 8 server-side directives. data-wp-on, data-wp-init, data-wp-watch, data-wp-run, and data-wp-key are client-side only directives that have no server-side processing.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-006",
+      "category": "interactivity-api",
+      "subcategory": "namespaces",
+      "difficulty": "intermediate",
+      "prompt": "What separator character(s) are used in Interactivity API directive values to specify a namespace?",
+      "type": "short_answer",
+      "correct_answer": "::",
+      "answer_type": "exact",
+      "explanation": "The double colon '::' separates the namespace from the reference in directive values. For example: data-wp-text=\"myPlugin::state.title\" references the 'title' state in the 'myPlugin' namespace.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-007",
+      "category": "interactivity-api",
+      "subcategory": "directives",
+      "difficulty": "intermediate",
+      "prompt": "In the data-wp-interactive attribute, a namespace can be specified in two formats. What are they?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "A plain string or a JSON object with a namespace key" },
+        { "key": "B", "text": "A data attribute or a CSS class" },
+        { "key": "C", "text": "A URL hash or query parameter" },
+        { "key": "D", "text": "An HTML comment or meta tag" }
+      ],
+      "correct_answer": "A",
+      "explanation": "data-wp-interactive accepts either a plain string namespace (e.g., data-wp-interactive=\"myPlugin\") or a JSON object with a namespace key (e.g., data-wp-interactive='{\"namespace\":\"myPlugin\"}'). Core blocks use the simple string form.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-008",
+      "category": "interactivity-api",
+      "subcategory": "rendering",
+      "difficulty": "hard",
+      "prompt": "Which HTML elements are completely skipped during server-side Interactivity API directive processing?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "SVG and MATH elements" },
+        { "key": "B", "text": "Only IFRAME elements" },
+        { "key": "C", "text": "TABLE and FORM elements" },
+        { "key": "D", "text": "No elements are skipped" }
+      ],
+      "correct_answer": "A",
+      "explanation": "SVG and MATH elements and their children are completely skipped during server-side directive processing. Additionally, SCRIPT, IFRAME, NOEMBED, NOFRAMES, STYLE, TEXTAREA, TITLE, and XMP tags don't visit their closers.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_interactivity_api/"]
+    },
+    {
+      "id": "k-interactivity-009",
+      "category": "interactivity-api",
+      "subcategory": "state",
+      "difficulty": "hard",
+      "prompt": "State values in the Interactivity API can be PHP Closures. What are these called and how are they handled?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Derived state -- closures are called during server evaluation and tracked for client serialization" },
+        { "key": "B", "text": "Lazy state -- closures are serialized and executed on the client" },
+        { "key": "C", "text": "Computed state -- closures are memoized and cached in the object cache" },
+        { "key": "D", "text": "Reactive state -- closures trigger re-renders when dependencies change" }
+      ],
+      "correct_answer": "A",
+      "explanation": "PHP Closures in Interactivity API state are 'derived state'. When encountered during evaluate(), they are called and their result is used. Since 6.9, accessed derived state closures are tracked in $derived_state_closures and serialized to the client as derivedStateClosures.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-010",
+      "category": "interactivity-api",
+      "subcategory": "block-support",
+      "difficulty": "hard",
+      "prompt": "In block.json, the interactivity support can be set to true or to an object. What are the two properties in the object form?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "interactive and clientNavigation" },
+        { "key": "B", "text": "enabled and router" },
+        { "key": "C", "text": "serverRendered and clientHydrated" },
+        { "key": "D", "text": "namespace and directives" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The object form is { \"interactive\": true, \"clientNavigation\": true }. Setting interactivity to boolean true is shorthand for both properties being true. The interactive property marks the block as an interactive root; clientNavigation marks it as compatible with SPA navigation.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/block-api/block-supports/"]
+    },
+    {
       "id": "k-interactivity-attach-001",
       "category": "interactivity-api",
+      "subcategory": "router",
       "difficulty": "hard",
       "prompt": "In WordPress 6.9, what does the Interactivity API router option attachTo solve?",
       "type": "multiple_choice",
@@ -27,6 +183,7 @@
     {
       "id": "k-interactivity-module-001",
       "category": "interactivity-api",
+      "subcategory": "client-navigation",
       "difficulty": "hard",
       "prompt": "When manually registering a script module for the Interactivity API in WordPress 6.9, how do you mark it as compatible with client navigation so it loads on SPA transitions?",
       "type": "multiple_choice",
@@ -37,24 +194,49 @@
         { "key": "D", "text": "Prefix the handle with 'interactivity-'" }
       ],
       "correct_answer": "C",
-      "explanation": "Manually enqueued script modules must be flagged with add_client_navigation_support_to_script_module so router navigation imports them and adds the data-wp-router-options directive.",
+      "explanation": "Manually enqueued script modules must be flagged with add_client_navigation_support_to_script_module so router navigation imports them during SPA transitions.",
       "references": ["https://make.wordpress.org/core/2025/11/12/interactivity-apis-client-navigation-improvements-in-wordpress-6-9/"]
     },
     {
-      "id": "k-interactivity-router-attr-001",
+      "id": "k-interactivity-011",
       "category": "interactivity-api",
-      "difficulty": "hard",
-      "prompt": "After marking a script module as client-navigation compatible in 6.9, what attribute appears on its script tag?",
+      "subcategory": "client-api",
+      "difficulty": "basic",
+      "prompt": "What are the three main functions exported by the @wordpress/interactivity package for use in client-side store definitions?",
       "type": "multiple_choice",
       "choices": [
-        { "key": "A", "text": "data-wp-interactive" },
-        { "key": "B", "text": "data-wp-router-options='{\"loadOnClientNavigation\":true}'" },
-        { "key": "C", "text": "data-wp-client-nav" },
-        { "key": "D", "text": "type=\"module/nav\"" }
+        { "key": "A", "text": "store, getContext, getElement" },
+        { "key": "B", "text": "init, watch, render" },
+        { "key": "C", "text": "createStore, useContext, useRef" },
+        { "key": "D", "text": "reactive, computed, effect" }
       ],
-      "correct_answer": "B",
-      "explanation": "add_client_navigation_support_to_script_module injects data-wp-router-options with loadOnClientNavigation true so the router imports the module on SPA transitions.",
-      "references": ["https://make.wordpress.org/core/2025/11/12/interactivity-apis-client-navigation-improvements-in-wordpress-6-9/"]
+      "correct_answer": "A",
+      "explanation": "The @wordpress/interactivity module exports store() for creating/managing reactive stores with state and actions, getContext() for retrieving an element's inherited context from data-wp-context, and getElement() for accessing a read-only representation of the current DOM element including its ref and attributes. Additional exports include getServerState() and getConfig().",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-012",
+      "category": "interactivity-api",
+      "subcategory": "directives",
+      "difficulty": "intermediate",
+      "prompt": "What directive prevents the Interactivity API from processing directives on an element's children?",
+      "type": "short_answer",
+      "correct_answer": "data-wp-ignore",
+      "answer_type": "contains",
+      "explanation": "The data-wp-ignore directive tells the Interactivity API runtime to skip directive processing on the element's subtree. This is useful for portions of the DOM that should remain static or are managed by other libraries.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
+    },
+    {
+      "id": "k-interactivity-013",
+      "category": "interactivity-api",
+      "subcategory": "router",
+      "difficulty": "hard",
+      "prompt": "What is the default timeout in milliseconds for the Interactivity API router's navigate() function?",
+      "type": "short_answer",
+      "correct_answer": "10000",
+      "answer_type": "exact",
+      "explanation": "The @wordpress/interactivity-router's navigate() function defaults to a 10000ms (10 second) timeout. It also accepts options for force (re-fetch), replace (history entry), html (use provided HTML), loadingAnimation, and screenReaderAnnouncement.",
+      "references": ["https://developer.wordpress.org/block-editor/reference-guides/interactivity-api/"]
     }
   ]
 }

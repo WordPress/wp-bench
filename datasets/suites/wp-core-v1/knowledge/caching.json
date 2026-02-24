@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-caching",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Caching",
     "description": "Tests knowledge of WordPress caching APIs",
@@ -11,6 +11,7 @@
     {
       "id": "k-transients-001",
       "category": "caching",
+      "subcategory": "transients",
       "difficulty": "basic",
       "prompt": "What function retrieves a transient value in WordPress?",
       "type": "multiple_choice",
@@ -27,6 +28,7 @@
     {
       "id": "k-cache-salted-001",
       "category": "caching",
+      "subcategory": "salted_cache",
       "difficulty": "hard",
       "prompt": "Which helper should you use to reuse WP_Query cache keys while still invalidating when last_changed updates in WordPress 6.9?",
       "type": "multiple_choice",
@@ -43,6 +45,7 @@
     {
       "id": "k-object-cache-found-001",
       "category": "caching",
+      "subcategory": "object_cache",
       "difficulty": "hard",
       "prompt": "When storing falsey values in an object cache group, how do you distinguish a cached false from a cache miss with WordPress 6.9 APIs?",
       "type": "multiple_choice",
@@ -55,6 +58,185 @@
       "correct_answer": "B",
       "explanation": "WP_Object_Cache::get and wp_cache_get_multiple* report hits through the passed-by-reference $found flag/miss list, allowing false or 0 values to be distinguished from absent keys.",
       "references": ["https://developer.wordpress.org/reference/classes/wp_object_cache/get/"]
+    },
+    {
+      "id": "k-caching-001",
+      "category": "caching",
+      "subcategory": "object_cache",
+      "difficulty": "basic",
+      "prompt": "When an empty string is passed as the cache group to wp_cache_set(), what group name is used internally?",
+      "type": "short_answer",
+      "correct_answer": "default",
+      "answer_type": "exact",
+      "explanation": "WP_Object_Cache methods check for empty group and replace it with 'default'. This is the implicit group for all cache operations that don't specify one.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_object_cache/"]
+    },
+    {
+      "id": "k-caching-002",
+      "category": "caching",
+      "subcategory": "object_cache",
+      "difficulty": "basic",
+      "prompt": "What is the key difference between wp_cache_add() and wp_cache_set()?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "wp_cache_add() fails if the key already exists; wp_cache_set() always overwrites" },
+        { "key": "B", "text": "wp_cache_add() is persistent; wp_cache_set() is runtime-only" },
+        { "key": "C", "text": "wp_cache_add() supports groups; wp_cache_set() does not" },
+        { "key": "D", "text": "wp_cache_add() increments an existing value; wp_cache_set() replaces it" }
+      ],
+      "correct_answer": "A",
+      "explanation": "wp_cache_add() returns false if the key already exists in the cache, making it safe for race conditions. wp_cache_set() unconditionally stores the value, overwriting any existing data.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_cache_add/"]
+    },
+    {
+      "id": "k-caching-003",
+      "category": "caching",
+      "subcategory": "transients",
+      "difficulty": "intermediate",
+      "prompt": "Without an external object cache, how are transients with an expiration stored in the database?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "A single row in a dedicated wp_transients table" },
+        { "key": "B", "text": "Two options: _transient_{name} for the value and _transient_timeout_{name} for the expiration timestamp" },
+        { "key": "C", "text": "A single option _transient_{name} containing both value and expiration in a serialized array" },
+        { "key": "D", "text": "An entry in the wp_postmeta table tied to a special transients post" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Without an external cache, transients with a non-zero expiration are stored as two separate options in the wp_options table: one for the value and one for the timeout (time() + expiration). Both are stored as non-autoloaded options.",
+      "references": ["https://developer.wordpress.org/reference/functions/set_transient/"]
+    },
+    {
+      "id": "k-caching-004",
+      "category": "caching",
+      "subcategory": "transients",
+      "difficulty": "intermediate",
+      "prompt": "What happens when you call set_transient() with an expiration of 0?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The transient is not stored" },
+        { "key": "B", "text": "The transient never expires and is stored as an autoloaded option (without external cache)" },
+        { "key": "C", "text": "The transient expires immediately on the next request" },
+        { "key": "D", "text": "It defaults to 1 hour" }
+      ],
+      "correct_answer": "B",
+      "explanation": "An expiration of 0 means the transient never expires. Without an external cache, it's stored as an autoloaded option with no timeout option created. It persists until explicitly deleted.",
+      "references": ["https://developer.wordpress.org/reference/functions/set_transient/"]
+    },
+    {
+      "id": "k-caching-005",
+      "category": "caching",
+      "subcategory": "object_cache",
+      "difficulty": "intermediate",
+      "prompt": "What is the filename of the drop-in file that WordPress looks for to load an external persistent object cache?",
+      "type": "short_answer",
+      "correct_answer": "object-cache.php",
+      "answer_type": "exact",
+      "explanation": "WordPress checks for WP_CONTENT_DIR/object-cache.php. If this file exists and defines wp_cache_init(), WordPress sets wp_using_ext_object_cache(true) and uses it instead of the default WP_Object_Cache.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_using_ext_object_cache/"]
+    },
+    {
+      "id": "k-caching-006",
+      "category": "caching",
+      "subcategory": "transients",
+      "difficulty": "intermediate",
+      "prompt": "When an external object cache is active, in which cache group are regular transients stored?",
+      "type": "short_answer",
+      "correct_answer": "transient",
+      "answer_type": "exact",
+      "explanation": "With an external object cache, set_transient() stores data via wp_cache_set($transient, $value, 'transient', $expiration). Site transients use the 'site-transient' group instead.",
+      "references": ["https://developer.wordpress.org/reference/functions/set_transient/"]
+    },
+    {
+      "id": "k-caching-007",
+      "category": "caching",
+      "subcategory": "object_cache",
+      "difficulty": "hard",
+      "prompt": "Which of these is a non-persistent cache group that WordPress core registers by default?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "counts" },
+        { "key": "B", "text": "posts" },
+        { "key": "C", "text": "options" },
+        { "key": "D", "text": "users" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The 'counts' group is one of the non-persistent cache groups registered by WordPress core (along with 'plugins' and 'theme_json'). Non-persistent groups are never stored in an external persistent cache backend. Groups like 'posts', 'options', and 'users' are persistent by default.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_cache_add_non_persistent_groups/"]
+    },
+    {
+      "id": "k-caching-008",
+      "category": "caching",
+      "subcategory": "invalidation",
+      "difficulty": "hard",
+      "prompt": "What value does wp_cache_get_last_changed() store as the 'last_changed' token?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "An auto-incrementing integer" },
+        { "key": "B", "text": "The result of microtime() — a string with microseconds and Unix timestamp" },
+        { "key": "C", "text": "A random UUID v4 string" },
+        { "key": "D", "text": "The Unix timestamp from time()" }
+      ],
+      "correct_answer": "B",
+      "explanation": "wp_cache_set_last_changed() calls microtime() and stores the result. The microtime string provides sufficient precision to detect rapid successive changes.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_cache_get_last_changed/"]
+    },
+    {
+      "id": "k-caching-009",
+      "category": "caching",
+      "subcategory": "invalidation",
+      "difficulty": "hard",
+      "prompt": "When clean_post_cache() is called, how does it invalidate all cached WP_Query results?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It calls wp_cache_flush_group('post-queries')" },
+        { "key": "B", "text": "It deletes all cache keys matching a 'post-queries:*' pattern" },
+        { "key": "C", "text": "It calls wp_cache_set_posts_last_changed() which updates the 'last_changed' token in the 'posts' group, causing salted cache reads to reject stale data" },
+        { "key": "D", "text": "It iterates through all cached queries and deletes them individually" }
+      ],
+      "correct_answer": "C",
+      "explanation": "clean_post_cache() calls wp_cache_set_posts_last_changed(), which updates the 'last_changed' key in the 'posts' cache group. Since WP_Query uses salted caching, stored results with the old salt no longer match and are effectively invalidated.",
+      "references": ["https://developer.wordpress.org/reference/functions/clean_post_cache/"]
+    },
+    {
+      "id": "k-caching-010",
+      "category": "caching",
+      "subcategory": "object_cache",
+      "difficulty": "intermediate",
+      "prompt": "In which WordPress version was wp_cache_flush_group() introduced?",
+      "type": "short_answer",
+      "correct_answer": "6.1",
+      "answer_type": "contains",
+      "explanation": "wp_cache_flush_group() was introduced in WordPress 6.1.0. The default WP_Object_Cache implementation simply unsets the entire group array from its internal $cache property.",
+      "references": ["https://developer.wordpress.org/reference/functions/wp_cache_flush_group/"]
+    },
+    {
+      "id": "k-caching-011",
+      "category": "caching",
+      "subcategory": "transients",
+      "difficulty": "hard",
+      "prompt": "What is the maximum length of a transient name for set_transient()?",
+      "type": "short_answer",
+      "correct_answer": "172",
+      "answer_type": "exact",
+      "explanation": "Transient names must be 172 characters or fewer for set_transient(). Site transients have an even shorter limit of 167 characters. These limits account for the '_transient_' prefix within the options table's option_name column.",
+      "references": ["https://developer.wordpress.org/reference/functions/set_transient/"]
+    },
+    {
+      "id": "k-caching-012",
+      "category": "caching",
+      "subcategory": "object_cache",
+      "difficulty": "hard",
+      "prompt": "The default WP_Object_Cache clones PHP objects when storing and retrieving them. Why?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "To ensure serialization compatibility with external backends" },
+        { "key": "B", "text": "To prevent accidental mutation — modifications to a retrieved object won't affect the cached copy, and vice versa" },
+        { "key": "C", "text": "To reduce memory usage via copy-on-write" },
+        { "key": "D", "text": "To support multisite blog switching" }
+      ],
+      "correct_answer": "B",
+      "explanation": "WP_Object_Cache clones objects on both set() and get() to prevent accidental mutation. Without cloning, modifying a retrieved object would also modify the cached copy since PHP objects are passed by reference.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_object_cache/"]
     }
   ]
 }

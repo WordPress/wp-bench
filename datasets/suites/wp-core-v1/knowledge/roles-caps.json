@@ -1,6 +1,6 @@
 {
   "id": "wp-core-knowledge-v1-roles_caps",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Knowledge - Roles & Capabilities",
     "description": "Tests knowledge of WordPress roles and capabilities",
@@ -11,6 +11,7 @@
     {
       "id": "k-roles-001",
       "category": "roles-caps",
+      "subcategory": "capabilities",
       "difficulty": "intermediate",
       "prompt": "What capability is required by default to install plugins in WordPress?",
       "type": "multiple_choice",
@@ -21,7 +22,221 @@
         { "key": "D", "text": "edit_plugins" }
       ],
       "correct_answer": "B",
-      "explanation": "The 'install_plugins' capability controls who can install new plugins."
+      "explanation": "The 'install_plugins' capability controls who can install new plugins. It is distinct from activate_plugins (activating/deactivating) and update_plugins (updating existing plugins).",
+      "references": ["https://developer.wordpress.org/reference/functions/map_meta_cap/"]
+    },
+    {
+      "id": "k-roles-002",
+      "category": "roles-caps",
+      "subcategory": "roles",
+      "difficulty": "basic",
+      "prompt": "How many default roles does WordPress ship with?",
+      "type": "short_answer",
+      "correct_answer": "5",
+      "answer_type": "exact",
+      "explanation": "WordPress ships with 5 default roles: Administrator, Editor, Author, Contributor, and Subscriber.",
+      "references": ["https://developer.wordpress.org/plugins/users/roles-and-capabilities/"]
+    },
+    {
+      "id": "k-roles-003",
+      "category": "roles-caps",
+      "subcategory": "roles",
+      "difficulty": "basic",
+      "prompt": "Which capability does a Contributor lack that prevents them from making their posts visible to the public?",
+      "type": "short_answer",
+      "correct_answer": "publish_posts",
+      "answer_type": "contains",
+      "explanation": "Contributors can edit_posts and delete_posts (their own drafts), but cannot publish_posts. They also lack upload_files and edit_published_posts. Their posts must be published by an Editor or Administrator.",
+      "references": ["https://developer.wordpress.org/plugins/users/roles-and-capabilities/"]
+    },
+    {
+      "id": "k-roles-004",
+      "category": "roles-caps",
+      "subcategory": "roles",
+      "difficulty": "intermediate",
+      "prompt": "Which is the lowest role that has the upload_files capability by default?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Subscriber" },
+        { "key": "B", "text": "Contributor" },
+        { "key": "C", "text": "Author" },
+        { "key": "D", "text": "Editor" }
+      ],
+      "correct_answer": "C",
+      "explanation": "The upload_files capability is granted to Author, Editor, and Administrator. Contributors and Subscribers cannot upload files by default.",
+      "references": ["https://developer.wordpress.org/plugins/users/roles-and-capabilities/"]
+    },
+    {
+      "id": "k-roles-005",
+      "category": "roles-caps",
+      "subcategory": "meta_caps",
+      "difficulty": "intermediate",
+      "prompt": "What is the difference between primitive capabilities and meta capabilities in WordPress?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "Primitive caps are stored in roles; meta caps are context-dependent and mapped to primitives via map_meta_cap()" },
+        { "key": "B", "text": "Primitive caps apply to posts; meta caps apply to users" },
+        { "key": "C", "text": "Primitive caps are built-in; meta caps are created by plugins" },
+        { "key": "D", "text": "Primitive caps are checked server-side; meta caps are checked client-side" }
+      ],
+      "correct_answer": "A",
+      "explanation": "Primitive capabilities (like edit_posts, edit_others_posts) are stored directly in role definitions. Meta capabilities (like edit_post, delete_post) are abstract/contextual and require an object ID — map_meta_cap() translates them into the required primitive capabilities based on context.",
+      "references": ["https://developer.wordpress.org/reference/functions/map_meta_cap/"]
+    },
+    {
+      "id": "k-roles-006",
+      "category": "roles-caps",
+      "subcategory": "meta_caps",
+      "difficulty": "hard",
+      "prompt": "When map_meta_cap() processes 'edit_user' and the user is editing their own profile, what capabilities are required?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "edit_users" },
+        { "key": "B", "text": "No additional capabilities — any logged-in user can edit their own profile" },
+        { "key": "C", "text": "manage_options" },
+        { "key": "D", "text": "read and edit_posts" }
+      ],
+      "correct_answer": "B",
+      "explanation": "When $user_id === $args[0] (editing yourself), map_meta_cap() returns an empty $caps array, meaning no special capability is needed. Any authenticated user can edit their own profile.",
+      "references": ["https://developer.wordpress.org/reference/functions/map_meta_cap/"]
+    },
+    {
+      "id": "k-roles-007",
+      "category": "roles-caps",
+      "subcategory": "meta_caps",
+      "difficulty": "hard",
+      "prompt": "What happens when map_meta_cap() returns 'do_not_allow' in the required capabilities array?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "The check still passes for super admins on multisite" },
+        { "key": "B", "text": "The capability check always fails, even for super admins — it is explicitly unset from all users' capabilities" },
+        { "key": "C", "text": "A _doing_it_wrong notice is triggered" },
+        { "key": "D", "text": "The check is deferred to the user_has_cap filter" }
+      ],
+      "correct_answer": "B",
+      "explanation": "do_not_allow is the ultimate denial. In WP_User::has_cap(), it is explicitly unset from $capabilities. Even super admins on multisite fail the check — the code returns false before granting all-caps if do_not_allow is in the required caps.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_user/has_cap/"]
+    },
+    {
+      "id": "k-roles-008",
+      "category": "roles-caps",
+      "subcategory": "capabilities",
+      "difficulty": "hard",
+      "prompt": "When DISALLOW_UNFILTERED_HTML is defined as true, what happens to the 'unfiltered_html' capability?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It is removed from the Administrator role only" },
+        { "key": "B", "text": "It is mapped to do_not_allow for ALL users, including administrators and super admins" },
+        { "key": "C", "text": "It only affects non-super-admin users on multisite" },
+        { "key": "D", "text": "It triggers a deprecation warning but still allows the capability" }
+      ],
+      "correct_answer": "B",
+      "explanation": "When DISALLOW_UNFILTERED_HTML is defined and true, map_meta_cap() maps unfiltered_html to do_not_allow for everyone. This is stronger than any role check — even super admins cannot bypass it.",
+      "references": ["https://developer.wordpress.org/reference/functions/map_meta_cap/"]
+    },
+    {
+      "id": "k-roles-009",
+      "category": "roles-caps",
+      "subcategory": "multisite",
+      "difficulty": "hard",
+      "prompt": "On a single-site WordPress installation, is_super_admin() returns true based on which capability?",
+      "type": "short_answer",
+      "correct_answer": "delete_users",
+      "answer_type": "contains",
+      "explanation": "On single-site, is_super_admin() checks if the user has_cap('delete_users'). Since only Administrators have this capability by default, all Administrators are effectively super admins on single-site.",
+      "references": ["https://developer.wordpress.org/reference/functions/is_super_admin/"]
+    },
+    {
+      "id": "k-roles-010",
+      "category": "roles-caps",
+      "subcategory": "roles",
+      "difficulty": "basic",
+      "prompt": "What is the default role assigned to new users who register on a WordPress site?",
+      "type": "short_answer",
+      "correct_answer": "subscriber",
+      "answer_type": "contains",
+      "explanation": "The default role for new user registrations is Subscriber. This can be changed in Settings > General under 'New User Default Role'.",
+      "references": ["https://developer.wordpress.org/plugins/users/roles-and-capabilities/"]
+    },
+    {
+      "id": "k-roles-011",
+      "category": "roles-caps",
+      "subcategory": "storage",
+      "difficulty": "intermediate",
+      "prompt": "Where are WordPress roles and their capabilities stored in the database?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "In a dedicated wp_roles table" },
+        { "key": "B", "text": "In the wp_options table under the {prefix}user_roles option key" },
+        { "key": "C", "text": "In the wp_usermeta table for each user" },
+        { "key": "D", "text": "In wp-config.php as a defined constant" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Roles are stored as a serialized array in the wp_options table under the key {$table_prefix}user_roles (e.g., wp_user_roles). Each role entry contains a display name and capabilities array.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_roles/"]
+    },
+    {
+      "id": "k-roles-012",
+      "category": "roles-caps",
+      "subcategory": "capabilities",
+      "difficulty": "intermediate",
+      "prompt": "Which capability is the primary gatekeeper for the WordPress Settings pages?",
+      "type": "short_answer",
+      "correct_answer": "manage_options",
+      "answer_type": "contains",
+      "explanation": "manage_options is the capability that controls access to the Settings admin pages. Only Administrators have this capability by default.",
+      "references": ["https://developer.wordpress.org/plugins/users/roles-and-capabilities/"]
+    },
+    {
+      "id": "k-roles-013",
+      "category": "roles-caps",
+      "subcategory": "capabilities",
+      "difficulty": "intermediate",
+      "prompt": "The 'exist' capability has special behavior in WP_User::has_cap(). What is it?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "It returns true only for users who exist in the database" },
+        { "key": "B", "text": "It is hardcoded to true for all users, regardless of their roles" },
+        { "key": "C", "text": "It checks if the user session is still active" },
+        { "key": "D", "text": "It is an alias for the 'read' capability" }
+      ],
+      "correct_answer": "B",
+      "explanation": "In WP_User::has_cap(), the 'exist' capability is hardcoded: $capabilities['exist'] = true. This means any capability check for 'exist' always passes, for every user.",
+      "references": ["https://developer.wordpress.org/reference/classes/wp_user/has_cap/"]
+    },
+    {
+      "id": "k-roles-014",
+      "category": "roles-caps",
+      "subcategory": "roles",
+      "difficulty": "basic",
+      "prompt": "What capabilities does the Subscriber role have by default?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "read and edit_posts" },
+        { "key": "B", "text": "read only" },
+        { "key": "C", "text": "read, edit_posts, and upload_files" },
+        { "key": "D", "text": "No capabilities at all" }
+      ],
+      "correct_answer": "B",
+      "explanation": "Subscribers only have the 'read' capability (and the legacy level_0). They cannot create, edit, or delete any content.",
+      "references": ["https://developer.wordpress.org/plugins/users/roles-and-capabilities/"]
+    },
+    {
+      "id": "k-roles-015",
+      "category": "roles-caps",
+      "subcategory": "meta_caps",
+      "difficulty": "hard",
+      "prompt": "The user_has_cap filter allows plugins to dynamically grant capabilities. What arguments does it receive?",
+      "type": "multiple_choice",
+      "choices": [
+        { "key": "A", "text": "$allcaps (all user capabilities), $caps (required primitives), $args (cap name, user ID, object ID), $user (WP_User)" },
+        { "key": "B", "text": "$cap (capability name), $user_id, $grant (boolean)" },
+        { "key": "C", "text": "$user (WP_User), $cap (capability name), $result (boolean)" },
+        { "key": "D", "text": "$allcaps (all user capabilities), $cap (single capability name), $user_id" }
+      ],
+      "correct_answer": "A",
+      "explanation": "The user_has_cap filter passes: $allcaps (full capabilities array), $caps (required primitive caps from map_meta_cap), $args (array with original cap, user ID, and optional object ID), and $user (WP_User object since 3.7.0).",
+      "references": ["https://developer.wordpress.org/reference/hooks/user_has_cap/"]
     }
   ]
 }
