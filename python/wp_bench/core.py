@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import orjson
 
+from .callbacks import FileLoggerCallback, TestCallback
 from .config import HarnessConfig, ModelConfig
 from .datasets import ExecutionTest, KnowledgeTest, load_tests
 from .environment import WordPressEnvironment
@@ -62,6 +64,21 @@ class BenchmarkRunner:
         self.aggregator = ScoreAggregator()
         self.records: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
+        self._callback = self._setup_callback()
+
+    def _setup_callback(self) -> Optional[TestCallback]:
+        """Setup test callback if logging is enabled."""
+        if not self.config.output.enable_test_logging:
+            return None
+
+        model_name = self.config.model.name if self.config.model else "unknown"
+        log_path = self.config.output.test_log_path
+        if log_path:
+            # Apply timestamp to log file to match results files
+            timestamped_log_path = _timestamped_path(log_path)
+            ensure_dir(timestamped_log_path.parent)
+            return FileLoggerCallback(timestamped_log_path, model_name)
+        return None
 
     def run(self) -> Dict[str, Any]:
         """Execute the full benchmark pipeline.
@@ -126,12 +143,26 @@ class BenchmarkRunner:
         limit = self.config.run.limit or len(tests)
         tests_to_run = tests[:limit]
         concurrency = self.config.run.concurrency
+        model_name = self.config.model.name if self.config.model else "unknown"
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
+            start_time = time.time()
+
+            # Log test START
+            if self._callback:
+                self._callback.on_test_start(test.id, "knowledge", model_name)
+
             try:
                 prompt = self._render_knowledge_prompt(test)
                 answer = strip_code_fences(self.model.generate(prompt)).strip()
                 correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
+
+                duration_ms = (time.time() - start_time) * 1000
+
+                # Log test COMPLETE
+                if self._callback:
+                    self._callback.on_test_complete(test.id, "knowledge", model_name, correct, duration_ms)
+
                 return {
                     "test_id": test.id,
                     "type": "knowledge",
@@ -141,6 +172,9 @@ class BenchmarkRunner:
                     "score": correct,
                 }
             except Exception as e:
+                # Log test ERROR
+                if self._callback:
+                    self._callback.on_test_error(test.id, "knowledge", model_name, e)
                 raise TestError(test.id, "knowledge", e) from e
 
         with create_progress() as progress:
@@ -174,9 +208,16 @@ class BenchmarkRunner:
         limit = self.config.run.limit or len(tests)
         tests_to_run = tests[:limit]
         concurrency = self.config.run.concurrency
+        model_name = self.config.model.name if self.config.model else "unknown"
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
             """Process a single execution test (runs in thread pool)."""
+            start_time = time.time()
+
+            # Log test START
+            if self._callback:
+                self._callback.on_test_start(test.id, "execution", model_name)
+
             try:
                 prompt = self._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
@@ -189,6 +230,16 @@ class BenchmarkRunner:
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = self._score_assertions(env_result.raw)
                 quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
+
+                duration_ms = (time.time() - start_time) * 1000
+
+                # Use correctness for score, fallback to quality if available
+                score = correctness if correctness is not None else (quality if quality is not None else 0.0)
+
+                # Log test COMPLETE
+                if self._callback:
+                    self._callback.on_test_complete(test.id, "execution", model_name, score, duration_ms)
+
                 return {
                     "test_id": test.id,
                     "type": "execution",
@@ -201,6 +252,9 @@ class BenchmarkRunner:
                     "quality": quality,
                 }
             except Exception as e:
+                # Log test ERROR
+                if self._callback:
+                    self._callback.on_test_error(test.id, "execution", model_name, e)
                 raise TestError(test.id, "execution", e) from e
 
         with create_progress() as progress:
@@ -401,6 +455,30 @@ class SingleModelRunner:
         self.aggregator = ScoreAggregator()
         self.records: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
+        self._callback = self._setup_callback()
+
+    def _setup_callback(self) -> Optional[TestCallback]:
+        """Setup test callback if logging is enabled."""
+        if not self.config.output.enable_test_logging:
+            return None
+
+        model_name = self.model_config.name
+        log_path = self.config.output.test_log_path
+        if log_path:
+            # Apply timestamp and include model name for multi-model runs
+            # e.g., test_execution_gpt-4o_20231216_143052.log
+            safe_model_name = model_name.replace("/", "-").replace(":", "-")
+            timestamped_log_path = _timestamped_path(log_path)
+            # Insert model name before timestamp: test_execution_20231216_143052.log -> test_execution_gpt-4o_20231216_143052.log
+            parts = timestamped_log_path.stem.rsplit("_", 2)
+            if len(parts) == 3:
+                new_stem = f"{parts[0]}_{safe_model_name}_{parts[1]}_{parts[2]}"
+            else:
+                new_stem = f"{timestamped_log_path.stem}_{safe_model_name}"
+            timestamped_log_path = timestamped_log_path.parent / f"{new_stem}{timestamped_log_path.suffix}"
+            ensure_dir(timestamped_log_path.parent)
+            return FileLoggerCallback(timestamped_log_path, model_name)
+        return None
 
     def run(self) -> Dict[str, Any]:
         """Run all tests and return scores for this model.
@@ -430,12 +508,26 @@ class SingleModelRunner:
         limit = self.config.run.limit or len(tests)
         tests_to_run = tests[:limit]
         concurrency = self.config.run.concurrency
+        model_name = self.model_config.name
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
+            start_time = time.time()
+
+            # Log test START
+            if self._callback:
+                self._callback.on_test_start(test.id, "knowledge", model_name)
+
             try:
                 prompt = BenchmarkRunner._render_knowledge_prompt(test)
                 answer = strip_code_fences(self.model.generate(prompt)).strip()
                 correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
+
+                duration_ms = (time.time() - start_time) * 1000
+
+                # Log test COMPLETE
+                if self._callback:
+                    self._callback.on_test_complete(test.id, "knowledge", model_name, correct, duration_ms)
+
                 return {
                     "test_id": test.id,
                     "type": "knowledge",
@@ -444,6 +536,9 @@ class SingleModelRunner:
                     "score": correct,
                 }
             except Exception as e:
+                # Log test ERROR
+                if self._callback:
+                    self._callback.on_test_error(test.id, "knowledge", model_name, e)
                 raise TestError(test.id, "knowledge", e) from e
 
         with create_progress() as progress:
@@ -467,8 +562,15 @@ class SingleModelRunner:
         limit = self.config.run.limit or len(tests)
         tests_to_run = tests[:limit]
         concurrency = self.config.run.concurrency
+        model_name = self.model_config.name
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
+            start_time = time.time()
+
+            # Log test START
+            if self._callback:
+                self._callback.on_test_start(test.id, "execution", model_name)
+
             try:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
@@ -481,6 +583,16 @@ class SingleModelRunner:
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = BenchmarkRunner._score_assertions(env_result.raw)
                 quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
+
+                duration_ms = (time.time() - start_time) * 1000
+
+                # Use correctness for score, fallback to quality if available
+                score = correctness if correctness is not None else (quality if quality is not None else 0.0)
+
+                # Log test COMPLETE
+                if self._callback:
+                    self._callback.on_test_complete(test.id, "execution", model_name, score, duration_ms)
+
                 return {
                     "test_id": test.id,
                     "type": "execution",
@@ -489,6 +601,9 @@ class SingleModelRunner:
                     "quality": quality,
                 }
             except Exception as e:
+                # Log test ERROR
+                if self._callback:
+                    self._callback.on_test_error(test.id, "execution", model_name, e)
                 raise TestError(test.id, "execution", e) from e
 
         with create_progress() as progress:

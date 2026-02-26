@@ -66,6 +66,8 @@ class OutputConfig(BaseModel):
     jsonl_path: Optional[Path] = Field(default=Path("results.jsonl"))
     save_prompts: bool = True
     save_artifacts_dir: Optional[Path] = Field(default=Path("artifacts"))
+    enable_test_logging: bool = False
+    test_log_path: Optional[Path] = Field(default=Path("test_execution.log"))
 
 
 class HarnessConfig(BaseModel):
@@ -111,7 +113,7 @@ class HarnessConfig(BaseModel):
                 data["grader"]["wp_env_dir"] = resolve_path(wp_env_dir)
 
         if "output" in data and isinstance(data["output"], dict):
-            for key in ("path", "jsonl_path", "save_artifacts_dir"):
+            for key in ("path", "jsonl_path", "save_artifacts_dir", "test_log_path"):
                 if key in data["output"] and data["output"][key]:
                     data["output"][key] = resolve_path(data["output"][key])
 
