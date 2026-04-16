@@ -6,7 +6,7 @@ The official WordPress AI benchmark. Evaluate how well language models understan
 
 WP-Bench measures AI model capabilities across two dimensions:
 
-- **Knowledge** — Multiple-choice questions testing WordPress concepts, APIs, and best practices
+- **Knowledge** — Multiple-choice and short-answer questions testing WordPress concepts, APIs, and best practices
 - **Execution** — Code generation tasks graded by a real WordPress runtime for correctness and quality
 
 The benchmark uses WordPress itself as the grader, running generated code in a sandboxed environment with static analysis and runtime assertions.
@@ -114,7 +114,7 @@ wp-bench dry-run --config wp-bench.yaml      # validate config without calling m
 Test suites live in `datasets/suites/<suite-name>/` with two directories per suite:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
-- `knowledge/` — Multiple-choice knowledge questions (one JSON file per category)
+- `knowledge/` — Multiple-choice and short-answer knowledge questions (one JSON file per category)
 
 The default suite `wp-core-v1` covers WordPress core APIs, hooks, database operations, and security patterns.
 

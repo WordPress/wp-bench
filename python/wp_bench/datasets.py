@@ -40,6 +40,7 @@ class KnowledgeTest:
     difficulty: str
     choices: Optional[List[Dict[str, Any]]] = None
     correct_answer: Optional[str] = None
+    answer_type: Optional[str] = None
     answer: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -88,16 +89,18 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                 )
             )
         else:
+            choice_list = choices if isinstance(choices, list) and choices else None
             knowledge.append(
                 KnowledgeTest(
                     id=row["id"],
                     suite=row.get("suite", config.name),
                     prompt=row["prompt"],
-                    test_type="knowledge",
+                    test_type=row.get("type", "knowledge"),
                     category=row.get("category", "general"),
                     difficulty=row.get("difficulty", "unknown"),
-                    choices=choices if isinstance(choices, list) else None,
+                    choices=choice_list,
                     correct_answer=row.get("correct_answer"),
+                    answer_type=row.get("answer_type"),
                     metadata={},
                 )
             )
@@ -179,6 +182,7 @@ def _parse_knowledge_suite(path: Path) -> List[KnowledgeTest]:
                 difficulty=test.get("difficulty", "unknown"),
                 choices=test.get("choices"),
                 correct_answer=test.get("correct_answer"),
+                answer_type=test.get("answer_type"),
                 metadata={"suite_metadata": metadata},
             )
         )
