@@ -13,6 +13,7 @@ import orjson
 from .config import HarnessConfig, ModelConfig
 from .datasets import ExecutionTest, KnowledgeTest, load_tests
 from .environment import WordPressEnvironment
+from .knowledge import render_knowledge_prompt, score_knowledge_answer
 from .models import ModelInterface
 from .output import (
     create_progress,
@@ -112,10 +113,10 @@ class BenchmarkRunner:
         return payload
 
     def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
-        """Run multiple-choice knowledge tests in parallel.
+        """Run knowledge tests in parallel.
 
         Prompts the model with WordPress knowledge questions and scores responses
-        based on whether they match the expected answer letter.
+        against either multiple-choice or short-answer expectations.
 
         Args:
             tests: List of knowledge test definitions.
@@ -131,7 +132,7 @@ class BenchmarkRunner:
             try:
                 prompt = self._render_knowledge_prompt(test)
                 answer = strip_code_fences(self.model.generate(prompt)).strip()
-                correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
+                correct = score_knowledge_answer(test, answer)
                 return {
                     "test_id": test.id,
                     "type": "knowledge",
@@ -221,21 +222,15 @@ class BenchmarkRunner:
 
     @staticmethod
     def _render_knowledge_prompt(test: KnowledgeTest) -> str:
-        """Format a knowledge test into a multiple-choice prompt string.
+        """Format a knowledge test into a prompt string.
 
         Args:
             test: Knowledge test with question and choices.
 
         Returns:
-            Formatted prompt asking for a single letter answer.
+            Formatted prompt with instructions that match the answer mode.
         """
-        prompt = [test.prompt]
-        if test.choices:
-            prompt.append("Choices:")
-            for choice in test.choices:
-                prompt.append(f"{choice['key']}. {choice['text']}")
-        prompt.append("Answer with only the letter of the correct choice.")
-        return "\n".join(prompt)
+        return render_knowledge_prompt(test)
 
     @staticmethod
     def _render_execution_prompt(test: ExecutionTest) -> str:
@@ -435,7 +430,7 @@ class SingleModelRunner:
             try:
                 prompt = BenchmarkRunner._render_knowledge_prompt(test)
                 answer = strip_code_fences(self.model.generate(prompt)).strip()
-                correct = 1.0 if (test.correct_answer and answer.upper().startswith(test.correct_answer)) else 0.0
+                correct = score_knowledge_answer(test, answer)
                 return {
                     "test_id": test.id,
                     "type": "knowledge",

@@ -75,5 +75,7 @@ dataset:
 |-------|------|-------------|
 | `id` | string | Unique test ID |
 | `prompt` | string | Question text |
-| `choices` | array | Multiple choice options `[{key, text}]` |
-| `correct_answer` | string | Correct choice key (e.g., "B") |
+| `type` | string | Knowledge mode such as `multiple_choice` or `short_answer` |
+| `choices` | array | Optional multiple choice options `[{key, text}]` |
+| `correct_answer` | string | Correct choice key or canonical short answer |
+| `answer_type` | string | Optional short-answer scoring mode such as `exact` or `contains` |
