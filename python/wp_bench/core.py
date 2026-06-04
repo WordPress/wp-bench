@@ -250,16 +250,26 @@ class BenchmarkRunner:
     def _score_assertions(raw: Dict[str, Any]) -> float:
         """Calculate correctness from static and runtime verifier scores.
 
+        Only sections that actually defined checks contribute to the score.
+        An empty static (or runtime) section reports a perfect score of 1.0
+        (or 0.0), so averaging it in unconditionally would inflate or deflate
+        correctness for tests that exercise only one section.
+
         Args:
             raw: Raw result dict from WordPress environment.
 
         Returns:
             Float between 0.0 and 1.0 representing combined verifier score.
         """
-        static_score = raw.get("static", {}).get("score")
-        runtime_score = raw.get("runtime", {}).get("score")
-        if isinstance(static_score, (int, float)) and isinstance(runtime_score, (int, float)):
-            return round((float(static_score) + float(runtime_score)) / 2, 4)
+        scores: List[float] = []
+        for section in ("static", "runtime"):
+            result = raw.get(section) or {}
+            score = result.get("score")
+            total_weight = result.get("details", {}).get("total_weight", 0)
+            if isinstance(score, (int, float)) and total_weight:
+                scores.append(float(score))
+        if scores:
+            return round(sum(scores) / len(scores), 4)
 
         assertions = raw.get("assertions") or []
         if not assertions:
