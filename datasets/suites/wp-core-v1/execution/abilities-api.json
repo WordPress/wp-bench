@@ -11,29 +11,24 @@
     {
       "id": "e-abilities-api-001",
       "category": "abilities-api",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_abilities_api_001() to register an ability category and confirm it is discoverable.",
-      "expected_behavior": "Reviewer contract: `wpbp_abilities_api_001()` must register an ability category and confirm it is discoverable. Review focus: Use WordPress Abilities API; Keep ability and category names namespaced; Register categories on wp_abilities_api_categories_init. Static checks intentionally require wp_register_ability_category, wp_has_ability_category, wp_abilities_api_categories_init. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "intermediate",
+      "prompt": "Register an Abilities API category with the slug 'wpbp-tools' so it is discoverable by WordPress.",
+      "expected_behavior": "Reviewer contract: the submitted code must register the `wpbp-tools` ability category so `wp_has_ability_category( 'wpbp-tools' )` returns true after the Abilities category registry initializes. Review focus: Use WordPress Abilities API; Keep the category slug namespaced; Register categories on wp_abilities_api_categories_init. Static checks intentionally require wp_register_ability_category, the wpbp-tools slug, and wp_abilities_api_categories_init. The runtime check initializes the registry and verifies the category is discoverable.",
       "requirements": [
         "Use WordPress Abilities API",
-        "Keep ability and category names namespaced",
-        "Register categories on wp_abilities_api_categories_init"
+        "Register the category slug as 'wpbp-tools'",
+        "Register the category on wp_abilities_api_categories_init"
       ],
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_abilities_api_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_register_ability_category",
             "description": "Uses wp_register_ability_category",
             "weight": 1
           },
           {
-            "pattern": "wp_has_ability_category",
-            "description": "Uses wp_has_ability_category",
+            "pattern": "wpbp-tools",
+            "description": "Registers the requested category slug",
             "weight": 1
           },
           {
@@ -47,13 +42,13 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_abilities_api_001' ) ) { return false; } $ok = wpbp_abilities_api_001(); wp_unregister_ability_category( 'wpbp-tools' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "code": "return wp_has_ability_category( 'wpbp-tools' );",
+            "description": "The wpbp-tools category is discoverable",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_abilities_api_001(): bool { add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-tools', array( 'label' => 'WPBP Tools', 'description' => 'Abilities for WPBP tools.' ) ); } ); return wp_has_ability_category( 'wpbp-tools' ); }",
+      "reference_solution": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-tools', array( 'label' => 'WPBP Tools', 'description' => 'Abilities for WPBP tools.' ) ); } );",
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
