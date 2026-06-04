@@ -20,9 +20,5 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 } else {
 	require_once __DIR__ . '/src/class-sandbox.php';
 	require_once __DIR__ . '/src/class-static-analysis.php';
-	require_once __DIR__ . '/src/class-cli-verifier.php';
-}
-
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
-	\WP_CLI::add_command( 'bench verify', \WPBench\Runtime\CLI_Verifier::class );
+	require_once __DIR__ . '/src/class-verifier.php';
 }
