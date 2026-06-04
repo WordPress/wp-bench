@@ -52,6 +52,40 @@ def load_tests(config: DatasetConfig) -> Dict[str, List[Any]]:
     return _load_from_local_files(config)
 
 
+def filter_tests_by_ids(
+    tests: Dict[str, List[Any]],
+    test_ids: List[str],
+) -> Dict[str, List[Any]]:
+    """Filter loaded tests to the requested dataset test IDs."""
+    if not test_ids:
+        return tests
+
+    available_ids = {test.id for group in tests.values() for test in group}
+    missing_ids = [test_id for test_id in test_ids if test_id not in available_ids]
+    if missing_ids:
+        raise ValueError(f"Unknown test id(s): {', '.join(missing_ids)}")
+
+    wanted = set(test_ids)
+    return {
+        kind: [test for test in group if test.id in wanted]
+        for kind, group in tests.items()
+    }
+
+
+def ensure_test_ids_match_type(
+    tests: Dict[str, List[Any]],
+    test_type: str | None,
+    test_ids: List[str],
+) -> None:
+    """Fail clearly when requested IDs do not match an explicit test type."""
+    if not test_ids or test_type is None:
+        return
+    if not tests[test_type]:
+        raise ValueError(
+            f"No {test_type} tests matched requested test id(s): {', '.join(test_ids)}"
+        )
+
+
 def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
     """Load dataset from Hugging Face Hub (Parquet format)."""
     dataset = hf_load_dataset(

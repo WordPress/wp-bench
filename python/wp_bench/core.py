@@ -11,7 +11,13 @@ from typing import Any, Dict, List
 import orjson
 
 from .config import HarnessConfig, ModelConfig
-from .datasets import ExecutionTest, KnowledgeTest, load_tests
+from .datasets import (
+    ExecutionTest,
+    KnowledgeTest,
+    ensure_test_ids_match_type,
+    filter_tests_by_ids,
+    load_tests,
+)
 from .environment import WordPressEnvironment
 from .knowledge import render_knowledge_prompt, score_knowledge_answer
 from .models import ModelInterface
@@ -42,6 +48,14 @@ def _timestamped_path(path: Path) -> Path:
     """Add timestamp to filename: results.json -> results_20231216_143052.json"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return path.parent / f"{path.stem}_{timestamp}{path.suffix}"
+
+
+def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
+    """Apply run limit unless explicit test IDs are selected."""
+    if config.run.test_ids:
+        return tests
+    limit = config.run.limit or len(tests)
+    return tests[:limit]
 
 
 class BenchmarkRunner:
@@ -76,8 +90,9 @@ class BenchmarkRunner:
         Raises:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
-        tests = load_tests(self.config.dataset)
+        tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
         test_type = self.config.run.test_type
+        ensure_test_ids_match_type(tests, test_type, self.config.run.test_ids)
         run_knowledge = test_type in (None, "knowledge")
         run_execution = test_type in (None, "execution")
         if run_execution:
@@ -123,8 +138,7 @@ class BenchmarkRunner:
         Raises:
             TestError: If any test fails, stops execution and raises with details.
         """
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
@@ -171,8 +185,7 @@ class BenchmarkRunner:
         Raises:
             TestError: If any test fails, stops execution and raises with details.
         """
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
@@ -326,7 +339,12 @@ class MultiModelRunner:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
         models = self.config.get_models()
-        tests = load_tests(self.config.dataset)
+        tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
+        ensure_test_ids_match_type(
+            tests,
+            self.config.run.test_type,
+            self.config.run.test_ids,
+        )
         if self.config.run.test_type != "knowledge":
             self.environment.setup()
 
@@ -432,8 +450,7 @@ class SingleModelRunner:
 
     def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
         """Run knowledge tests in parallel. See BenchmarkRunner._run_knowledge_tests."""
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
@@ -469,8 +486,7 @@ class SingleModelRunner:
 
     def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
         """Run execution tests in parallel. See BenchmarkRunner._run_execution_tests."""
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
