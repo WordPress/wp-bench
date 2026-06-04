@@ -394,9 +394,15 @@ class Sandbox {
 		];
 
 		$expected_status = $assertion['expected_status'] ?? null;
-		if ( is_numeric( $expected_status ) && (int) $expected_status !== $status ) {
-			$result['expected'] = [ 'status' => (int) $expected_status ];
-			return $result;
+		if ( null !== $expected_status ) {
+			if ( ! is_numeric( $expected_status ) ) {
+				$result['error'] = 'rest_response expected_status must be numeric.';
+				return $result;
+			}
+			if ( (int) $expected_status !== $status ) {
+				$result['expected'] = [ 'status' => (int) $expected_status ];
+				return $result;
+			}
 		}
 
 		if ( array_key_exists( 'expected_data', $assertion ) ) {
@@ -418,6 +424,17 @@ class Sandbox {
 		$not_contains = $assertion['body_not_contains'] ?? null;
 		if ( is_string( $not_contains ) && str_contains( $encoded, $not_contains ) ) {
 			$result['expected'] = [ 'body_not_contains' => $not_contains ];
+			return $result;
+		}
+
+		// Require at least one expectation; an assertion that checks nothing
+		// must not silently pass for any response.
+		$has_expectation = null !== $expected_status
+			|| array_key_exists( 'expected_data', $assertion )
+			|| is_string( $contains )
+			|| is_string( $not_contains );
+		if ( ! $has_expectation ) {
+			$result['error'] = 'rest_response assertion requires expected_status, expected_data, body_contains, or body_not_contains.';
 			return $result;
 		}
 
