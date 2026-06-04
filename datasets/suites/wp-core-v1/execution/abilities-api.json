@@ -53,7 +53,7 @@
           }
         ]
       },
-      "reference_solution": "function wpbp_abilities_api_001(): bool { add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-tools', array( 'label' => 'WPBP Tools', 'description' => 'Abilities for WPBP tools.' ) ); } ); WP_Ability_Categories_Registry::get_instance(); return wp_has_ability_category( 'wpbp-tools' ); }",
+      "reference_solution": "function wpbp_abilities_api_001(): bool { add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-tools', array( 'label' => 'WPBP Tools', 'description' => 'Abilities for WPBP tools.' ) ); } ); return wp_has_ability_category( 'wpbp-tools' ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
