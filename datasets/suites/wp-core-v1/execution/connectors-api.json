@@ -1,0 +1,141 @@
+{
+  "id": "wp-core-execution-v1-connectors_api",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Connectors API",
+    "description": "Code generation tasks for WordPress Connectors API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-connectors-api-001",
+      "category": "connectors-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_connectors_api_001() to check that the built-in Akismet connector is registered.",
+      "expected_behavior": "Reviewer contract: `wpbp_connectors_api_001()` must check that the built-in Akismet connector is registered. Review focus: Use public Connectors API functions; Do not access the registry singleton directly. Static checks intentionally require wp_is_connector_registered. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use public Connectors API functions",
+        "Do not access the registry singleton directly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_connectors_api_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_is_connector_registered",
+            "description": "Uses wp_is_connector_registered",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_001' ) ) { return false; } return wpbp_connectors_api_001();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_connectors_api_001(): bool { return wp_is_connector_registered( 'akismet' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/connectors.php",
+          "src/wp-includes/class-wp-connector-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-connectors-api-002",
+      "category": "connectors-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_connectors_api_002() to return connector metadata for a registered connector.",
+      "expected_behavior": "Reviewer contract: `wpbp_connectors_api_002()` must return connector metadata for a registered connector. Review focus: Use public Connectors API functions; Do not access the registry singleton directly. Static checks intentionally require wp_get_connector. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use public Connectors API functions",
+        "Do not access the registry singleton directly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_connectors_api_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_connector",
+            "description": "Uses wp_get_connector",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_002' ) ) { return false; } $connector = wpbp_connectors_api_002( 'akismet' ); return is_array( $connector ) && 'spam_filtering' === $connector['type'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_connectors_api_002( string $id ): ?array { return wp_get_connector( $id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/connectors.php",
+          "src/wp-includes/class-wp-connector-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-connectors-api-003",
+      "category": "connectors-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_connectors_api_003() to list connectors and expose authentication metadata.",
+      "expected_behavior": "Reviewer contract: `wpbp_connectors_api_003()` must list connectors and expose authentication metadata. Review focus: Use public Connectors API functions; Do not access the registry singleton directly. Static checks intentionally require wp_get_connectors. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use public Connectors API functions",
+        "Do not access the registry singleton directly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_connectors_api_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_connectors",
+            "description": "Uses wp_get_connectors",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_003' ) ) { return false; } $connectors = wpbp_connectors_api_003(); return isset( $connectors['akismet']['authentication']['method'] );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_connectors_api_003(): array { return wp_get_connectors(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/connectors.php",
+          "src/wp-includes/class-wp-connector-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    }
+  ]
+}

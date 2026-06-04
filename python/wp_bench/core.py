@@ -103,7 +103,6 @@ class BenchmarkRunner:
                 "scores": {
                     "knowledge": summary.knowledge,
                     "correctness": summary.correctness,
-                    "quality": summary.quality,
                     "overall": summary.overall(),
                 },
             },
@@ -185,11 +184,9 @@ class BenchmarkRunner:
                 verification_spec = {
                     "static_checks": test.static_checks,
                     "runtime_checks": test.runtime_checks,
-                    "judge_config": test.judge_config,
                 }
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = self._score_assertions(env_result.raw)
-                quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
                 return {
                     "test_id": test.id,
                     "type": "execution",
@@ -199,7 +196,6 @@ class BenchmarkRunner:
                     "stdout": env_result.stdout,
                     "stderr": env_result.stderr,
                     "correctness": correctness,
-                    "quality": quality,
                 }
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
@@ -212,7 +208,7 @@ class BenchmarkRunner:
                     try:
                         result = future.result()
                         with self._lock:
-                            self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.aggregator.add_execution(result["correctness"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -252,14 +248,19 @@ class BenchmarkRunner:
 
     @staticmethod
     def _score_assertions(raw: Dict[str, Any]) -> float:
-        """Calculate correctness score from assertion results.
+        """Calculate correctness from static and runtime verifier scores.
 
         Args:
-            raw: Raw result dict from WordPress environment containing assertions.
+            raw: Raw result dict from WordPress environment.
 
         Returns:
-            Float between 0.0 and 1.0 representing fraction of passed assertions.
+            Float between 0.0 and 1.0 representing combined verifier score.
         """
+        static_score = raw.get("static", {}).get("score")
+        runtime_score = raw.get("runtime", {}).get("score")
+        if isinstance(static_score, (int, float)) and isinstance(runtime_score, (int, float)):
+            return round((float(static_score) + float(runtime_score)) / 2, 4)
+
         assertions = raw.get("assertions") or []
         if not assertions:
             return 0.0
@@ -414,7 +415,6 @@ class SingleModelRunner:
             "scores": {
                 "knowledge": summary.knowledge,
                 "correctness": summary.correctness,
-                "quality": summary.quality,
                 "overall": summary.overall(),
             },
             "results": self.records,
@@ -471,17 +471,14 @@ class SingleModelRunner:
                 verification_spec = {
                     "static_checks": test.static_checks,
                     "runtime_checks": test.runtime_checks,
-                    "judge_config": test.judge_config,
                 }
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = BenchmarkRunner._score_assertions(env_result.raw)
-                quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
                 return {
                     "test_id": test.id,
                     "type": "execution",
                     "code": code,
                     "correctness": correctness,
-                    "quality": quality,
                 }
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
@@ -494,7 +491,7 @@ class SingleModelRunner:
                     try:
                         result = future.result()
                         with self._lock:
-                            self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.aggregator.add_execution(result["correctness"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:

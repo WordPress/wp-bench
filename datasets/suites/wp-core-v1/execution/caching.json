@@ -1,80 +1,301 @@
 {
   "id": "wp-core-execution-v1-caching",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Caching",
-    "description": "Code generation tasks for WordPress object caching",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Caching APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
-      "id": "e-cache-false-hit-001",
+      "id": "e-caching-001",
       "category": "caching",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_cached_flag() that caches a computed boolean false and returns the cached false on subsequent calls using the $found parameter to distinguish cache hits from misses.",
-      "expected_behavior": "First call computes false; second call returns false from cache without recomputing.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_caching_001() to cache a false value while distinguishing a cache hit from a miss.",
+      "expected_behavior": "Reviewer contract: `wpbp_caching_001()` must cache a false value while distinguishing a cache hit from a miss. Review focus: Use WordPress cache or transient APIs; Handle falsey values correctly. Static checks intentionally require wp_cache_get, wp_cache_set. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
       "requirements": [
-        "Use wp_cache_get with $found to detect cached false values",
-        "Store results in cache group 'wpbp-cache-flag' with key 'flag'",
-        "Ensure recomputation does not occur on cache hit even when value is false"
+        "Use WordPress cache or transient APIs",
+        "Handle falsey values correctly"
       ],
       "static_checks": {
         "required_patterns": [
-          { "pattern": "wp_cache_get\\s*\\(.*\\$found", "description": "Uses found flag on cache get", "weight": 1.0 },
-          { "pattern": "wp_cache_set", "description": "Writes to cache", "weight": 0.8 }
-        ],
-        "forbidden_patterns": [
-          { "pattern": "wp_cache_delete", "description": "No explicit deletes needed", "severity": "warning" }
+          {
+            "pattern": "wpbp_caching_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_cache_get",
+            "description": "Uses wp_cache_get",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_cache_set",
+            "description": "Uses wp_cache_set",
+            "weight": 1
+          }
         ]
       },
       "runtime_checks": {
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists('wpbp_cached_flag') ) { return false; } $a = wpbp_cached_flag(); $b = wpbp_cached_flag(); return $a === false && $b === false;",
-            "description": "Returns cached false without recompute",
-            "weight": 1.0
+            "code": "if ( ! function_exists( 'wpbp_caching_001' ) ) { return false; } return array( false, false, false, true ) === wpbp_caching_001();",
+            "description": "Reference behavior is correct",
+            "weight": 1
           }
         ]
       },
-      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
-      "reference_solution": "function wpbp_cached_flag(): bool {\n    $cached = wp_cache_get( 'flag', 'wpbp-cache-flag', false, $found );\n    if ( $found ) {\n        return (bool) $cached;\n    }\n    // Simulate expensive computation that yields false first time.\n    $value = false;\n    wp_cache_set( 'flag', $value, 'wpbp-cache-flag' );\n    return $value;\n}"
+      "reference_solution": "function wpbp_caching_001(): array { wp_cache_delete( 'wpbp_false', 'wpbp' ); $first = wp_cache_get( 'wpbp_false', 'wpbp', false, $found_first ); wp_cache_set( 'wpbp_false', false, 'wpbp' ); $second = wp_cache_get( 'wpbp_false', 'wpbp', false, $found_second ); return array( $first, $found_first, $second, $found_second ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      }
     },
     {
-      "id": "e-cache-get-multiple-001",
+      "id": "e-caching-002",
       "category": "caching",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_get_options_cached(array $keys) that uses wp_cache_get_multiple to fetch options and fills misses from get_option without overwriting cached falsey values.",
-      "expected_behavior": "Returns associative array of option values; cached false is preserved; misses are saved back to cache.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_caching_002() to fetch multiple cached values and preserve falsey values.",
+      "expected_behavior": "Reviewer contract: `wpbp_caching_002()` must fetch multiple cached values and preserve falsey values. Review focus: Use WordPress cache or transient APIs; Handle falsey values correctly. Static checks intentionally require wp_cache_get_multiple, wp_cache_set_multiple. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
       "requirements": [
-        "Call wp_cache_get_multiple with a custom group (e.g., 'options') and capture missing keys via the miss list",
-        "For misses, call get_option and wp_cache_set_multiple",
-        "Do not treat falsey cached values as misses"
+        "Use WordPress cache or transient APIs",
+        "Handle falsey values correctly"
       ],
       "static_checks": {
         "required_patterns": [
-          { "pattern": "wp_cache_get_multiple", "description": "Batch cache get", "weight": 1.0 },
-          { "pattern": "wp_cache_set_multiple", "description": "Batch cache set for misses", "weight": 0.8 }
-        ],
-        "forbidden_patterns": [
-          { "pattern": "wp_cache_delete", "description": "No deletes necessary", "severity": "warning" }
+          {
+            "pattern": "wpbp_caching_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_cache_get_multiple",
+            "description": "Uses wp_cache_get_multiple",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_cache_set_multiple",
+            "description": "Uses wp_cache_set_multiple",
+            "weight": 1
+          }
         ]
       },
       "runtime_checks": {
-        "setup": "update_option('opt_false', false); update_option('opt_one', 'one');",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists('wpbp_get_options_cached') ) { return false; } $res = wpbp_get_options_cached( array( 'opt_false', 'opt_one', 'missing_opt' ) ); return array_key_exists('opt_false',$res) && $res['opt_false'] === false && $res['opt_one'] === 'one' && $res['missing_opt'] === null;",
-            "description": "Preserves cached false, fetches existing and missing options",
-            "weight": 1.0
+            "code": "if ( ! function_exists( 'wpbp_caching_002' ) ) { return false; } $out = wpbp_caching_002(); return array_key_exists( 'a', $out ) && false === $out['a'] && 'bee' === $out['b'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
           }
-        ],
-        "teardown": "delete_option('opt_false'); delete_option('opt_one'); delete_option('missing_opt');"
+        ]
       },
-      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
-      "reference_solution": "function wpbp_get_options_cached( array $keys ): array {\n    $group = 'wpbp-options';\n    $fetched = wp_cache_get_multiple( $keys, $group );\n    $misses  = array();\n    foreach ( $keys as $k ) {\n        if ( ! array_key_exists( $k, $fetched ) ) {\n            $misses[] = $k;\n        }\n    }\n    if ( $misses ) {\n        $fill = array();\n        foreach ( $misses as $k ) {\n            $val       = get_option( $k, null );\n            $fill[ $k ] = $val;\n            $fetched[ $k ] = $val;\n        }\n        wp_cache_set_multiple( $fill, $group );\n    }\n    return $fetched;\n}"
+      "reference_solution": "function wpbp_caching_002(): array { wp_cache_set_multiple( array( 'a' => false, 'b' => 'bee' ), 'wpbp_multi' ); return wp_cache_get_multiple( array( 'a', 'b', 'c' ), 'wpbp_multi' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-caching-003",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_caching_003() to use salted cache helpers with a salt key.",
+      "expected_behavior": "Reviewer contract: `wpbp_caching_003()` must use salted cache helpers with a salt key. Review focus: Use WordPress cache or transient APIs; Handle falsey values correctly. Static checks intentionally require wp_cache_get_salted, wp_cache_set_salted. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress cache or transient APIs",
+        "Handle falsey values correctly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_caching_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_cache_get_salted",
+            "description": "Uses wp_cache_get_salted",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_cache_set_salted",
+            "description": "Uses wp_cache_set_salted",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_003' ) ) { return false; } return wpbp_caching_003();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_caching_003(): bool { wp_cache_set_salted( 'item', 'value', 'wpbp_salted', 'salt-a' ); $hit = wp_cache_get_salted( 'item', 'wpbp_salted', 'salt-a' ); $miss = wp_cache_get_salted( 'item', 'wpbp_salted', 'salt-b' ); return 'value' === $hit && false === $miss; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-caching-004",
+      "category": "caching",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_caching_004() to store a transient with an expiration and retrieve it.",
+      "expected_behavior": "Reviewer contract: `wpbp_caching_004()` must store a transient with an expiration and retrieve it. Review focus: Use WordPress cache or transient APIs; Handle falsey values correctly. Static checks intentionally require set_transient, get_transient. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress cache or transient APIs",
+        "Handle falsey values correctly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_caching_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "set_transient",
+            "description": "Uses set_transient",
+            "weight": 1
+          },
+          {
+            "pattern": "get_transient",
+            "description": "Uses get_transient",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_004' ) ) { return false; } $ok = wpbp_caching_004( 'wpbp_transient', 'cached' ); delete_transient( 'wpbp_transient' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_caching_004( string $key, string $value ): bool { set_transient( $key, $value, HOUR_IN_SECONDS ); return $value === get_transient( $key ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-caching-005",
+      "category": "caching",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_caching_005() to prime and clean the posts cache for a post ID.",
+      "expected_behavior": "Reviewer contract: `wpbp_caching_005()` must prime and clean the posts cache for a post ID. Review focus: Use WordPress cache or transient APIs; Handle falsey values correctly. Static checks intentionally require _prime_post_caches, clean_post_cache. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress cache or transient APIs",
+        "Handle falsey values correctly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_caching_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "_prime_post_caches",
+            "description": "Uses _prime_post_caches",
+            "weight": 1
+          },
+          {
+            "pattern": "clean_post_cache",
+            "description": "Uses clean_post_cache",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_005' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Cache Post', 'post_status' => 'publish' ) ); $ok = wpbp_caching_005( $p ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_caching_005( int $post_id ): bool { _prime_post_caches( array( $post_id ), false, false ); clean_post_cache( $post_id ); return true; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-caching-006",
+      "category": "caching",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_caching_006() to get multiple salted cache values.",
+      "expected_behavior": "Reviewer contract: `wpbp_caching_006()` must get multiple salted cache values. Review focus: Use WordPress cache or transient APIs; Handle falsey values correctly. Static checks intentionally require wp_cache_get_multiple_salted. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress cache or transient APIs",
+        "Handle falsey values correctly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_caching_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_cache_get_multiple_salted",
+            "description": "Uses wp_cache_get_multiple_salted",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_006' ) ) { return false; } return wpbp_caching_006();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_caching_006(): bool { wp_cache_set_salted( 'a', 'A', 'wpbp_multi_salt', 's' ); $out = wp_cache_get_multiple_salted( array( 'a', 'b' ), 'wpbp_multi_salt', 's' ); return isset( $out['a'] ) && 'A' === $out['a'] && array_key_exists( 'b', $out ) && false === $out['b']; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "6.9"
+      }
     }
   ]
 }

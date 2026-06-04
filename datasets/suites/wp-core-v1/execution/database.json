@@ -1,43 +1,299 @@
 {
   "id": "wp-core-execution-v1-database",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Database",
-    "description": "Code generation tasks for WordPress database operations and meta queries",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Database APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
-      "id": "e-meta-query-zero-001",
+      "id": "e-database-001",
       "category": "database",
-      "difficulty": "hard",
-      "prompt": "Write wpbp_zero_price_products() that returns a WP_Query for 'product' posts whose numeric meta key 'price_cents' equals 0 without missing results due to type coercion.",
-      "expected_behavior": "Function returns one post when a product has meta price_cents stored as integer 0; does not return posts with null/missing meta.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_001() to insert a row using $wpdb->insert and return the inserted ID.",
+      "expected_behavior": "Reviewer contract: `wpbp_database_001()` must insert a row using $wpdb->insert and return the inserted ID. Review focus: Use $wpdb safely; Use prepared statements or format arrays where appropriate. Static checks intentionally require wpdb, insert. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
       "requirements": [
-        "Query post_type=product and post_status=publish",
-        "Use a meta_query with key price_cents, compare '=' and type 'NUMERIC'; do not rely on meta_value=0 string",
-        "Meta results must include rows where meta_value is 0",
-        "Return the WP_Query object"
+        "Use $wpdb safely",
+        "Use prepared statements or format arrays where appropriate"
       ],
       "static_checks": {
         "required_patterns": [
-          { "pattern": "meta_query", "description": "Uses meta_query", "weight": 1.0 },
-          { "pattern": "type['\"]?\\s*=>\\s*['\"]NUMERIC['\"]", "description": "Numeric type coercion", "weight": 0.8 }
-        ],
-        "forbidden_patterns": [
-          { "pattern": "meta_value\\s*=>\\s*0", "description": "Avoid direct meta_value=0 string shortcut", "severity": "warning" }
+          {
+            "pattern": "wpbp_database_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wpdb",
+            "description": "Uses wpdb",
+            "weight": 1
+          },
+          {
+            "pattern": "insert",
+            "description": "Uses insert",
+            "weight": 1
+          }
         ]
       },
       "runtime_checks": {
-        "setup": "$id = wp_insert_post(['post_title'=>'Zero Product','post_type'=>'product','post_status'=>'publish']); update_post_meta($id,'price_cents', 0); return true;",
         "assertions": [
-          { "type": "custom_assertion", "code": "return function_exists('wpbp_zero_price_products') && wpbp_zero_price_products()->post_count === 1;", "description": "Finds zero-priced product", "weight": 1.0 }
-        ],
-        "teardown": "wp_delete_post({id}, true);"
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_001' ) ) { return false; } $id = wpbp_database_001(); return $id > 0;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
       },
-      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
-      "reference_solution": "function wpbp_zero_price_products(): WP_Query {\n    return new WP_Query( array(\n        'post_type'      => 'product',\n        'post_status'    => 'publish',\n        'fields'         => 'ids',\n        'meta_query'     => array(\n            array(\n                'key'     => 'price_cents',\n                'value'   => 0,\n                'compare' => '=',\n                'type'    => 'NUMERIC',\n            ),\n        ),\n    ) );\n}"
+      "reference_solution": "function wpbp_database_001(): int { global $wpdb; $table = $wpdb->prefix . 'options'; $wpdb->insert( $table, array( 'option_name' => 'wpbp_db_' . wp_rand(), 'option_value' => 'yes', 'autoload' => 'no' ), array( '%s', '%s', '%s' ) ); return (int) $wpdb->insert_id; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-002",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_002() to prepare a SQL fragment for a LIKE search.",
+      "expected_behavior": "Reviewer contract: `wpbp_database_002()` must prepare a SQL fragment for a LIKE search. Review focus: Use $wpdb safely; Use prepared statements or format arrays where appropriate. Static checks intentionally require prepare, esc_like. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use $wpdb safely",
+        "Use prepared statements or format arrays where appropriate"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "prepare",
+            "description": "Uses prepare",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_like",
+            "description": "Uses esc_like",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_002' ) ) { return false; } $sql = wpbp_database_002( '100%' ); return str_contains( $sql, 'LIKE' ) && str_contains( $sql, '100' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_database_002( string $term ): string { global $wpdb; return $wpdb->prepare( 'post_title LIKE %s', '%' . $wpdb->esc_like( $term ) . '%' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-003",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_003() to read one variable with get_var from a prepared query.",
+      "expected_behavior": "Reviewer contract: `wpbp_database_003()` must read one variable with get_var from a prepared query. Review focus: Use $wpdb safely; Use prepared statements or format arrays where appropriate. Static checks intentionally require get_var, prepare. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use $wpdb safely",
+        "Use prepared statements or format arrays where appropriate"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_var",
+            "description": "Uses get_var",
+            "weight": 1
+          },
+          {
+            "pattern": "prepare",
+            "description": "Uses prepare",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_003' ) ) { return false; } update_option( 'wpbp_db_get_var', 'stored' ); $ok = 'stored' === wpbp_database_003( 'wpbp_db_get_var' ); delete_option( 'wpbp_db_get_var' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_database_003( string $option ): ?string { global $wpdb; return $wpdb->get_var( $wpdb->prepare( \"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", $option ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-004",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_004() to update rows safely with $wpdb->update.",
+      "expected_behavior": "Reviewer contract: `wpbp_database_004()` must update rows safely with $wpdb->update. Review focus: Use $wpdb safely; Use prepared statements or format arrays where appropriate. Static checks intentionally require update, wpdb. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use $wpdb safely",
+        "Use prepared statements or format arrays where appropriate"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "update",
+            "description": "Uses update",
+            "weight": 1
+          },
+          {
+            "pattern": "wpdb",
+            "description": "Uses wpdb",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_004' ) ) { return false; } global $wpdb; $name = 'wpbp_db_update'; $ok = wpbp_database_004( $name, 'new' ) && 'new' === $wpdb->get_var( $wpdb->prepare( \"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", $name ) ); delete_option( $name ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_database_004( string $name, string $value ): bool { global $wpdb; update_option( $name, 'old' ); $updated = false !== $wpdb->update( $wpdb->options, array( 'option_value' => $value ), array( 'option_name' => $name ), array( '%s' ), array( '%s' ) ); wp_cache_delete( $name, 'options' ); return $updated; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-005",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_005() to delete rows safely with $wpdb->delete.",
+      "expected_behavior": "Reviewer contract: `wpbp_database_005()` must delete rows safely with $wpdb->delete. Review focus: Use $wpdb safely; Use prepared statements or format arrays where appropriate. Static checks intentionally require delete, wpdb. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use $wpdb safely",
+        "Use prepared statements or format arrays where appropriate"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "delete",
+            "description": "Uses delete",
+            "weight": 1
+          },
+          {
+            "pattern": "wpdb",
+            "description": "Uses wpdb",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_005' ) ) { return false; } global $wpdb; $name = 'wpbp_db_delete'; $ok = wpbp_database_005( $name ) && null === $wpdb->get_var( $wpdb->prepare( \"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", $name ) ); delete_option( $name ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_database_005( string $name ): bool { global $wpdb; update_option( $name, 'bye' ); $deleted = false !== $wpdb->delete( $wpdb->options, array( 'option_name' => $name ), array( '%s' ) ); wp_cache_delete( $name, 'options' ); return $deleted; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-006",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_006() to use get_results OBJECT_K to key rows by option name.",
+      "expected_behavior": "Reviewer contract: `wpbp_database_006()` must use get_results OBJECT_K to key rows by option name. Review focus: Use $wpdb safely; Use prepared statements or format arrays where appropriate. Static checks intentionally require get_results, OBJECT_K, prepare. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use $wpdb safely",
+        "Use prepared statements or format arrays where appropriate"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_results",
+            "description": "Uses get_results",
+            "weight": 1
+          },
+          {
+            "pattern": "OBJECT_K",
+            "description": "Uses OBJECT_K",
+            "weight": 1
+          },
+          {
+            "pattern": "prepare",
+            "description": "Uses prepare",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_006' ) ) { return false; } update_option( 'wpbp_db_object_k_one', '1' ); $rows = wpbp_database_006( 'wpbp_db_object_k' ); $ok = isset( $rows['wpbp_db_object_k_one'] ); delete_option( 'wpbp_db_object_k_one' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_database_006( string $prefix ): array { global $wpdb; return $wpdb->get_results( $wpdb->prepare( \"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s\", $wpdb->esc_like( $prefix ) . '%' ), OBJECT_K ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
     }
   ]
 }

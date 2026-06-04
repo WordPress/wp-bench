@@ -36,6 +36,7 @@ def load_suite(suite_name: str) -> list[dict]:
                     "test_kind": "execution",
                     "type": "execution",
                     "prompt": t["prompt"],
+                    "expected_behavior": t.get("expected_behavior", ""),
                     "category": t.get("category", "general"),
                     "difficulty": t.get("difficulty", "unknown"),
                     "choices": orjson.dumps(t.get("choices", [])).decode(),
@@ -44,7 +45,6 @@ def load_suite(suite_name: str) -> list[dict]:
                     "requirements": orjson.dumps(t.get("requirements", [])).decode(),
                     "static_checks": orjson.dumps(t.get("static_checks", {})).decode(),
                     "runtime_checks": orjson.dumps(t.get("runtime_checks", {})).decode(),
-                    "judge_config": orjson.dumps(t.get("judge_config", {})).decode(),
                     "reference_solution": t.get("reference_solution", ""),
                 })
 
@@ -60,6 +60,7 @@ def load_suite(suite_name: str) -> list[dict]:
                     "test_kind": "knowledge",
                     "type": t.get("type", "knowledge"),
                     "prompt": t["prompt"],
+                    "expected_behavior": "",
                     "category": t.get("category", "general"),
                     "difficulty": t.get("difficulty", "unknown"),
                     "choices": orjson.dumps(t.get("choices", [])).decode(),
@@ -68,7 +69,6 @@ def load_suite(suite_name: str) -> list[dict]:
                     "requirements": "[]",
                     "static_checks": "{}",
                     "runtime_checks": "{}",
-                    "judge_config": "{}",
                     "reference_solution": "",
                 })
 

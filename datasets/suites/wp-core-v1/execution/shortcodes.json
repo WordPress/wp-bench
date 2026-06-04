@@ -1,81 +1,237 @@
 {
   "id": "wp-core-execution-v1-shortcodes",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Shortcodes",
-    "description": "Code generation tasks for WordPress shortcode development",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Shortcodes APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
-      "id": "e-shortcode-001",
+      "id": "e-shortcodes-001",
       "category": "shortcodes",
-      "difficulty": "basic",
-      "prompt": "Create a WordPress shortcode called 'greeting' that accepts a 'name' attribute and outputs 'Hello, {name}!' where {name} is the attribute value. If no name is provided, default to 'World'.",
-      "expected_behavior": "A shortcode [greeting name=\"Alice\"] outputs 'Hello, Alice!' and [greeting] outputs 'Hello, World!'",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_shortcodes_001() to register a greeting shortcode with a sanitized name attribute.",
+      "expected_behavior": "Reviewer contract: `wpbp_shortcodes_001()` must register a greeting shortcode with a sanitized name attribute. Review focus: Use shortcode APIs; Escape rendered shortcode output. Static checks intentionally require add_shortcode, shortcode_atts, esc_html. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
       "requirements": [
-        "Register a shortcode with the tag 'greeting'",
-        "Accept a 'name' attribute with default value 'World'",
-        "Output must be properly escaped using esc_html()",
-        "Return the greeting string, do not echo"
+        "Use shortcode APIs",
+        "Escape rendered shortcode output"
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "add_shortcode\\s*\\(\\s*['\"]greeting['\"]",
-            "description": "Must register shortcode with tag 'greeting'",
-            "weight": 1.0
+            "pattern": "wpbp_shortcodes_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
           },
           {
-            "pattern": "esc_html|esc_attr|wp_kses",
-            "description": "Must use WordPress escaping",
-            "weight": 0.5
+            "pattern": "add_shortcode",
+            "description": "Uses add_shortcode",
+            "weight": 1
           },
           {
             "pattern": "shortcode_atts",
-            "description": "Should use shortcode_atts for attribute defaults",
-            "weight": 0.5
-          }
-        ],
-        "forbidden_patterns": [
+            "description": "Uses shortcode_atts",
+            "weight": 1
+          },
           {
-            "pattern": "\\becho\\b",
-            "description": "Should return, not echo",
-            "severity": "warning"
+            "pattern": "esc_html",
+            "description": "Uses esc_html",
+            "weight": 1
           }
         ]
       },
       "runtime_checks": {
-        "setup": "",
         "assertions": [
           {
-            "type": "shortcode_exists",
-            "target": "greeting",
-            "description": "Shortcode must be registered",
-            "weight": 1.0
-          },
-          {
-            "type": "output_equals",
-            "target": "echo do_shortcode('[greeting name=\"Alice\"]');",
-            "expected": "Hello, Alice!",
-            "description": "Shortcode with name attribute",
-            "weight": 1.0
-          },
-          {
-            "type": "output_equals",
-            "target": "echo do_shortcode('[greeting]');",
-            "expected": "Hello, World!",
-            "description": "Shortcode with default name",
-            "weight": 1.0
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_shortcodes_001' ) ) { return false; } wpbp_shortcodes_001(); $out = do_shortcode( '[wpbp_greeting name=\"Ada\"]' ); remove_shortcode( 'wpbp_greeting' ); return 'Hello, Ada!' === $out;",
+            "description": "Reference behavior is correct",
+            "weight": 1
           }
+        ]
+      },
+      "reference_solution": "function wpbp_shortcodes_001(): void { add_shortcode( 'wpbp_greeting', function ( $atts ) { $atts = shortcode_atts( array( 'name' => 'World' ), $atts, 'wpbp_greeting' ); return 'Hello, ' . esc_html( $atts['name'] ) . '!'; } ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/shortcodes.php"
         ],
-        "teardown": "remove_shortcode('greeting');"
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-shortcodes-002",
+      "category": "shortcodes",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_shortcodes_002() to parse shortcode attributes without executing the shortcode.",
+      "expected_behavior": "Reviewer contract: `wpbp_shortcodes_002()` must parse shortcode attributes without executing the shortcode. Review focus: Use shortcode APIs; Escape rendered shortcode output. Static checks intentionally require shortcode_parse_atts. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use shortcode APIs",
+        "Escape rendered shortcode output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_shortcodes_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "shortcode_parse_atts",
+            "description": "Uses shortcode_parse_atts",
+            "weight": 1
+          }
+        ]
       },
-      "judge_config": {
-        "rubric_id": "wp-judge-rubric-v1"
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_shortcodes_002' ) ) { return false; } $atts = wpbp_shortcodes_002( 'name=\"Ada\" count=\"3\"' ); return 'Ada' === $atts['name'] && '3' === $atts['count'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
       },
-      "reference_solution": "function greeting_shortcode( $atts ) {\n    $atts = shortcode_atts( array( 'name' => 'World' ), $atts, 'greeting' );\n    return 'Hello, ' . esc_html( $atts['name'] ) . '!';\n}\nadd_shortcode( 'greeting', 'greeting_shortcode' );"
+      "reference_solution": "function wpbp_shortcodes_002( string $text ): array { return shortcode_parse_atts( $text ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/shortcodes.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-shortcodes-003",
+      "category": "shortcodes",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_shortcodes_003() to strip only registered shortcodes from content.",
+      "expected_behavior": "Reviewer contract: `wpbp_shortcodes_003()` must strip only registered shortcodes from content. Review focus: Use shortcode APIs; Escape rendered shortcode output. Static checks intentionally require strip_shortcodes. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use shortcode APIs",
+        "Escape rendered shortcode output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_shortcodes_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "strip_shortcodes",
+            "description": "Uses strip_shortcodes",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_shortcodes_003' ) ) { return false; } add_shortcode( 'wpbp_strip', fn() => 'X' ); $out = wpbp_shortcodes_003( 'A [wpbp_strip] B' ); remove_shortcode( 'wpbp_strip' ); return trim( $out ) === 'A  B';",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_shortcodes_003( string $content ): string { return strip_shortcodes( $content ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/shortcodes.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-shortcodes-004",
+      "category": "shortcodes",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_shortcodes_004() to detect whether content contains a specific shortcode.",
+      "expected_behavior": "Reviewer contract: `wpbp_shortcodes_004()` must detect whether content contains a specific shortcode. Review focus: Use shortcode APIs; Escape rendered shortcode output. Static checks intentionally require has_shortcode. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use shortcode APIs",
+        "Escape rendered shortcode output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_shortcodes_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "has_shortcode",
+            "description": "Uses has_shortcode",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_shortcodes_004' ) ) { return false; } return wpbp_shortcodes_004( 'Before [gallery ids=\"1\"]', 'gallery' ) && ! wpbp_shortcodes_004( 'Nope', 'gallery' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_shortcodes_004( string $content, string $tag ): bool { return has_shortcode( $content, $tag ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/shortcodes.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-shortcodes-005",
+      "category": "shortcodes",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_shortcodes_005() to register a wrapping shortcode that receives enclosed content.",
+      "expected_behavior": "Reviewer contract: `wpbp_shortcodes_005()` must register a wrapping shortcode that receives enclosed content. Review focus: Use shortcode APIs; Escape rendered shortcode output. Static checks intentionally require add_shortcode, esc_html. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use shortcode APIs",
+        "Escape rendered shortcode output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_shortcodes_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_shortcode",
+            "description": "Uses add_shortcode",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_html",
+            "description": "Uses esc_html",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_shortcodes_005' ) ) { return false; } wpbp_shortcodes_005(); $out = do_shortcode( '[wpbp_wrap]Safe[/wpbp_wrap]' ); remove_shortcode( 'wpbp_wrap' ); return '<span>Safe</span>' === $out;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_shortcodes_005(): void { add_shortcode( 'wpbp_wrap', fn( $atts, $content = '' ) => '<span>' . esc_html( $content ) . '</span>' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/shortcodes.php"
+        ],
+        "release_focus": "classic"
+      }
     }
   ]
 }

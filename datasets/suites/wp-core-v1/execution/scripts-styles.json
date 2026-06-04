@@ -1,0 +1,247 @@
+{
+  "id": "wp-core-execution-v1-scripts_styles",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Scripts and Styles",
+    "description": "Code generation tasks for WordPress Scripts and Styles APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-scripts-styles-001",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_001() to register and enqueue a script with dependencies.",
+      "expected_behavior": "Reviewer contract: `wpbp_scripts_styles_001()` must register and enqueue a script with dependencies. Review focus: Use WordPress script/style APIs; Avoid hard-coded script tags. Static checks intentionally require wp_register_script, wp_enqueue_script. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress script/style APIs",
+        "Avoid hard-coded script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_register_script",
+            "description": "Uses wp_register_script",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script",
+            "description": "Uses wp_enqueue_script",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_001' ) ) { return false; } $ok = wpbp_scripts_styles_001(); wp_dequeue_script( 'wpbp-script' ); wp_deregister_script( 'wpbp-script' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_001(): bool { wp_register_script( 'wpbp-script', 'https://example.test/script.js', array( 'jquery' ), '1.0.0', true ); wp_enqueue_script( 'wpbp-script' ); return wp_script_is( 'wpbp-script', 'enqueued' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-scripts-styles-002",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_002() to add inline script data after a handle.",
+      "expected_behavior": "Reviewer contract: `wpbp_scripts_styles_002()` must add inline script data after a handle. Review focus: Use WordPress script/style APIs; Avoid hard-coded script tags. Static checks intentionally require wp_add_inline_script. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress script/style APIs",
+        "Avoid hard-coded script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_add_inline_script",
+            "description": "Uses wp_add_inline_script",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_002' ) ) { return false; } $ok = wpbp_scripts_styles_002(); wp_dequeue_script( 'wpbp-inline' ); wp_deregister_script( 'wpbp-inline' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_002(): bool { wp_register_script( 'wpbp-inline', false, array(), null, true ); wp_enqueue_script( 'wpbp-inline' ); return wp_add_inline_script( 'wpbp-inline', 'window.wpbpInline = true;', 'after' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-scripts-styles-003",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_003() to register a script module and enqueue it.",
+      "expected_behavior": "Reviewer contract: `wpbp_scripts_styles_003()` must register a script module and enqueue it. Review focus: Use WordPress script/style APIs; Avoid hard-coded script tags. Static checks intentionally require wp_register_script_module, wp_enqueue_script_module. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress script/style APIs",
+        "Avoid hard-coded script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_register_script_module",
+            "description": "Uses wp_register_script_module",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script_module",
+            "description": "Uses wp_enqueue_script_module",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_003' ) ) { return false; } return wpbp_scripts_styles_003();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_003(): bool { wp_register_script_module( 'wpbp/module', 'https://example.test/module.js', array(), '1.0.0' ); wp_enqueue_script_module( 'wpbp/module' ); return true; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-scripts-styles-004",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_004() to register a script that depends on a module.",
+      "expected_behavior": "Reviewer contract: `wpbp_scripts_styles_004()` must register a script that depends on a module. Review focus: Use WordPress script/style APIs; Avoid hard-coded script tags. Static checks intentionally require module_dependencies, wp_register_script. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress script/style APIs",
+        "Avoid hard-coded script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "module_dependencies",
+            "description": "Uses module_dependencies",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_register_script",
+            "description": "Uses wp_register_script",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_004' ) ) { return false; } $ok = wpbp_scripts_styles_004(); wp_deregister_script( 'wpbp-script-with-module' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_004(): bool { wp_register_script_module( 'wpbp/dep-module', 'https://example.test/dep.js' ); wp_register_script( 'wpbp-script-with-module', 'https://example.test/app.js', array(), '1.0.0', array( 'in_footer' => true, 'module_dependencies' => array( 'wpbp/dep-module' ) ) ); return wp_script_is( 'wpbp-script-with-module', 'registered' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-scripts-styles-005",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_005() to convert JS dataset property names to HTML data attributes.",
+      "expected_behavior": "Reviewer contract: `wpbp_scripts_styles_005()` must convert JS dataset property names to HTML data attributes. Review focus: Use WordPress script/style APIs; Avoid hard-coded script tags. Static checks intentionally require wp_html_custom_data_attribute_name. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress script/style APIs",
+        "Avoid hard-coded script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_html_custom_data_attribute_name",
+            "description": "Uses wp_html_custom_data_attribute_name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_005' ) ) { return false; } return 'data-post-id' === wpbp_scripts_styles_005( 'postId' ) && null === wpbp_scripts_styles_005( 'no spaces' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_005( string $prop ): ?string { return wp_html_custom_data_attribute_name( $prop ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

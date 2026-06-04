@@ -1,0 +1,247 @@
+{
+  "id": "wp-core-execution-v1-cron",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Cron",
+    "description": "Code generation tasks for WordPress Cron APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-cron-001",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_001() to schedule a single event only when one is not already scheduled.",
+      "expected_behavior": "Reviewer contract: `wpbp_cron_001()` must schedule a single event only when one is not already scheduled. Review focus: Use WP-Cron APIs; Clean up scheduled hooks. Static checks intentionally require wp_schedule_single_event, wp_next_scheduled. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP-Cron APIs",
+        "Clean up scheduled hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_schedule_single_event",
+            "description": "Uses wp_schedule_single_event",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_next_scheduled",
+            "description": "Uses wp_next_scheduled",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_001' ) ) { return false; } wp_clear_scheduled_hook( 'wpbp_single_event' ); $ts = time() + HOUR_IN_SECONDS; $ok = wpbp_cron_001( $ts ) && wp_next_scheduled( 'wpbp_single_event' ) === $ts; wp_clear_scheduled_hook( 'wpbp_single_event' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_cron_001( int $timestamp ): bool { if ( ! wp_next_scheduled( 'wpbp_single_event' ) ) { return wp_schedule_single_event( $timestamp, 'wpbp_single_event' ); } return false; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-002",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_002() to schedule a recurring hourly event with arguments.",
+      "expected_behavior": "Reviewer contract: `wpbp_cron_002()` must schedule a recurring hourly event with arguments. Review focus: Use WP-Cron APIs; Clean up scheduled hooks. Static checks intentionally require wp_schedule_event, hourly. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP-Cron APIs",
+        "Clean up scheduled hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_schedule_event",
+            "description": "Uses wp_schedule_event",
+            "weight": 1
+          },
+          {
+            "pattern": "hourly",
+            "description": "Uses hourly",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_002' ) ) { return false; } $ts = time() + HOUR_IN_SECONDS; $args = array( 'site' => wp_rand() ); wp_clear_scheduled_hook( 'wpbp_hourly_event', $args ); $ok = wpbp_cron_002( $ts, $args ) && $ts === wp_next_scheduled( 'wpbp_hourly_event', $args ); wp_clear_scheduled_hook( 'wpbp_hourly_event', $args ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_cron_002( int $timestamp, array $args ): bool { return wp_schedule_event( $timestamp, 'hourly', 'wpbp_hourly_event', $args ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-003",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_003() to unschedule the next matching event.",
+      "expected_behavior": "Reviewer contract: `wpbp_cron_003()` must unschedule the next matching event. Review focus: Use WP-Cron APIs; Clean up scheduled hooks. Static checks intentionally require wp_unschedule_event, wp_next_scheduled. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP-Cron APIs",
+        "Clean up scheduled hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_unschedule_event",
+            "description": "Uses wp_unschedule_event",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_next_scheduled",
+            "description": "Uses wp_next_scheduled",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_003' ) ) { return false; } $args = array( 'id' => wp_rand() ); wp_clear_scheduled_hook( 'wpbp_unschedule', $args ); wp_schedule_single_event( time() + 1000, 'wpbp_unschedule', $args ); $ok = wpbp_cron_003( $args ) && false === wp_next_scheduled( 'wpbp_unschedule', $args ); wp_clear_scheduled_hook( 'wpbp_unschedule', $args ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_cron_003( array $args ): bool { $timestamp = wp_next_scheduled( 'wpbp_unschedule', $args ); return $timestamp ? wp_unschedule_event( $timestamp, 'wpbp_unschedule', $args ) : false; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-004",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_004() to add a custom cron schedule interval.",
+      "expected_behavior": "Reviewer contract: `wpbp_cron_004()` must add a custom cron schedule interval. Review focus: Use WP-Cron APIs; Clean up scheduled hooks. Static checks intentionally require cron_schedules, wp_get_schedules. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP-Cron APIs",
+        "Clean up scheduled hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "cron_schedules",
+            "description": "Uses cron_schedules",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_get_schedules",
+            "description": "Uses wp_get_schedules",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_004' ) ) { return false; } wpbp_cron_004(); $schedules = wp_get_schedules(); return isset( $schedules['wpbp_five_minutes'] ) && 300 === $schedules['wpbp_five_minutes']['interval'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_cron_004(): void { add_filter( 'cron_schedules', function ( $schedules ) { $schedules['wpbp_five_minutes'] = array( 'interval' => 300, 'display' => 'Every five minutes' ); return $schedules; } ); wp_get_schedules(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-005",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_005() to return a WP_Error when scheduling an invalid recurrence with wp_error enabled.",
+      "expected_behavior": "Reviewer contract: `wpbp_cron_005()` must return a WP_Error when scheduling an invalid recurrence with wp_error enabled. Review focus: Use WP-Cron APIs; Clean up scheduled hooks. Static checks intentionally require wp_schedule_event, WP_Error. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP-Cron APIs",
+        "Clean up scheduled hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_schedule_event",
+            "description": "Uses wp_schedule_event",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_Error",
+            "description": "Uses WP_Error",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_005' ) ) { return false; } return wpbp_cron_005();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_cron_005(): bool { $result = wp_schedule_event( time() + 100, 'not_a_schedule', 'wpbp_invalid_event', array(), true ); return $result instanceof WP_Error || is_wp_error( $result ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

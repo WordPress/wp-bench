@@ -1,0 +1,154 @@
+{
+  "id": "wp-core-execution-v1-gb_templates_navigation",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Templates and Navigation",
+    "description": "Code generation tasks for WordPress Templates and Navigation APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-templates-navigation-001",
+      "category": "gb-templates-navigation",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_templates_navigation_001() to register a block template in the templates registry.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_001()` must register a block template in the templates registry. Review focus: Use block template or navigation APIs; Return deterministic data. Static checks intentionally require WP_Block_Templates_Registry, register. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block template or navigation APIs",
+        "Return deterministic data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_templates_navigation_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Block_Templates_Registry",
+            "description": "Uses WP_Block_Templates_Registry",
+            "weight": 1
+          },
+          {
+            "pattern": "register",
+            "description": "Uses register",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_001' ) ) { return false; } return wpbp_gb_templates_navigation_001();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_templates_navigation_001(): bool { WP_Block_Templates_Registry::get_instance()->register( 'wpbp//single-product', array( 'title' => 'Product', 'content' => '<!-- wp:paragraph --><p>Product</p><!-- /wp:paragraph -->', 'description' => 'Product template', 'post_types' => array( 'post' ) ) ); $ok = WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp//single-product' ); unregister_block_template( 'wpbp//single-product' ); return $ok; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template.php",
+          "src/wp-includes/block-template-utils.php",
+          "src/wp-includes/blocks/navigation.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-templates-navigation-002",
+      "category": "gb-templates-navigation",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_templates_navigation_002() to render a navigation link block with a dynamic URL.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_002()` must render a navigation link block with a dynamic URL. Review focus: Use block template or navigation APIs; Return deterministic data. Static checks intentionally require render_block, core/navigation-link. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block template or navigation APIs",
+        "Return deterministic data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_templates_navigation_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "render_block",
+            "description": "Uses render_block",
+            "weight": 1
+          },
+          {
+            "pattern": "core\\/navigation\\-link",
+            "description": "Uses core/navigation-link",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_002' ) ) { return false; } $out = wpbp_gb_templates_navigation_002( 'https://example.test', 'Example' ); return str_contains( $out, 'Example' ) && str_contains( $out, 'https://example.test' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_templates_navigation_002( string $url, string $label ): string { return render_block( array( 'blockName' => 'core/navigation-link', 'attrs' => array( 'url' => $url, 'label' => $label ), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template.php",
+          "src/wp-includes/block-template-utils.php",
+          "src/wp-includes/blocks/navigation.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-templates-navigation-003",
+      "category": "gb-templates-navigation",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_templates_navigation_003() to return navigation overlay pattern names from registered core patterns.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_003()` must return navigation overlay pattern names from registered core patterns. Review focus: Use block template or navigation APIs; Return deterministic data. Static checks intentionally require WP_Block_Patterns_Registry. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block template or navigation APIs",
+        "Return deterministic data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_templates_navigation_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Block_Patterns_Registry",
+            "description": "Uses WP_Block_Patterns_Registry",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_003' ) ) { return false; } $names = wpbp_gb_templates_navigation_003(); return is_array( $names );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_templates_navigation_003(): array { return array_keys( WP_Block_Patterns_Registry::get_instance()->get_all_registered() ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template.php",
+          "src/wp-includes/block-template-utils.php",
+          "src/wp-includes/blocks/navigation.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

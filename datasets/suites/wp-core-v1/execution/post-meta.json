@@ -1,69 +1,289 @@
 {
   "id": "wp-core-execution-v1-post_meta",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Post Meta",
-    "description": "Code generation tasks for WordPress post meta operations",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Post Meta APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
-      "id": "e-meta-001",
+      "id": "e-post-meta-001",
       "category": "post-meta",
-      "difficulty": "basic",
-      "prompt": "Write a function called 'save_view_count' that takes a post ID and increments a post meta value '_view_count' by 1. If the meta doesn't exist, initialize it to 1. The function should return the new view count.",
-      "expected_behavior": "Calling save_view_count(123) increments _view_count meta for post 123 and returns the new count",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_post_meta_001() to increment a numeric post meta value and return the new count.",
+      "expected_behavior": "Reviewer contract: `wpbp_post_meta_001()` must increment a numeric post meta value and return the new count. Review focus: Use WordPress metadata APIs; Preserve type and sanitization behavior. Static checks intentionally require get_post_meta, update_post_meta. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
       "requirements": [
-        "Accept post ID as parameter",
-        "Get current _view_count meta value",
-        "If meta doesn't exist, treat as 0",
-        "Increment by 1 and save using update_post_meta()",
-        "Return the new count as an integer"
+        "Use WordPress metadata APIs",
+        "Preserve type and sanitization behavior"
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "function\\s+save_view_count",
-            "description": "Must define function save_view_count",
-            "weight": 1.0
+            "pattern": "wpbp_post_meta_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
           },
           {
             "pattern": "get_post_meta",
-            "description": "Must use get_post_meta to read current value",
-            "weight": 0.5
+            "description": "Uses get_post_meta",
+            "weight": 1
           },
           {
             "pattern": "update_post_meta",
-            "description": "Must use update_post_meta to save value",
-            "weight": 0.5
-          },
-          {
-            "pattern": "_view_count",
-            "description": "Must use correct meta key",
-            "weight": 0.5
-          }
-        ],
-        "forbidden_patterns": [
-          {
-            "pattern": "\\$wpdb->",
-            "description": "Should use WordPress meta functions, not direct queries",
-            "severity": "warning"
+            "description": "Uses update_post_meta",
+            "weight": 1
           }
         ]
       },
       "runtime_checks": {
         "assertions": [
           {
-            "type": "function_exists",
-            "target": "save_view_count",
-            "description": "Function must exist",
-            "weight": 1.0
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_meta_001' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Meta', 'post_status' => 'publish' ) ); $ok = 1 === wpbp_post_meta_001( $p ) && 2 === wpbp_post_meta_001( $p ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
           }
         ]
       },
-      "judge_config": {
-        "rubric_id": "wp-judge-rubric-v1"
+      "reference_solution": "function wpbp_post_meta_001( int $post_id ): int { $count = (int) get_post_meta( $post_id, '_wpbp_count', true ); $count++; update_post_meta( $post_id, '_wpbp_count', $count ); return $count; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-post-meta-002",
+      "category": "post-meta",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_post_meta_002() to register protected string post meta for REST exposure.",
+      "expected_behavior": "Reviewer contract: `wpbp_post_meta_002()` must register protected string post meta for REST exposure. Review focus: Use WordPress metadata APIs; Preserve type and sanitization behavior. Static checks intentionally require register_post_meta, show_in_rest. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress metadata APIs",
+        "Preserve type and sanitization behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_post_meta_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_post_meta",
+            "description": "Uses register_post_meta",
+            "weight": 1
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Uses show_in_rest",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_meta_002' ) ) { return false; } return true === wpbp_post_meta_002();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_post_meta_002(): bool { return register_post_meta( 'post', '_wpbp_subtitle', array( 'type' => 'string', 'single' => true, 'show_in_rest' => true, 'sanitize_callback' => 'sanitize_text_field', 'auth_callback' => '__return_true' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-post-meta-003",
+      "category": "post-meta",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_post_meta_003() to delete a post meta key only when the stored value matches.",
+      "expected_behavior": "Reviewer contract: `wpbp_post_meta_003()` must delete a post meta key only when the stored value matches. Review focus: Use WordPress metadata APIs; Preserve type and sanitization behavior. Static checks intentionally require delete_post_meta. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress metadata APIs",
+        "Preserve type and sanitization behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_post_meta_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "delete_post_meta",
+            "description": "Uses delete_post_meta",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_meta_003' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Delete Meta', 'post_status' => 'publish' ) ); update_post_meta( $p, '_wpbp_token', 'abc' ); $ok = ! wpbp_post_meta_003( $p, 'wrong' ) && wpbp_post_meta_003( $p, 'abc' ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_post_meta_003( int $post_id, string $value ): bool { return delete_post_meta( $post_id, '_wpbp_token', $value ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-post-meta-004",
+      "category": "post-meta",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_post_meta_004() to read all values for a multi-value post meta key.",
+      "expected_behavior": "Reviewer contract: `wpbp_post_meta_004()` must read all values for a multi-value post meta key. Review focus: Use WordPress metadata APIs; Preserve type and sanitization behavior. Static checks intentionally require get_post_meta. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress metadata APIs",
+        "Preserve type and sanitization behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_post_meta_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Uses get_post_meta",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_meta_004' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Multi Meta', 'post_status' => 'publish' ) ); add_post_meta( $p, '_wpbp_multi', 'a' ); add_post_meta( $p, '_wpbp_multi', 'b' ); $ok = array( 'a', 'b' ) === wpbp_post_meta_004( $p ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_post_meta_004( int $post_id ): array { return get_post_meta( $post_id, '_wpbp_multi', false ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-post-meta-005",
+      "category": "post-meta",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_post_meta_005() to update post meta after slashing JSON-like text.",
+      "expected_behavior": "Reviewer contract: `wpbp_post_meta_005()` must update post meta after slashing JSON-like text. Review focus: Use WordPress metadata APIs; Preserve type and sanitization behavior. Static checks intentionally require wp_slash, update_post_meta. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress metadata APIs",
+        "Preserve type and sanitization behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_post_meta_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_slash",
+            "description": "Uses wp_slash",
+            "weight": 1
+          },
+          {
+            "pattern": "update_post_meta",
+            "description": "Uses update_post_meta",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_meta_005' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Slash Meta', 'post_status' => 'publish' ) ); $json = '{\"a\":\"b\"}'; $ok = $json === wpbp_post_meta_005( $p, $json ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_post_meta_005( int $post_id, string $json ): string { update_post_meta( $post_id, '_wpbp_json', wp_slash( $json ) ); return get_post_meta( $post_id, '_wpbp_json', true ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-post-meta-006",
+      "category": "post-meta",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_post_meta_006() to register object subtype meta with a default value.",
+      "expected_behavior": "Reviewer contract: `wpbp_post_meta_006()` must register object subtype meta with a default value. Review focus: Use WordPress metadata APIs; Preserve type and sanitization behavior. Static checks intentionally require register_meta, object_subtype. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress metadata APIs",
+        "Preserve type and sanitization behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_post_meta_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_meta",
+            "description": "Uses register_meta",
+            "weight": 1
+          },
+          {
+            "pattern": "object_subtype",
+            "description": "Uses object_subtype",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_meta_006' ) ) { return false; } return true === wpbp_post_meta_006();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_post_meta_006(): bool { return register_meta( 'post', '_wpbp_rating', array( 'object_subtype' => 'post', 'type' => 'integer', 'single' => true, 'default' => 0, 'show_in_rest' => true ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
       }
     }
   ]

@@ -1,0 +1,194 @@
+{
+  "id": "wp-core-execution-v1-gb_interactivity_api",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Interactivity API",
+    "description": "Code generation tasks for WordPress Interactivity API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-interactivity-api-001",
+      "category": "gb-interactivity-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_interactivity_api_001() to set and retrieve Interactivity API state.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_interactivity_api_001()` must set and retrieve Interactivity API state. Review focus: Use Interactivity API helpers; Keep directives namespaced where applicable. Static checks intentionally require wp_interactivity_state. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Interactivity API helpers",
+        "Keep directives namespaced where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Uses wp_interactivity_state",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_001' ) ) { return false; } $state = wpbp_gb_interactivity_api_001(); return 2 === $state['count'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_001(): array { wp_interactivity_state( 'wpbp/store', array( 'count' => 2 ) ); return wp_interactivity_state( 'wpbp/store' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-interactivity-api-002",
+      "category": "gb-interactivity-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_interactivity_api_002() to serialize Interactivity API context data as an attribute value.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_interactivity_api_002()` must serialize Interactivity API context data as an attribute value. Review focus: Use Interactivity API helpers; Keep directives namespaced where applicable. Static checks intentionally require wp_interactivity_data_wp_context. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Interactivity API helpers",
+        "Keep directives namespaced where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_data_wp_context",
+            "description": "Uses wp_interactivity_data_wp_context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_002' ) ) { return false; } $out = wpbp_gb_interactivity_api_002( array( 'open' => true ) ); return str_contains( $out, 'data-wp-context' ) && str_contains( $out, 'open' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_002( array $context ): string { return wp_interactivity_data_wp_context( $context, 'wpbp/store' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-interactivity-api-003",
+      "category": "gb-interactivity-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_interactivity_api_003() to process a derived Interactivity API state value during directive rendering.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_interactivity_api_003()` must process a derived Interactivity API state value during directive rendering. Review focus: Use Interactivity API helpers; Keep directives namespaced where applicable. Static checks intentionally require wp_interactivity_process_directives, wp_interactivity_state. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Interactivity API helpers",
+        "Keep directives namespaced where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Uses wp_interactivity_process_directives",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Uses wp_interactivity_state",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_003' ) ) { return false; } $out = wpbp_gb_interactivity_api_003( '<div data-wp-interactive=\"wpbp/iapi-derived\"><span data-wp-text=\"state.double\"></span></div>' ); return str_contains( $out, '4' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_003( string $html ): string { wp_interactivity_state( 'wpbp/iapi-derived', array( 'base' => 2, 'double' => static fn() => 4 ) ); return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-gb-interactivity-api-004",
+      "category": "gb-interactivity-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_interactivity_api_004() to emit multiple unique Interactivity directive IDs on one element.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_interactivity_api_004()` must emit multiple unique Interactivity directive IDs on one element. Review focus: Use Interactivity API helpers; Keep directives namespaced where applicable. Static checks intentionally require data-wp-on, ---. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Interactivity API helpers",
+        "Keep directives namespaced where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "data\\-wp\\-on",
+            "description": "Uses data-wp-on",
+            "weight": 1
+          },
+          {
+            "pattern": "\\-\\-\\-",
+            "description": "Uses ---",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_004' ) ) { return false; } $out = wpbp_gb_interactivity_api_004(); return str_contains( $out, '---plugin-a' ) && str_contains( $out, '---plugin-b' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_004(): string { return '<button data-wp-on--click---plugin-a=\"actions.a\" data-wp-on--click---plugin-b=\"actions.b\">Go</button>'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

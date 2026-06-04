@@ -82,7 +82,6 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
     table.add_column("Model", style="cyan")
     table.add_column("Knowledge", justify="right")
     table.add_column("Correctness", justify="right")
-    table.add_column("Quality", justify="right")
     table.add_column("Overall", justify="right", style="bold")
 
     def _fmt_score(value: float | None) -> str:
@@ -94,7 +93,6 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
             model_name,
             _fmt_score(scores["knowledge"]),
             _fmt_score(scores["correctness"]),
-            _fmt_score(scores["quality"]),
             f"{scores['overall']*100:.1f}%",
         )
 

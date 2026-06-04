@@ -7,7 +7,7 @@ The official WordPress AI benchmark. Evaluate how well language models understan
 WP-Bench measures AI model capabilities across two dimensions:
 
 - **Knowledge** — Multiple-choice and short-answer questions testing WordPress concepts, APIs, and best practices
-- **Execution** — Code generation tasks graded by a real WordPress runtime for correctness and quality
+- **Execution** — Code generation tasks graded by static checks and runtime assertions in a real WordPress environment
 
 The benchmark uses WordPress itself as the grader, running generated code in a sandboxed environment with static analysis and runtime assertions.
 

@@ -1,99 +1,604 @@
 {
   "id": "wp-core-execution-v1-rest_api",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - REST API",
-    "description": "Code generation tasks for WordPress REST API development",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress REST API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
-      "id": "e-rest-001",
+      "id": "e-rest-api-001",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Create a REST API endpoint at '/wp-json/myplugin/v1/status' that returns a JSON object with a 'status' key set to 'ok' and a 'timestamp' key with the current Unix timestamp. The endpoint should be publicly accessible without authentication.",
-      "expected_behavior": "GET request to /wp-json/myplugin/v1/status returns {\"status\": \"ok\", \"timestamp\": <unix_timestamp>}",
+      "prompt": "Create a public REST endpoint /wp-json/wpbp/v1/status that returns a status string and numeric timestamp.",
+      "expected_behavior": "Reviewer contract: The submission must create a public REST endpoint /wp-json/wpbp/v1/status that returns a status string and numeric timestamp. Review focus: Register the route on rest_api_init; Use namespace wpbp/v1; Return REST data with status ok. Static checks intentionally require register_rest_route, rest_ensure_response, permission_callback. The runtime checks dispatch the route through WordPress REST internals and verify status/data behavior.",
       "requirements": [
-        "Use register_rest_route() to register the endpoint",
-        "Use namespace 'myplugin/v1'",
-        "Route should be 'status'",
-        "Accept GET requests",
-        "Return WP_REST_Response with status and timestamp",
-        "Endpoint should be publicly accessible (permission_callback returns true)"
+        "Register the route on rest_api_init",
+        "Use namespace wpbp/v1",
+        "Return REST data with status ok",
+        "Use a public permission callback"
       ],
       "static_checks": {
         "required_patterns": [
           {
             "pattern": "register_rest_route",
-            "description": "Must use register_rest_route()",
-            "weight": 1.0
+            "description": "Uses register_rest_route",
+            "weight": 1
           },
           {
-            "pattern": "myplugin/v1",
-            "description": "Must use correct namespace",
-            "weight": 0.5
+            "pattern": "rest_ensure_response",
+            "description": "Uses rest_ensure_response",
+            "weight": 1
           },
           {
             "pattern": "permission_callback",
-            "description": "Must include permission_callback",
-            "weight": 0.5
-          },
-          {
-            "pattern": "WP_REST_Response|rest_ensure_response",
-            "description": "Should return proper REST response",
-            "weight": 0.3
+            "description": "Uses permission_callback",
+            "weight": 1
           }
         ]
       },
       "runtime_checks": {
         "assertions": [
           {
-            "type": "hook_registered",
-            "target": "rest_api_init",
-            "description": "REST route registration hook must be used",
-            "weight": 1.0
+            "type": "rest_response",
+            "target": "/wpbp/v1/status",
+            "expected_status": 200,
+            "body_contains": "\"status\":\"ok\"",
+            "description": "Status endpoint responds"
           }
         ]
       },
-      "judge_config": {
-        "rubric_id": "wp-judge-rubric-v1",
-        "context_for_judge": "This is a simple status endpoint for a health check. Security is important - ensure permission_callback is properly defined."
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'wpbp/v1', '/status', array(\n        'methods'             => WP_REST_Server::READABLE,\n        'permission_callback' => '__return_true',\n        'callback'            => function () {\n            return rest_ensure_response( array( 'status' => 'ok', 'timestamp' => time() ) );\n        },\n    ) );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
       }
     },
     {
-      "id": "e-rest-cache-salted-001",
+      "id": "e-rest-api-002",
       "category": "rest-api",
-      "difficulty": "hard",
-      "prompt": "Create a REST endpoint /wp-json/demo/v1/books that returns published 'book' titles and uses wp_cache_get_salted/wp_cache_set_salted keyed by the posts last_changed value. Invalidate cache on save_post_book and deleted_post.",
-      "expected_behavior": "First call computes and caches list; second call is a cache hit; after inserting a new book, subsequent call reflects new title and cache resets.",
+      "difficulty": "intermediate",
+      "prompt": "Create a REST endpoint /wp-json/wpbp/v1/books/(?P<id>\\d+) that validates the ID and returns it as an integer.",
+      "expected_behavior": "Reviewer contract: The submission must create a REST endpoint /wp-json/wpbp/v1/books/(?P<id>\\d+) that validates the ID and returns it as an integer. Review focus: Use a route parameter named id; Validate that id is numeric; Return the id as an integer. Static checks intentionally require register_rest_route, validate_callback, WP_REST_Request. The runtime checks dispatch the route through WordPress REST internals and verify status/data behavior.",
       "requirements": [
-        "Register route on rest_api_init with namespace demo/v1 and route books",
-        "Use wp_cache_get_salted/wp_cache_set_salted with group 'books-list' and salt from wp_cache_get_last_changed('posts')",
-        "Capability: read for logged-in users, otherwise error",
-        "Add actions on save_post_book and deleted_post to delete the salted cache entry"
+        "Use a route parameter named id",
+        "Validate that id is numeric",
+        "Return the id as an integer"
       ],
       "static_checks": {
         "required_patterns": [
-          { "pattern": "register_rest_route", "description": "Registers REST route", "weight": 1.0 },
-          { "pattern": "wp_cache_get_salted", "description": "Uses salted cache get", "weight": 0.8 },
-          { "pattern": "save_post_book", "description": "Cache invalidation hook", "weight": 0.6 }
-        ],
-        "forbidden_patterns": [
-          { "pattern": "transient", "description": "Do not use transients", "severity": "error" }
+          {
+            "pattern": "register_rest_route",
+            "description": "Uses register_rest_route",
+            "weight": 1
+          },
+          {
+            "pattern": "validate_callback",
+            "description": "Uses validate_callback",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_REST_Request",
+            "description": "Uses WP_REST_Request",
+            "weight": 1
+          }
         ]
       },
       "runtime_checks": {
-        "setup": "register_post_type('book'); wp_insert_post(['post_type'=>'book','post_title'=>'Alpha','post_status'=>'publish']);",
         "assertions": [
-          { "type": "http_body_contains", "target": "/wp-json/demo/v1/books", "expected": "Alpha", "description": "Endpoint returns cached data", "weight": 1.0 },
-          { "type": "cache_miss_then_hit", "target": "/wp-json/demo/v1/books", "description": "Second call hits cache", "weight": 1.0 },
-          { "type": "cache_invalidated_on_hook", "target": "save_post_book", "description": "Cache clears when book updated", "weight": 1.0 }
-        ],
-        "teardown": "unregister_post_type('book');"
+          {
+            "type": "rest_response",
+            "target": "/wpbp/v1/books/42",
+            "expected_status": 200,
+            "expected_data": {
+              "id": 42
+            },
+            "description": "ID is validated and returned"
+          }
+        ]
       },
-      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
-      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'demo/v1', '/books', array(\n        'methods'             => 'GET',\n        'permission_callback' => fn() => is_user_logged_in() && current_user_can( 'read' ),\n        'callback'            => function () {\n            $salt  = wp_cache_get_last_changed( 'posts' );\n            $group = 'books-list';\n            $key   = 'titles';\n            $data  = wp_cache_get_salted( $key, $group, $salt, $found );\n            if ( $found ) {\n                return rest_ensure_response( $data );\n            }\n            $q     = new WP_Query( array( 'post_type' => 'book', 'post_status' => 'publish', 'fields' => 'titles', 'nopaging' => true ) );\n            $titles = wp_list_pluck( $q->posts, 'post_title' );\n            wp_cache_set_salted( $key, $titles, $group, $salt );\n            return rest_ensure_response( $titles );\n        },\n    ) );\n} );\nadd_action( 'save_post_book', fn() => wp_cache_delete( 'titles', 'books-list' ) );\nadd_action( 'deleted_post', function ( $pid ) {\n    if ( get_post_type( $pid ) === 'book' ) {\n        wp_cache_delete( 'titles', 'books-list' );\n    }\n} );"
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'wpbp/v1', '/books/(?P<id>\\d+)', array(\n        'methods'             => WP_REST_Server::READABLE,\n        'permission_callback' => '__return_true',\n        'callback'            => fn( WP_REST_Request $request ) => array( 'id' => absint( $request['id'] ) ),\n        'args'                => array( 'id' => array( 'validate_callback' => fn( $value ) => is_numeric( $value ) ) ),\n    ) );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-003",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Create a private REST endpoint /wp-json/wpbp/v1/private that requires manage_options and returns secret data.",
+      "expected_behavior": "Reviewer contract: The submission must create a private REST endpoint /wp-json/wpbp/v1/private that requires manage_options and returns secret data. Review focus: Use current_user_can in permission_callback; Return a WP_Error-compatible forbidden response when unauthorized; Return secret true when authorized. Static checks intentionally require register_rest_route, current_user_can, permission_callback. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use current_user_can in permission_callback",
+        "Return a WP_Error-compatible forbidden response when unauthorized",
+        "Return secret true when authorized"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Uses register_rest_route",
+            "weight": 1
+          },
+          {
+            "pattern": "current_user_can",
+            "description": "Uses current_user_can",
+            "weight": 1
+          },
+          {
+            "pattern": "permission_callback",
+            "description": "Uses permission_callback",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); } wp_set_current_user( 0 ); $response = rest_do_request( new WP_REST_Request( 'GET', '/wpbp/v1/private' ) ); return 401 === $response->get_status();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'wpbp/v1', '/private', array(\n        'methods'             => 'GET',\n        'permission_callback' => fn() => current_user_can( 'manage_options' ),\n        'callback'            => fn() => array( 'secret' => true ),\n    ) );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-004",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Create a REST endpoint /wp-json/wpbp/v1/options that sanitizes a title parameter and returns it.",
+      "expected_behavior": "Reviewer contract: The submission must create a REST endpoint /wp-json/wpbp/v1/options that sanitizes a title parameter and returns it. Review focus: Accept POST requests; Declare a title argument with sanitize_callback; Return the sanitized title. Static checks intentionally require register_rest_route, sanitize_callback, sanitize_text_field. The runtime checks dispatch the route through WordPress REST internals and verify status/data behavior.",
+      "requirements": [
+        "Accept POST requests",
+        "Declare a title argument with sanitize_callback",
+        "Return the sanitized title"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Uses register_rest_route",
+            "weight": 1
+          },
+          {
+            "pattern": "sanitize_callback",
+            "description": "Uses sanitize_callback",
+            "weight": 1
+          },
+          {
+            "pattern": "sanitize_text_field",
+            "description": "Uses sanitize_text_field",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "rest_response",
+            "target": "/wpbp/v1/options",
+            "method": "POST",
+            "params": {
+              "title": "<b>Hello</b>"
+            },
+            "expected_status": 200,
+            "expected_data": {
+              "title": "Hello"
+            },
+            "description": "Parameter is sanitized"
+          }
+        ]
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route( 'wpbp/v1', '/options', array(\n        'methods'             => WP_REST_Server::CREATABLE,\n        'permission_callback' => '__return_true',\n        'args'                => array( 'title' => array( 'sanitize_callback' => 'sanitize_text_field' ) ),\n        'callback'            => fn( WP_REST_Request $request ) => array( 'title' => $request->get_param( 'title' ) ),\n    ) );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-005",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_005() to normalize a WP_Error into a REST response array with code, message, and status.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_005()` must normalize a WP_Error into a REST response array with code, message, and status. Review focus: Use rest_convert_error_to_response; Preserve the status code. Static checks intentionally require rest_convert_error_to_response, WP_Error. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use rest_convert_error_to_response",
+        "Preserve the status code"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "rest_convert_error_to_response",
+            "description": "Uses rest_convert_error_to_response",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_Error",
+            "description": "Uses WP_Error",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_005' ) ) { return false; } $out = wpbp_rest_api_005( new WP_Error( 'wpbp_forbidden', 'Nope', array( 'status' => 403 ) ) ); return 403 === $out['status'] && 'wpbp_forbidden' === $out['data']['code'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_005( WP_Error $error ): array { $response = rest_convert_error_to_response( $error ); return array( 'status' => $response->get_status(), 'data' => $response->get_data() ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-006",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_006() to ensure arbitrary callback data is converted to a WP_REST_Response.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_006()` must ensure arbitrary callback data is converted to a WP_REST_Response. Review focus: Use rest_ensure_response; Return the response status and data. Static checks intentionally require rest_ensure_response, WP_REST_Response. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use rest_ensure_response",
+        "Return the response status and data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "rest_ensure_response",
+            "description": "Uses rest_ensure_response",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_REST_Response",
+            "description": "Uses WP_REST_Response",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_006' ) ) { return false; } return array( 200, array( 'ok' => true ) ) === wpbp_rest_api_006( array( 'ok' => true ) );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_006( array $data ): array { $response = rest_ensure_response( $data ); if ( ! $response instanceof WP_REST_Response ) { return array(); } return array( $response->get_status(), $response->get_data() ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-007",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_007() to build a collection response with X-WP-Total and X-WP-TotalPages headers.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_007()` must build a collection response with X-WP-Total and X-WP-TotalPages headers. Review focus: Use WP_REST_Response; Set pagination headers. Static checks intentionally require WP_REST_Response, header. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP_REST_Response",
+        "Set pagination headers"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_007",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_REST_Response",
+            "description": "Uses WP_REST_Response",
+            "weight": 1
+          },
+          {
+            "pattern": "header",
+            "description": "Uses header",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_007' ) ) { return false; } $r = wpbp_rest_api_007( array( 'a' ), 21, 10 ); return '21' === $r->get_headers()['X-WP-Total'] && '3' === $r->get_headers()['X-WP-TotalPages'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_007( array $items, int $total, int $per_page ): WP_REST_Response { $response = new WP_REST_Response( $items ); $response->header( 'X-WP-Total', (string) $total ); $response->header( 'X-WP-TotalPages', (string) (int) ceil( $total / $per_page ) ); return $response; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-008",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_008() to prepare a REST schema for a string enum setting.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_008()` must prepare a REST schema for a string enum setting. Review focus: Return JSON Schema compatible with WordPress REST API; Use enum and required keys. Static checks intentionally require enum, properties. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Return JSON Schema compatible with WordPress REST API",
+        "Use enum and required keys"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_008",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "enum",
+            "description": "Uses enum",
+            "weight": 1
+          },
+          {
+            "pattern": "properties",
+            "description": "Uses properties",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_008' ) ) { return false; } $schema = wpbp_rest_api_008(); return 'object' === $schema['type'] && array( 'light', 'dark' ) === $schema['properties']['mode']['enum'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_008(): array { return array( 'type' => 'object', 'required' => array( 'mode' ), 'properties' => array( 'mode' => array( 'type' => 'string', 'enum' => array( 'light', 'dark' ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-009",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_009() to validate a REST request URL parameter using rest_validate_request_arg.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_009()` must validate a REST request URL parameter using rest_validate_request_arg. Review focus: Build an argument schema; Return true only for positive integers. Static checks intentionally require rest_validate_value_from_schema, minimum. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Build an argument schema",
+        "Return true only for positive integers"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_009",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "rest_validate_value_from_schema",
+            "description": "Uses rest_validate_value_from_schema",
+            "weight": 1
+          },
+          {
+            "pattern": "minimum",
+            "description": "Uses minimum",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_009' ) ) { return false; } return wpbp_rest_api_009( 5 ) && ! wpbp_rest_api_009( 0 ) && ! wpbp_rest_api_009( 'abc' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_009( mixed $value ): bool { $schema = array( 'type' => 'integer', 'minimum' => 1 ); return true === rest_validate_value_from_schema( $value, $schema, 'id' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-010",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_010() to sanitize REST array input using rest_sanitize_value_from_schema.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_010()` must sanitize REST array input using rest_sanitize_value_from_schema. Review focus: Declare an array item schema; Return sanitized integers. Static checks intentionally require rest_sanitize_value_from_schema, items. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Declare an array item schema",
+        "Return sanitized integers"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_010",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "rest_sanitize_value_from_schema",
+            "description": "Uses rest_sanitize_value_from_schema",
+            "weight": 1
+          },
+          {
+            "pattern": "items",
+            "description": "Uses items",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_010' ) ) { return false; } return array( 1, 2, 3 ) === wpbp_rest_api_010( array( '1', '2', '3' ) );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_010( array $values ): array { $schema = array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ); return rest_sanitize_value_from_schema( $values, $schema ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-011",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_011() to return the correct authorization status for logged-out and logged-in users.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_011()` must return the correct authorization status for logged-out and logged-in users. Review focus: Use rest_authorization_required_code; Do not hard-code only one status. Static checks intentionally require rest_authorization_required_code, wp_set_current_user. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use rest_authorization_required_code",
+        "Do not hard-code only one status"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_011",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "rest_authorization_required_code",
+            "description": "Uses rest_authorization_required_code",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_set_current_user",
+            "description": "Uses wp_set_current_user",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_011' ) ) { return false; } return array( 401, 403 ) === wpbp_rest_api_011();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_011(): array { wp_set_current_user( 0 ); $logged_out = rest_authorization_required_code(); $user_id = wp_insert_user( array( 'user_login' => 'wpbp_rest_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); wp_set_current_user( $user_id ); $logged_in = rest_authorization_required_code(); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $user_id ); wp_set_current_user( 0 ); return array( $logged_out, $logged_in ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rest-api-012",
+      "category": "rest-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_rest_api_012() to add a custom link relation to a WP_REST_Response.",
+      "expected_behavior": "Reviewer contract: `wpbp_rest_api_012()` must add a custom link relation to a WP_REST_Response. Review focus: Use add_link; Return links from response. Static checks intentionally require WP_REST_Response, add_link. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use add_link",
+        "Return links from response"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rest_api_012",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_REST_Response",
+            "description": "Uses WP_REST_Response",
+            "weight": 1
+          },
+          {
+            "pattern": "add_link",
+            "description": "Uses add_link",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_012' ) ) { return false; } $links = wpbp_rest_api_012( 'https://example.test/item' ); return isset( $links['https://api.w.org/related'][0]['href'] ) && 'https://example.test/item' === $links['https://api.w.org/related'][0]['href'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rest_api_012( string $url ): array { $response = new WP_REST_Response( array( 'ok' => true ) ); $response->add_link( 'https://api.w.org/related', $url ); return $response->get_links(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php"
+        ],
+        "release_focus": "classic"
+      }
     }
   ]
 }

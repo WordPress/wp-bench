@@ -1,0 +1,384 @@
+{
+  "id": "wp-core-execution-v1-roles_caps",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Roles and Capabilities",
+    "description": "Code generation tasks for WordPress Roles and Capabilities APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-roles-caps-001",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_001() to create a role with a custom capability and confirm it exists.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_001()` must create a role with a custom capability and confirm it exists. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require add_role, get_role. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_role",
+            "description": "Uses add_role",
+            "weight": 1
+          },
+          {
+            "pattern": "get_role",
+            "description": "Uses get_role",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_001' ) ) { return false; } return wpbp_roles_caps_001();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_001(): bool { add_role( 'wpbp_manager', 'WPBP Manager', array( 'read' => true, 'wpbp_manage' => true ) ); $role = get_role( 'wpbp_manager' ); $ok = $role && $role->has_cap( 'wpbp_manage' ); remove_role( 'wpbp_manager' ); return (bool) $ok; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-roles-caps-002",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_002() to add and remove a capability from an existing role.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_002()` must add and remove a capability from an existing role. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require add_cap, remove_cap. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_cap",
+            "description": "Uses add_cap",
+            "weight": 1
+          },
+          {
+            "pattern": "remove_cap",
+            "description": "Uses remove_cap",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_002' ) ) { return false; } return wpbp_roles_caps_002();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_002(): bool { $role = get_role( 'subscriber' ); $role->add_cap( 'wpbp_temp_cap' ); $has = $role->has_cap( 'wpbp_temp_cap' ); $role->remove_cap( 'wpbp_temp_cap' ); return $has && ! $role->has_cap( 'wpbp_temp_cap' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-roles-caps-003",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_003() to check current user capability after switching users.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_003()` must check current user capability after switching users. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require current_user_can, wp_set_current_user. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "current_user_can",
+            "description": "Uses current_user_can",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_set_current_user",
+            "description": "Uses wp_set_current_user",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_003' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_cap_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $ok = wpbp_roles_caps_003( $u, 'read' ) && ! wpbp_roles_caps_003( $u, 'manage_options' ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); wp_set_current_user( 0 ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_003( int $user_id, string $cap ): bool { wp_set_current_user( $user_id ); return current_user_can( $cap ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-roles-caps-004",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_004() to map edit_post meta capability for a post author.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_004()` must map edit_post meta capability for a post author. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require map_meta_cap. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "map_meta_cap",
+            "description": "Uses map_meta_cap",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_004' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_meta_cap_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'author' ) ); $p = wp_insert_post( array( 'post_title' => 'Owned', 'post_status' => 'draft', 'post_author' => $u ) ); $caps = wpbp_roles_caps_004( $u, $p ); $ok = in_array( 'edit_posts', $caps, true ); wp_delete_post( $p, true ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_004( int $user_id, int $post_id ): array { return map_meta_cap( 'edit_post', $user_id, $post_id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-roles-caps-005",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_005() to grant a capability directly to a user.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_005()` must grant a capability directly to a user. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require WP_User, user_can. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_User",
+            "description": "Uses WP_User",
+            "weight": 1
+          },
+          {
+            "pattern": "user_can",
+            "description": "Uses user_can",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_005' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_direct_cap_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $ok = wpbp_roles_caps_005( $u, 'wpbp_direct' ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_005( int $user_id, string $cap ): bool { $user = new WP_User( $user_id ); $user->add_cap( $cap ); $ok = user_can( $user_id, $cap ); $user->remove_cap( $cap ); return $ok; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-roles-caps-006",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_006() to filter the default-role dropdown excluded roles.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_006()` must filter the default-role dropdown excluded roles. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require default_role_dropdown_excluded_roles. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "default_role_dropdown_excluded_roles",
+            "description": "Uses default_role_dropdown_excluded_roles",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_006' ) ) { return false; } add_filter( 'default_role_dropdown_excluded_roles', function( $roles ) { $roles[] = 'administrator'; return $roles; } ); $out = wpbp_roles_caps_006( array() ); return in_array( 'administrator', $out, true );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_006( array $roles ): array { return apply_filters( 'default_role_dropdown_excluded_roles', $roles ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-roles-caps-007",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_007() to check super-admin-safe capability with user_can.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_007()` must check super-admin-safe capability with user_can. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require user_can. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_007",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "user_can",
+            "description": "Uses user_can",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_007' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_user_can_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $ok = wpbp_roles_caps_007( $u, 'read' ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_007( int $user_id, string $cap ): bool { return user_can( $user_id, $cap ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-roles-caps-008",
+      "category": "roles-caps",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_roles_caps_008() to return primitive caps for deleting a published post.",
+      "expected_behavior": "Reviewer contract: `wpbp_roles_caps_008()` must return primitive caps for deleting a published post. Review focus: Use WordPress roles/capabilities APIs; Do not inspect role arrays directly when helper APIs exist. Static checks intentionally require map_meta_cap. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress roles/capabilities APIs",
+        "Do not inspect role arrays directly when helper APIs exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_roles_caps_008",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "map_meta_cap",
+            "description": "Uses map_meta_cap",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_008' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_delete_cap_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'author' ) ); $p = wp_insert_post( array( 'post_title' => 'Delete owned', 'post_status' => 'publish', 'post_author' => $u ) ); $caps = wpbp_roles_caps_008( $u, $p ); $ok = in_array( 'delete_published_posts', $caps, true ); wp_delete_post( $p, true ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_roles_caps_008( int $user_id, int $post_id ): array { return map_meta_cap( 'delete_post', $user_id, $post_id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

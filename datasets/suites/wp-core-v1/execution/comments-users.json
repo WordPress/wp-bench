@@ -1,0 +1,203 @@
+{
+  "id": "wp-core-execution-v1-comments_users",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Comments and Users",
+    "description": "Code generation tasks for WordPress Comments and Users APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-comments-users-001",
+      "category": "comments-users",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_comments_users_001() to create a user and return the resulting WP_User object.",
+      "expected_behavior": "Reviewer contract: `wpbp_comments_users_001()` must create a user and return the resulting WP_User object. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require wp_insert_user, get_user_by. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use comments or users APIs",
+        "Clean up created records"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_comments_users_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_insert_user",
+            "description": "Uses wp_insert_user",
+            "weight": 1
+          },
+          {
+            "pattern": "get_user_by",
+            "description": "Uses get_user_by",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_001' ) ) { return false; } $user = wpbp_comments_users_001( 'wpbp_cu_' . wp_rand() ); $ok = $user instanceof WP_User && user_can( $user, 'read' ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $user->ID ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_comments_users_001( string $login ): WP_User|WP_Error { $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); return is_wp_error( $id ) ? $id : get_user_by( 'id', $id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/comment.php",
+          "src/wp-includes/user.php",
+          "src/wp-includes/class-wp-user-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-comments-users-002",
+      "category": "comments-users",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_comments_users_002() to query users by user meta value.",
+      "expected_behavior": "Reviewer contract: `wpbp_comments_users_002()` must query users by user meta value. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require WP_User_Query, meta_key. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use comments or users APIs",
+        "Clean up created records"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_comments_users_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_User_Query",
+            "description": "Uses WP_User_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "meta_key",
+            "description": "Uses meta_key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_002' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_user_meta_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); update_user_meta( $u, 'wpbp_team', 'blue' ); $ids = array_map( 'intval', wpbp_comments_users_002( 'wpbp_team', 'blue' ) ); $ok = in_array( $u, $ids, true ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_comments_users_002( string $key, string $value ): array { $q = new WP_User_Query( array( 'meta_key' => $key, 'meta_value' => $value, 'fields' => 'ID' ) ); return $q->get_results(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/comment.php",
+          "src/wp-includes/user.php",
+          "src/wp-includes/class-wp-user-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-comments-users-003",
+      "category": "comments-users",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_comments_users_003() to insert an approved comment and return comment text.",
+      "expected_behavior": "Reviewer contract: `wpbp_comments_users_003()` must insert an approved comment and return comment text. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require wp_insert_comment, get_comment_text. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use comments or users APIs",
+        "Clean up created records"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_comments_users_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_insert_comment",
+            "description": "Uses wp_insert_comment",
+            "weight": 1
+          },
+          {
+            "pattern": "get_comment_text",
+            "description": "Uses get_comment_text",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_003' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'C', 'post_status' => 'publish' ) ); $ok = 'Hello' === wpbp_comments_users_003( $p, 'Hello' ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_comments_users_003( int $post_id, string $content ): string { $id = wp_insert_comment( array( 'comment_post_ID' => $post_id, 'comment_content' => $content, 'comment_approved' => 1 ) ); return get_comment_text( $id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/comment.php",
+          "src/wp-includes/user.php",
+          "src/wp-includes/class-wp-user-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-comments-users-004",
+      "category": "comments-users",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_comments_users_004() to count approved comments for a post.",
+      "expected_behavior": "Reviewer contract: `wpbp_comments_users_004()` must count approved comments for a post. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require wp_count_comments. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use comments or users APIs",
+        "Clean up created records"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_comments_users_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_count_comments",
+            "description": "Uses wp_count_comments",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_004' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Count C', 'post_status' => 'publish' ) ); $c = wp_insert_comment( array( 'comment_post_ID' => $p, 'comment_content' => 'Hi', 'comment_approved' => 1 ) ); $ok = wpbp_comments_users_004( $p ) >= 1; wp_delete_comment( $c, true ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_comments_users_004( int $post_id ): int { $counts = wp_count_comments( $post_id ); return (int) $counts->approved; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/comment.php",
+          "src/wp-includes/user.php",
+          "src/wp-includes/class-wp-user-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

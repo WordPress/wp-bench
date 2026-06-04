@@ -1,0 +1,194 @@
+{
+  "id": "wp-core-execution-v1-gb_block_hooks",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Hooks",
+    "description": "Code generation tasks for WordPress Block Hooks APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-hooks-001",
+      "category": "gb-block-hooks",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_hooks_001() to register a hooked block after core/post-title.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_hooks_001()` must register a hooked block after core/post-title. Review focus: Use Block Hooks APIs; Keep hooked block names namespaced. Static checks intentionally require block_hooks, register_block_type. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Hooks APIs",
+        "Keep hooked block names namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "block_hooks",
+            "description": "Uses block_hooks",
+            "weight": 1
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses register_block_type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_001' ) ) { return false; } $ok = wpbp_gb_block_hooks_001(); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/cta-hook' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_001(): bool { register_block_type( 'wpbp/cta-hook', array( 'block_hooks' => array( 'core/post-title' => 'after' ), 'render_callback' => fn() => '<p>CTA</p>' ) ); return WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/cta-hook' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-hooks-002",
+      "category": "gb-block-hooks",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_hooks_002() to filter hooked block types for an anchor block.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_hooks_002()` must filter hooked block types for an anchor block. Review focus: Use Block Hooks APIs; Keep hooked block names namespaced. Static checks intentionally require hooked_block_types. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Hooks APIs",
+        "Keep hooked block names namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "hooked_block_types",
+            "description": "Uses hooked_block_types",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_002' ) ) { return false; } wpbp_gb_block_hooks_002(); $out = apply_filters( 'hooked_block_types', array(), 'after', 'core/paragraph', null ); return in_array( 'wpbp/after-paragraph', $out, true );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_002(): void { add_filter( 'hooked_block_types', function ( $hooked, $position, $anchor ) { if ( 'core/paragraph' === $anchor && 'after' === $position ) { $hooked[] = 'wpbp/after-paragraph'; } return $hooked; }, 10, 3 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-hooks-003",
+      "category": "gb-block-hooks",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_hooks_003() to set ignored hooked blocks metadata on parsed content.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_hooks_003()` must set ignored hooked blocks metadata on parsed content. Review focus: Use Block Hooks APIs; Keep hooked block names namespaced. Static checks intentionally require apply_block_hooks_to_content. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Hooks APIs",
+        "Keep hooked block names namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "apply_block_hooks_to_content",
+            "description": "Uses apply_block_hooks_to_content",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_003' ) ) { return false; } register_block_type( 'wpbp/hooked', array( 'block_hooks' => array( 'core/paragraph' => 'after' ), 'render_callback' => fn() => '<p>Hooked</p>' ) ); $out = wpbp_gb_block_hooks_003( '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->' ); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/hooked' ); return is_string( $out );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_003( string $content ): string { $ignored = array(); return apply_block_hooks_to_content( $content, null, 'insert_hooked_blocks', $ignored ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-hooks-004",
+      "category": "gb-block-hooks",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_hooks_004() to respect multiple false for a hooked block registration.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_hooks_004()` must respect multiple false for a hooked block registration. Review focus: Use Block Hooks APIs; Keep hooked block names namespaced. Static checks intentionally require multiple, block_hooks. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Hooks APIs",
+        "Keep hooked block names namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "multiple",
+            "description": "Uses multiple",
+            "weight": 1
+          },
+          {
+            "pattern": "block_hooks",
+            "description": "Uses block_hooks",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_004' ) ) { return false; } $ok = wpbp_gb_block_hooks_004(); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/single-hook' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_004(): bool { register_block_type( 'wpbp/single-hook', array( 'block_hooks' => array( 'core/paragraph' => 'after' ), 'supports' => array( 'multiple' => false ), 'render_callback' => fn() => '<p>Once</p>' ) ); $type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/single-hook' ); return $type instanceof WP_Block_Type && false === ( $type->supports['multiple'] ?? true ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

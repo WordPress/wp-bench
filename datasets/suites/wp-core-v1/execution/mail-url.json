@@ -1,0 +1,189 @@
+{
+  "id": "wp-core-execution-v1-mail_url",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Mail and URL Handling",
+    "description": "Code generation tasks for WordPress Mail and URL Handling APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-mail-url-001",
+      "category": "mail-url",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_mail_url_001() to sanitize a URL with HTTPS preferred as the default scheme.",
+      "expected_behavior": "Reviewer contract: `wpbp_mail_url_001()` must sanitize a URL with HTTPS preferred as the default scheme. Review focus: Use WordPress mail or URL helpers; Keep behavior deterministic. Static checks intentionally require sanitize_url. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress mail or URL helpers",
+        "Keep behavior deterministic"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "sanitize_url",
+            "description": "Uses sanitize_url",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_001' ) ) { return false; } return str_starts_with( wpbp_mail_url_001( 'example.org' ), 'https://example.org' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_001( string $url ): string { return sanitize_url( $url, array( 'https', 'http' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-mail-url-002",
+      "category": "mail-url",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_mail_url_002() to validate an email address and return the normalized address.",
+      "expected_behavior": "Reviewer contract: `wpbp_mail_url_002()` must validate an email address and return the normalized address. Review focus: Use WordPress mail or URL helpers; Keep behavior deterministic. Static checks intentionally require is_email. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress mail or URL helpers",
+        "Keep behavior deterministic"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "is_email",
+            "description": "Uses is_email",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_002' ) ) { return false; } return 'person@example.com' === wpbp_mail_url_002( 'person@example.com' ) && false === wpbp_mail_url_002( 'bad@' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_002( string $email ): string|false { return is_email( $email ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-mail-url-003",
+      "category": "mail-url",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_mail_url_003() to build a safe redirect URL against allowed hosts.",
+      "expected_behavior": "Reviewer contract: `wpbp_mail_url_003()` must build a safe redirect URL against allowed hosts. Review focus: Use WordPress mail or URL helpers; Keep behavior deterministic. Static checks intentionally require wp_sanitize_redirect. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress mail or URL helpers",
+        "Keep behavior deterministic"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_sanitize_redirect",
+            "description": "Uses wp_sanitize_redirect",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_003' ) ) { return false; } $out = wpbp_mail_url_003( \"https://example.com/a b\" ); return ! str_contains( $out, ' ' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_003( string $url ): string { return wp_sanitize_redirect( $url ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-mail-url-004",
+      "category": "mail-url",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_mail_url_004() to send mail through pre_wp_mail filter for deterministic testing.",
+      "expected_behavior": "Reviewer contract: `wpbp_mail_url_004()` must send mail through pre_wp_mail filter for deterministic testing. Review focus: Use WordPress mail or URL helpers; Keep behavior deterministic. Static checks intentionally require wp_mail, pre_wp_mail. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress mail or URL helpers",
+        "Keep behavior deterministic"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_mail",
+            "description": "Uses wp_mail",
+            "weight": 1
+          },
+          {
+            "pattern": "pre_wp_mail",
+            "description": "Uses pre_wp_mail",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_004' ) ) { return false; } return wpbp_mail_url_004( 'nobody@example.com', 'Subject' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_004( string $to, string $subject ): bool { add_filter( 'pre_wp_mail', fn() => true ); $sent = wp_mail( $to, $subject, 'Body' ); remove_all_filters( 'pre_wp_mail' ); return $sent; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

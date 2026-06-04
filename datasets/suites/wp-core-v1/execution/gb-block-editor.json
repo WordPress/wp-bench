@@ -1,0 +1,208 @@
+{
+  "id": "wp-core-execution-v1-gb_block_editor",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Editor",
+    "description": "Code generation tasks for WordPress Block Editor APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-editor-001",
+      "category": "gb-block-editor",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_editor_001() to read theme.json dimension size presets from a WP_Theme_JSON object.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_editor_001()` must read theme.json dimension size presets from a WP_Theme_JSON object. Review focus: Use block editor server APIs; Cover editor-facing metadata behavior. Static checks intentionally require WP_Theme_JSON, dimensionSizes. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block editor server APIs",
+        "Cover editor-facing metadata behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_editor_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Theme_JSON",
+            "description": "Uses WP_Theme_JSON",
+            "weight": 1
+          },
+          {
+            "pattern": "dimensionSizes",
+            "description": "Uses dimensionSizes",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_editor_001' ) ) { return false; } $settings = wpbp_gb_block_editor_001(); return isset( $settings['dimensions']['dimensionSizes']['theme'][0]['slug'] );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_editor_001(): array { $data = new WP_Theme_JSON( array( 'version' => WP_Theme_JSON::LATEST_SCHEMA, 'settings' => array( 'dimensions' => array( 'dimensionSizes' => array( array( 'name' => 'Small', 'slug' => 'small', 'size' => '240px' ) ) ) ) ) ); return $data->get_settings(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-theme-json.php",
+          "src/wp-includes/block-supports/block-visibility.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-editor-002",
+      "category": "gb-block-editor",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_editor_002() to render a block hidden everywhere with blockVisibility false.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_editor_002()` must render a block hidden everywhere with blockVisibility false. Review focus: Use block editor server APIs; Cover editor-facing metadata behavior. Static checks intentionally require blockVisibility, do_blocks. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block editor server APIs",
+        "Cover editor-facing metadata behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_editor_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "blockVisibility",
+            "description": "Uses blockVisibility",
+            "weight": 1
+          },
+          {
+            "pattern": "do_blocks",
+            "description": "Uses do_blocks",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_editor_002' ) ) { return false; } $out = wpbp_gb_block_editor_002( '<!-- wp:paragraph {\"metadata\":{\"blockVisibility\":false}} --><p>Hidden</p><!-- /wp:paragraph -->' ); return '' === trim( $out );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_editor_002( string $content ): string { if ( str_contains( $content, 'blockVisibility' ) ) { return do_blocks( $content ); } return do_blocks( $content ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-theme-json.php",
+          "src/wp-includes/block-supports/block-visibility.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-editor-003",
+      "category": "gb-block-editor",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_editor_003() to register a block with dimensions width and height support.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_editor_003()` must register a block with dimensions width and height support. Review focus: Use block editor server APIs; Cover editor-facing metadata behavior. Static checks intentionally require dimensions, height. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block editor server APIs",
+        "Cover editor-facing metadata behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_editor_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "dimensions",
+            "description": "Uses dimensions",
+            "weight": 1
+          },
+          {
+            "pattern": "height",
+            "description": "Uses height",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_editor_003' ) ) { return false; } $ok = wpbp_gb_block_editor_003(); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/dimensions' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_editor_003(): bool { register_block_type( 'wpbp/dimensions', array( 'supports' => array( 'dimensions' => array( 'width' => true, 'height' => true ) ), 'render_callback' => fn() => '<div></div>' ) ); $type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/dimensions' ); return ! empty( $type->supports['dimensions']['width'] ) && ! empty( $type->supports['dimensions']['height'] ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-theme-json.php",
+          "src/wp-includes/block-supports/block-visibility.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-editor-004",
+      "category": "gb-block-editor",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_editor_004() to register a block with typography textIndent support.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_editor_004()` must register a block with typography textIndent support. Review focus: Use block editor server APIs; Cover editor-facing metadata behavior. Static checks intentionally require textIndent, typography. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use block editor server APIs",
+        "Cover editor-facing metadata behavior"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_editor_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "textIndent",
+            "description": "Uses textIndent",
+            "weight": 1
+          },
+          {
+            "pattern": "typography",
+            "description": "Uses typography",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_editor_004' ) ) { return false; } $ok = wpbp_gb_block_editor_004(); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/text-indent' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_editor_004(): bool { register_block_type( 'wpbp/text-indent', array( 'supports' => array( 'typography' => array( 'textIndent' => true ) ), 'render_callback' => fn() => '<p></p>' ) ); $type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/text-indent' ); return ! empty( $type->supports['typography']['textIndent'] ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-theme-json.php",
+          "src/wp-includes/block-supports/block-visibility.php"
+        ],
+        "release_focus": "7.0"
+      }
+    }
+  ]
+}

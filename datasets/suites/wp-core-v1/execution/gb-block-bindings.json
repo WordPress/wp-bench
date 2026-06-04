@@ -1,0 +1,189 @@
+{
+  "id": "wp-core-execution-v1-gb_block_bindings",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Bindings",
+    "description": "Code generation tasks for WordPress Block Bindings APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-bindings-001",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_001() to register a custom block bindings source.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_bindings_001()` must register a custom block bindings source. Review focus: Use Block Bindings APIs; Keep sources namespaced. Static checks intentionally require register_block_bindings_source. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Bindings APIs",
+        "Keep sources namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_bindings_source",
+            "description": "Uses register_block_bindings_source",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_001' ) ) { return false; } $ok = wpbp_gb_block_bindings_001(); WP_Block_Bindings_Registry::get_instance()->unregister( 'wpbp/source' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_001(): bool { register_block_bindings_source( 'wpbp/source', array( 'label' => 'WPBP Source', 'get_value_callback' => fn() => 'bound' ) ); return WP_Block_Bindings_Registry::get_instance()->is_registered( 'wpbp/source' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-bindings-002",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_002() to allow binding a custom attribute on a custom block.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_bindings_002()` must allow binding a custom attribute on a custom block. Review focus: Use Block Bindings APIs; Keep sources namespaced. Static checks intentionally require block_bindings_supported_attributes. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Bindings APIs",
+        "Keep sources namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "block_bindings_supported_attributes",
+            "description": "Uses block_bindings_supported_attributes",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_002' ) ) { return false; } register_block_type( 'wpbp/card', array( 'attributes' => array( 'title' => array( 'type' => 'string' ) ) ) ); wpbp_gb_block_bindings_002(); $attrs = get_block_bindings_supported_attributes( 'wpbp/card' ); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/card' ); return in_array( 'title', $attrs, true );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_002(): void { add_filter( 'block_bindings_supported_attributes', function ( $attrs, $block_type ) { if ( 'wpbp/card' === $block_type ) { $attrs[] = 'title'; } return $attrs; }, 10, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-bindings-003",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_003() to register a block binding source that reads post meta from context.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_bindings_003()` must register a block binding source that reads post meta from context. Review focus: Use Block Bindings APIs; Keep sources namespaced. Static checks intentionally require register_block_bindings_source, uses_context. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Bindings APIs",
+        "Keep sources namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_bindings_source",
+            "description": "Uses register_block_bindings_source",
+            "weight": 1
+          },
+          {
+            "pattern": "uses_context",
+            "description": "Uses uses_context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_003' ) ) { return false; } $ok = wpbp_gb_block_bindings_003(); WP_Block_Bindings_Registry::get_instance()->unregister( 'wpbp/meta-title' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_003(): bool { register_block_bindings_source( 'wpbp/meta-title', array( 'label' => 'Meta Title', 'uses_context' => array( 'postId' ), 'get_value_callback' => function ( $source_args, $block_instance ) { return get_post_meta( $block_instance->context['postId'] ?? 0, '_wpbp_title', true ); } ) ); return WP_Block_Bindings_Registry::get_instance()->is_registered( 'wpbp/meta-title' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-bindings-004",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_004() to filter any returned block binding value.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_bindings_004()` must filter any returned block binding value. Review focus: Use Block Bindings APIs; Keep sources namespaced. Static checks intentionally require block_bindings_source_value. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Block Bindings APIs",
+        "Keep sources namespaced"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "block_bindings_source_value",
+            "description": "Uses block_bindings_source_value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_004' ) ) { return false; } wpbp_gb_block_bindings_004(); return 'BOUND' === apply_filters( 'block_bindings_source_value', 'bound', 'wpbp/source', array(), null );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_004(): void { add_filter( 'block_bindings_source_value', fn( $value ) => strtoupper( (string) $value ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

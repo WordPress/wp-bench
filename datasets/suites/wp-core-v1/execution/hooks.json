@@ -1,68 +1,278 @@
 {
   "id": "wp-core-execution-v1-hooks",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Hooks",
-    "description": "Code generation tasks for WordPress hooks (actions and filters)",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Hooks APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-hooks-001",
       "category": "hooks",
       "difficulty": "intermediate",
-      "prompt": "Create code that adds a custom column called 'Featured' to the Posts admin list table. The column should display 'Yes' if the post has a meta key '_is_featured' with value '1', otherwise display 'No'.",
-      "expected_behavior": "Admin posts list shows a 'Featured' column with Yes/No values based on post meta",
+      "prompt": "Implement wpbp_hooks_001() to register a filter that appends text to the_title.",
+      "expected_behavior": "Reviewer contract: `wpbp_hooks_001()` must register a filter that appends text to the_title. Review focus: Use WordPress hook APIs; Verify behavior through applied hooks. Static checks intentionally require add_filter. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
       "requirements": [
-        "Add column header using 'manage_posts_columns' filter",
-        "Populate column content using 'manage_posts_custom_column' action",
-        "Check post meta '_is_featured' for value '1'",
-        "Display 'Yes' or 'No' appropriately",
-        "Escape all output"
+        "Use WordPress hook APIs",
+        "Verify behavior through applied hooks"
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "add_filter.*manage_posts_columns",
-            "description": "Must hook into manage_posts_columns",
-            "weight": 1.0
-          },
-          {
-            "pattern": "add_action.*manage_posts_custom_column",
-            "description": "Must hook into manage_posts_custom_column",
-            "weight": 1.0
-          },
-          {
-            "pattern": "get_post_meta",
-            "description": "Must use get_post_meta to check meta value",
+            "pattern": "wpbp_hooks_001",
+            "description": "Defines the requested function",
             "weight": 0.5
           },
           {
-            "pattern": "_is_featured",
-            "description": "Must reference the correct meta key",
-            "weight": 0.5
+            "pattern": "add_filter",
+            "description": "Uses add_filter",
+            "weight": 1
           }
         ]
       },
       "runtime_checks": {
         "assertions": [
           {
-            "type": "hook_registered",
-            "target": "manage_posts_columns",
-            "description": "Column filter must be registered",
-            "weight": 1.0
-          },
-          {
-            "type": "hook_registered",
-            "target": "manage_posts_custom_column",
-            "description": "Column action must be registered",
-            "weight": 1.0
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_001' ) ) { return false; } wpbp_hooks_001(); return 'Hello [WPBP]' === apply_filters( 'the_title', 'Hello' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
           }
         ]
       },
-      "judge_config": {
-        "rubric_id": "wp-judge-rubric-v1"
+      "reference_solution": "function wpbp_hooks_001(): void { add_filter( 'the_title', function ( $title ) { return $title . ' [WPBP]'; }, 10, 1 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-002",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_002() to register an action with two accepted arguments.",
+      "expected_behavior": "Reviewer contract: `wpbp_hooks_002()` must register an action with two accepted arguments. Review focus: Use WordPress hook APIs; Verify behavior through applied hooks. Static checks intentionally require add_action. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress hook APIs",
+        "Verify behavior through applied hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_action",
+            "description": "Uses add_action",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_002' ) ) { return false; } wpbp_hooks_002(); do_action( 'wpbp_two_args', 'a', 'b' ); $ok = 'a:b' === get_option( 'wpbp_two_args_result' ); delete_option( 'wpbp_two_args_result' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_002(): void { add_action( 'wpbp_two_args', function ( $a, $b ) { update_option( 'wpbp_two_args_result', $a . ':' . $b ); }, 10, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-003",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_003() to remove a named filter callback.",
+      "expected_behavior": "Reviewer contract: `wpbp_hooks_003()` must remove a named filter callback. Review focus: Use WordPress hook APIs; Verify behavior through applied hooks. Static checks intentionally require remove_filter, has_filter. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress hook APIs",
+        "Verify behavior through applied hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Uses remove_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "has_filter",
+            "description": "Uses has_filter",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_003' ) ) { return false; } $cb = function( $v ) { return $v; }; return wpbp_hooks_003( $cb );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_003( callable $callback ): bool { add_filter( 'wpbp_remove_filter', $callback ); $before = has_filter( 'wpbp_remove_filter', $callback ); remove_filter( 'wpbp_remove_filter', $callback ); return false !== $before && false === has_filter( 'wpbp_remove_filter', $callback ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-004",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_004() to run callbacks in priority order and return the final value.",
+      "expected_behavior": "Reviewer contract: `wpbp_hooks_004()` must run callbacks in priority order and return the final value. Review focus: Use WordPress hook APIs; Verify behavior through applied hooks. Static checks intentionally require add_filter, apply_filters. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress hook APIs",
+        "Verify behavior through applied hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Uses add_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "apply_filters",
+            "description": "Uses apply_filters",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_004' ) ) { return false; } return 'AB' === wpbp_hooks_004();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_004(): string { add_filter( 'wpbp_priority', fn( $v ) => $v . 'B', 20 ); add_filter( 'wpbp_priority', fn( $v ) => $v . 'A', 5 ); return apply_filters( 'wpbp_priority', '' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-005",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_005() to detect whether an action has run.",
+      "expected_behavior": "Reviewer contract: `wpbp_hooks_005()` must detect whether an action has run. Review focus: Use WordPress hook APIs; Verify behavior through applied hooks. Static checks intentionally require do_action, did_action. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress hook APIs",
+        "Verify behavior through applied hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "do_action",
+            "description": "Uses do_action",
+            "weight": 1
+          },
+          {
+            "pattern": "did_action",
+            "description": "Uses did_action",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_005' ) ) { return false; } return wpbp_hooks_005() >= 2;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_005(): int { do_action( 'wpbp_did_action' ); do_action( 'wpbp_did_action' ); return did_action( 'wpbp_did_action' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-006",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_006() to temporarily remove all callbacks on a hook and restore by re-adding.",
+      "expected_behavior": "Reviewer contract: `wpbp_hooks_006()` must temporarily remove all callbacks on a hook and restore by re-adding. Review focus: Use WordPress hook APIs; Verify behavior through applied hooks. Static checks intentionally require remove_all_filters. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress hook APIs",
+        "Verify behavior through applied hooks"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "remove_all_filters",
+            "description": "Uses remove_all_filters",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_006' ) ) { return false; } return wpbp_hooks_006();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_006(): bool { add_filter( 'wpbp_remove_all', 'strtoupper' ); remove_all_filters( 'wpbp_remove_all' ); return 'abc' === apply_filters( 'wpbp_remove_all', 'abc' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
       }
     }
   ]

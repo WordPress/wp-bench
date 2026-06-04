@@ -1,0 +1,600 @@
+{
+  "id": "wp-core-execution-v1-queries",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Queries",
+    "description": "Code generation tasks for WordPress Queries APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-queries-001",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_001() to return recent published posts by category slug with no_found_rows.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_001()` must return recent published posts by category slug with no_found_rows. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Query, no_found_rows. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "no_found_rows",
+            "description": "Uses no_found_rows",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_001' ) ) { return false; } $suffix = (string) wp_rand(); $slug = 'wpbp-news-' . $suffix; $cat = wp_insert_term( 'WPBP News ' . $suffix, 'category', array( 'slug' => $slug ) ); if ( is_wp_error( $cat ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Q1 ' . $suffix, 'post_status' => 'publish', 'post_category' => array( $cat['term_id'] ) ) ); $q = wpbp_queries_001( $slug, 3 ); $ok = in_array( $id, wp_list_pluck( $q->posts, 'ID' ), true ); wp_delete_post( $id, true ); wp_delete_term( $cat['term_id'], 'category' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_001( string $slug, int $limit = 5 ): WP_Query { return new WP_Query( array( 'category_name' => $slug, 'posts_per_page' => $limit, 'post_status' => 'publish', 'no_found_rows' => true ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-002",
+      "category": "queries",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_queries_002() to query posts whose numeric price_cents meta is exactly zero.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_002()` must query posts whose numeric price_cents meta is exactly zero. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Query, meta_query, NUMERIC. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "meta_query",
+            "description": "Uses meta_query",
+            "weight": 1
+          },
+          {
+            "pattern": "NUMERIC",
+            "description": "Uses NUMERIC",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_002' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Free', 'post_status' => 'publish' ) ); update_post_meta( $id, 'price_cents', '0' ); $q = wpbp_queries_002(); $ok = in_array( $id, wp_list_pluck( $q->posts, 'ID' ), true ); wp_delete_post( $id, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_002(): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'meta_query' => array( array( 'key' => 'price_cents', 'value' => 0, 'compare' => '=', 'type' => 'NUMERIC' ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-003",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_003() to return only post IDs for a search query.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_003()` must return only post IDs for a search query. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Query, fields. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "fields",
+            "description": "Uses fields",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_003' ) ) { return false; } $needle = 'Needle' . wp_rand(); $id = wp_insert_post( array( 'post_title' => $needle . ' Alpha', 'post_status' => 'publish' ) ); $ids = wpbp_queries_003( $needle ); $ok = in_array( $id, $ids, true ); wp_delete_post( $id, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_003( string $term ): array { $q = new WP_Query( array( 's' => $term, 'fields' => 'ids', 'post_status' => 'publish' ) ); return $q->posts; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-004",
+      "category": "queries",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_queries_004() to query posts using a nested AND tax query.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_004()` must query posts using a nested AND tax query. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Query, tax_query, relation. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "tax_query",
+            "description": "Uses tax_query",
+            "weight": 1
+          },
+          {
+            "pattern": "relation",
+            "description": "Uses relation",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_004' ) ) { return false; } $suffix = (string) wp_rand(); $term = wp_insert_term( 'WPBP Tax ' . $suffix, 'category', array( 'slug' => 'wpbp-tax-' . $suffix ) ); if ( is_wp_error( $term ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Tax ' . $suffix, 'post_status' => 'publish' ) ); wp_set_post_terms( $id, array( $term['term_id'] ), 'category' ); $q = wpbp_queries_004( 'category', $term['term_id'] ); $ok = in_array( $id, wp_list_pluck( $q->posts, 'ID' ), true ); wp_delete_post( $id, true ); wp_delete_term( $term['term_id'], 'category' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_004( string $taxonomy, int $term_id ): WP_Query { return new WP_Query( array( 'post_status' => 'publish', 'tax_query' => array( 'relation' => 'AND', array( 'taxonomy' => $taxonomy, 'field' => 'term_id', 'terms' => array( $term_id ) ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-005",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_005() to query future posts after a supplied date.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_005()` must query scheduled future posts after the supplied date. Review focus: Use WP_Query; Build a date_query with the supplied lower bound; Include future post status rather than relying on published posts. Static checks intentionally require WP_Query, date_query. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "date_query",
+            "description": "Uses date_query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_005' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Date ' . wp_rand(), 'post_status' => 'future', 'post_date' => '2099-01-05 00:00:00' ) ); $q = wpbp_queries_005( '2099-01-01' ); $ok = in_array( $id, wp_list_pluck( $q->posts, 'ID' ), true ); wp_delete_post( $id, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_005( string $after ): WP_Query { return new WP_Query( array( 'post_status' => 'future', 'posts_per_page' => -1, 'date_query' => array( array( 'after' => $after, 'inclusive' => true ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-006",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_006() to build a WP_User_Query for users matching a role.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_006()` must build a WP_User_Query for users matching a role. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_User_Query, role. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_User_Query",
+            "description": "Uses WP_User_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "role",
+            "description": "Uses role",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_006' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_query_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $q = wpbp_queries_006( 'subscriber' ); $ok = in_array( $u, array_map( 'intval', $q->get_results() ), true ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_006( string $role ): WP_User_Query { return new WP_User_Query( array( 'role' => $role, 'fields' => 'ID' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-007",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_007() to return comments for a post using WP_Comment_Query.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_007()` must return comments for a post using WP_Comment_Query. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Comment_Query. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_007",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Comment_Query",
+            "description": "Uses WP_Comment_Query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_007' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Commented', 'post_status' => 'publish' ) ); $c = wp_insert_comment( array( 'comment_post_ID' => $p, 'comment_content' => 'Hi', 'comment_approved' => 1 ) ); $comments = wpbp_queries_007( $p ); $ok = in_array( $c, wp_list_pluck( $comments, 'comment_ID' ) ); wp_delete_comment( $c, true ); wp_delete_post( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_007( int $post_id ): array { $q = new WP_Comment_Query( array( 'post_id' => $post_id, 'status' => 'approve' ) ); return $q->comments; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-008",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_008() to query terms with hide_empty disabled.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_008()` must query terms with hide_empty disabled. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Term_Query, hide_empty. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_008",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Term_Query",
+            "description": "Uses WP_Term_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "hide_empty",
+            "description": "Uses hide_empty",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_008' ) ) { return false; } $suffix = (string) wp_rand(); $term = wp_insert_term( 'WPBP Empty Term ' . $suffix, 'category', array( 'slug' => 'wpbp-empty-' . $suffix ) ); if ( is_wp_error( $term ) ) { return false; } $ids = wpbp_queries_008( 'category' ); $ok = in_array( (int) $term['term_id'], array_map( 'intval', $ids ), true ); wp_delete_term( $term['term_id'], 'category' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_008( string $taxonomy ): array { $q = new WP_Term_Query( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'fields' => 'ids' ) ); return $q->terms; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-009",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_009() to return adjacent posts constrained by taxonomy.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_009()` must return adjacent posts constrained by taxonomy. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require get_adjacent_post. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_009",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_adjacent_post",
+            "description": "Uses get_adjacent_post",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_009' ) ) { return false; } return function_exists( 'wpbp_queries_009' ) && null === wpbp_queries_009( true );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_009( bool $previous = true ): mixed { return get_adjacent_post( true, '', $previous, 'category' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-queries-010",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_010() to preload post meta cache before reading many posts.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_010()` must preload post meta cache before reading many posts. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require update_meta_cache, get_post_meta. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_010",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "update_meta_cache",
+            "description": "Uses update_meta_cache",
+            "weight": 1
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Uses get_post_meta",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_010' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Meta Cache', 'post_status' => 'publish' ) ); update_post_meta( $id, 'wpbp_key', 'yes' ); $out = wpbp_queries_010( array( $id ), 'wpbp_key' ); wp_delete_post( $id, true ); return $out[$id] === 'yes';",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_010( array $post_ids, string $key ): array { update_meta_cache( 'post', $post_ids ); $out = array(); foreach ( $post_ids as $post_id ) { $out[ $post_id ] = get_post_meta( $post_id, $key, true ); } return $out; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-011",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_011() to query posts while preserving filters.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_011()` must query posts while preserving filters. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require get_posts, suppress_filters. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_011",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_posts",
+            "description": "Uses get_posts",
+            "weight": 1
+          },
+          {
+            "pattern": "suppress_filters",
+            "description": "Uses suppress_filters",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_011' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Filters', 'post_status' => 'publish' ) ); $posts = wpbp_queries_011(); $ok = ! empty( $posts ); wp_delete_post( $id, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_011(): array { $posts = get_posts( array( 'numberposts' => 1, 'suppress_filters' => false, 'post_status' => 'publish' ) ); return $posts; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-012",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_012() to return sticky posts after normal query handling.",
+      "expected_behavior": "Reviewer contract: `wpbp_queries_012()` must return sticky posts after normal query handling. Review focus: Use the relevant WordPress query class or helper; Return deterministic query data. Static checks intentionally require WP_Query, ignore_sticky_posts. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_012",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "ignore_sticky_posts",
+            "description": "Uses ignore_sticky_posts",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_012' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Sticky', 'post_status' => 'publish' ) ); stick_post( $id ); $q = wpbp_queries_012(); $ok = ! empty( $q->posts ); unstick_post( $id ); wp_delete_post( $id, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_queries_012(): WP_Query { return new WP_Query( array( 'post_status' => 'publish', 'ignore_sticky_posts' => false, 'posts_per_page' => 1 ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

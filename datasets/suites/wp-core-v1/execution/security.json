@@ -1,0 +1,240 @@
+{
+  "id": "wp-core-execution-v1-security",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Security",
+    "description": "Code generation tasks for WordPress Security APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-security-001",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_security_001() to set an anchor href with WP_HTML_Tag_Processor so character references are safely escaped.",
+      "expected_behavior": "Reviewer contract: `wpbp_security_001()` must set an anchor href with WP_HTML_Tag_Processor so character references are safely escaped. Review focus: Use WP_HTML_Tag_Processor; Set the href through set_attribute; Return the updated HTML. Static checks intentionally require WP_HTML_Tag_Processor, set_attribute. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP_HTML_Tag_Processor",
+        "Set the href through set_attribute",
+        "Return the updated HTML"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_security_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_HTML_Tag_Processor",
+            "description": "Uses WP_HTML_Tag_Processor",
+            "weight": 1
+          },
+          {
+            "pattern": "set_attribute",
+            "description": "Uses set_attribute",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_001' ) ) { return false; } $out = wpbp_security_001( '<a>Link</a>', 'https://example.test/?q=Tom&Jerry' ); return str_contains( $out, 'Tom' ) && str_contains( $out, 'Jerry' ) && ! str_contains( $out, 'Tom&Jerry' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_001( string $html, string $href ): string { $processor = new WP_HTML_Tag_Processor( $html ); if ( $processor->next_tag( 'a' ) ) { $processor->set_attribute( 'href', $href ); } return $processor->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-security-002",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_security_002() to serialize the current token from a WP_HTML_Processor fragment.",
+      "expected_behavior": "Reviewer contract: `wpbp_security_002()` must serialize the current token from a WP_HTML_Processor fragment. Review focus: Use WP_HTML_Processor::create_fragment; Advance to the first token; Return serialize_token output. Static checks intentionally require WP_HTML_Processor, serialize_token. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WP_HTML_Processor::create_fragment",
+        "Advance to the first token",
+        "Return serialize_token output"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_security_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_HTML_Processor",
+            "description": "Uses WP_HTML_Processor",
+            "weight": 1
+          },
+          {
+            "pattern": "serialize_token",
+            "description": "Uses serialize_token",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_002' ) ) { return false; } $out = wpbp_security_002( '<p class=x>Hi</p>' ); return str_starts_with( $out, '<p' ) && str_contains( $out, 'class' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_002( string $html ): string { $processor = WP_HTML_Processor::create_fragment( $html ); $processor->next_token(); return $processor->serialize_token(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-processor.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-security-003",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_security_003() to allow only safe post HTML using KSES.",
+      "expected_behavior": "Reviewer contract: `wpbp_security_003()` must allow only safe post HTML using KSES. Review focus: Use WordPress security helpers; Avoid raw output of untrusted values. Static checks intentionally require wp_kses_post. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress security helpers",
+        "Avoid raw output of untrusted values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_security_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_kses_post",
+            "description": "Uses wp_kses_post",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_003' ) ) { return false; } $out = wpbp_security_003( '<p>ok</p><script>bad</script>' ); return str_contains( $out, '<p>ok</p>' ) && ! str_contains( $out, '<script>' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_003( string $html ): string { return wp_kses_post( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/kses.php",
+          "src/wp-includes/formatting.php",
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-security-004",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_security_004() to verify and fail a nonce for an expected action.",
+      "expected_behavior": "Reviewer contract: `wpbp_security_004()` must verify and fail a nonce for an expected action. Review focus: Use WordPress security helpers; Avoid raw output of untrusted values. Static checks intentionally require wp_verify_nonce. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress security helpers",
+        "Avoid raw output of untrusted values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_security_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_verify_nonce",
+            "description": "Uses wp_verify_nonce",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_004' ) ) { return false; } $nonce = wp_create_nonce( 'wpbp_action' ); return wpbp_security_004( $nonce, 'wpbp_action' ) && ! wpbp_security_004( $nonce, 'other' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_004( string $nonce, string $action ): bool { return false !== wp_verify_nonce( $nonce, $action ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/kses.php",
+          "src/wp-includes/formatting.php",
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-security-005",
+      "category": "security",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_security_005() to prepend HTTPS by default when esc_url protocols start with https.",
+      "expected_behavior": "Reviewer contract: `wpbp_security_005()` must prepend HTTPS by default when esc_url protocols start with https. Review focus: Use WordPress security helpers; Avoid raw output of untrusted values. Static checks intentionally require esc_url. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress security helpers",
+        "Avoid raw output of untrusted values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_security_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "esc_url",
+            "description": "Uses esc_url",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_005' ) ) { return false; } $out = wpbp_security_005( 'example.com/path' ); return str_starts_with( $out, 'https://example.com/path' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_005( string $url ): string { return esc_url( $url, array( 'https', 'http' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/kses.php",
+          "src/wp-includes/formatting.php",
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

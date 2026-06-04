@@ -149,21 +149,23 @@ class Sandbox {
 		];
 
 		try {
-			$result = match ( $type ) {
-				'function_exists'   => $this->assert_function_exists( $target, $result ),
-				'class_exists'      => $this->assert_class_exists( $target, $result ),
-				'shortcode_exists'  => $this->assert_shortcode_exists( $target, $result ),
-				'hook_registered'   => $this->assert_hook_registered( $target, $assertion, $result ),
-				'output_contains'   => $this->assert_output_contains( $target, $expected_str, $result ),
-				'output_equals'     => $this->assert_output_equals( $target, $expected_str, $result ),
-				'output_matches'    => $this->assert_output_matches( $target, $expected_str, $result ),
-				'returns_value'     => $this->assert_returns_value( $target, $expected, $result ),
-				'query_result'      => $this->assert_query_result( $target, $expected, $result ),
-				'option_value'      => $this->assert_option_value( $target, $expected, $result ),
-				'post_meta_value'   => $this->assert_post_meta_value( $assertion, $result ),
-				'custom_assertion'  => $this->assert_custom( $assertion, $result ),
-				default             => array_merge( $result, [ 'error' => "Unknown assertion type: {$type}" ] ),
-			};
+				$result = match ( $type ) {
+					'function_exists'     => $this->assert_function_exists( $target, $result ),
+					'class_exists'        => $this->assert_class_exists( $target, $result ),
+					'shortcode_exists'    => $this->assert_shortcode_exists( $target, $result ),
+					'hook_registered'     => $this->assert_hook_registered( $target, $assertion, $result ),
+					'output_contains'     => $this->assert_output_contains( $target, $expected_str, $result ),
+					'output_not_contains' => $this->assert_output_not_contains( $target, $expected_str, $result ),
+					'output_equals'       => $this->assert_output_equals( $target, $expected_str, $result ),
+					'output_matches'      => $this->assert_output_matches( $target, $expected_str, $result ),
+					'rest_response'       => $this->assert_rest_response( $target, $assertion, $result ),
+					'returns_value'       => $this->assert_returns_value( $target, $expected, $result ),
+					'query_result'        => $this->assert_query_result( $target, $expected, $result ),
+					'option_value'        => $this->assert_option_value( $target, $expected, $result ),
+					'post_meta_value'     => $this->assert_post_meta_value( $assertion, $result ),
+					'custom_assertion'    => $this->assert_custom( $assertion, $result ),
+					default               => array_merge( $result, [ 'error' => "Unknown assertion type: {$type}" ] ),
+				};
 		} catch ( \Throwable $e ) {
 			$result['error'] = $e->getMessage();
 		}
@@ -275,6 +277,26 @@ class Sandbox {
 	}
 
 	/**
+	 * Assert that code output does not contain a string.
+	 *
+	 * @param string               $code_or_callable Code to execute.
+	 * @param string               $expected         Forbidden substring.
+	 * @param array<string, mixed> $result           Base result array.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function assert_output_not_contains( string $code_or_callable, string $expected, array $result ): array {
+		ob_start();
+		$this->safe_eval( $code_or_callable );
+		$output = ob_get_clean();
+		$output = false !== $output ? $output : '';
+
+		$result['actual'] = $output;
+		$result['passed'] = ! str_contains( $output, $expected );
+		return $result;
+	}
+
+	/**
 	 * Assert that code output equals a string.
 	 *
 	 * @param string               $code_or_callable Code to execute.
@@ -317,6 +339,89 @@ class Sandbox {
 		}
 
 		$result['passed'] = (bool) preg_match( $pattern, $output );
+		return $result;
+	}
+
+	/**
+	 * Assert a REST API response by dispatching through WordPress internals.
+	 *
+	 * @param string               $route     REST route, e.g. /demo/v1/item.
+	 * @param array<string, mixed> $assertion Full assertion config.
+	 * @param array<string, mixed> $result    Base result array.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function assert_rest_response( string $route, array $assertion, array $result ): array {
+		if ( ! did_action( 'rest_api_init' ) ) {
+			do_action( 'rest_api_init' );
+		}
+
+		$method_value = $assertion['method'] ?? 'GET';
+		$method       = is_string( $method_value ) ? strtoupper( $method_value ) : 'GET';
+		$request      = new \WP_REST_Request( $method, $route );
+
+		$params = $assertion['params'] ?? [];
+		if ( is_array( $params ) ) {
+			foreach ( $params as $key => $value ) {
+				if ( is_string( $key ) ) {
+					$request->set_param( $key, $value );
+				}
+			}
+		}
+
+		$headers = $assertion['headers'] ?? [];
+		if ( is_array( $headers ) ) {
+			foreach ( $headers as $key => $value ) {
+				if ( is_string( $key ) && is_string( $value ) ) {
+					$request->set_header( $key, $value );
+				}
+			}
+		}
+
+		if ( array_key_exists( 'body', $assertion ) ) {
+			$request->set_body( wp_json_encode( $assertion['body'] ) );
+			$request->set_header( 'content-type', 'application/json' );
+		}
+
+		$response = rest_do_request( $request );
+		$server   = rest_get_server();
+		$data     = $server->response_to_data( $response, false );
+		$status   = $response->get_status();
+
+		$result['actual'] = [
+			'status' => $status,
+			'data'   => $data,
+		];
+
+		$expected_status = $assertion['expected_status'] ?? null;
+		if ( is_numeric( $expected_status ) && (int) $expected_status !== $status ) {
+			$result['expected'] = [ 'status' => (int) $expected_status ];
+			return $result;
+		}
+
+		if ( array_key_exists( 'expected_data', $assertion ) ) {
+			$result['expected'] = $assertion['expected_data'];
+			// phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- REST data can contain arrays/objects.
+			$result['passed'] = $assertion['expected_data'] == $data;
+			return $result;
+		}
+
+		$encoded = wp_json_encode( $data );
+		$encoded = is_string( $encoded ) ? $encoded : '';
+
+		$contains = $assertion['body_contains'] ?? null;
+		if ( is_string( $contains ) && ! str_contains( $encoded, $contains ) ) {
+			$result['expected'] = [ 'body_contains' => $contains ];
+			return $result;
+		}
+
+		$not_contains = $assertion['body_not_contains'] ?? null;
+		if ( is_string( $not_contains ) && str_contains( $encoded, $not_contains ) ) {
+			$result['expected'] = [ 'body_not_contains' => $not_contains ];
+			return $result;
+		}
+
+		$result['passed'] = true;
 		return $result;
 	}
 

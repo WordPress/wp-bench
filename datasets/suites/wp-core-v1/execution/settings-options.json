@@ -1,0 +1,247 @@
+{
+  "id": "wp-core-execution-v1-settings_options",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Settings and Options",
+    "description": "Code generation tasks for WordPress Settings and Options APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-settings-options-001",
+      "category": "settings-options",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_settings_options_001() to register a string setting with REST schema and sanitization.",
+      "expected_behavior": "Reviewer contract: `wpbp_settings_options_001()` must register a string setting with REST schema and sanitization. Review focus: Use Settings or Options APIs; Sanitize user-facing values. Static checks intentionally require register_setting, show_in_rest. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Settings or Options APIs",
+        "Sanitize user-facing values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_settings_options_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_setting",
+            "description": "Uses register_setting",
+            "weight": 1
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Uses show_in_rest",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_001' ) ) { return false; } wpbp_settings_options_001(); global $wp_registered_settings; return isset( $wp_registered_settings['wpbp_setting_title'] ) && true === $wp_registered_settings['wpbp_setting_title']['show_in_rest'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_settings_options_001(): void { register_setting( 'wpbp', 'wpbp_setting_title', array( 'type' => 'string', 'show_in_rest' => true, 'sanitize_callback' => 'sanitize_text_field', 'default' => '' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-admin/includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-settings-options-002",
+      "category": "settings-options",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_settings_options_002() to add an option without autoloading it.",
+      "expected_behavior": "Reviewer contract: `wpbp_settings_options_002()` must add an option without autoloading it. Review focus: Use Settings or Options APIs; Sanitize user-facing values. Static checks intentionally require add_option. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Settings or Options APIs",
+        "Sanitize user-facing values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_settings_options_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_option",
+            "description": "Uses add_option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_002' ) ) { return false; } $ok = wpbp_settings_options_002( 'wpbp_noautoload', 'v' ) && 'v' === get_option( 'wpbp_noautoload' ); delete_option( 'wpbp_noautoload' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_settings_options_002( string $name, string $value ): bool { return add_option( $name, $value, '', 'no' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-admin/includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-settings-options-003",
+      "category": "settings-options",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_settings_options_003() to update a nested option after sanitizing a key.",
+      "expected_behavior": "Reviewer contract: `wpbp_settings_options_003()` must update a nested option after sanitizing a key. Review focus: Use Settings or Options APIs; Sanitize user-facing values. Static checks intentionally require sanitize_key, update_option. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Settings or Options APIs",
+        "Sanitize user-facing values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_settings_options_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "sanitize_key",
+            "description": "Uses sanitize_key",
+            "weight": 1
+          },
+          {
+            "pattern": "update_option",
+            "description": "Uses update_option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_003' ) ) { return false; } $out = wpbp_settings_options_003( 'Some Key', '<b>Value</b>' ); $ok = isset( $out['somekey'] ) && 'Value' === $out['somekey']; delete_option( 'wpbp_nested' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_settings_options_003( string $key, string $value ): array { $options = get_option( 'wpbp_nested', array() ); $options[ sanitize_key( $key ) ] = sanitize_text_field( $value ); update_option( 'wpbp_nested', $options ); return $options; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-admin/includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-settings-options-004",
+      "category": "settings-options",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_settings_options_004() to register an admin settings section and field.",
+      "expected_behavior": "Reviewer contract: `wpbp_settings_options_004()` must register an admin settings section and field. Review focus: Use Settings or Options APIs; Sanitize user-facing values. Static checks intentionally require add_settings_section, add_settings_field. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Settings or Options APIs",
+        "Sanitize user-facing values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_settings_options_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_settings_section",
+            "description": "Uses add_settings_section",
+            "weight": 1
+          },
+          {
+            "pattern": "add_settings_field",
+            "description": "Uses add_settings_field",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_004' ) ) { return false; } return wpbp_settings_options_004();",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_settings_options_004(): bool { add_settings_section( 'wpbp_section', 'WPBP', '__return_null', 'reading' ); add_settings_field( 'wpbp_field', 'WPBP Field', '__return_null', 'reading', 'wpbp_section' ); global $wp_settings_sections, $wp_settings_fields; return isset( $wp_settings_sections['reading']['wpbp_section'], $wp_settings_fields['reading']['wpbp_section']['wpbp_field'] ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-admin/includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-settings-options-005",
+      "category": "settings-options",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_settings_options_005() to delete an option and verify the default fallback is returned.",
+      "expected_behavior": "Reviewer contract: `wpbp_settings_options_005()` must delete an option and verify the default fallback is returned. Review focus: Use Settings or Options APIs; Sanitize user-facing values. Static checks intentionally require delete_option, get_option. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use Settings or Options APIs",
+        "Sanitize user-facing values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_settings_options_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "delete_option",
+            "description": "Uses delete_option",
+            "weight": 1
+          },
+          {
+            "pattern": "get_option",
+            "description": "Uses get_option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_005' ) ) { return false; } return 'fallback' === wpbp_settings_options_005( 'wpbp_deleted_option' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_settings_options_005( string $name ): mixed { update_option( $name, 'stored' ); delete_option( $name ); return get_option( $name, 'fallback' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-admin/includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

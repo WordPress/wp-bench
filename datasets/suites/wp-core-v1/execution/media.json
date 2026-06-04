@@ -1,0 +1,233 @@
+{
+  "id": "wp-core-execution-v1-media",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Media",
+    "description": "Code generation tasks for WordPress Media APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-media-001",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_001() to return an attachment image src array for a known attachment.",
+      "expected_behavior": "Reviewer contract: `wpbp_media_001()` must return an attachment image src array for a known attachment. Review focus: Use WordPress media APIs; Do not parse attachment data manually. Static checks intentionally require wp_get_attachment_image_src. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Do not parse attachment data manually"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_attachment_image_src",
+            "description": "Uses wp_get_attachment_image_src",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_001' ) ) { return false; } $p = wp_insert_attachment( array( 'post_title' => 'Media', 'post_mime_type' => 'image/jpeg', 'guid' => 'https://example.test/a.jpg' ) ); update_post_meta( $p, '_wp_attached_file', 'a.jpg' ); update_post_meta( $p, '_wp_attachment_metadata', array( 'width' => 100, 'height' => 100, 'file' => 'a.jpg', 'sizes' => array() ) ); $out = wpbp_media_001( $p, 'full' ); $ok = is_array( $out ) && 100 === $out[1]; wp_delete_attachment( $p, true ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_001( int $attachment_id, string $size = 'thumbnail' ): array|false { return wp_get_attachment_image_src( $attachment_id, $size ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php",
+          "src/wp-admin/includes/image.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-media-002",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_002() to filter content image tags through wp_filter_content_tags.",
+      "expected_behavior": "Reviewer contract: `wpbp_media_002()` must filter content image tags through wp_filter_content_tags. Review focus: Use WordPress media APIs; Do not parse attachment data manually. Static checks intentionally require wp_filter_content_tags. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Do not parse attachment data manually"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_filter_content_tags",
+            "description": "Uses wp_filter_content_tags",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_002' ) ) { return false; } $out = wpbp_media_002( '<p><img src=\"https://example.test/a.jpg\" width=\"10\" height=\"10\" /></p>' ); return str_contains( $out, '<img' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_002( string $html ): string { return wp_filter_content_tags( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php",
+          "src/wp-admin/includes/image.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-media-003",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_003() to calculate image resize dimensions without upscaling.",
+      "expected_behavior": "Reviewer contract: `wpbp_media_003()` must calculate image resize dimensions without upscaling. Review focus: Use WordPress media APIs; Do not parse attachment data manually. Static checks intentionally require image_resize_dimensions. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Do not parse attachment data manually"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "image_resize_dimensions",
+            "description": "Uses image_resize_dimensions",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_003' ) ) { return false; } $out = wpbp_media_003(); return is_array( $out ) && 300 === $out[4] && 150 === $out[5];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_003(): array|false { return image_resize_dimensions( 600, 300, 300, 300, false ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php",
+          "src/wp-admin/includes/image.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-media-004",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_004() to retrieve XMP image alt text metadata from a file path.",
+      "expected_behavior": "Reviewer contract: `wpbp_media_004()` must retrieve XMP image alt text metadata from a file path. Review focus: Use WordPress media APIs; Do not parse attachment data manually; Load the admin image helper before calling wp_get_image_alttext. Static checks intentionally require wp_get_image_alttext, wp-admin/includes/image.php. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Do not parse attachment data manually",
+        "Load the admin image helper before calling wp_get_image_alttext"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_image_alttext",
+            "description": "Uses wp_get_image_alttext",
+            "weight": 1
+          },
+          {
+            "pattern": "wp\\-admin\\/includes\\/image\\.php",
+            "description": "Uses wp-admin/includes/image.php",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_004' ) ) { return false; } $file = sys_get_temp_dir() . '/wpbp-alttext-' . wp_rand() . '.jpg'; $xmp = '<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description xmlns:Iptc4xmpCore=\"http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/\"><Iptc4xmpCore:AltTextAccessibility><rdf:Alt><rdf:li xml:lang=\"x-default\">Bench alt text</rdf:li></rdf:Alt></Iptc4xmpCore:AltTextAccessibility></rdf:Description></rdf:RDF></x:xmpmeta>'; file_put_contents( $file, 'jpg' . $xmp ); $out = wpbp_media_004( $file ); unlink( $file ); return 'Bench alt text' === $out;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_004( string $file ): string { require_once ABSPATH . 'wp-admin/includes/image.php'; return (string) wp_get_image_alttext( $file ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php",
+          "src/wp-admin/includes/image.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-media-005",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_005() to return the mime type and extension for an upload filename.",
+      "expected_behavior": "Reviewer contract: `wpbp_media_005()` must return the mime type and extension for an upload filename. Review focus: Use WordPress media APIs; Do not parse attachment data manually. Static checks intentionally require wp_check_filetype. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Do not parse attachment data manually"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_check_filetype",
+            "description": "Uses wp_check_filetype",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_005' ) ) { return false; } $out = wpbp_media_005( 'photo.jpg' ); return 'jpg' === $out['ext'] && 'image/jpeg' === $out['type'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_005( string $filename ): array { return wp_check_filetype( $filename ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php",
+          "src/wp-admin/includes/image.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

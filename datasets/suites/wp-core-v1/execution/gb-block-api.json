@@ -1,0 +1,296 @@
+{
+  "id": "wp-core-execution-v1-gb_block_api",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block API",
+    "description": "Code generation tasks for WordPress Block API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-api-001",
+      "category": "gb-block-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_api_001() to register a dynamic block type in PHP.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_api_001()` must register a dynamic block type in PHP. Review focus: Use server-side block APIs; Return behavior based on registered block metadata. Static checks intentionally require register_block_type, render_callback. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use server-side block APIs",
+        "Return behavior based on registered block metadata"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses register_block_type",
+            "weight": 1
+          },
+          {
+            "pattern": "render_callback",
+            "description": "Uses render_callback",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_001' ) ) { return false; } $ok = wpbp_gb_block_api_001(); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/dynamic' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_001(): bool { register_block_type( 'wpbp/dynamic', array( 'render_callback' => fn() => '<p>Dynamic</p>' ) ); return WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/dynamic' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-api-002",
+      "category": "gb-block-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_api_002() to register a PHP-only auto-registered block.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_api_002()` must register a PHP-only auto-registered block. Review focus: Use server-side block APIs; Return behavior based on registered block metadata. Static checks intentionally require autoRegister, register_block_type. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use server-side block APIs",
+        "Return behavior based on registered block metadata"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "autoRegister",
+            "description": "Uses autoRegister",
+            "weight": 1
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses register_block_type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_002' ) ) { return false; } $ok = wpbp_gb_block_api_002(); WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/auto' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_002(): bool { register_block_type( 'wpbp/auto', array( 'title' => 'Auto', 'attributes' => array( 'message' => array( 'type' => 'string', 'default' => 'Hi' ) ), 'supports' => array( 'autoRegister' => true ), 'render_callback' => fn( $attrs ) => '<p>' . esc_html( $attrs['message'] ?? '' ) . '</p>' ) ); $type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/auto' ); return ! empty( $type->supports['autoRegister'] ) && $type->is_dynamic(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-api-003",
+      "category": "gb-block-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_api_003() to count block types using WP_Block_Processor.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_api_003()` must count block types using WP_Block_Processor. Review focus: Use server-side block APIs; Return behavior based on registered block metadata. Static checks intentionally require WP_Block_Processor, next_block. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use server-side block APIs",
+        "Return behavior based on registered block metadata"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Block_Processor",
+            "description": "Uses WP_Block_Processor",
+            "weight": 1
+          },
+          {
+            "pattern": "next_block",
+            "description": "Uses next_block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_003' ) ) { return false; } $counts = wpbp_gb_block_api_003( '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph --><!-- wp:image /-->' ); return 1 === $counts['core/paragraph'] && 1 === $counts['core/image'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_003( string $content ): array { $processor = new WP_Block_Processor( $content ); $counts = array(); while ( $processor->next_block() ) { if ( $processor->opens_block() ) { $name = $processor->get_block_type(); $counts[ $name ] = ( $counts[ $name ] ?? 0 ) + 1; } } return $counts; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-gb-block-api-004",
+      "category": "gb-block-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_api_004() to serialize a parsed block back to markup.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_api_004()` must serialize a parsed block back to markup. Review focus: Use server-side block APIs; Return behavior based on registered block metadata. Static checks intentionally require serialize_block. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use server-side block APIs",
+        "Return behavior based on registered block metadata"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "serialize_block",
+            "description": "Uses serialize_block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_004' ) ) { return false; } $block = array( 'blockName' => 'core/paragraph', 'attrs' => array(), 'innerBlocks' => array(), 'innerHTML' => '<p>Hi</p>', 'innerContent' => array( '<p>Hi</p>' ) ); return str_contains( wpbp_gb_block_api_004( $block ), '<!-- wp:paragraph -->' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_004( array $block ): string { return serialize_block( $block ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-api-005",
+      "category": "gb-block-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_api_005() to register a block style for a core block.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_api_005()` must register a block style for a core block. Review focus: Use server-side block APIs; Return behavior based on registered block metadata. Static checks intentionally require register_block_style. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use server-side block APIs",
+        "Return behavior based on registered block metadata"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_style",
+            "description": "Uses register_block_style",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_005' ) ) { return false; } $ok = wpbp_gb_block_api_005(); WP_Block_Styles_Registry::get_instance()->unregister( 'core/paragraph', 'wpbp-muted' ); return $ok;",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_005(): bool { register_block_style( 'core/paragraph', array( 'name' => 'wpbp-muted', 'label' => 'Muted' ) ); return WP_Block_Styles_Registry::get_instance()->is_registered( 'core/paragraph', 'wpbp-muted' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-api-006",
+      "category": "gb-block-api",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_api_006() to find a top image block with WP_Block_Processor.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_block_api_006()` must find a top image block with WP_Block_Processor. Review focus: Use server-side block APIs; Return behavior based on registered block metadata. Static checks intentionally require WP_Block_Processor, extract_full_block_and_advance. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use server-side block APIs",
+        "Return behavior based on registered block metadata"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Block_Processor",
+            "description": "Uses WP_Block_Processor",
+            "weight": 1
+          },
+          {
+            "pattern": "extract_full_block_and_advance",
+            "description": "Uses extract_full_block_and_advance",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_006' ) ) { return false; } $out = wpbp_gb_block_api_006( '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph --><!-- wp:image {\"id\":1} /-->' ); return isset( $out['blockName'] ) && 'core/image' === $out['blockName'];",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_006( string $content ): array { $processor = new WP_Block_Processor( $content ); $remaining = 10; while ( $processor->next_block() && --$remaining >= 0 ) { if ( $processor->is_block_type( 'image' ) ) { return $processor->extract_full_block_and_advance() ?? array(); } } return array(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

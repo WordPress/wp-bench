@@ -1,0 +1,237 @@
+{
+  "id": "wp-core-execution-v1-internationalization",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Internationalization",
+    "description": "Code generation tasks for WordPress Internationalization APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-internationalization-001",
+      "category": "internationalization",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_internationalization_001() to translate a string in a text domain.",
+      "expected_behavior": "Reviewer contract: `wpbp_internationalization_001()` must translate a string in a text domain. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require __. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress i18n APIs",
+        "Preserve text domains where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_internationalization_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "__",
+            "description": "Uses __",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_001' ) ) { return false; } return 'Posts' === wpbp_internationalization_001( 'Posts' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_internationalization_001( string $text ): string { return __( $text, 'default' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/l10n.php",
+          "src/wp-includes/class-wp-locale-switcher.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-internationalization-002",
+      "category": "internationalization",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_internationalization_002() to escape a translated string for HTML output.",
+      "expected_behavior": "Reviewer contract: `wpbp_internationalization_002()` must escape a translated string for HTML output. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require esc_html__. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress i18n APIs",
+        "Preserve text domains where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_internationalization_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "esc_html__",
+            "description": "Uses esc_html__",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_002' ) ) { return false; } return 'Posts' === wpbp_internationalization_002( 'Posts' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_internationalization_002( string $text ): string { return esc_html__( $text, 'default' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/l10n.php",
+          "src/wp-includes/class-wp-locale-switcher.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-internationalization-003",
+      "category": "internationalization",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_internationalization_003() to switch locale and restore the previous locale.",
+      "expected_behavior": "Reviewer contract: `wpbp_internationalization_003()` must switch locale and restore the previous locale. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require switch_to_locale, restore_previous_locale. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress i18n APIs",
+        "Preserve text domains where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_internationalization_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "switch_to_locale",
+            "description": "Uses switch_to_locale",
+            "weight": 1
+          },
+          {
+            "pattern": "restore_previous_locale",
+            "description": "Uses restore_previous_locale",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_003' ) ) { return false; } return is_bool( wpbp_internationalization_003( 'en_US' ) );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_internationalization_003( string $locale ): bool { $switched = switch_to_locale( $locale ); restore_previous_locale(); return (bool) $switched; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/l10n.php",
+          "src/wp-includes/class-wp-locale-switcher.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-internationalization-004",
+      "category": "internationalization",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_internationalization_004() to load plugin textdomain from a relative languages directory.",
+      "expected_behavior": "Reviewer contract: `wpbp_internationalization_004()` must load plugin textdomain from a relative languages directory. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require load_plugin_textdomain. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress i18n APIs",
+        "Preserve text domains where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_internationalization_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "load_plugin_textdomain",
+            "description": "Uses load_plugin_textdomain",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_004' ) ) { return false; } return is_bool( wpbp_internationalization_004( 'wpbp-domain' ) );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_internationalization_004( string $domain ): bool { return load_plugin_textdomain( $domain, false, 'wp-bench-runtime/languages' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/l10n.php",
+          "src/wp-includes/class-wp-locale-switcher.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-internationalization-005",
+      "category": "internationalization",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_internationalization_005() to apply the gettext filter for a specific source string.",
+      "expected_behavior": "Reviewer contract: `wpbp_internationalization_005()` must apply the gettext filter for a specific source string. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require gettext, apply_filters. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "requirements": [
+        "Use WordPress i18n APIs",
+        "Preserve text domains where applicable"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_internationalization_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "gettext",
+            "description": "Uses gettext",
+            "weight": 1
+          },
+          {
+            "pattern": "apply_filters",
+            "description": "Uses apply_filters",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_005' ) ) { return false; } add_filter( 'gettext', function( $translation, $text ) { return 'WPBP Source' === $text ? 'Changed' : $translation; }, 10, 2 ); return 'Changed' === wpbp_internationalization_005( 'WPBP Source' );",
+            "description": "Reference behavior is correct",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_internationalization_005( string $text ): string { return apply_filters( 'gettext', $text, $text, 'default' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/l10n.php",
+          "src/wp-includes/class-wp-locale-switcher.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}
