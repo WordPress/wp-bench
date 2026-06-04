@@ -1,6 +1,6 @@
 FROM wordpress:cli-php8.2
 
-ENV WORDPRESS_VERSION=6.9 \
+ENV WORDPRESS_VERSION=7.0 \
     WP_CLI_ALLOW_ROOT=1
 
 RUN apt-get update && apt-get install -y default-mysql-client && rm -rf /var/lib/apt/lists/*
