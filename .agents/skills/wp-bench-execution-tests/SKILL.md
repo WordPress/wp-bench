@@ -17,7 +17,7 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 6. Use `reference_solution` as the canonical passing implementation. It is for verification and maintenance, not model input.
 7. Make static checks minimal: require essential APIs, slugs, hooks, schema keys, or forbidden dangerous patterns. Do not require helper/checker calls that the runtime assertion can perform itself.
 8. Make runtime checks test the behavior inside WordPress. Use built-in assertion types when they directly express the check, such as output containment or REST response checks. Use `custom_assertion` when the verifier needs PHP to inspect the result, such as checking a registered category, returned value, database state, capability result, dispatched hook, or computed WordPress output.
-9. Verify both a reference implementation and at least one intentionally wrong implementation. The wrong case should fail for the intended reason.
+9. Verify `reference_solution` with `wp-bench run --check-reference-solution` and verify at least one intentionally wrong implementation. The wrong case should fail for the intended reason.
 
 ## Field Semantics
 
@@ -100,14 +100,16 @@ For each changed test, run:
 ```bash
 .venv/bin/python -m pytest python/tests/test_execution_dataset.py
 .venv/bin/wp-bench run --config wp-bench.yaml --dry-run --test-type execution --test-id <test-id>
+.venv/bin/wp-bench run --config wp-bench.yaml --check-reference-solution --test-type execution --test-id <test-id>
 ```
 
-Require the scoped run to execute only the requested test ID or IDs and report a result for each selected test.
+Require the dry run to select only the requested test ID or IDs. Require the reference-solution run to execute the selected tests through the real WordPress verifier, without model calls, and pass every selected test.
 
 For broad suite changes, also run:
 
 ```bash
 .venv/bin/wp-bench run --config wp-bench.yaml --dry-run --test-type execution
+.venv/bin/wp-bench run --config wp-bench.yaml --check-reference-solution --test-type execution
 .venv/bin/python datasets/export_dataset.py
 git diff --check
 ```

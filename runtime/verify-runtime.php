@@ -3,8 +3,6 @@
  * Internal WP-Bench verifier entrypoint for wp eval-file.
  */
 
-declare(strict_types=1);
-
 use WPBench\Runtime\Verifier;
 
 require_once __DIR__ . '/src/class-sandbox.php';

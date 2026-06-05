@@ -99,6 +99,29 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
     console.print(table)
 
 
+def print_reference_solution_failures(records: list[Dict[str, Any]]) -> None:
+    """Print reference solution failures in a compact table."""
+    table = Table(title="Reference Solution Failures")
+    table.add_column("Test ID", style="cyan")
+    table.add_column("Correctness", justify="right")
+    table.add_column("Static", justify="right")
+    table.add_column("Runtime", justify="right")
+
+    def _fmt_score(value: Any) -> str:
+        return f"{value*100:.1f}%" if isinstance(value, (int, float)) else "N/A"
+
+    for record in records:
+        result = record.get("result") or {}
+        table.add_row(
+            str(record.get("test_id", "")),
+            _fmt_score(record.get("correctness")),
+            _fmt_score((result.get("static") or {}).get("score")),
+            _fmt_score((result.get("runtime") or {}).get("score")),
+        )
+
+    console.print(table)
+
+
 def create_progress() -> Progress:
     """Create a Progress instance for tracking test execution."""
     return Progress()

@@ -86,6 +86,10 @@ def run(
     limit: Optional[int] = typer.Option(None, help="Limit number of tests"),
     test_type: Optional[str] = typer.Option(None, help="Run only 'knowledge' or 'execution' tests"),
     dry_run: bool = typer.Option(False, help="Load and filter tests without calling models"),
+    check_reference_solution: bool = typer.Option(
+        False,
+        help="Run execution tests with their reference_solution instead of calling models",
+    ),
     test_id: Optional[List[str]] = typer.Option(
         None,
         "--test-id",
@@ -101,6 +105,8 @@ def run(
         harness_config.run.limit = limit
     if dry_run:
         harness_config.run.dry_run = True
+    if check_reference_solution:
+        harness_config.run.check_reference_solution = True
     normalized_test_ids = _normalize_test_ids(test_id)
     if normalized_test_ids:
         harness_config.run.test_ids = normalized_test_ids
@@ -109,6 +115,10 @@ def run(
             console.print(f"[red]Invalid --test-type: {test_type}. Must be 'knowledge' or 'execution'.[/red]")
             raise typer.Exit(1)
         harness_config.run.test_type = test_type  # type: ignore[assignment]
+
+    if harness_config.run.dry_run and harness_config.run.check_reference_solution:
+        console.print("[red]--dry-run and --check-reference-solution cannot be used together.[/red]")
+        raise typer.Exit(1)
 
     if harness_config.run.dry_run:
         try:
@@ -119,24 +129,34 @@ def run(
         _print_dry_run_counts(tests, harness_config)
         return
 
+    if harness_config.run.check_reference_solution:
+        reference_runner = BenchmarkRunner(harness_config)
+        try:
+            result = reference_runner.run()
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1) from exc
+        console.print("[bold green]Reference solution check completed[/bold green]", result["metadata"]["scores"])
+        return
+
     # Check if multi-model mode
     models = harness_config.get_models()
     if model_name:
         # Override to single model
         harness_config.model = ModelConfig(name=model_name)
         harness_config.models = None
-        runner = BenchmarkRunner(harness_config)
+        single_runner = BenchmarkRunner(harness_config)
         try:
-            result = runner.run()
+            result = single_runner.run()
         except ValueError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(1) from exc
         console.print("[bold green]WP-Bench completed[/bold green]", result["metadata"]["scores"])
     elif len(models) > 1:
         # Multi-model mode
-        runner = MultiModelRunner(harness_config)
+        multi_runner = MultiModelRunner(harness_config)
         try:
-            runner.run()
+            multi_runner.run()
         except ValueError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(1) from exc
@@ -145,9 +165,9 @@ def run(
         # Single model mode (legacy)
         if not harness_config.model:
             harness_config.model = models[0]
-        runner = BenchmarkRunner(harness_config)
+        single_runner = BenchmarkRunner(harness_config)
         try:
-            result = runner.run()
+            result = single_runner.run()
         except ValueError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(1) from exc
