@@ -11,13 +11,13 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 
 1. Inspect nearby execution and knowledge tests before editing. Match the suite's organization, naming style, and category balance.
 2. Treat the WordPress source/runtime as the authority. For modern APIs, verify behavior against WordPress 7.0 source or official field-guide docs before writing assertions.
-3. Define the observable WordPress behavior first. Prompts should ask for a behavior or artifact, not an arbitrary wrapper function, unless the function itself is the contract.
+3. Define the observable WordPress behavior first. Prompts should be specific enough to identify the intended API area and outcome, but should not give away exact implementation details that the test is meant to measure, such as a particular argument key, metadata field, or helper call. Ask for a behavior or artifact, not an arbitrary wrapper function, unless the function itself is the contract.
 4. Keep `requirements` concise and model-facing. They are appended to the prompt.
 5. Keep `expected_behavior` reviewer-facing. It documents the contract and review focus; it is not used for scoring.
 6. Use `reference_solution` as the canonical passing implementation. It is for verification and maintenance, not model input.
-7. Make static checks minimal: require essential APIs, slugs, hooks, schema keys, or forbidden dangerous patterns. Do not require helper/checker calls that the runtime assertion can perform itself.
+7. Make static checks robust for the contract: require expected functions, methods, classes, hooks, slugs, schema keys, and other identifiers when their use is essential to the task. Do not require incidental helpers or checker calls that the runtime assertion can perform itself.
 8. Make runtime checks test the behavior inside WordPress. Use built-in assertion types when they directly express the check, such as output containment or REST response checks. Use `custom_assertion` when the verifier needs PHP to inspect the result, such as checking a registered category, returned value, database state, capability result, dispatched hook, or computed WordPress output.
-9. Verify `reference_solution` with `wp-bench run --check-reference-solution` and verify at least one intentionally wrong implementation. The wrong case should fail for the intended reason.
+9. Verify `reference_solution` with `wp-bench run --check-reference-solution` for every new or modified execution test.
 
 ## Field Semantics
 
@@ -67,6 +67,10 @@ Avoid:
 - Putting fixture cleanup inside assertions instead of `runtime_checks.teardown`.
 - Adding cleanup by habit when the state is process-local.
 - Making `prompt` and `expected_behavior` duplicates.
+
+Static check patterns are regular expressions. Delimiterless patterns are wrapped by the runtime, so simple slugs like `wpbp/count-words` can be written without escaping. Use explicit regex delimiters only when flags are needed, such as `/pattern/i`.
+
+Use the pattern list to enforce important API surface, not just one token from the prompt. If a task requires retrieving an ability and executing it, check for the function, method, and ability name, such as `wp_get_ability`, `execute`, and `wpbp/add-one`.
 
 ## Difficulty
 
