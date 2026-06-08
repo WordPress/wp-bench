@@ -11,9 +11,9 @@
     {
       "id": "e-abilities-api-001",
       "category": "abilities-api",
-      "difficulty": "intermediate",
+      "difficulty": "basic",
       "prompt": "Register an Abilities API category with the slug 'wpbp-tools' so it is discoverable by WordPress.",
-      "expected_behavior": "Reviewer contract: the submitted code must register the `wpbp-tools` ability category so `wp_has_ability_category( 'wpbp-tools' )` returns true after the Abilities category registry initializes. Review focus: Use WordPress Abilities API; Keep the category slug namespaced; Register categories on wp_abilities_api_categories_init. Static checks intentionally require wp_register_ability_category, the wpbp-tools slug, and wp_abilities_api_categories_init. The runtime check initializes the registry and verifies the category is discoverable.",
+      "expected_behavior": "Registers the `wpbp-tools` ability category with the public Abilities API on `wp_abilities_api_categories_init`, so WordPress can discover it through `wp_has_ability_category()`. The test focuses on category discovery through WordPress, not a custom registry or helper.",
       "requirements": [
         "Use WordPress Abilities API",
         "Register the category slug as 'wpbp-tools'",
@@ -52,7 +52,8 @@
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
-          "src/wp-includes/abilities-api/class-wp-ability.php"
+          "src/wp-includes/abilities-api/class-wp-ability-category.php",
+          "src/wp-includes/abilities-api/class-wp-ability-categories-registry.php"
         ],
         "release_focus": "6.9"
       }
@@ -60,24 +61,29 @@
     {
       "id": "e-abilities-api-002",
       "category": "abilities-api",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_abilities_api_002() to register an ability with input and output schemas.",
-      "expected_behavior": "Reviewer contract: `wpbp_abilities_api_002()` must register an ability with input and output schemas. Review focus: Use WordPress Abilities API; Keep ability and category names namespaced; Register the category and ability on the Abilities API init actions. Static checks intentionally require wp_register_ability, input_schema, output_schema, wp_abilities_api_init. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "intermediate",
+      "prompt": "Register an Abilities API ability named 'wpbp/count-words' in the 'wpbp-content' category. It must accept an object input with a required 'text' string, return an integer, and count the words in the supplied text.",
+      "expected_behavior": "Registers the `wpbp-content` category and the `wpbp/count-words` ability through the Abilities API init hooks. The ability has an object input schema requiring a `text` string, an integer output schema, and an execute callback that returns the word count for the supplied text. Runtime validation inspects the registered `WP_Ability` and executes it with deterministic input.",
       "requirements": [
         "Use WordPress Abilities API",
-        "Keep ability and category names namespaced",
-        "Register the category and ability on the Abilities API init actions"
+        "Register the 'wpbp-content' category before the ability",
+        "Use input_schema and output_schema for the ability contract"
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "wpbp_abilities_api_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
-          {
             "pattern": "wp_register_ability",
             "description": "Uses wp_register_ability",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_register_ability_category",
+            "description": "Registers the custom ability category",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/count-words",
+            "description": "Registers the requested ability name",
             "weight": 1
           },
           {
@@ -94,6 +100,11 @@
             "pattern": "wp_abilities_api_init",
             "description": "Uses wp_abilities_api_init",
             "weight": 1
+          },
+          {
+            "pattern": "wp_abilities_api_categories_init",
+            "description": "Uses wp_abilities_api_categories_init",
+            "weight": 1
           }
         ]
       },
@@ -101,17 +112,19 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_abilities_api_002' ) ) { return false; } $ok = wpbp_abilities_api_002(); wp_unregister_ability( 'wpbp/count-words' ); wp_unregister_ability_category( 'wpbp-content' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "code": "WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/count-words' ); if ( ! $ability instanceof WP_Ability ) { return false; } $input_schema = $ability->get_input_schema(); $output_schema = $ability->get_output_schema(); return 'wpbp-content' === $ability->get_category() && 'object' === ( $input_schema['type'] ?? null ) && 'string' === ( $input_schema['properties']['text']['type'] ?? null ) && isset( $input_schema['required'] ) && in_array( 'text', $input_schema['required'], true ) && 'integer' === ( $output_schema['type'] ?? null ) && 3 === $ability->execute( array( 'text' => 'one two three' ) );",
+            "description": "The count-words ability is registered with schemas and executes correctly",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_abilities_api_002(): bool { add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-content', array( 'label' => 'Content', 'description' => 'Content analysis abilities.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/count-words', array( 'label' => 'Count words', 'description' => 'Counts words', 'category' => 'wpbp-content', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ) ), 'output_schema' => array( 'type' => 'integer' ), 'execute_callback' => fn( $input ) => str_word_count( $input['text'] ?? '' ), 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance(); return wp_has_ability( 'wpbp/count-words' ); }",
+      "reference_solution": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-content', array( 'label' => 'Content', 'description' => 'Content analysis abilities.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/count-words', array( 'label' => 'Count words', 'description' => 'Counts the words in supplied text.', 'category' => 'wpbp-content', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'output_schema' => array( 'type' => 'integer' ), 'execute_callback' => static fn( array $input ): int => str_word_count( $input['text'] ), 'permission_callback' => '__return_true' ) ); } );",
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
-          "src/wp-includes/abilities-api/class-wp-ability.php"
+          "src/wp-includes/abilities-api/class-wp-ability.php",
+          "src/wp-includes/abilities-api/class-wp-abilities-registry.php",
+          "src/wp-includes/abilities-api/class-wp-ability-categories-registry.php"
         ],
         "release_focus": "6.9"
       }
@@ -119,13 +132,13 @@
     {
       "id": "e-abilities-api-003",
       "category": "abilities-api",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_abilities_api_003() to execute a registered ability and return its output.",
-      "expected_behavior": "Reviewer contract: `wpbp_abilities_api_003()` must execute a registered ability and return its output. Review focus: Use WordPress Abilities API; Keep ability and category names namespaced; Register the category and ability on the Abilities API init actions. Static checks intentionally require wp_get_ability, execute, wp_abilities_api_init. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_abilities_api_003( int $number ) to retrieve the registered 'wpbp/add-one' ability and return the result of executing it with the supplied number.",
+      "expected_behavior": "`wpbp_abilities_api_003()` retrieves the pre-registered `wpbp/add-one` ability with `wp_get_ability()` and returns the result from `WP_Ability::execute()` for the supplied number. The setup registers the fixture ability, and runtime validation checks multiple inputs.",
       "requirements": [
-        "Use WordPress Abilities API",
-        "Keep ability and category names namespaced",
-        "Register the category and ability on the Abilities API init actions"
+        "Use wp_get_ability to retrieve 'wpbp/add-one'",
+        "Call the ability object's execute method",
+        "Return the execution result"
       ],
       "static_checks": {
         "required_patterns": [
@@ -140,32 +153,34 @@
             "weight": 1
           },
           {
-            "pattern": "execute",
-            "description": "Uses execute",
+            "pattern": "wpbp/add-one",
+            "description": "Retrieves the requested ability name",
             "weight": 1
           },
           {
-            "pattern": "wp_abilities_api_init",
-            "description": "Uses wp_abilities_api_init",
+            "pattern": "execute",
+            "description": "Uses execute",
             "weight": 1
           }
         ]
       },
       "runtime_checks": {
+        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-math', array( 'label' => 'Math', 'description' => 'Math abilities.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/add-one', array( 'label' => 'Add one', 'description' => 'Adds one to an integer.', 'category' => 'wpbp-math', 'input_schema' => array( 'type' => 'integer' ), 'output_schema' => array( 'type' => 'integer' ), 'execute_callback' => static fn( int $input ): int => $input + 1, 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_abilities_api_003' ) ) { return false; } $out = wpbp_abilities_api_003(); wp_unregister_ability( 'wpbp/add-one' ); wp_unregister_ability_category( 'wpbp-math' ); return 5 === $out;",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_abilities_api_003' ) ) { return false; } return 5 === wpbp_abilities_api_003( 4 ) && -1 === wpbp_abilities_api_003( -2 );",
+            "description": "The helper returns results from executing the registered ability",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_abilities_api_003(): int { add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-math', array( 'label' => 'Math', 'description' => 'Math abilities.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/add-one', array( 'label' => 'Add one', 'description' => 'Adds one', 'category' => 'wpbp-math', 'input_schema' => array( 'type' => 'integer' ), 'output_schema' => array( 'type' => 'integer' ), 'execute_callback' => fn( $input ) => (int) $input + 1, 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/add-one' ); return $ability instanceof WP_Ability ? $ability->execute( 4 ) : 0; }",
+      "reference_solution": "function wpbp_abilities_api_003( int $number ) { $ability = wp_get_ability( 'wpbp/add-one' ); if ( ! $ability instanceof WP_Ability ) { return new WP_Error( 'wpbp_missing_ability', 'The wpbp/add-one ability is not registered.' ); } return $ability->execute( $number ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
-          "src/wp-includes/abilities-api/class-wp-ability.php"
+          "src/wp-includes/abilities-api/class-wp-ability.php",
+          "src/wp-includes/abilities-api/class-wp-abilities-registry.php"
         ],
         "release_focus": "6.9"
       }
@@ -173,21 +188,16 @@
     {
       "id": "e-abilities-api-004",
       "category": "abilities-api",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_abilities_api_004() to expose a registered ability through REST metadata.",
-      "expected_behavior": "Reviewer contract: `wpbp_abilities_api_004()` must expose a registered ability through REST metadata. Review focus: Use WordPress Abilities API; Keep ability and category names namespaced; Register the category and ability on the Abilities API init actions. Static checks intentionally require show_in_rest, wp_register_ability, wp_abilities_api_init. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "intermediate",
+      "prompt": "Register an Abilities API ability named 'wpbp/rest-visible' in the 'wpbp-rest-abilities' category and configure the ability to be available through the Abilities REST API.",
+      "expected_behavior": "Registers the `wpbp-rest-abilities` category and the `wpbp/rest-visible` ability through the Abilities API init hooks, with `meta.show_in_rest` set to true on the ability. Runtime validation inspects the registered ability metadata and executes its callback; REST visibility should come from Abilities API metadata, not a custom REST route.",
       "requirements": [
         "Use WordPress Abilities API",
-        "Keep ability and category names namespaced",
-        "Register the category and ability on the Abilities API init actions"
+        "Configure the ability for Abilities REST API availability",
+        "Do not create a custom REST route"
       ],
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_abilities_api_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "show_in_rest",
             "description": "Uses show_in_rest",
@@ -199,9 +209,31 @@
             "weight": 1
           },
           {
+            "pattern": "wp_register_ability_category",
+            "description": "Registers the REST ability category",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/rest-visible",
+            "description": "Registers the requested ability name",
+            "weight": 1
+          },
+          {
             "pattern": "wp_abilities_api_init",
             "description": "Uses wp_abilities_api_init",
             "weight": 1
+          },
+          {
+            "pattern": "wp_abilities_api_categories_init",
+            "description": "Uses wp_abilities_api_categories_init",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Do not create a custom REST route for Abilities API exposure",
+            "severity": "error"
           }
         ]
       },
@@ -209,17 +241,19 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_abilities_api_004' ) ) { return false; } $ok = wpbp_abilities_api_004(); wp_unregister_ability( 'wpbp/rest-visible' ); wp_unregister_ability_category( 'wpbp-rest-abilities' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "code": "WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/rest-visible' ); if ( ! $ability instanceof WP_Ability ) { return false; } $meta = $ability->get_meta(); return 'wpbp-rest-abilities' === $ability->get_category() && true === ( $meta['show_in_rest'] ?? false ) && array( 'ok' => true ) === $ability->execute();",
+            "description": "The ability is registered with REST visibility metadata",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_abilities_api_004(): bool { add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-rest-abilities', array( 'label' => 'REST Abilities', 'description' => 'Abilities exposed through REST.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/rest-visible', array( 'label' => 'REST Visible', 'description' => 'Visible', 'category' => 'wpbp-rest-abilities', 'output_schema' => array( 'type' => 'object' ), 'execute_callback' => fn() => array( 'ok' => true ), 'permission_callback' => '__return_true', 'meta' => array( 'show_in_rest' => true ) ) ); } ); WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/rest-visible' ); return $ability instanceof WP_Ability && true === $ability->get_meta()['show_in_rest']; }",
+      "reference_solution": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-rest-abilities', array( 'label' => 'REST Abilities', 'description' => 'Abilities exposed through REST.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/rest-visible', array( 'label' => 'REST Visible', 'description' => 'Returns a small REST-visible payload.', 'category' => 'wpbp-rest-abilities', 'output_schema' => array( 'type' => 'object' ), 'execute_callback' => static fn() : array => array( 'ok' => true ), 'permission_callback' => '__return_true', 'meta' => array( 'show_in_rest' => true ) ) ); } );",
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
-          "src/wp-includes/abilities-api/class-wp-ability.php"
+          "src/wp-includes/abilities-api/class-wp-ability.php",
+          "src/wp-includes/abilities-api/class-wp-abilities-registry.php",
+          "src/wp-includes/abilities-api/class-wp-ability-categories-registry.php"
         ],
         "release_focus": "6.9"
       }
