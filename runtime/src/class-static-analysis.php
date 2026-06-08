@@ -206,9 +206,10 @@ class Static_Analysis {
 	 * @return bool True if pattern matches.
 	 */
 	private function safe_preg_match( string $pattern, string $subject ): bool {
-		// Ensure pattern has delimiters.
+		// Ensure pattern has delimiters. Delimiterless patterns are still regexes,
+		// but use ~ so WordPress slugs like wpbp/example do not need escaping.
 		if ( ! preg_match( '/^[\/\#\~\@\!]/', $pattern ) ) {
-			$pattern = '/' . $pattern . '/';
+			$pattern = '~' . str_replace( '~', '\~', $pattern ) . '~';
 		}
 
 		// Suppress regex warnings.
