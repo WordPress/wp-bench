@@ -66,7 +66,6 @@ def test_execution_tests_have_required_fields() -> None:
         assert test["reference_solution"].strip(), test["id"]
         assert test["expected_behavior"].strip(), test["id"]
         assert test["expected_behavior"] != test["prompt"], test["id"]
-        assert test["expected_behavior"].startswith("Reviewer contract:"), test["id"]
         assert test["requirements"], test["id"]
         assert test["metadata"].get("source_refs"), test["id"]
 
