@@ -12,11 +12,11 @@
       "id": "e-security-001",
       "category": "security",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_security_001() to set an anchor href with WP_HTML_Tag_Processor so character references are safely escaped.",
-      "expected_behavior": "Reviewer contract: `wpbp_security_001()` must set an anchor href with WP_HTML_Tag_Processor so character references are safely escaped. Review focus: Use WP_HTML_Tag_Processor; Set the href through set_attribute; Return the updated HTML. Static checks intentionally require WP_HTML_Tag_Processor, set_attribute. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Implement `wpbp_security_001( string $html, string $href ): string` to update the first anchor in an HTML fragment with the supplied href and return the updated HTML.",
+      "expected_behavior": "`wpbp_security_001()` uses `WP_HTML_Tag_Processor` to find the first anchor and write the href through `set_attribute()`, so URI values are escaped by WordPress's HTML API. It should return `get_updated_html()`, leave fragments without an anchor unchanged, and avoid string replacement or concatenated attributes.",
       "requirements": [
         "Use WP_HTML_Tag_Processor",
-        "Set the href through set_attribute",
+        "Set the first anchor's href through the processor",
         "Return the updated HTML"
       ],
       "static_checks": {
@@ -32,8 +32,18 @@
             "weight": 1
           },
           {
+            "pattern": "next_tag",
+            "description": "Finds the anchor through the HTML API",
+            "weight": 1
+          },
+          {
             "pattern": "set_attribute",
             "description": "Uses set_attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "get_updated_html",
+            "description": "Returns the processor's updated HTML",
             "weight": 1
           }
         ]
@@ -42,8 +52,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_security_001' ) ) { return false; } $out = wpbp_security_001( '<a>Link</a>', 'https://example.test/?q=Tom&Jerry' ); return str_contains( $out, 'Tom' ) && str_contains( $out, 'Jerry' ) && ! str_contains( $out, 'Tom&Jerry' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_security_001' ) ) { return false; } $updated = wpbp_security_001( '<p><a class=\"cta\">Go</a></p>', 'https://example.test/?q=Tom&name=Jerry' ); $rejected = wpbp_security_001( '<a href=\"/old\">Go</a>', 'javascript:alert(1)' ); $plain = wpbp_security_001( '<span>No link</span>', 'https://example.test/' ); return '<p><a href=\"https://example.test/?q=Tom&#038;name=Jerry\" class=\"cta\">Go</a></p>' === $updated && '<a href=\"/old\">Go</a>' === $rejected && '<span>No link</span>' === $plain;",
+            "description": "The first anchor href is updated with WordPress escaping, unsafe hrefs are rejected, and non-anchor fragments are unchanged",
             "weight": 1
           }
         ]
@@ -60,8 +70,8 @@
       "id": "e-security-002",
       "category": "security",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_security_002() to serialize the current token from a WP_HTML_Processor fragment.",
-      "expected_behavior": "Reviewer contract: `wpbp_security_002()` must serialize the current token from a WP_HTML_Processor fragment. Review focus: Use WP_HTML_Processor::create_fragment; Advance to the first token; Return serialize_token output. Static checks intentionally require WP_HTML_Processor, serialize_token. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Implement `wpbp_security_002( string $html ): string` to return the normalized serialization of the first token in a WordPress HTML fragment.",
+      "expected_behavior": "`wpbp_security_002()` creates a fragment `WP_HTML_Processor`, advances to the first token, and returns `serialize_token()`. The result should be only the current token's normalized serialization, not the full fragment or raw input.",
       "requirements": [
         "Use WP_HTML_Processor::create_fragment",
         "Advance to the first token",
@@ -80,6 +90,16 @@
             "weight": 1
           },
           {
+            "pattern": "create_fragment",
+            "description": "Creates a fragment processor",
+            "weight": 1
+          },
+          {
+            "pattern": "next_token",
+            "description": "Advances to the first token",
+            "weight": 1
+          },
+          {
             "pattern": "serialize_token",
             "description": "Uses serialize_token",
             "weight": 1
@@ -90,8 +110,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_security_002' ) ) { return false; } $out = wpbp_security_002( '<p class=x>Hi</p>' ); return str_starts_with( $out, '<p' ) && str_contains( $out, 'class' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_security_002' ) ) { return false; } $tag = wpbp_security_002( '<P CLASS=x data-note=\"5 < 8\">Hi</P>' ); $text = wpbp_security_002( '5 < 8 & <em>ok</em>' ); $empty = wpbp_security_002( '' ); return '<p class=\"x\" data-note=\"5 &lt; 8\">' === $tag && '5 &lt; 8 &amp; ' === $text && '' === $empty;",
+            "description": "Only the first token is serialized, with WordPress normalization for tags, attributes, text, and empty fragments",
             "weight": 1
           }
         ]
@@ -107,12 +127,12 @@
     {
       "id": "e-security-003",
       "category": "security",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_security_003() to allow only safe post HTML using KSES.",
-      "expected_behavior": "Reviewer contract: `wpbp_security_003()` must allow only safe post HTML using KSES. Review focus: Use WordPress security helpers; Avoid raw output of untrusted values. Static checks intentionally require wp_kses_post. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_security_003( string $html ): string` to filter a chunk of post content so only HTML allowed for WordPress post content remains.",
+      "expected_behavior": "`wpbp_security_003()` delegates to `wp_kses_post()`, preserving allowed post-content markup while removing disallowed tags and attributes. The test focuses on KSES post-context behavior, not generic escaping or hand-built allowlists.",
       "requirements": [
-        "Use WordPress security helpers",
-        "Avoid raw output of untrusted values"
+        "Use KSES's post-content allowlist",
+        "Return the filtered HTML string"
       ],
       "static_checks": {
         "required_patterns": [
@@ -132,8 +152,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_security_003' ) ) { return false; } $out = wpbp_security_003( '<p>ok</p><script>bad</script>' ); return str_contains( $out, '<p>ok</p>' ) && ! str_contains( $out, '<script>' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_security_003' ) ) { return false; } $out = wpbp_security_003( '<p><a href=\"https://example.test\" onclick=\"bad()\">Safe</a></p><script>alert(1)</script>' ); return str_contains( $out, '<p><a href=\"https://example.test\">Safe</a></p>' ) && str_contains( $out, 'alert(1)' ) && ! str_contains( $out, 'onclick' ) && ! str_contains( $out, '<script' ) && ! str_contains( $out, '</script' );",
+            "description": "Allowed post HTML remains while disallowed script tags and event-handler attributes are stripped",
             "weight": 1
           }
         ]
@@ -141,9 +161,7 @@
       "reference_solution": "function wpbp_security_003( string $html ): string { return wp_kses_post( $html ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/kses.php",
-          "src/wp-includes/formatting.php",
-          "src/wp-includes/pluggable.php"
+          "src/wp-includes/kses.php"
         ],
         "release_focus": "classic"
       }
@@ -151,12 +169,13 @@
     {
       "id": "e-security-004",
       "category": "security",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_security_004() to verify and fail a nonce for an expected action.",
-      "expected_behavior": "Reviewer contract: `wpbp_security_004()` must verify and fail a nonce for an expected action. Review focus: Use WordPress security helpers; Avoid raw output of untrusted values. Static checks intentionally require wp_verify_nonce. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_security_004( string $nonce, string $action ): bool` to report whether a nonce is valid for the supplied action.",
+      "expected_behavior": "`wpbp_security_004()` uses `wp_verify_nonce()` and treats any non-false verification result as valid. It should accept current and previous nonce ticks for the matching action, while returning false for empty or mismatched nonces.",
       "requirements": [
-        "Use WordPress security helpers",
-        "Avoid raw output of untrusted values"
+        "Use wp_verify_nonce()",
+        "Return true for any non-false verification result",
+        "Return false for invalid or mismatched nonces"
       ],
       "static_checks": {
         "required_patterns": [
@@ -176,8 +195,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_security_004' ) ) { return false; } $nonce = wp_create_nonce( 'wpbp_action' ); return wpbp_security_004( $nonce, 'wpbp_action' ) && ! wpbp_security_004( $nonce, 'other' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_security_004' ) ) { return false; } $action = 'wpbp_action'; $nonce = wp_create_nonce( $action ); $user = wp_get_current_user(); $uid = (int) $user->ID; if ( ! $uid ) { $uid = apply_filters( 'nonce_user_logged_out', $uid, $action ); } $previous = substr( wp_hash( ( wp_nonce_tick( $action ) - 1 ) . '|' . $action . '|' . $uid . '|' . wp_get_session_token(), 'nonce' ), -12, 10 ); return wpbp_security_004( $nonce, $action ) && wpbp_security_004( $previous, $action ) && ! wpbp_security_004( $nonce, 'other' ) && ! wpbp_security_004( '', $action );",
+            "description": "Current and previous-tick nonces are valid for the matching action only",
             "weight": 1
           }
         ]
@@ -185,8 +204,6 @@
       "reference_solution": "function wpbp_security_004( string $nonce, string $action ): bool { return false !== wp_verify_nonce( $nonce, $action ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/kses.php",
-          "src/wp-includes/formatting.php",
           "src/wp-includes/pluggable.php"
         ],
         "release_focus": "classic"
@@ -195,12 +212,13 @@
     {
       "id": "e-security-005",
       "category": "security",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_security_005() to prepend HTTPS by default when esc_url protocols start with https.",
-      "expected_behavior": "Reviewer contract: `wpbp_security_005()` must prepend HTTPS by default when esc_url protocols start with https. Review focus: Use WordPress security helpers; Avoid raw output of untrusted values. Static checks intentionally require esc_url. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_security_005( string $url ): string` to escape a URL for HTML display while preferring HTTPS when WordPress has to add a missing scheme.",
+      "expected_behavior": "`wpbp_security_005()` calls `esc_url()` with HTTPS first and HTTP second in the allowed protocol list. Schemeless absolute URLs should gain `https://`, existing HTTP URLs should stay HTTP, display-context ampersands should be entity-escaped, and protocols outside the allowed list should be rejected.",
       "requirements": [
-        "Use WordPress security helpers",
-        "Avoid raw output of untrusted values"
+        "Use esc_url()",
+        "Allow both HTTPS and HTTP with HTTPS preferred",
+        "Return the display-safe URL string"
       ],
       "static_checks": {
         "required_patterns": [
@@ -213,6 +231,16 @@
             "pattern": "esc_url",
             "description": "Uses esc_url",
             "weight": 1
+          },
+          {
+            "pattern": "/['\"]https['\"]/i",
+            "description": "Supplies HTTPS as the preferred protocol",
+            "weight": 0.5
+          },
+          {
+            "pattern": "/['\"]http['\"]/i",
+            "description": "Allows HTTP as a valid protocol",
+            "weight": 0.5
           }
         ]
       },
@@ -220,8 +248,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_security_005' ) ) { return false; } $out = wpbp_security_005( 'example.com/path' ); return str_starts_with( $out, 'https://example.com/path' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_security_005' ) ) { return false; } return 'https://example.com/path?x=1&#038;y=2' === wpbp_security_005( 'example.com/path?x=1&y=2' ) && 'http://example.com/path?x=1&#038;y=2' === wpbp_security_005( 'http://example.com/path?x=1&y=2' ) && '' === wpbp_security_005( 'mailto:person@example.com' ) && '' === wpbp_security_005( 'javascript:alert(1)' );",
+            "description": "Schemeless URLs prefer HTTPS, existing HTTP is preserved, display entities are escaped, and disallowed protocols are removed",
             "weight": 1
           }
         ]
@@ -229,9 +257,8 @@
       "reference_solution": "function wpbp_security_005( string $url ): string { return esc_url( $url, array( 'https', 'http' ) ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/kses.php",
           "src/wp-includes/formatting.php",
-          "src/wp-includes/pluggable.php"
+          "src/wp-includes/kses.php"
         ],
         "release_focus": "6.9"
       }

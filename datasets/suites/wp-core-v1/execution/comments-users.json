@@ -11,12 +11,13 @@
     {
       "id": "e-comments-users-001",
       "category": "comments-users",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_comments_users_001() to create a user and return the resulting WP_User object.",
-      "expected_behavior": "Reviewer contract: `wpbp_comments_users_001()` must create a user and return the resulting WP_User object. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require wp_insert_user, get_user_by. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_comments_users_001( string $login ) to create a Subscriber user with that login and return the resulting WP_User object.",
+      "expected_behavior": "Reviewer contract: The function should create a new Subscriber through WordPress user APIs and return the stored WP_User for the supplied login. The runtime verifies the returned object, persisted login, role, and basic read capability, then deletes the created user in teardown.",
       "requirements": [
-        "Use comments or users APIs",
-        "Clean up created records"
+        "Use WordPress user APIs",
+        "Accept the login as input",
+        "Return the stored WP_User object"
       ],
       "static_checks": {
         "required_patterns": [
@@ -32,7 +33,12 @@
           },
           {
             "pattern": "get_user_by",
-            "description": "Uses get_user_by",
+            "description": "Retrieves the stored user object",
+            "weight": 1
+          },
+          {
+            "pattern": "subscriber",
+            "description": "Assigns the Subscriber role",
             "weight": 1
           }
         ]
@@ -41,18 +47,18 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_comments_users_001' ) ) { return false; } $user = wpbp_comments_users_001( 'wpbp_cu_' . wp_rand() ); $ok = $user instanceof WP_User && user_can( $user, 'read' ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $user->ID ); return $ok;",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_001' ) ) { return false; } $login = 'wpbp_cu_001_' . wp_rand(); $GLOBALS['wpbp_comments_users_001_login'] = $login; $user = wpbp_comments_users_001( $login ); if ( ! $user instanceof WP_User ) { return false; } $GLOBALS['wpbp_comments_users_001_user_id'] = $user->ID; $stored = get_user_by( 'id', $user->ID ); return $stored instanceof WP_User && $stored->user_login === $login && $user->user_login === $login && in_array( 'subscriber', (array) $stored->roles, true ) && user_can( $stored, 'read' );",
+            "description": "A Subscriber is created for the supplied login and returned as a WP_User",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$user_id = $GLOBALS['wpbp_comments_users_001_user_id'] ?? 0; $login = $GLOBALS['wpbp_comments_users_001_login'] ?? ''; if ( ( ! is_int( $user_id ) || $user_id <= 0 ) && is_string( $login ) && '' !== $login ) { $user_id = username_exists( $login ); } if ( is_int( $user_id ) && $user_id > 0 ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $user_id ); } unset( $GLOBALS['wpbp_comments_users_001_user_id'], $GLOBALS['wpbp_comments_users_001_login'] );"
       },
       "reference_solution": "function wpbp_comments_users_001( string $login ): WP_User|WP_Error { $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); return is_wp_error( $id ) ? $id : get_user_by( 'id', $id ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/comment.php",
           "src/wp-includes/user.php",
-          "src/wp-includes/class-wp-user-query.php"
+          "src/wp-includes/class-wp-user.php"
         ],
         "release_focus": "classic"
       }
@@ -61,11 +67,12 @@
       "id": "e-comments-users-002",
       "category": "comments-users",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_comments_users_002() to query users by user meta value.",
-      "expected_behavior": "Reviewer contract: `wpbp_comments_users_002()` must query users by user meta value. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require WP_User_Query, meta_key. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Implement wpbp_comments_users_002( string $meta_key, string $meta_value ) to return user IDs whose user meta exactly matches the supplied value.",
+      "expected_behavior": "Reviewer contract: The function should use WP_User_Query with the supplied meta key and value and return IDs only. The runtime creates matching and non-matching user fixtures, checks that only the matching user ID is present, and removes both users in teardown.",
       "requirements": [
-        "Use comments or users APIs",
-        "Clean up created records"
+        "Use WordPress user-query APIs",
+        "Accept the meta key and value as inputs",
+        "Return matching user IDs"
       ],
       "static_checks": {
         "required_patterns": [
@@ -83,25 +90,37 @@
             "pattern": "meta_key",
             "description": "Uses meta_key",
             "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
+          },
           {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_comments_users_002' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_user_meta_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); update_user_meta( $u, 'wpbp_team', 'blue' ); $ids = array_map( 'intval', wpbp_comments_users_002( 'wpbp_team', 'blue' ) ); $ok = in_array( $u, $ids, true ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
-            "description": "Reference behavior is correct",
+            "pattern": "meta_value",
+            "description": "Uses meta_value",
+            "weight": 1
+          },
+          {
+            "pattern": "fields",
+            "description": "Requests IDs from the query",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_comments_users_002( string $key, string $value ): array { $q = new WP_User_Query( array( 'meta_key' => $key, 'meta_value' => $value, 'fields' => 'ID' ) ); return $q->get_results(); }",
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_comments_users_002_target_id'] = wp_insert_user( array( 'user_login' => 'wpbp_user_meta_target_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $GLOBALS['wpbp_comments_users_002_other_id'] = wp_insert_user( array( 'user_login' => 'wpbp_user_meta_other_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); if ( is_int( $GLOBALS['wpbp_comments_users_002_target_id'] ) ) { update_user_meta( $GLOBALS['wpbp_comments_users_002_target_id'], 'wpbp_team', 'blue' ); } if ( is_int( $GLOBALS['wpbp_comments_users_002_other_id'] ) ) { update_user_meta( $GLOBALS['wpbp_comments_users_002_other_id'], 'wpbp_team', 'red' ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$target_id = $GLOBALS['wpbp_comments_users_002_target_id'] ?? 0; $other_id = $GLOBALS['wpbp_comments_users_002_other_id'] ?? 0; if ( ! function_exists( 'wpbp_comments_users_002' ) || ! is_int( $target_id ) || ! is_int( $other_id ) ) { return false; } $ids = wpbp_comments_users_002( 'wpbp_team', 'blue' ); if ( ! is_array( $ids ) ) { return false; } $ids = array_map( 'intval', $ids ); return in_array( $target_id, $ids, true ) && ! in_array( $other_id, $ids, true );",
+            "description": "Only users with the exact requested user-meta value are returned",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_comments_users_002_target_id', 'wpbp_comments_users_002_other_id' ) as $key ) { $user_id = $GLOBALS[ $key ] ?? 0; if ( is_int( $user_id ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $user_id ); } unset( $GLOBALS[ $key ] ); }"
+      },
+      "reference_solution": "function wpbp_comments_users_002( string $meta_key, string $meta_value ): array { $query = new WP_User_Query( array( 'meta_key' => $meta_key, 'meta_value' => $meta_value, 'fields' => 'ID' ) ); return $query->get_results(); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/comment.php",
           "src/wp-includes/user.php",
-          "src/wp-includes/class-wp-user-query.php"
+          "src/wp-includes/class-wp-user-query.php",
+          "src/wp-includes/class-wp-meta-query.php"
         ],
         "release_focus": "classic"
       }
@@ -109,12 +128,13 @@
     {
       "id": "e-comments-users-003",
       "category": "comments-users",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_comments_users_003() to insert an approved comment and return comment text.",
-      "expected_behavior": "Reviewer contract: `wpbp_comments_users_003()` must insert an approved comment and return comment text. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require wp_insert_comment, get_comment_text. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_comments_users_003( int $post_id, string $content ) to add an approved comment to the post and return the stored comment text.",
+      "expected_behavior": "Reviewer contract: The function should insert an approved comment for the supplied post and return the text retrieved from WordPress for that new comment. The runtime creates a post, verifies the stored approved comment content and returned text, then removes comments and the post in teardown.",
       "requirements": [
-        "Use comments or users APIs",
-        "Clean up created records"
+        "Use WordPress comment APIs",
+        "Accept the post ID and comment content as inputs",
+        "Return the stored comment text"
       ],
       "static_checks": {
         "required_patterns": [
@@ -132,25 +152,32 @@
             "pattern": "get_comment_text",
             "description": "Uses get_comment_text",
             "weight": 1
+          },
+          {
+            "pattern": "comment_approved",
+            "description": "Creates the comment as approved",
+            "weight": 1
           }
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_comments_users_003_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Comment Text', 'post_status' => 'publish' ) );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_comments_users_003' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'C', 'post_status' => 'publish' ) ); $ok = 'Hello' === wpbp_comments_users_003( $p, 'Hello' ); wp_delete_post( $p, true ); return $ok;",
-            "description": "Reference behavior is correct",
+            "code": "$post_id = $GLOBALS['wpbp_comments_users_003_post_id'] ?? 0; if ( ! function_exists( 'wpbp_comments_users_003' ) || ! is_int( $post_id ) ) { return false; } $content = 'Approved text ' . wp_rand(); $returned = wpbp_comments_users_003( $post_id, $content ); $comments = get_comments( array( 'post_id' => $post_id, 'status' => 'approve' ) ); $matches = array(); foreach ( $comments as $comment ) { if ( $comment instanceof WP_Comment && $comment->comment_content === $content ) { $matches[] = $comment; } } return $returned === $content && 1 === count( $matches ) && '1' === (string) $matches[0]->comment_approved;",
+            "description": "An approved comment is stored on the post and its text is returned",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$post_id = $GLOBALS['wpbp_comments_users_003_post_id'] ?? 0; if ( is_int( $post_id ) ) { foreach ( get_comments( array( 'post_id' => $post_id, 'status' => 'all' ) ) as $comment ) { if ( $comment instanceof WP_Comment ) { wp_delete_comment( (int) $comment->comment_ID, true ); } } wp_delete_post( $post_id, true ); } unset( $GLOBALS['wpbp_comments_users_003_post_id'] );"
       },
       "reference_solution": "function wpbp_comments_users_003( int $post_id, string $content ): string { $id = wp_insert_comment( array( 'comment_post_ID' => $post_id, 'comment_content' => $content, 'comment_approved' => 1 ) ); return get_comment_text( $id ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/comment.php",
-          "src/wp-includes/user.php",
-          "src/wp-includes/class-wp-user-query.php"
+          "src/wp-includes/comment-template.php",
+          "src/wp-includes/class-wp-comment.php"
         ],
         "release_focus": "classic"
       }
@@ -158,12 +185,13 @@
     {
       "id": "e-comments-users-004",
       "category": "comments-users",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_comments_users_004() to count approved comments for a post.",
-      "expected_behavior": "Reviewer contract: `wpbp_comments_users_004()` must count approved comments for a post. Review focus: Use comments or users APIs; Clean up created records. Static checks intentionally require wp_count_comments. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_comments_users_004( int $post_id ) to return the number of approved comments for that post.",
+      "expected_behavior": "Reviewer contract: The function should use WordPress comment-count APIs for the supplied post and return only the approved count. The runtime creates one approved and one pending comment, expects an exact count of one, and removes all fixtures in teardown.",
       "requirements": [
-        "Use comments or users APIs",
-        "Clean up created records"
+        "Use WordPress comment APIs",
+        "Accept the post ID as input",
+        "Count only approved comments"
       ],
       "static_checks": {
         "required_patterns": [
@@ -176,25 +204,30 @@
             "pattern": "wp_count_comments",
             "description": "Uses wp_count_comments",
             "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
+          },
           {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_comments_users_004' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Count C', 'post_status' => 'publish' ) ); $c = wp_insert_comment( array( 'comment_post_ID' => $p, 'comment_content' => 'Hi', 'comment_approved' => 1 ) ); $ok = wpbp_comments_users_004( $p ) >= 1; wp_delete_comment( $c, true ); wp_delete_post( $p, true ); return $ok;",
-            "description": "Reference behavior is correct",
+            "pattern": "approved",
+            "description": "Reads the approved count",
             "weight": 1
           }
         ]
       },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_comments_users_004_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Comment Count', 'post_status' => 'publish' ) ); if ( is_int( $GLOBALS['wpbp_comments_users_004_post_id'] ) ) { $GLOBALS['wpbp_comments_users_004_approved_id'] = wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Approved', 'comment_approved' => 1 ) ); $GLOBALS['wpbp_comments_users_004_pending_id'] = wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Pending', 'comment_approved' => 0 ) ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$post_id = $GLOBALS['wpbp_comments_users_004_post_id'] ?? 0; if ( ! function_exists( 'wpbp_comments_users_004' ) || ! is_int( $post_id ) ) { return false; } return 1 === wpbp_comments_users_004( $post_id );",
+            "description": "Only the approved comment is counted for the supplied post",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_comments_users_004_approved_id', 'wpbp_comments_users_004_pending_id' ) as $key ) { $comment_id = $GLOBALS[ $key ] ?? 0; if ( is_int( $comment_id ) && $comment_id > 0 ) { wp_delete_comment( $comment_id, true ); } unset( $GLOBALS[ $key ] ); } $post_id = $GLOBALS['wpbp_comments_users_004_post_id'] ?? 0; if ( is_int( $post_id ) ) { wp_delete_post( $post_id, true ); } unset( $GLOBALS['wpbp_comments_users_004_post_id'] );"
+      },
       "reference_solution": "function wpbp_comments_users_004( int $post_id ): int { $counts = wp_count_comments( $post_id ); return (int) $counts->approved; }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/comment.php",
-          "src/wp-includes/user.php",
-          "src/wp-includes/class-wp-user-query.php"
+          "src/wp-includes/comment.php"
         ],
         "release_focus": "classic"
       }

@@ -12,27 +12,27 @@
       "id": "e-gb-templates-navigation-001",
       "category": "gb-templates-navigation",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_templates_navigation_001() to register a block template in the templates registry.",
-      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_001()` must register a block template in the templates registry. Review focus: Use block template or navigation APIs; Return deterministic data. Static checks intentionally require WP_Block_Templates_Registry, register. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Register a plugin-provided block template named `wpbp//landing-special` for posts. The template should have the title `Landing Special`, the description `Landing page for benchmark products`, and paragraph block content containing `Landing Special Template`.",
+      "expected_behavior": "Reviewer contract: the submitted code registers the `wpbp//landing-special` block template with WordPress so it is available for the `post` post type and preserves the requested title, description, and block markup in the registered `WP_Block_Template` object.",
       "requirements": [
-        "Use block template or navigation APIs",
-        "Return deterministic data"
+        "Use the WordPress block template registration API.",
+        "Make the template available only to posts."
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "wpbp_gb_templates_navigation_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
-          {
-            "pattern": "WP_Block_Templates_Registry",
-            "description": "Uses WP_Block_Templates_Registry",
+            "pattern": "register_block_template|WP_Block_Templates_Registry",
+            "description": "Uses a WordPress block template registration API",
             "weight": 1
           },
           {
-            "pattern": "register",
-            "description": "Uses register",
+            "pattern": "wpbp//landing-special",
+            "description": "Registers the requested template name",
+            "weight": 1
+          },
+          {
+            "pattern": "post_types",
+            "description": "Scopes the template to post types",
             "weight": 1
           }
         ]
@@ -41,18 +41,17 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_001' ) ) { return false; } return wpbp_gb_templates_navigation_001();",
-            "description": "Reference behavior is correct",
+            "code": "$template = WP_Block_Templates_Registry::get_instance()->get_registered( 'wpbp//landing-special' ); return $template instanceof WP_Block_Template && 'landing-special' === $template->slug && 'plugin' === $template->source && 'wp_template' === $template->type && 'Landing Special' === $template->title && 'Landing page for benchmark products' === $template->description && array( 'post' ) === $template->post_types && str_contains( $template->content, '<!-- wp:paragraph -->' ) && str_contains( $template->content, 'Landing Special Template' );",
+            "description": "The registered template has the expected template object properties",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_gb_templates_navigation_001(): bool { WP_Block_Templates_Registry::get_instance()->register( 'wpbp//single-product', array( 'title' => 'Product', 'content' => '<!-- wp:paragraph --><p>Product</p><!-- /wp:paragraph -->', 'description' => 'Product template', 'post_types' => array( 'post' ) ) ); $ok = WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp//single-product' ); unregister_block_template( 'wpbp//single-product' ); return $ok; }",
+      "reference_solution": "register_block_template( 'wpbp//landing-special', array( 'title' => 'Landing Special', 'description' => 'Landing page for benchmark products', 'content' => '<!-- wp:paragraph --><p>Landing Special Template</p><!-- /wp:paragraph -->', 'post_types' => array( 'post' ) ) );",
       "metadata": {
         "source_refs": [
           "src/wp-includes/block-template.php",
-          "src/wp-includes/block-template-utils.php",
-          "src/wp-includes/blocks/navigation.php"
+          "src/wp-includes/class-wp-block-templates-registry.php"
         ],
         "release_focus": "classic"
       }
@@ -61,11 +60,11 @@
       "id": "e-gb-templates-navigation-002",
       "category": "gb-templates-navigation",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_templates_navigation_002() to render a navigation link block with a dynamic URL.",
-      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_002()` must render a navigation link block with a dynamic URL. Review focus: Use block template or navigation APIs; Return deterministic data. Static checks intentionally require render_block, core/navigation-link. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Define `wpbp_gb_templates_navigation_002( string $url, string $label ): string` to render a `core/navigation-link` block for the supplied URL and label using WordPress server-side block rendering.",
+      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_002()` returns the markup produced by rendering a `core/navigation-link` block with the supplied `url` and `label` attributes. Review focus is that WordPress block rendering handles the navigation item markup and escaping.",
       "requirements": [
-        "Use block template or navigation APIs",
-        "Return deterministic data"
+        "Pass the URL and label as block attributes.",
+        "Return the rendered markup."
       ],
       "static_checks": {
         "required_patterns": [
@@ -83,6 +82,16 @@
             "pattern": "core\\/navigation\\-link",
             "description": "Uses core/navigation-link",
             "weight": 1
+          },
+          {
+            "pattern": "url",
+            "description": "Passes a URL attribute",
+            "weight": 0.5
+          },
+          {
+            "pattern": "label",
+            "description": "Passes a label attribute",
+            "weight": 0.5
           }
         ]
       },
@@ -90,8 +99,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_002' ) ) { return false; } $out = wpbp_gb_templates_navigation_002( 'https://example.test', 'Example' ); return str_contains( $out, 'Example' ) && str_contains( $out, 'https://example.test' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_002' ) ) { return false; } $out = wpbp_gb_templates_navigation_002( 'https://example.test/products?ref=bench&plan=pro', 'Products & Plans' ); $decoded = html_entity_decode( $out, ENT_QUOTES, 'UTF-8' ); return is_string( $out ) && str_contains( $out, 'wp-block-navigation-item' ) && str_contains( $decoded, 'https://example.test/products?ref=bench&plan=pro' ) && str_contains( $decoded, 'Products & Plans' );",
+            "description": "The rendered navigation link contains WordPress navigation item markup, the supplied URL, and the supplied label",
             "weight": 1
           }
         ]
@@ -99,9 +108,8 @@
       "reference_solution": "function wpbp_gb_templates_navigation_002( string $url, string $label ): string { return render_block( array( 'blockName' => 'core/navigation-link', 'attrs' => array( 'url' => $url, 'label' => $label ), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/block-template.php",
-          "src/wp-includes/block-template-utils.php",
-          "src/wp-includes/blocks/navigation.php"
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/navigation-link.php"
         ],
         "release_focus": "7.0"
       }
@@ -110,22 +118,37 @@
       "id": "e-gb-templates-navigation-003",
       "category": "gb-templates-navigation",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_templates_navigation_003() to return navigation overlay pattern names from registered core patterns.",
-      "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_003()` must return navigation overlay pattern names from registered core patterns. Review focus: Use block template or navigation APIs; Return deterministic data. Static checks intentionally require WP_Block_Patterns_Registry. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Register a block pattern named `wpbp/navigation-footer` for the Navigation block. Its content should be a `core/navigation` block with two custom links: `Docs` to `/docs` and `Support` to `/support`.",
+      "expected_behavior": "Reviewer contract: the submitted code registers the `wpbp/navigation-footer` block pattern with title `Navigation Footer`, marks it as relevant to `core/navigation`, and stores block markup containing a Navigation block with the requested custom links.",
       "requirements": [
-        "Use block template or navigation APIs",
-        "Return deterministic data"
+        "Use the WordPress block pattern registration API.",
+        "Set the pattern title to `Navigation Footer` and include `core/navigation` in `blockTypes`."
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "wpbp_gb_templates_navigation_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
+            "pattern": "register_block_pattern|WP_Block_Patterns_Registry",
+            "description": "Uses a WordPress block pattern registration API",
+            "weight": 1
           },
           {
-            "pattern": "WP_Block_Patterns_Registry",
-            "description": "Uses WP_Block_Patterns_Registry",
+            "pattern": "wpbp\\/navigation-footer",
+            "description": "Registers the requested pattern name",
+            "weight": 1
+          },
+          {
+            "pattern": "core\\/navigation",
+            "description": "Includes a Navigation block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:navigation\\-link|core\\/navigation\\-link",
+            "description": "Includes serialized Navigation Link blocks",
+            "weight": 1
+          },
+          {
+            "pattern": "blockTypes",
+            "description": "Scopes the pattern to relevant block types",
             "weight": 1
           }
         ]
@@ -134,18 +157,19 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_gb_templates_navigation_003' ) ) { return false; } $names = wpbp_gb_templates_navigation_003(); return is_array( $names );",
-            "description": "Reference behavior is correct",
+            "code": "$pattern = WP_Block_Patterns_Registry::get_instance()->get_registered( 'wpbp/navigation-footer' ); return is_array( $pattern ) && 'Navigation Footer' === $pattern['title'] && in_array( 'core/navigation', $pattern['blockTypes'] ?? array(), true ) && str_contains( $pattern['content'], '<!-- wp:navigation' ) && str_contains( $pattern['content'], '<!-- wp:navigation-link' ) && str_contains( $pattern['content'], 'Docs' ) && str_contains( $pattern['content'], '/docs' ) && str_contains( $pattern['content'], 'Support' ) && str_contains( $pattern['content'], '/support' );",
+            "description": "The registered pattern exposes the expected title, blockTypes, and navigation link content",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_gb_templates_navigation_003(): array { return array_keys( WP_Block_Patterns_Registry::get_instance()->get_all_registered() ); }",
+      "reference_solution": "register_block_pattern( 'wpbp/navigation-footer', array( 'title' => 'Navigation Footer', 'blockTypes' => array( 'core/navigation' ), 'content' => '<!-- wp:navigation --><!-- wp:navigation-link {\"url\":\"/docs\",\"label\":\"Docs\"} /--><!-- wp:navigation-link {\"url\":\"/support\",\"label\":\"Support\"} /--><!-- /wp:navigation -->' ) );",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/block-template.php",
-          "src/wp-includes/block-template-utils.php",
-          "src/wp-includes/blocks/navigation.php"
+          "src/wp-includes/block-patterns.php",
+          "src/wp-includes/class-wp-block-patterns-registry.php",
+          "src/wp-includes/blocks/navigation.php",
+          "src/wp-includes/blocks/navigation-link.php"
         ],
         "release_focus": "classic"
       }

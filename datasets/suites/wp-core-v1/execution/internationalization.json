@@ -11,12 +11,12 @@
     {
       "id": "e-internationalization-001",
       "category": "internationalization",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_internationalization_001() to translate a string in a text domain.",
-      "expected_behavior": "Reviewer contract: `wpbp_internationalization_001()` must translate a string in a text domain. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require __. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_internationalization_001(): string` to return the translatable label \"Checkout complete\" from the `wpbp-i18n` text domain.",
+      "expected_behavior": "`wpbp_internationalization_001()` uses the core translation helper with the exact source string `Checkout complete` and text domain `wpbp-i18n`. Runtime validation installs a gettext filter for that text/domain pair and expects the filtered translation to be returned.",
       "requirements": [
-        "Use WordPress i18n APIs",
-        "Preserve text domains where applicable"
+        "Use a WordPress i18n return helper",
+        "Pass the source string and text domain directly to the translation call"
       ],
       "static_checks": {
         "required_patterns": [
@@ -26,27 +26,38 @@
             "weight": 0.5
           },
           {
-            "pattern": "__",
-            "description": "Uses __",
+            "pattern": "/\\b__\\s*\\(/",
+            "description": "Uses the return-oriented translation helper",
+            "weight": 1
+          },
+          {
+            "pattern": "Checkout complete",
+            "description": "Uses the requested source string",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-i18n",
+            "description": "Uses the requested text domain",
             "weight": 1
           }
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_i18n_001_filter'] = static function ( $translation, $text, $domain ) { return ( 'Checkout complete' === $text && 'wpbp-i18n' === $domain ) ? 'Translated Checkout' : $translation; }; add_filter( 'gettext', $GLOBALS['wpbp_i18n_001_filter'], 10, 3 );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_internationalization_001' ) ) { return false; } return 'Posts' === wpbp_internationalization_001( 'Posts' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_001' ) ) { return false; } return 'Translated Checkout' === wpbp_internationalization_001();",
+            "description": "The label is passed through WordPress translation with the requested text domain",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_i18n_001_filter'] ) ) { remove_filter( 'gettext', $GLOBALS['wpbp_i18n_001_filter'], 10 ); unset( $GLOBALS['wpbp_i18n_001_filter'] ); }"
       },
-      "reference_solution": "function wpbp_internationalization_001( string $text ): string { return __( $text, 'default' ); }",
+      "reference_solution": "function wpbp_internationalization_001(): string { return __( 'Checkout complete', 'wpbp-i18n' ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/l10n.php",
-          "src/wp-includes/class-wp-locale-switcher.php"
+          "src/wp-includes/l10n.php"
         ],
         "release_focus": "classic"
       }
@@ -54,12 +65,12 @@
     {
       "id": "e-internationalization-002",
       "category": "internationalization",
-      "difficulty": "intermediate",
-      "prompt": "Implement wpbp_internationalization_002() to escape a translated string for HTML output.",
-      "expected_behavior": "Reviewer contract: `wpbp_internationalization_002()` must escape a translated string for HTML output. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require esc_html__. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_internationalization_002(): string` to return the label \"Open <settings> & tools\" translated from `wpbp-i18n` and escaped for safe HTML text output.",
+      "expected_behavior": "`wpbp_internationalization_002()` uses WordPress's combined translate-and-escape helper for HTML text. Runtime validation filters the translation to unsafe markup and expects the returned string to match WordPress HTML escaping.",
       "requirements": [
-        "Use WordPress i18n APIs",
-        "Preserve text domains where applicable"
+        "Use the combined WordPress helper for translated HTML text",
+        "Pass the source string and text domain directly to the helper"
       ],
       "static_checks": {
         "required_patterns": [
@@ -69,27 +80,39 @@
             "weight": 0.5
           },
           {
-            "pattern": "esc_html__",
-            "description": "Uses esc_html__",
+            "pattern": "/\\besc_html__\\s*\\(/",
+            "description": "Uses esc_html__ for translated HTML text",
+            "weight": 1
+          },
+          {
+            "pattern": "Open <settings> & tools",
+            "description": "Uses the requested source string",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-i18n",
+            "description": "Uses the requested text domain",
             "weight": 1
           }
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_i18n_002_filter'] = static function ( $translation, $text, $domain ) { return ( 'Open <settings> & tools' === $text && 'wpbp-i18n' === $domain ) ? '<strong>Unsafe & label</strong>' : $translation; }; add_filter( 'gettext', $GLOBALS['wpbp_i18n_002_filter'], 10, 3 );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_internationalization_002' ) ) { return false; } return 'Posts' === wpbp_internationalization_002( 'Posts' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_002' ) ) { return false; } return esc_html( '<strong>Unsafe & label</strong>' ) === wpbp_internationalization_002();",
+            "description": "The filtered translation is escaped for safe HTML text output",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_i18n_002_filter'] ) ) { remove_filter( 'gettext', $GLOBALS['wpbp_i18n_002_filter'], 10 ); unset( $GLOBALS['wpbp_i18n_002_filter'] ); }"
       },
-      "reference_solution": "function wpbp_internationalization_002( string $text ): string { return esc_html__( $text, 'default' ); }",
+      "reference_solution": "function wpbp_internationalization_002(): string { return esc_html__( 'Open <settings> & tools', 'wpbp-i18n' ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/l10n.php",
-          "src/wp-includes/class-wp-locale-switcher.php"
+          "src/wp-includes/formatting.php"
         ],
         "release_focus": "classic"
       }
@@ -98,11 +121,11 @@
       "id": "e-internationalization-003",
       "category": "internationalization",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_internationalization_003() to switch locale and restore the previous locale.",
-      "expected_behavior": "Reviewer contract: `wpbp_internationalization_003()` must switch locale and restore the previous locale. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require switch_to_locale, restore_previous_locale. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Implement `wpbp_internationalization_003( string $locale ): bool` to temporarily switch WordPress to the supplied locale and restore the previous locale before returning whether the switch succeeded.",
+      "expected_behavior": "`wpbp_internationalization_003()` calls `switch_to_locale()`, restores after a successful switch, returns the boolean switch result, and leaves no switched locale on the stack. Runtime validation forces a non-en_US effective locale so switching to `en_US` succeeds, then checks WordPress's switch and restore hooks.",
       "requirements": [
-        "Use WordPress i18n APIs",
-        "Preserve text domains where applicable"
+        "Use WordPress locale switching APIs",
+        "Restore the previous locale after a successful switch"
       ],
       "static_checks": {
         "required_patterns": [
@@ -124,16 +147,18 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_i18n_003_counts'] = array( 'switch' => 0, 'restore' => 0 ); $GLOBALS['wpbp_i18n_003_determine'] = static function ( $locale ) { return is_locale_switched() ? $locale : 'wpbp_TEST'; }; add_filter( 'determine_locale', $GLOBALS['wpbp_i18n_003_determine'], 1 ); $GLOBALS['wpbp_i18n_003_switch'] = static function ( $locale ) { $GLOBALS['wpbp_i18n_003_counts']['switch']++; $GLOBALS['wpbp_i18n_003_counts']['switched_to'] = $locale; }; add_action( 'switch_locale', $GLOBALS['wpbp_i18n_003_switch'], 10, 1 ); $GLOBALS['wpbp_i18n_003_restore'] = static function ( $locale, $previous_locale ) { $GLOBALS['wpbp_i18n_003_counts']['restore']++; $GLOBALS['wpbp_i18n_003_counts']['restored_to'] = $locale; $GLOBALS['wpbp_i18n_003_counts']['previous_locale'] = $previous_locale; }; add_action( 'restore_previous_locale', $GLOBALS['wpbp_i18n_003_restore'], 10, 2 );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_internationalization_003' ) ) { return false; } return is_bool( wpbp_internationalization_003( 'en_US' ) );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_003' ) ) { return false; } $ok = wpbp_internationalization_003( 'en_US' ); $counts = $GLOBALS['wpbp_i18n_003_counts'] ?? array(); return true === $ok && false === is_locale_switched() && 1 === ( $counts['switch'] ?? 0 ) && 1 === ( $counts['restore'] ?? 0 ) && 'en_US' === ( $counts['switched_to'] ?? null );",
+            "description": "The locale switch succeeds, is restored, and fires the expected WordPress hooks",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_i18n_003_determine'] ) ) { remove_filter( 'determine_locale', $GLOBALS['wpbp_i18n_003_determine'], 1 ); unset( $GLOBALS['wpbp_i18n_003_determine'] ); } if ( isset( $GLOBALS['wpbp_i18n_003_switch'] ) ) { remove_action( 'switch_locale', $GLOBALS['wpbp_i18n_003_switch'], 10 ); unset( $GLOBALS['wpbp_i18n_003_switch'] ); } if ( isset( $GLOBALS['wpbp_i18n_003_restore'] ) ) { remove_action( 'restore_previous_locale', $GLOBALS['wpbp_i18n_003_restore'], 10 ); unset( $GLOBALS['wpbp_i18n_003_restore'] ); } unset( $GLOBALS['wpbp_i18n_003_counts'] );"
       },
-      "reference_solution": "function wpbp_internationalization_003( string $locale ): bool { $switched = switch_to_locale( $locale ); restore_previous_locale(); return (bool) $switched; }",
+      "reference_solution": "function wpbp_internationalization_003( string $locale ): bool { $switched = switch_to_locale( $locale ); if ( $switched ) { restore_previous_locale(); } return $switched; }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/l10n.php",
@@ -146,11 +171,11 @@
       "id": "e-internationalization-004",
       "category": "internationalization",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_internationalization_004() to load plugin textdomain from a relative languages directory.",
-      "expected_behavior": "Reviewer contract: `wpbp_internationalization_004()` must load plugin textdomain from a relative languages directory. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require load_plugin_textdomain. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Implement `wpbp_internationalization_004(): bool` to register the plugin text domain `wpbp-i18n-loader` with the relative languages directory `wp-bench-runtime/languages` when the function is called.",
+      "expected_behavior": "`wpbp_internationalization_004()` calls `load_plugin_textdomain()` with the requested domain and relative plugin languages path. Runtime validation checks WordPress's textdomain registry for the custom path instead of expecting translations to load immediately, matching the just-in-time loading behavior in modern WordPress.",
       "requirements": [
-        "Use WordPress i18n APIs",
-        "Preserve text domains where applicable"
+        "Use load_plugin_textdomain()",
+        "Use the relative path parameter rather than an absolute MO file path"
       ],
       "static_checks": {
         "required_patterns": [
@@ -163,6 +188,16 @@
             "pattern": "load_plugin_textdomain",
             "description": "Uses load_plugin_textdomain",
             "weight": 1
+          },
+          {
+            "pattern": "wpbp-i18n-loader",
+            "description": "Uses the requested text domain",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-bench-runtime/languages",
+            "description": "Uses the requested relative languages path",
+            "weight": 1
           }
         ]
       },
@@ -170,17 +205,17 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_internationalization_004' ) ) { return false; } return is_bool( wpbp_internationalization_004( 'wpbp-domain' ) );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_004' ) ) { return false; } global $wp_textdomain_registry; if ( ! $wp_textdomain_registry instanceof WP_Textdomain_Registry ) { return false; } $ok = wpbp_internationalization_004(); $path = $wp_textdomain_registry->get( 'wpbp-i18n-loader', determine_locale() ); return true === $ok && is_string( $path ) && str_ends_with( rtrim( $path, '/' ), '/wp-bench-runtime/languages' );",
+            "description": "The text domain registry resolves the domain to the requested custom languages path",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_internationalization_004( string $domain ): bool { return load_plugin_textdomain( $domain, false, 'wp-bench-runtime/languages' ); }",
+      "reference_solution": "function wpbp_internationalization_004(): bool { return load_plugin_textdomain( 'wpbp-i18n-loader', false, 'wp-bench-runtime/languages' ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/l10n.php",
-          "src/wp-includes/class-wp-locale-switcher.php"
+          "src/wp-includes/class-wp-textdomain-registry.php"
         ],
         "release_focus": "classic"
       }
@@ -189,11 +224,11 @@
       "id": "e-internationalization-005",
       "category": "internationalization",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_internationalization_005() to apply the gettext filter for a specific source string.",
-      "expected_behavior": "Reviewer contract: `wpbp_internationalization_005()` must apply the gettext filter for a specific source string. Review focus: Use WordPress i18n APIs; Preserve text domains where applicable. Static checks intentionally require gettext, apply_filters. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Implement `wpbp_internationalization_005( string $text, string $domain ): string` to return WordPress's translation for the supplied source text and text domain, allowing gettext filters to affect the result.",
+      "expected_behavior": "`wpbp_internationalization_005()` delegates to WordPress translation with both caller-supplied arguments. Runtime validation installs a gettext filter and verifies that only the matching source string and domain are changed.",
       "requirements": [
-        "Use WordPress i18n APIs",
-        "Preserve text domains where applicable"
+        "Use the WordPress translation API that applies gettext filters",
+        "Pass through the caller-supplied text and domain"
       ],
       "static_checks": {
         "required_patterns": [
@@ -203,32 +238,39 @@
             "weight": 0.5
           },
           {
-            "pattern": "gettext",
-            "description": "Uses gettext",
+            "pattern": "/\\btranslate\\s*\\(/",
+            "description": "Uses translate to apply WordPress gettext behavior",
             "weight": 1
           },
           {
-            "pattern": "apply_filters",
-            "description": "Uses apply_filters",
-            "weight": 1
+            "pattern": "\\$text",
+            "description": "Uses the supplied text argument",
+            "weight": 0.5
+          },
+          {
+            "pattern": "\\$domain",
+            "description": "Uses the supplied domain argument",
+            "weight": 0.5
           }
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_i18n_005_filter'] = static function ( $translation, $text, $domain ) { return ( 'WPBP Source' === $text && 'wpbp-i18n' === $domain ) ? 'Filtered Translation' : $translation; }; add_filter( 'gettext', $GLOBALS['wpbp_i18n_005_filter'], 10, 3 );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_internationalization_005' ) ) { return false; } add_filter( 'gettext', function( $translation, $text ) { return 'WPBP Source' === $text ? 'Changed' : $translation; }, 10, 2 ); return 'Changed' === wpbp_internationalization_005( 'WPBP Source' );",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_005' ) ) { return false; } return 'Filtered Translation' === wpbp_internationalization_005( 'WPBP Source', 'wpbp-i18n' ) && 'WPBP Source' === wpbp_internationalization_005( 'WPBP Source', 'other-domain' ) && 'Other Source' === wpbp_internationalization_005( 'Other Source', 'wpbp-i18n' );",
+            "description": "The gettext filter can change only the matching text and domain",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_i18n_005_filter'] ) ) { remove_filter( 'gettext', $GLOBALS['wpbp_i18n_005_filter'], 10 ); unset( $GLOBALS['wpbp_i18n_005_filter'] ); }"
       },
-      "reference_solution": "function wpbp_internationalization_005( string $text ): string { return apply_filters( 'gettext', $text, $text, 'default' ); }",
+      "reference_solution": "function wpbp_internationalization_005( string $text, string $domain ): string { return translate( $text, $domain ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/l10n.php",
-          "src/wp-includes/class-wp-locale-switcher.php"
+          "src/wp-includes/plugin.php"
         ],
         "release_focus": "classic"
       }

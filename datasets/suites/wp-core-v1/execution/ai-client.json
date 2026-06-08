@@ -11,13 +11,13 @@
     {
       "id": "e-ai-client-001",
       "category": "ai-client",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_ai_client_001() to detect AI support after the wp_supports_ai filter disables it.",
-      "expected_behavior": "Reviewer contract: `wpbp_ai_client_001()` must detect AI support after the wp_supports_ai filter disables it. Review focus: Use AI Client APIs deterministically; Do not require live provider credentials or model calls; Use the wp_supports_ai filter to force a false result. Static checks intentionally require wp_supports_ai, add_filter. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_ai_client_001(): bool so it temporarily disables WordPress AI support for its own check, returns the disabled support result, and leaves AI support enabled afterward.",
+      "expected_behavior": "`wpbp_ai_client_001()` uses the `wp_supports_ai` filter only around a call to `wp_supports_ai()`, returns `false` for that temporary check, and removes the filter before returning. The test focuses on the AI support gate and cleanup, not a hard-coded return value.",
       "requirements": [
-        "Use AI Client APIs deterministically",
-        "Do not require live provider credentials or model calls",
-        "Use the wp_supports_ai filter to force a false result"
+        "Use wp_supports_ai() to read the support state",
+        "Use the wp_supports_ai filter to force support off for the temporary check",
+        "Remove the filter before returning"
       ],
       "static_checks": {
         "required_patterns": [
@@ -35,6 +35,11 @@
             "pattern": "add_filter",
             "description": "Uses add_filter",
             "weight": 1
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Removes the temporary filter",
+            "weight": 1
           }
         ]
       },
@@ -42,8 +47,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_001' ) ) { return false; } return false === wpbp_ai_client_001();",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_001' ) ) { return false; } $result = wpbp_ai_client_001(); return false === $result && true === wp_supports_ai();",
+            "description": "The support check is disabled only temporarily",
             "weight": 1
           }
         ]
@@ -51,9 +56,7 @@
       "reference_solution": "function wpbp_ai_client_001(): bool { add_filter( 'wp_supports_ai', '__return_false' ); $supported = wp_supports_ai(); remove_filter( 'wp_supports_ai', '__return_false' ); return $supported; }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-ability-function-resolver.php"
+          "src/wp-includes/ai-client.php"
         ],
         "release_focus": "7.0"
       }
@@ -61,12 +64,13 @@
     {
       "id": "e-ai-client-002",
       "category": "ai-client",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_ai_client_002() to create a prompt builder and configure text generation options without generating.",
-      "expected_behavior": "Reviewer contract: `wpbp_ai_client_002()` must create a prompt builder and configure text generation options without generating. Review focus: Use AI Client APIs deterministically; Do not require live provider credentials or model calls. Static checks intentionally require wp_ai_client_prompt, using_temperature, using_model_preference. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_ai_client_002(): WP_AI_Client_Prompt_Builder to create a text prompt builder with a concise system instruction, temperature 0.2, and a model preference order of 'gpt-4o-mini' then 'gpt-4o'. Return the builder without generating content.",
+      "expected_behavior": "`wpbp_ai_client_002()` returns a `WP_AI_Client_Prompt_Builder` from `wp_ai_client_prompt()` after configuring text-generation options with snake_case AI Client methods. It must not call a generating method; runtime validation later prevents generation and confirms the returned builder is not already in an error state.",
       "requirements": [
-        "Use AI Client APIs deterministically",
-        "Do not require live provider credentials or model calls"
+        "Use wp_ai_client_prompt()",
+        "Configure temperature, system instruction, and model preference",
+        "Return the builder without generating content"
       ],
       "static_checks": {
         "required_patterns": [
@@ -86,9 +90,21 @@
             "weight": 1
           },
           {
+            "pattern": "using_system_instruction",
+            "description": "Uses using_system_instruction",
+            "weight": 1
+          },
+          {
             "pattern": "using_model_preference",
             "description": "Uses using_model_preference",
             "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/\\b(?:generate_(?:result|text(?:s|_result)?|image(?:s|_result)?|speech(?:es|_result)?|video(?:s|_result)?)|convert_text_to_speech(?:es|_result)?)\\b/",
+            "description": "Does not generate content in the helper",
+            "severity": "error"
           }
         ]
       },
@@ -96,18 +112,18 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_002' ) ) { return false; } return wpbp_ai_client_002();",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_002' ) ) { return false; } $builder = wpbp_ai_client_002(); if ( ! $builder instanceof WP_AI_Client_Prompt_Builder ) { return false; } add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $result = $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $result ) && 'prompt_prevented' === $result->get_error_code();",
+            "description": "The helper returns a usable builder without calling a provider",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_ai_client_002(): bool { $builder = wp_ai_client_prompt( 'Summarize WordPress.' )->using_temperature( 0.2 )->using_system_instruction( 'Be concise.' )->using_model_preference( 'gpt-5.4', 'claude-sonnet-4-6' ); return $builder instanceof WP_AI_Client_Prompt_Builder; }",
+      "reference_solution": "function wpbp_ai_client_002(): WP_AI_Client_Prompt_Builder { return wp_ai_client_prompt( 'Summarize WordPress.' )->using_system_instruction( 'Be concise.' )->using_temperature( 0.2 )->using_model_preference( 'gpt-4o-mini', 'gpt-4o' ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
           "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-ability-function-resolver.php"
+          "src/wp-includes/php-ai-client/src/Builders/PromptBuilder.php"
         ],
         "release_focus": "7.0"
       }
@@ -115,12 +131,13 @@
     {
       "id": "e-ai-client-003",
       "category": "ai-client",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_ai_client_003() to prevent prompt execution via wp_ai_client_prevent_prompt and return the WP_Error code.",
-      "expected_behavior": "Reviewer contract: `wpbp_ai_client_003()` must prevent prompt execution via wp_ai_client_prevent_prompt and return the WP_Error code. Review focus: Use AI Client APIs deterministically; Do not require live provider credentials or model calls. Static checks intentionally require wp_ai_client_prevent_prompt, generate_text. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_ai_client_003(): string to prevent a single AI text generation attempt and return the resulting WP_Error code.",
+      "expected_behavior": "`wpbp_ai_client_003()` temporarily enables `wp_ai_client_prevent_prompt`, calls `generate_text()` on an AI Client prompt, returns the resulting `WP_Error` code, and removes the prevention filter. The expected code is `prompt_prevented`, with no live provider call.",
       "requirements": [
-        "Use AI Client APIs deterministically",
-        "Do not require live provider credentials or model calls"
+        "Use wp_ai_client_prompt() and generate_text()",
+        "Use wp_ai_client_prevent_prompt to prevent the generation call",
+        "Remove the filter before returning"
       ],
       "static_checks": {
         "required_patterns": [
@@ -135,8 +152,18 @@
             "weight": 1
           },
           {
+            "pattern": "wp_ai_client_prompt",
+            "description": "Uses wp_ai_client_prompt",
+            "weight": 1
+          },
+          {
             "pattern": "generate_text",
             "description": "Uses generate_text",
+            "weight": 1
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Removes the temporary filter",
             "weight": 1
           }
         ]
@@ -145,18 +172,17 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_003' ) ) { return false; } return 'prompt_prevented' === wpbp_ai_client_003();",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_003' ) ) { return false; } $code = wpbp_ai_client_003(); $prevented_after = apply_filters( 'wp_ai_client_prevent_prompt', false, wp_ai_client_prompt( 'Probe' ) ); return 'prompt_prevented' === $code && false === $prevented_after;",
+            "description": "Prompt generation is prevented and the filter is restored",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_ai_client_003(): string { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $result = wp_ai_client_prompt( 'Blocked' )->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $result ) ? $result->get_error_code() : ''; }",
+      "reference_solution": "function wpbp_ai_client_003(): string { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); try { $result = wp_ai_client_prompt( 'Blocked' )->generate_text(); } finally { remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); } return is_wp_error( $result ) ? $result->get_error_code() : ''; }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-ability-function-resolver.php"
+          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
         ],
         "release_focus": "7.0"
       }
@@ -164,12 +190,13 @@
     {
       "id": "e-ai-client-004",
       "category": "ai-client",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_ai_client_004() to convert an ability name to the AI function-call name and back.",
-      "expected_behavior": "Reviewer contract: `wpbp_ai_client_004()` must convert an ability name to the AI function-call name and back. Review focus: Use AI Client APIs deterministically; Do not require live provider credentials or model calls. Static checks intentionally require WP_AI_Client_Ability_Function_Resolver, ability_name_to_function_name. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_ai_client_004( string $ability_name ): array to return the AI Client function-call name for the ability and the ability name obtained by converting it back.",
+      "expected_behavior": "`wpbp_ai_client_004()` uses `WP_AI_Client_Ability_Function_Resolver` conversion helpers to return `array( $function_name, $round_trip_ability_name )` for any supplied ability name. Runtime validation checks multiple ability names so hard-coded output does not pass.",
       "requirements": [
-        "Use AI Client APIs deterministically",
-        "Do not require live provider credentials or model calls"
+        "Use WP_AI_Client_Ability_Function_Resolver",
+        "Use both conversion directions",
+        "Return the function-call name and round-tripped ability name"
       ],
       "static_checks": {
         "required_patterns": [
@@ -187,6 +214,11 @@
             "pattern": "ability_name_to_function_name",
             "description": "Uses ability_name_to_function_name",
             "weight": 1
+          },
+          {
+            "pattern": "function_name_to_ability_name",
+            "description": "Uses function_name_to_ability_name",
+            "weight": 1
           }
         ]
       },
@@ -194,8 +226,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_004' ) ) { return false; } $out = wpbp_ai_client_004( 'wpbp/do-thing' ); return 'wpab__wpbp__do-thing' === $out[0] && 'wpbp/do-thing' === $out[1];",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_004' ) ) { return false; } $first = wpbp_ai_client_004( 'wpbp/do-thing' ); $second = wpbp_ai_client_004( 'my-plugin/export_data' ); return is_array( $first ) && is_array( $second ) && 'wpab__wpbp__do-thing' === ( $first[0] ?? null ) && 'wpbp/do-thing' === ( $first[1] ?? null ) && 'wpab__my-plugin__export_data' === ( $second[0] ?? null ) && 'my-plugin/export_data' === ( $second[1] ?? null );",
+            "description": "Ability names round-trip through AI function-call names",
             "weight": 1
           }
         ]
@@ -203,8 +235,6 @@
       "reference_solution": "function wpbp_ai_client_004( string $ability ): array { $function = WP_AI_Client_Ability_Function_Resolver::ability_name_to_function_name( $ability ); return array( $function, WP_AI_Client_Ability_Function_Resolver::function_name_to_ability_name( $function ) ); }",
       "metadata": {
         "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php",
           "src/wp-includes/ai-client/class-wp-ai-client-ability-function-resolver.php"
         ],
         "release_focus": "7.0"
@@ -213,12 +243,13 @@
     {
       "id": "e-ai-client-005",
       "category": "ai-client",
-      "difficulty": "hard",
-      "prompt": "Implement wpbp_ai_client_005() to return false for AI support checks when prompt execution is prevented.",
-      "expected_behavior": "Reviewer contract: `wpbp_ai_client_005()` must return false for AI support checks when prompt execution is prevented. Review focus: Use AI Client APIs deterministically; Do not require live provider credentials or model calls. Static checks intentionally require is_supported_for_text_generation, wp_ai_client_prevent_prompt. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_ai_client_005(): bool to return the text-generation support check result while AI prompt execution is temporarily prevented.",
+      "expected_behavior": "`wpbp_ai_client_005()` temporarily enables `wp_ai_client_prevent_prompt`, calls `is_supported_for_text_generation()` on an AI Client prompt, returns that support-check result, and removes the filter. The support check should return `false` without making a provider call.",
       "requirements": [
-        "Use AI Client APIs deterministically",
-        "Do not require live provider credentials or model calls"
+        "Use wp_ai_client_prompt()",
+        "Use is_supported_for_text_generation()",
+        "Remove the prevention filter before returning"
       ],
       "static_checks": {
         "required_patterns": [
@@ -233,9 +264,26 @@
             "weight": 1
           },
           {
+            "pattern": "wp_ai_client_prompt",
+            "description": "Uses wp_ai_client_prompt",
+            "weight": 1
+          },
+          {
             "pattern": "wp_ai_client_prevent_prompt",
             "description": "Uses wp_ai_client_prevent_prompt",
             "weight": 1
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Removes the temporary filter",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/\\b(?:generate_(?:result|text(?:s|_result)?|image(?:s|_result)?|speech(?:es|_result)?|video(?:s|_result)?)|convert_text_to_speech(?:es|_result)?)\\b/",
+            "description": "Does not generate content for a support check",
+            "severity": "error"
           }
         ]
       },
@@ -243,18 +291,17 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_005' ) ) { return false; } return wpbp_ai_client_005();",
-            "description": "Reference behavior is correct",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_005' ) ) { return false; } $supported = wpbp_ai_client_005(); $prevented_after = apply_filters( 'wp_ai_client_prevent_prompt', false, wp_ai_client_prompt( 'Probe' ) ); return false === $supported && false === $prevented_after;",
+            "description": "The support check returns false while prevention is active and the filter is restored",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_ai_client_005(): bool { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $supported = wp_ai_client_prompt( 'Check' )->is_supported_for_text_generation(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return false === $supported; }",
+      "reference_solution": "function wpbp_ai_client_005(): bool { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); try { $supported = wp_ai_client_prompt( 'Check' )->is_supported_for_text_generation(); } finally { remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); } return $supported; }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-ability-function-resolver.php"
+          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
         ],
         "release_focus": "7.0"
       }

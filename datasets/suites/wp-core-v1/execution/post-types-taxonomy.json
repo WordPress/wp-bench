@@ -13,7 +13,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_001() to register a public book post type with REST support.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_001()` must register a public book post type with REST support. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require register_post_type, show_in_rest. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_001()` registers a public `wpbp_book` post type with REST API exposure. Runtime validation checks the registered post type through WordPress and unregisters it afterward.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -42,7 +42,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_001' ) ) { return false; } $ok = wpbp_post_types_taxonomy_001(); unregister_post_type( 'wpbp_book' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "description": "The book post type is registered and REST-enabled",
             "weight": 1
           }
         ]
@@ -61,7 +61,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_002() to register a hierarchical genre taxonomy for posts.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_002()` must register a hierarchical genre taxonomy for posts. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require register_taxonomy, hierarchical. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_002()` registers a hierarchical `wpbp_genre` taxonomy for posts. Runtime validation checks the taxonomy through WordPress and unregisters it afterward.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -90,7 +90,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_002' ) ) { return false; } $ok = wpbp_post_types_taxonomy_002(); unregister_taxonomy( 'wpbp_genre' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "description": "The genre taxonomy is registered as hierarchical",
             "weight": 1
           }
         ]
@@ -109,7 +109,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_003() to attach an existing taxonomy to a custom post type.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_003()` must attach an existing taxonomy to a custom post type. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require register_taxonomy_for_object_type. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_003()` registers a fixture post type and taxonomy, then attaches the taxonomy to that post type with WordPress registration APIs. Runtime validation checks the attachment result.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -133,7 +133,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_003' ) ) { return false; } return wpbp_post_types_taxonomy_003();",
-            "description": "Reference behavior is correct",
+            "description": "The taxonomy is attached to the custom post type",
             "weight": 1
           }
         ]
@@ -152,7 +152,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_004() to create a post type with custom capabilities mapped from meta caps.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_004()` must create a post type with custom capabilities mapped from meta caps. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require capability_type, map_meta_cap. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_004()` registers a custom post type using singular/plural capability types with meta-cap mapping enabled, then returns the generated edit capabilities from the registered post type object.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -181,7 +181,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_004' ) ) { return false; } return array( 'edit_case', 'edit_cases' ) === wpbp_post_types_taxonomy_004();",
-            "description": "Reference behavior is correct",
+            "description": "The custom post type generates mapped edit capabilities",
             "weight": 1
           }
         ]
@@ -200,7 +200,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_005() to insert a term and return its slug and taxonomy.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_005()` must insert a term and return its slug and taxonomy. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require wp_insert_term, get_term. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_005()` inserts a category term, reads it back through WordPress term APIs, and returns its slug, taxonomy, and term ID so runtime cleanup can remove it.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -229,7 +229,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_005' ) ) { return false; } $out = wpbp_post_types_taxonomy_005( 'WPBP Term Insert ' . wp_rand() ); $ok = is_array( $out ) && 'category' === $out[1]; wp_delete_term( $out[2], 'category' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "description": "The inserted category term can be read back from WordPress",
             "weight": 1
           }
         ]
@@ -247,11 +247,12 @@
       "id": "e-post-types-taxonomy-006",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_006() to set object terms without replacing existing terms.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_006()` must set object terms without replacing existing terms. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require wp_set_object_terms. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "prompt": "Provide a PHP function named wpbp_post_types_taxonomy_006( int $post_id, array $term_ids ): array that adds the given category term IDs to the post without removing category terms already assigned to it.",
+      "expected_behavior": "The helper appends the supplied category term IDs to the given post while preserving any category terms already assigned. Runtime validation creates a post with one existing category, invokes the helper with a second category, verifies both relationships remain, verifies the returned IDs include the appended term_taxonomy_id, and removes the fixtures in teardown.",
       "requirements": [
-        "Use registration APIs",
-        "Clean up registered types when possible"
+        "Use WordPress taxonomy relationship APIs",
+        "Preserve existing category relationships",
+        "Return the term_taxonomy_ids reported by WordPress"
       ],
       "static_checks": {
         "required_patterns": [
@@ -264,20 +265,32 @@
             "pattern": "wp_set_object_terms",
             "description": "Uses wp_set_object_terms",
             "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
+          },
           {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_006' ) ) { return false; } $suffix = (string) wp_rand(); $t = wp_insert_term( 'WPBP Append ' . $suffix, 'category', array( 'slug' => 'wpbp-append-' . $suffix ) ); if ( is_wp_error( $t ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Terms ' . $suffix, 'post_status' => 'publish' ) ); $ids = wpbp_post_types_taxonomy_006( $p, array( (int) $t['term_id'] ) ); $ok = in_array( (int) $t['term_id'], array_map( 'intval', $ids ), true ); wp_delete_post( $p, true ); wp_delete_term( $t['term_id'], 'category' ); return $ok;",
-            "description": "Reference behavior is correct",
+            "pattern": "category",
+            "description": "Targets the category taxonomy",
+            "weight": 0.5
+          },
+          {
+            "pattern": "/wp_set_object_terms\\s*\\((?:(?!;).)*,\\s*true\\s*\\)/s",
+            "description": "Appends terms instead of replacing existing relationships",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_post_types_taxonomy_006( int $post_id, array $terms ): array { return wp_set_object_terms( $post_id, $terms, 'category', true ); }",
+      "runtime_checks": {
+        "setup": "foreach ( array( 'wpbp-existing-006', 'wpbp-added-006' ) as $slug ) { $stale = get_term_by( 'slug', $slug, 'category' ); if ( $stale ) { wp_delete_term( $stale->term_id, 'category' ); } } $post_id = wp_insert_post( array( 'post_title' => 'WPBP Preserve Terms 006', 'post_status' => 'publish', 'post_type' => 'post' ) ); $existing = wp_insert_term( 'WPBP Existing 006', 'category', array( 'slug' => 'wpbp-existing-006' ) ); $added = wp_insert_term( 'WPBP Added 006', 'category', array( 'slug' => 'wpbp-added-006' ) ); if ( ! $post_id || is_wp_error( $existing ) || is_wp_error( $added ) ) { throw new RuntimeException( 'Failed to create post-types-taxonomy-006 fixtures.' ); } $assigned = wp_set_object_terms( $post_id, array( (int) $existing['term_id'] ), 'category', false ); if ( is_wp_error( $assigned ) ) { throw new RuntimeException( 'Failed to assign initial category fixture.' ); } $GLOBALS['wpbp_ptt_006'] = array( 'post_id' => (int) $post_id, 'existing_term_id' => (int) $existing['term_id'], 'added_term_id' => (int) $added['term_id'], 'added_tt_id' => (int) $added['term_taxonomy_id'] );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_006' ) || empty( $GLOBALS['wpbp_ptt_006'] ) ) { return false; } $fixture = $GLOBALS['wpbp_ptt_006']; $result = wpbp_post_types_taxonomy_006( $fixture['post_id'], array( $fixture['added_term_id'] ) ); if ( is_wp_error( $result ) ) { return false; } $assigned = wp_get_object_terms( $fixture['post_id'], 'category', array( 'fields' => 'ids', 'orderby' => 'none' ) ); if ( is_wp_error( $assigned ) ) { return false; } $assigned = array_map( 'intval', $assigned ); $result = array_map( 'intval', $result ); return in_array( $fixture['existing_term_id'], $assigned, true ) && in_array( $fixture['added_term_id'], $assigned, true ) && in_array( $fixture['added_tt_id'], $result, true );",
+            "description": "The helper appends the new category term and preserves the existing one",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_ptt_006']['post_id'] ) ) { wp_delete_post( $GLOBALS['wpbp_ptt_006']['post_id'], true ); } foreach ( array( 'wpbp-existing-006', 'wpbp-added-006' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'category' ); if ( $term ) { wp_delete_term( $term->term_id, 'category' ); } } unset( $GLOBALS['wpbp_ptt_006'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_006( int $post_id, array $term_ids ): array { return wp_set_object_terms( $post_id, array_map( 'intval', $term_ids ), 'category', true ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/post.php",
@@ -291,7 +304,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_007() to read a post type archive link for a public CPT.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_007()` must read a post type archive link for a public CPT. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require get_post_type_archive_link, has_archive. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_007()` registers a public custom post type with archives enabled and returns the archive link generated by WordPress.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -320,7 +333,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_007' ) ) { return false; } $link = wpbp_post_types_taxonomy_007(); return str_contains( $link, 'wpbp_archive' );",
-            "description": "Reference behavior is correct",
+            "description": "The archive link is generated for the custom post type",
             "weight": 1
           }
         ]
@@ -339,7 +352,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_008() to register a taxonomy with a custom REST base.",
-      "expected_behavior": "Reviewer contract: `wpbp_post_types_taxonomy_008()` must register a taxonomy with a custom REST base. Review focus: Use registration APIs; Clean up registered types when possible. Static checks intentionally require register_taxonomy, rest_base. The runtime checks execute the function in WordPress and verify the observable return value or side effect.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_008()` registers a taxonomy exposed through the REST API with the custom REST base `wpbp-tax`, then returns the REST base from the registered taxonomy object.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -368,7 +381,7 @@
           {
             "type": "custom_assertion",
             "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_008' ) ) { return false; } return 'wpbp-tax' === wpbp_post_types_taxonomy_008();",
-            "description": "Reference behavior is correct",
+            "description": "The taxonomy stores the requested REST base",
             "weight": 1
           }
         ]
