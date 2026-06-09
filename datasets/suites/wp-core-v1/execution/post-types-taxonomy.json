@@ -200,7 +200,7 @@
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
       "prompt": "Implement wpbp_post_types_taxonomy_005() to insert a term and return its slug and taxonomy.",
-      "expected_behavior": "`wpbp_post_types_taxonomy_005()` inserts a category term, reads it back through WordPress term APIs, and returns its slug, taxonomy, and term ID so runtime cleanup can remove it.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_005()` inserts a category term with the supplied name, reads it back through WordPress term APIs, and returns its slug, taxonomy, and term ID.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
@@ -225,14 +225,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_post_types_taxonomy_005_name'] = 'WPBP Term Insert ' . wp_rand();",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_005' ) ) { return false; } $out = wpbp_post_types_taxonomy_005( 'WPBP Term Insert ' . wp_rand() ); $ok = is_array( $out ) && 'category' === $out[1]; wp_delete_term( $out[2], 'category' ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_005' ) ) { return false; } $out = wpbp_post_types_taxonomy_005( $GLOBALS['wpbp_post_types_taxonomy_005_name'] ); return is_array( $out ) && 'category' === ( $out[1] ?? '' );",
             "description": "The inserted category term can be read back from WordPress",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$name = (string) ( $GLOBALS['wpbp_post_types_taxonomy_005_name'] ?? '' ); if ( '' !== $name ) { $term = get_term_by( 'name', $name, 'category' ); if ( $term ) { wp_delete_term( (int) $term->term_id, 'category' ); } } unset( $GLOBALS['wpbp_post_types_taxonomy_005_name'] );"
       },
       "reference_solution": "function wpbp_post_types_taxonomy_005( string $name ): array { $term = wp_insert_term( $name, 'category' ); if ( is_wp_error( $term ) ) { return array( '', '', 0 ); } return array( get_term_field( 'slug', $term['term_id'], 'category' ), get_term( $term['term_id'] )->taxonomy, $term['term_id'] ); }",
       "metadata": {

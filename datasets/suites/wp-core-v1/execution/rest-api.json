@@ -570,6 +570,7 @@
         ]
       },
       "runtime_checks": {
+        "setup": "global $wpdb; $GLOBALS['wpbp_rest_api_011_max_user'] = (int) $wpdb->get_var( \"SELECT MAX(ID) FROM {$wpdb->users}\" );",
         "assertions": [
           {
             "type": "custom_assertion",
@@ -577,7 +578,8 @@
             "description": "Authorization status differs for logged-out and logged-in users",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "global $wpdb; $max = (int) ( $GLOBALS['wpbp_rest_api_011_max_user'] ?? 0 ); if ( $max > 0 ) { $ids = $wpdb->get_col( $wpdb->prepare( \"SELECT ID FROM {$wpdb->users} WHERE ID > %d\", $max ) ); if ( $ids ) { require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( $ids as $user_id ) { wp_delete_user( (int) $user_id ); } } } unset( $GLOBALS['wpbp_rest_api_011_max_user'] );"
       },
       "reference_solution": "function wpbp_rest_api_011(): array { wp_set_current_user( 0 ); $logged_out = rest_authorization_required_code(); $user_id = wp_insert_user( array( 'user_login' => 'wpbp_rest_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); wp_set_current_user( $user_id ); $logged_in = rest_authorization_required_code(); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $user_id ); wp_set_current_user( 0 ); return array( $logged_out, $logged_in ); }",
       "metadata": {

@@ -38,14 +38,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$suffix = (string) wp_rand(); $slug = 'wpbp-news-' . $suffix; $cat = wp_insert_term( 'WPBP News ' . $suffix, 'category', array( 'slug' => $slug ) ); $term_id = is_wp_error( $cat ) ? 0 : (int) $cat['term_id']; $post_id = $term_id ? (int) wp_insert_post( array( 'post_title' => 'Q1 ' . $suffix, 'post_status' => 'publish', 'post_category' => array( $term_id ) ) ) : 0; $GLOBALS['wpbp_queries_001'] = array( 'slug' => $slug, 'term' => $term_id, 'post' => $post_id );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_001' ) ) { return false; } $suffix = (string) wp_rand(); $slug = 'wpbp-news-' . $suffix; $cat = wp_insert_term( 'WPBP News ' . $suffix, 'category', array( 'slug' => $slug ) ); if ( is_wp_error( $cat ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Q1 ' . $suffix, 'post_status' => 'publish', 'post_category' => array( $cat['term_id'] ) ) ); $q = wpbp_queries_001( $slug, 3 ); $ok = in_array( $id, wp_list_pluck( $q->posts, 'ID' ), true ); wp_delete_post( $id, true ); wp_delete_term( $cat['term_id'], 'category' ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_queries_001' ) ) { return false; } $fixture = $GLOBALS['wpbp_queries_001'] ?? array(); if ( empty( $fixture['post'] ) ) { return false; } $q = wpbp_queries_001( $fixture['slug'], 3 ); return in_array( $fixture['post'], array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ), true );",
             "description": "The query returns the published post in the requested category",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_queries_001'] ?? array(); if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } if ( ! empty( $fixture['term'] ) ) { wp_delete_term( (int) $fixture['term'], 'category' ); } unset( $GLOBALS['wpbp_queries_001'] );"
       },
       "reference_solution": "function wpbp_queries_001( string $slug, int $limit = 5 ): WP_Query { return new WP_Query( array( 'category_name' => $slug, 'posts_per_page' => $limit, 'post_status' => 'publish', 'no_found_rows' => true ) ); }",
       "metadata": {
@@ -144,14 +146,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$needle = 'Needle' . wp_rand(); $id = (int) wp_insert_post( array( 'post_title' => $needle . ' Alpha', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_queries_003'] = array( 'needle' => $needle, 'post' => $id );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_003' ) ) { return false; } $needle = 'Needle' . wp_rand(); $id = wp_insert_post( array( 'post_title' => $needle . ' Alpha', 'post_status' => 'publish' ) ); $ids = wpbp_queries_003( $needle ); $ok = in_array( $id, $ids, true ); wp_delete_post( $id, true ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_queries_003' ) ) { return false; } $fixture = $GLOBALS['wpbp_queries_003'] ?? array(); if ( empty( $fixture['post'] ) ) { return false; } $ids = wpbp_queries_003( $fixture['needle'] ); return in_array( $fixture['post'], array_map( 'intval', (array) $ids ), true );",
             "description": "The search query returns matching post IDs",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_queries_003'] ?? array(); if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } unset( $GLOBALS['wpbp_queries_003'] );"
       },
       "reference_solution": "function wpbp_queries_003( string $term ): array { $q = new WP_Query( array( 's' => $term, 'fields' => 'ids', 'post_status' => 'publish' ) ); return $q->posts; }",
       "metadata": {
@@ -259,14 +263,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_queries_005_post'] = (int) wp_insert_post( array( 'post_title' => 'Date ' . wp_rand(), 'post_status' => 'future', 'post_date' => '2099-01-05 00:00:00' ) );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_005' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Date ' . wp_rand(), 'post_status' => 'future', 'post_date' => '2099-01-05 00:00:00' ) ); $q = wpbp_queries_005( '2099-01-01' ); $ok = in_array( $id, wp_list_pluck( $q->posts, 'ID' ), true ); wp_delete_post( $id, true ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_queries_005' ) ) { return false; } $id = (int) ( $GLOBALS['wpbp_queries_005_post'] ?? 0 ); if ( ! $id ) { return false; } $q = wpbp_queries_005( '2099-01-01' ); return in_array( $id, array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ), true );",
             "description": "The query returns future posts after the supplied date",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$id = (int) ( $GLOBALS['wpbp_queries_005_post'] ?? 0 ); if ( $id ) { wp_delete_post( $id, true ); } unset( $GLOBALS['wpbp_queries_005_post'] );"
       },
       "reference_solution": "function wpbp_queries_005( string $after ): WP_Query { return new WP_Query( array( 'post_status' => 'future', 'posts_per_page' => -1, 'date_query' => array( array( 'after' => $after, 'inclusive' => true ) ) ) ); }",
       "metadata": {
@@ -308,14 +314,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$u = wp_insert_user( array( 'user_login' => 'wpbp_query_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $GLOBALS['wpbp_queries_006_user'] = is_wp_error( $u ) ? 0 : (int) $u;",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_006' ) ) { return false; } $u = wp_insert_user( array( 'user_login' => 'wpbp_query_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $q = wpbp_queries_006( 'subscriber' ); $ok = in_array( $u, array_map( 'intval', $q->get_results() ), true ); require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_queries_006' ) ) { return false; } $u = (int) ( $GLOBALS['wpbp_queries_006_user'] ?? 0 ); if ( ! $u ) { return false; } $q = wpbp_queries_006( 'subscriber' ); return in_array( $u, array_map( 'intval', $q->get_results() ), true );",
             "description": "The user query returns users with the requested role",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$u = (int) ( $GLOBALS['wpbp_queries_006_user'] ?? 0 ); if ( $u ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); } unset( $GLOBALS['wpbp_queries_006_user'] );"
       },
       "reference_solution": "function wpbp_queries_006( string $role ): WP_User_Query { return new WP_User_Query( array( 'role' => $role, 'fields' => 'ID' ) ); }",
       "metadata": {
@@ -352,14 +360,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$p = (int) wp_insert_post( array( 'post_title' => 'Commented', 'post_status' => 'publish' ) ); $c = $p ? (int) wp_insert_comment( array( 'comment_post_ID' => $p, 'comment_content' => 'Hi', 'comment_approved' => 1 ) ) : 0; $GLOBALS['wpbp_queries_007'] = array( 'post' => $p, 'comment' => $c );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_007' ) ) { return false; } $p = wp_insert_post( array( 'post_title' => 'Commented', 'post_status' => 'publish' ) ); $c = wp_insert_comment( array( 'comment_post_ID' => $p, 'comment_content' => 'Hi', 'comment_approved' => 1 ) ); $comments = wpbp_queries_007( $p ); $ok = in_array( $c, wp_list_pluck( $comments, 'comment_ID' ) ); wp_delete_comment( $c, true ); wp_delete_post( $p, true ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_queries_007' ) ) { return false; } $fixture = $GLOBALS['wpbp_queries_007'] ?? array(); if ( empty( $fixture['comment'] ) ) { return false; } $comments = wpbp_queries_007( $fixture['post'] ); return in_array( $fixture['comment'], array_map( 'intval', wp_list_pluck( $comments, 'comment_ID' ) ), true );",
             "description": "The comment query returns the approved comment for the post",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_queries_007'] ?? array(); if ( ! empty( $fixture['comment'] ) ) { wp_delete_comment( (int) $fixture['comment'], true ); } if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } unset( $GLOBALS['wpbp_queries_007'] );"
       },
       "reference_solution": "function wpbp_queries_007( int $post_id ): array { $q = new WP_Comment_Query( array( 'post_id' => $post_id, 'status' => 'approve' ) ); return $q->comments; }",
       "metadata": {
@@ -401,14 +411,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$suffix = (string) wp_rand(); $term = wp_insert_term( 'WPBP Empty Term ' . $suffix, 'category', array( 'slug' => 'wpbp-empty-' . $suffix ) ); $GLOBALS['wpbp_queries_008_term'] = is_wp_error( $term ) ? 0 : (int) $term['term_id'];",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_008' ) ) { return false; } $suffix = (string) wp_rand(); $term = wp_insert_term( 'WPBP Empty Term ' . $suffix, 'category', array( 'slug' => 'wpbp-empty-' . $suffix ) ); if ( is_wp_error( $term ) ) { return false; } $ids = wpbp_queries_008( 'category' ); $ok = in_array( (int) $term['term_id'], array_map( 'intval', $ids ), true ); wp_delete_term( $term['term_id'], 'category' ); return $ok;",
+            "code": "if ( ! function_exists( 'wpbp_queries_008' ) ) { return false; } $term_id = (int) ( $GLOBALS['wpbp_queries_008_term'] ?? 0 ); if ( ! $term_id ) { return false; } $ids = wpbp_queries_008( 'category' ); return in_array( $term_id, array_map( 'intval', (array) $ids ), true );",
             "description": "The term query includes empty terms",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$term_id = (int) ( $GLOBALS['wpbp_queries_008_term'] ?? 0 ); if ( $term_id ) { wp_delete_term( $term_id, 'category' ); } unset( $GLOBALS['wpbp_queries_008_term'] );"
       },
       "reference_solution": "function wpbp_queries_008( string $taxonomy ): array { $q = new WP_Term_Query( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'fields' => 'ids' ) ); return $q->terms; }",
       "metadata": {
@@ -502,14 +514,16 @@
         ]
       },
       "runtime_checks": {
+        "setup": "$id = (int) wp_insert_post( array( 'post_title' => 'Meta Cache', 'post_status' => 'publish' ) ); if ( $id ) { update_post_meta( $id, 'wpbp_key', 'yes' ); } $GLOBALS['wpbp_queries_010_post'] = $id;",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_queries_010' ) ) { return false; } $id = wp_insert_post( array( 'post_title' => 'Meta Cache', 'post_status' => 'publish' ) ); update_post_meta( $id, 'wpbp_key', 'yes' ); $out = wpbp_queries_010( array( $id ), 'wpbp_key' ); wp_delete_post( $id, true ); return $out[$id] === 'yes';",
+            "code": "if ( ! function_exists( 'wpbp_queries_010' ) ) { return false; } $id = (int) ( $GLOBALS['wpbp_queries_010_post'] ?? 0 ); if ( ! $id ) { return false; } $out = wpbp_queries_010( array( $id ), 'wpbp_key' ); return isset( $out[ $id ] ) && 'yes' === $out[ $id ];",
             "description": "The helper returns meta values after priming the post meta cache",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "$id = (int) ( $GLOBALS['wpbp_queries_010_post'] ?? 0 ); if ( $id ) { wp_delete_post( $id, true ); } unset( $GLOBALS['wpbp_queries_010_post'] );"
       },
       "reference_solution": "function wpbp_queries_010( array $post_ids, string $key ): array { update_meta_cache( 'post', $post_ids ); $out = array(); foreach ( $post_ids as $post_id ) { $out[ $post_id ] = get_post_meta( $post_id, $key, true ); } return $out; }",
       "metadata": {
