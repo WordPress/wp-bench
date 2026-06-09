@@ -1,0 +1,345 @@
+{
+  "id": "wp-core-execution-v1-scripts_styles",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Scripts and Styles",
+    "description": "Code generation tasks for WordPress Scripts and Styles APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-scripts-styles-001",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_001(): void to register the script handle 'wpbp-script' at 'https://example.test/script.js' with 'jquery' as its dependency, version '1.0.0', and enqueue it for footer output.",
+      "expected_behavior": "`wpbp_scripts_styles_001()` registers `wpbp-script` through WordPress's script API, preserves the requested source, dependency, version, and footer placement, then queues the handle. Runtime validation calls the function and inspects the `WP_Scripts` registration and queue state.",
+      "requirements": [
+        "Use wp_register_script() and wp_enqueue_script()",
+        "Register the requested handle, source, dependency, version, and footer placement",
+        "Do not print or return hard-coded script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_register_script",
+            "description": "Uses wp_register_script",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script",
+            "description": "Uses wp_enqueue_script",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-script",
+            "description": "Uses the requested script handle",
+            "weight": 1
+          },
+          {
+            "pattern": "jquery",
+            "description": "Declares the jQuery dependency",
+            "weight": 1
+          },
+          {
+            "pattern": "in_footer",
+            "description": "Requests footer output through script args",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/<script\\b/i",
+            "description": "Does not emit literal script tags",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_001' ) ) { return false; } wpbp_scripts_styles_001(); $scripts = wp_scripts(); $registered = $scripts->registered['wpbp-script'] ?? null; return $registered instanceof \\_WP_Dependency && wp_script_is( 'wpbp-script', 'enqueued' ) && 'https://example.test/script.js' === $registered->src && array( 'jquery' ) === $registered->deps && '1.0.0' === $registered->ver && 1 === (int) $scripts->get_data( 'wpbp-script', 'group' );",
+            "description": "The script is registered with the requested metadata and queued for footer output",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_001(): void { wp_register_script( 'wpbp-script', 'https://example.test/script.js', array( 'jquery' ), '1.0.0', array( 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-script' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-scripts-styles-002",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_002(): void to register and enqueue the script handle 'wpbp-inline', then attach the inline JavaScript `window.wpbpInline = true;` after that handle.",
+      "expected_behavior": "`wpbp_scripts_styles_002()` prepares a queued WordPress script handle and attaches the requested inline code in the `after` position with `wp_add_inline_script()`. Runtime validation checks the queued handle and the inline data stored on `WP_Scripts`.",
+      "requirements": [
+        "Use WordPress script APIs for the handle",
+        "Use wp_add_inline_script() with the after position",
+        "Do not print literal script tags"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_add_inline_script",
+            "description": "Uses wp_add_inline_script",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_register_script",
+            "description": "Registers the script handle",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script",
+            "description": "Enqueues the script handle",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-inline",
+            "description": "Uses the requested script handle",
+            "weight": 1
+          },
+          {
+            "pattern": "window\\.wpbpInline\\s*=\\s*true",
+            "description": "Adds the requested inline JavaScript",
+            "weight": 1
+          },
+          {
+            "pattern": "after",
+            "description": "Adds inline code after the script handle",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/<script\\b/i",
+            "description": "Does not emit literal script tags",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_002' ) ) { return false; } wpbp_scripts_styles_002(); $scripts = wp_scripts(); $after = $scripts->get_data( 'wpbp-inline', 'after' ); return wp_script_is( 'wpbp-inline', 'enqueued' ) && is_array( $after ) && in_array( 'window.wpbpInline = true;', $after, true );",
+            "description": "The handle is queued and has the requested inline code attached after it",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_002(): void { wp_register_script( 'wpbp-inline', false, array(), null, array( 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-inline' ); wp_add_inline_script( 'wpbp-inline', 'window.wpbpInline = true;', 'after' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-scripts-styles-003",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_003(): void to register the script module ID 'wpbp/module' at 'https://example.test/module.js' with version '1.0.0', then enqueue that module.",
+      "expected_behavior": "`wpbp_scripts_styles_003()` uses the Script Modules API to register `wpbp/module` with the requested source and version, then marks the module for enqueue. Runtime validation inspects the `WP_Script_Modules` registry and queue.",
+      "requirements": [
+        "Use wp_register_script_module() and wp_enqueue_script_module()",
+        "Register and enqueue the requested module ID",
+        "Do not print module script tags manually"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_register_script_module",
+            "description": "Uses wp_register_script_module",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script_module",
+            "description": "Uses wp_enqueue_script_module",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/module",
+            "description": "Uses the requested script module ID",
+            "weight": 1
+          },
+          {
+            "pattern": "https://example\\.test/module\\.js",
+            "description": "Registers the requested module source",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/<script\\b/i",
+            "description": "Does not emit literal script tags",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_003' ) || ! function_exists( 'wp_script_modules' ) ) { return false; } wpbp_scripts_styles_003(); $modules = wp_script_modules(); $registered = $modules->get_registered( 'wpbp/module' ); return is_array( $registered ) && in_array( 'wpbp/module', $modules->get_queue(), true ) && 'https://example.test/module.js' === $registered['src'] && '1.0.0' === $registered['version'];",
+            "description": "The script module is registered with the requested source and queued",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_003(): void { wp_register_script_module( 'wpbp/module', 'https://example.test/module.js', array(), '1.0.0' ); wp_enqueue_script_module( 'wpbp/module' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-modules.php",
+          "src/wp-includes/class-wp-script-modules.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-scripts-styles-004",
+      "category": "scripts-styles",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_scripts_styles_004(): void to register the script module ID 'wpbp/dep-module' at 'https://example.test/dep.js', then register the classic script handle 'wpbp-script-with-module' at 'https://example.test/app.js' with that module listed in its module dependencies and footer output enabled.",
+      "expected_behavior": "`wpbp_scripts_styles_004()` registers a script module and a classic script whose `module_dependencies` data points at that module. Because classic scripts with module dependencies need the import map available first, runtime validation also checks that the classic script is registered for footer output.",
+      "requirements": [
+        "Use wp_register_script_module() for the module",
+        "Use wp_register_script() with module_dependencies for the classic script",
+        "Enable footer output for the classic script"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "module_dependencies",
+            "description": "Uses module_dependencies",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_register_script_module",
+            "description": "Registers the module dependency",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_register_script",
+            "description": "Uses wp_register_script",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/dep-module",
+            "description": "Uses the requested module dependency ID",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-script-with-module",
+            "description": "Uses the requested classic script handle",
+            "weight": 1
+          },
+          {
+            "pattern": "in_footer",
+            "description": "Requests footer output for the classic script",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/<script\\b/i",
+            "description": "Does not emit literal script tags",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_004' ) || ! function_exists( 'wp_script_modules' ) ) { return false; } wpbp_scripts_styles_004(); $scripts = wp_scripts(); $registered = $scripts->registered['wpbp-script-with-module'] ?? null; $module = wp_script_modules()->get_registered( 'wpbp/dep-module' ); $module_dependencies = $scripts->get_data( 'wpbp-script-with-module', 'module_dependencies' ); $has_module_dependency = is_array( $module_dependencies ) && ( in_array( 'wpbp/dep-module', $module_dependencies, true ) || array_filter( $module_dependencies, static fn( $dependency ) => is_array( $dependency ) && 'wpbp/dep-module' === ( $dependency['id'] ?? null ) ) ); return $registered instanceof \\_WP_Dependency && is_array( $module ) && 'https://example.test/dep.js' === $module['src'] && 'https://example.test/app.js' === $registered->src && true === (bool) $has_module_dependency && 1 === (int) $scripts->get_data( 'wpbp-script-with-module', 'group' );",
+            "description": "The classic script is registered with the requested module dependency and footer placement",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_004(): void { wp_register_script_module( 'wpbp/dep-module', 'https://example.test/dep.js' ); wp_register_script( 'wpbp-script-with-module', 'https://example.test/app.js', array(), '1.0.0', array( 'in_footer' => true, 'module_dependencies' => array( 'wpbp/dep-module' ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php",
+          "src/wp-includes/script-modules.php",
+          "src/wp-includes/class-wp-script-modules.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-scripts-styles-005",
+      "category": "scripts-styles",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_scripts_styles_005( string $dataset_name ): ?string to return the HTML custom data attribute name WordPress would use for the given JavaScript dataset property name.",
+      "expected_behavior": "`wpbp_scripts_styles_005()` delegates dataset-property conversion to WordPress and returns `null` when the supplied property name cannot be represented as an HTML custom data attribute. Runtime validation checks camelCase, uppercase-leading, empty-string, and invalid-name cases from the core helper's contract.",
+      "requirements": [
+        "Use wp_html_custom_data_attribute_name()",
+        "Return the helper result without hand-written conversion rules"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_scripts_styles_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_html_custom_data_attribute_name",
+            "description": "Uses wp_html_custom_data_attribute_name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_scripts_styles_005' ) ) { return false; } return 'data-post-id' === wpbp_scripts_styles_005( 'postId' ) && 'data--before' === wpbp_scripts_styles_005( 'Before' ) && 'data---one---two---' === wpbp_scripts_styles_005( '-One--Two---' ) && 'data-' === wpbp_scripts_styles_005( '' ) && null === wpbp_scripts_styles_005( '/not-an-attribute/' ) && null === wpbp_scripts_styles_005( 'no spaces' );",
+            "description": "Dataset property names are converted or rejected according to WordPress core behavior",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_scripts_styles_005( string $prop ): ?string { return wp_html_custom_data_attribute_name( $prop ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

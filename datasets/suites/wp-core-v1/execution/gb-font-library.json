@@ -1,0 +1,185 @@
+{
+  "id": "wp-core-execution-v1-gb_font_library",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Font Library",
+    "description": "Code generation tasks for WordPress Font Library APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-font-library-001",
+      "category": "gb-font-library",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_font_library_001(): void to disable the Font Library in every block editor by filtering the editor settings WordPress sends to the editor.",
+      "expected_behavior": "`wpbp_gb_font_library_001()` registers a `block_editor_settings_all` callback that sets `fontLibraryEnabled` to false while preserving unrelated editor settings. Runtime validation applies the filter with a real block editor context after the function is called.",
+      "requirements": [
+        "Use the block editor settings filter",
+        "Disable only the Font Library setting",
+        "Do not remove Font Library post types or admin pages"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_font_library_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers a filter callback",
+            "weight": 1
+          },
+          {
+            "pattern": "block_editor_settings_all",
+            "description": "Uses the editor settings filter",
+            "weight": 1
+          },
+          {
+            "pattern": "fontLibraryEnabled",
+            "description": "Updates the Font Library setting",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_font_library_001' ) ) { return false; } $before = apply_filters( 'block_editor_settings_all', array( 'fontLibraryEnabled' => true, 'codeEditingEnabled' => true ), new WP_Block_Editor_Context() ); wpbp_gb_font_library_001(); $settings = apply_filters( 'block_editor_settings_all', array( 'fontLibraryEnabled' => true, 'codeEditingEnabled' => true ), new WP_Block_Editor_Context( array( 'name' => 'core/edit-site' ) ) ); return true === ( $before['fontLibraryEnabled'] ?? null ) && false === ( $settings['fontLibraryEnabled'] ?? null ) && true === ( $settings['codeEditingEnabled'] ?? null );",
+            "description": "Calling the function disables the Font Library setting and preserves unrelated editor settings",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_font_library_001(): void { add_filter( 'block_editor_settings_all', function ( $settings ) { $settings['fontLibraryEnabled'] = false; return $settings; } ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-block-editor-context.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-font-library-002",
+      "category": "gb-font-library",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_font_library_002(): bool to register a Font Library collection with the slug 'wpbp-fonts' that contains an inline family named 'Bench Sans'.",
+      "expected_behavior": "`wpbp_gb_font_library_002()` registers `wpbp-fonts` through the Font Library collection API and returns true when WordPress accepts the collection. Runtime validation inspects `WP_Font_Library` and the collection data instead of trusting the return value alone.",
+      "requirements": [
+        "Use wp_register_font_collection()",
+        "Set the collection name to WPBP Fonts",
+        "Define a Bench Sans family with slug bench-sans"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_font_library_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_register_font_collection",
+            "description": "Uses the Font Library collection API",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-fonts",
+            "description": "Registers the requested collection slug",
+            "weight": 1
+          },
+          {
+            "pattern": "font_families",
+            "description": "Defines collection font families",
+            "weight": 1
+          },
+          {
+            "pattern": "font_family_settings",
+            "description": "Defines a font family settings object",
+            "weight": 1
+          },
+          {
+            "pattern": "Bench Sans",
+            "description": "Defines the requested family name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_font_library_002' ) ) { return false; } $registered = wpbp_gb_font_library_002(); $collection = WP_Font_Library::get_instance()->get_font_collection( 'wpbp-fonts' ); if ( ! $collection instanceof WP_Font_Collection ) { return false; } $data = $collection->get_data(); if ( is_wp_error( $data ) ) { return false; } $family = $data['font_families'][0]['font_family_settings'] ?? array(); return true === $registered && 'WPBP Fonts' === ( $data['name'] ?? null ) && 'Bench Sans' === ( $family['name'] ?? null ) && 'bench-sans' === ( $family['slug'] ?? null ) && '\"Bench Sans\", system-ui, sans-serif' === ( $family['fontFamily'] ?? null );",
+            "description": "The wpbp-fonts collection is registered with the expected inline Bench Sans family",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_font_library_002(): bool { $collection = wp_register_font_collection( 'wpbp-fonts', array( 'name' => 'WPBP Fonts', 'font_families' => array( array( 'font_family_settings' => array( 'name' => 'Bench Sans', 'slug' => 'bench-sans', 'fontFamily' => 'Bench Sans, system-ui, sans-serif' ), 'categories' => array( 'sans-serif' ) ) ), 'categories' => array( array( 'name' => 'Sans Serif', 'slug' => 'sans-serif' ) ) ) ); return $collection instanceof WP_Font_Collection; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/fonts.php",
+          "src/wp-includes/fonts/class-wp-font-library.php",
+          "src/wp-includes/fonts/class-wp-font-collection.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-font-library-003",
+      "category": "gb-font-library",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_font_library_003( array $fonts ): string to generate WordPress Font Face style markup for the supplied font-face definitions and return it as a string.",
+      "expected_behavior": "`wpbp_gb_font_library_003()` captures the output from WordPress's Font Face printer and returns the generated style markup. Runtime validation supplies a local font definition and checks WordPress's normalized CSS, including the default `font-display: fallback` and source ordering.",
+      "requirements": [
+        "Use wp_print_font_faces()",
+        "Return the captured style markup as a string",
+        "Let WordPress apply default font-face values"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_font_library_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_print_font_faces",
+            "description": "Uses the WordPress Font Face printer",
+            "weight": 1
+          },
+          {
+            "pattern": "ob_start",
+            "description": "Captures printed style markup",
+            "weight": 1
+          },
+          {
+            "pattern": "ob_get_clean",
+            "description": "Returns captured output",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_font_library_003' ) ) { return false; } $fonts = array( 'bench' => array( array( 'font-family' => 'Bench Sans', 'font-style' => 'italic', 'font-weight' => '700', 'src' => array( 'https://example.test/fonts/bench-sans.woff', 'https://example.test/fonts/bench-sans.woff2' ) ) ) ); ob_start(); $out = wpbp_gb_font_library_003( $fonts ); $leaked = ob_get_clean(); return '' === $leaked && is_string( $out ) && str_contains( $out, 'wp-fonts-local' ) && str_contains( $out, '@font-face{' ) && str_contains( $out, 'font-family:\"Bench Sans\";' ) && str_contains( $out, 'font-style:italic;' ) && str_contains( $out, 'font-weight:700;' ) && str_contains( $out, 'font-display:fallback;' ) && str_contains( $out, \"url('https://example.test/fonts/bench-sans.woff2') format('woff2')\" ) && str_contains( $out, \"url('https://example.test/fonts/bench-sans.woff') format('woff')\" );",
+            "description": "The function returns WordPress-generated font-face style markup with default fallback display and ordered sources",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_font_library_003( array $fonts ): string { ob_start(); wp_print_font_faces( $fonts ); return (string) ob_get_clean(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/fonts.php",
+          "src/wp-includes/fonts/class-wp-font-face.php"
+        ],
+        "release_focus": "7.0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,249 @@
+{
+  "id": "wp-core-execution-v1-gb_interactivity_api",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Interactivity API",
+    "description": "Code generation tasks for WordPress Interactivity API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-interactivity-api-001",
+      "category": "gb-interactivity-api",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_gb_interactivity_api_001() to initialize the 'wpbp/store' Interactivity API state with a count of 2 and return the store state from WordPress.",
+      "expected_behavior": "`wpbp_gb_interactivity_api_001()` uses `wp_interactivity_state()` for the `wpbp/store` namespace and returns the state array reported by WordPress. Runtime validation confirms the requested `count` value is present without replacing unrelated state that was already registered for the same namespace.",
+      "requirements": [
+        "Use the WordPress Interactivity API state helper",
+        "Use the store namespace 'wpbp/store'",
+        "Return the final state array"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Uses wp_interactivity_state",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/store",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          },
+          {
+            "pattern": "count",
+            "description": "Sets the requested count state key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_interactivity_state( 'wpbp/store', array( 'label' => 'Preserved' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_001' ) ) { return false; } $state = wpbp_gb_interactivity_api_001(); return is_array( $state ) && 2 === ( $state['count'] ?? null ) && 'Preserved' === ( $state['label'] ?? null );",
+            "description": "The wpbp/store state contains the new count and preserves existing keys",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_001(): array { wp_interactivity_state( 'wpbp/store', array( 'count' => 2 ) ); return wp_interactivity_state( 'wpbp/store' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-interactivity-api-002",
+      "category": "gb-interactivity-api",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_gb_interactivity_api_002( array $context ) to return a safe Interactivity API context attribute for the 'wpbp/store' namespace.",
+      "expected_behavior": "`wpbp_gb_interactivity_api_002()` delegates context attribute generation to `wp_interactivity_data_wp_context()` with the `wpbp/store` namespace. Runtime validation passes context containing quotes, angle brackets, and ampersands, then verifies WordPress returns a `data-wp-context` attribute with the namespace prefix and JSON_HEX-escaped data.",
+      "requirements": [
+        "Use the WordPress Interactivity API context helper",
+        "Use the store namespace 'wpbp/store'",
+        "Return the complete attribute string"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_data_wp_context",
+            "description": "Uses wp_interactivity_data_wp_context",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/store",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_002' ) ) { return false; } $out = wpbp_gb_interactivity_api_002( array( 'open' => true, 'label' => 'A \"quote\" <tag> & more' ) ); return is_string( $out ) && str_starts_with( $out, \"data-wp-context='wpbp/store::\" ) && str_contains( $out, '\"open\":true' ) && str_contains( $out, '\\\\u0022quote\\\\u0022' ) && str_contains( $out, '\\\\u003Ctag\\\\u003E' ) && str_contains( $out, '\\\\u0026' );",
+            "description": "The context attribute is namespaced and safely JSON-encoded for HTML",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_002( array $context ): string { return wp_interactivity_data_wp_context( $context, 'wpbp/store' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-interactivity-api-003",
+      "category": "gb-interactivity-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_interactivity_api_003( string $html ) to register derived Interactivity API state for 'wpbp/iapi-derived' and return the server-processed markup.",
+      "expected_behavior": "`wpbp_gb_interactivity_api_003()` registers state for `wpbp/iapi-derived` with a base count and a PHP Closure-derived `summary` value, then runs the supplied HTML through `wp_interactivity_process_directives()`. Runtime validation checks that a `data-wp-text=\"state.summary\"` element is rendered with the derived text from WordPress instead of its fallback text.",
+      "requirements": [
+        "Use wp_interactivity_state for the 'wpbp/iapi-derived' namespace",
+        "Use a PHP Closure for the derived summary value",
+        "Process the supplied HTML with the WordPress directive processor"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Uses wp_interactivity_process_directives",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Uses wp_interactivity_state",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/iapi-derived",
+            "description": "Uses the requested namespace",
+            "weight": 1
+          },
+          {
+            "pattern": "summary",
+            "description": "Defines the derived summary state key",
+            "weight": 1
+          },
+          {
+            "pattern": "static\\s+fn|function\\s*\\(",
+            "description": "Uses a Closure for derived state",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_003' ) ) { return false; } $out = wpbp_gb_interactivity_api_003( '<div data-wp-interactive=\"wpbp/iapi-derived\"><span data-wp-text=\"state.summary\">Loading</span></div>' ); return is_string( $out ) && str_contains( $out, '>Items: 3</span>' ) && ! str_contains( $out, '>Loading</span>' );",
+            "description": "Server-side directive processing renders the derived summary text",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_003( string $html ): string { wp_interactivity_state( 'wpbp/iapi-derived', array( 'count' => 3, 'summary' => static function (): string { $state = wp_interactivity_state(); return 'Items: ' . $state['count']; } ) ); return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-gb-interactivity-api-004",
+      "category": "gb-interactivity-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_interactivity_api_004() to return server-processed markup for one interactive element where two independent plugins toggle the same class suffix using unique Interactivity API directive IDs.",
+      "expected_behavior": "`wpbp_gb_interactivity_api_004()` uses WordPress 6.9 unique directive ID syntax with `data-wp-class` directives on a single element, registers true state flags, and processes the markup through `wp_interactivity_process_directives()`. Runtime validation checks that WordPress preserves both independent directives by adding both unique class names to the rendered element.",
+      "requirements": [
+        "Use the 'wpbp/iapi-unique' namespace",
+        "Use triple-dash unique IDs for both class directives",
+        "Return the markup after WordPress processes the directives"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_interactivity_api_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Registers directive state",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-class",
+            "description": "Uses class directives",
+            "weight": 1
+          },
+          {
+            "pattern": "\\-\\-\\-plugin\\-a",
+            "description": "Uses a unique ID for plugin-a",
+            "weight": 1
+          },
+          {
+            "pattern": "\\-\\-\\-plugin\\-b",
+            "description": "Uses a unique ID for plugin-b",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/iapi-unique",
+            "description": "Uses the requested namespace",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_004' ) ) { return false; } $out = wpbp_gb_interactivity_api_004(); return is_string( $out ) && str_contains( $out, 'class=\"badge---plugin-a badge---plugin-b\"' ) && str_contains( $out, 'data-wp-class--badge---plugin-a=\"state.pluginA\"' ) && str_contains( $out, 'data-wp-class--badge---plugin-b=\"state.pluginB\"' );",
+            "description": "Both unique data-wp-class directives are applied to the same rendered element",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_004(): string { wp_interactivity_state( 'wpbp/iapi-unique', array( 'pluginA' => true, 'pluginB' => true ) ); return wp_interactivity_process_directives( '<span data-wp-interactive=\"wpbp/iapi-unique\" data-wp-class--badge---plugin-a=\"state.pluginA\" data-wp-class--badge---plugin-b=\"state.pluginB\">Badge</span>' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

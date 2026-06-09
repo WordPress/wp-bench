@@ -53,10 +53,11 @@ class RunConfig(BaseModel):
     suite: str = "wp-core-v1"
     test_type: Optional[Literal["knowledge", "execution"]] = None
     limit: Optional[int] = None
+    test_ids: List[str] = Field(default_factory=list)
     seed: int = 1337
     concurrency: int = 5
     dry_run: bool = False
-    skip_judge: bool = False
+    check_reference_solution: bool = False
     skip_runtime: bool = False
     skip_static: bool = False
 

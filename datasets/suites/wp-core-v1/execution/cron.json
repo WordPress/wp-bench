@@ -1,0 +1,280 @@
+{
+  "id": "wp-core-execution-v1-cron",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Cron",
+    "description": "Code generation tasks for WordPress Cron APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-cron-001",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_001( int $timestamp ): bool to schedule a one-time event for the hook 'wpbp_single_event' only when that hook is not already scheduled.",
+      "expected_behavior": "`wpbp_cron_001()` uses `wp_next_scheduled()` to avoid enqueueing another `wpbp_single_event`, schedules exactly one one-time event with `wp_schedule_single_event()` when none exists, and returns false without changing the existing timestamp on later calls.",
+      "requirements": [
+        "Use wp_next_scheduled() to detect an existing event",
+        "Return false when the hook already has a scheduled event"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_schedule_single_event",
+            "description": "Uses wp_schedule_single_event",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_next_scheduled",
+            "description": "Uses wp_next_scheduled",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_single_event",
+            "description": "Targets the expected cron hook",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_clear_scheduled_hook( 'wpbp_single_event' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_001' ) ) { return false; } $first = time() + HOUR_IN_SECONDS; $second = $first + HOUR_IN_SECONDS; $scheduled = wpbp_cron_001( $first ); $first_timestamp = wp_next_scheduled( 'wpbp_single_event' ); $blocked = wpbp_cron_001( $second ); return true === $scheduled && $first === $first_timestamp && false === $blocked && $first === wp_next_scheduled( 'wpbp_single_event' );",
+            "description": "The first call schedules the single event, while a later call leaves the existing timestamp unchanged",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_clear_scheduled_hook( 'wpbp_single_event' );"
+      },
+      "reference_solution": "function wpbp_cron_001( int $timestamp ): bool { if ( false !== wp_next_scheduled( 'wpbp_single_event' ) ) { return false; } return wp_schedule_single_event( $timestamp, 'wpbp_single_event' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-002",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_002( int $timestamp, array $args ): bool to schedule the hook 'wpbp_hourly_event' as an hourly recurring event using the provided arguments.",
+      "expected_behavior": "`wpbp_cron_002()` schedules `wpbp_hourly_event` with `wp_schedule_event()` using the `hourly` recurrence and the provided argument array. Runtime validation inspects the scheduled event object for the timestamp, recurrence name, interval, and stored arguments.",
+      "requirements": [
+        "Use wp_schedule_event() with the hourly recurrence",
+        "Pass the provided argument array to the scheduled event"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_schedule_event",
+            "description": "Uses wp_schedule_event",
+            "weight": 1
+          },
+          {
+            "pattern": "hourly",
+            "description": "Uses hourly",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_hourly_event",
+            "description": "Targets the expected cron hook",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_clear_scheduled_hook( 'wpbp_hourly_event', array( 'site' => 'wp-bench' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_002' ) ) { return false; } $ts = time() + HOUR_IN_SECONDS; $args = array( 'site' => 'wp-bench' ); $result = wpbp_cron_002( $ts, $args ); $event = wp_get_scheduled_event( 'wpbp_hourly_event', $args ); return true === $result && $event && $ts === $event->timestamp && 'hourly' === $event->schedule && HOUR_IN_SECONDS === $event->interval && $args === $event->args;",
+            "description": "The hourly cron event is scheduled with the requested timestamp, interval, and arguments",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_clear_scheduled_hook( 'wpbp_hourly_event', array( 'site' => 'wp-bench' ) );"
+      },
+      "reference_solution": "function wpbp_cron_002( int $timestamp, array $args ): bool { return wp_schedule_event( $timestamp, 'hourly', 'wpbp_hourly_event', $args ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-003",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_003( array $args ): bool to unschedule only the next event for the hook 'wpbp_unschedule' that matches the provided arguments.",
+      "expected_behavior": "`wpbp_cron_003()` finds the next scheduled `wpbp_unschedule` event for the provided arguments with `wp_next_scheduled()` and removes that timestamp with `wp_unschedule_event()`. Runtime validation schedules two matching events and verifies only the earlier event is removed.",
+      "requirements": [
+        "Find the next matching timestamp with wp_next_scheduled()",
+        "Unschedule that timestamp with the same hook and arguments"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_unschedule_event",
+            "description": "Uses wp_unschedule_event",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_next_scheduled",
+            "description": "Uses wp_next_scheduled",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_unschedule",
+            "description": "Targets the expected cron hook",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_clear_scheduled_hook( 'wpbp_unschedule', array( 'id' => 31 ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_003' ) ) { return false; } $args = array( 'id' => 31 ); $first = time() + 1000; $second = $first + HOUR_IN_SECONDS; wp_schedule_single_event( $first, 'wpbp_unschedule', $args ); wp_schedule_single_event( $second, 'wpbp_unschedule', $args ); $result = wpbp_cron_003( $args ); return true === $result && $second === wp_next_scheduled( 'wpbp_unschedule', $args );",
+            "description": "Only the next matching cron event is unscheduled",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_clear_scheduled_hook( 'wpbp_unschedule', array( 'id' => 31 ) );"
+      },
+      "reference_solution": "function wpbp_cron_003( array $args ): bool { $timestamp = wp_next_scheduled( 'wpbp_unschedule', $args ); if ( false === $timestamp ) { return false; } return wp_unschedule_event( $timestamp, 'wpbp_unschedule', $args ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-004",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_004(): void to add a custom recurrence named 'wpbp_five_minutes' to WordPress cron schedules with a 300-second interval and display text 'Every five minutes'.",
+      "expected_behavior": "`wpbp_cron_004()` attaches a `cron_schedules` filter that adds `wpbp_five_minutes` while preserving existing schedules. Runtime validation retrieves the schedules through WordPress and verifies the custom interval and display label.",
+      "requirements": [
+        "Use the cron_schedules filter",
+        "Preserve existing schedules"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "cron_schedules",
+            "description": "Uses cron_schedules",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_five_minutes",
+            "description": "Registers the expected custom schedule",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers the schedule filter",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_004' ) ) { return false; } wpbp_cron_004(); $schedules = wp_get_schedules(); return isset( $schedules['wpbp_five_minutes'] ) && 300 === $schedules['wpbp_five_minutes']['interval'] && 'Every five minutes' === $schedules['wpbp_five_minutes']['display'];",
+            "description": "The custom five-minute cron recurrence is available through wp_get_schedules()",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_cron_004(): void { add_filter( 'cron_schedules', function ( $schedules ) { $schedules['wpbp_five_minutes'] = array( 'interval' => 300, 'display' => 'Every five minutes' ); return $schedules; } ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-cron-005",
+      "category": "cron",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_cron_005(): WP_Error to attempt scheduling the hook 'wpbp_invalid_event' with the invalid recurrence slug 'wpbp_missing_schedule' and return the WP_Error object produced by WordPress.",
+      "expected_behavior": "`wpbp_cron_005()` calls `wp_schedule_event()` with WordPress error returns enabled for a recurrence that is not registered. Runtime validation expects the returned object to be a `WP_Error` with the `invalid_schedule` code and no scheduled `wpbp_invalid_event` event.",
+      "requirements": [
+        "Enable WP_Error returns when calling wp_schedule_event()",
+        "Return the error object instead of converting it to a boolean"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_cron_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_schedule_event",
+            "description": "Uses wp_schedule_event",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_invalid_event",
+            "description": "Targets the expected cron hook",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_missing_schedule",
+            "description": "Uses the invalid recurrence slug",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_clear_scheduled_hook( 'wpbp_invalid_event' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_005' ) ) { return false; } $result = wpbp_cron_005(); return is_wp_error( $result ) && 'invalid_schedule' === $result->get_error_code() && false === wp_next_scheduled( 'wpbp_invalid_event' );",
+            "description": "Invalid recurrence scheduling returns WordPress' invalid_schedule error and does not enqueue an event",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_clear_scheduled_hook( 'wpbp_invalid_event' );"
+      },
+      "reference_solution": "function wpbp_cron_005(): WP_Error { return wp_schedule_event( time() + HOUR_IN_SECONDS, 'wpbp_missing_schedule', 'wpbp_invalid_event', array(), true ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

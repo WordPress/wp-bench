@@ -1,0 +1,194 @@
+{
+  "id": "wp-core-execution-v1-connectors_api",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Connectors API",
+    "description": "Code generation tasks for WordPress Connectors API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-connectors-api-001",
+      "category": "connectors-api",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_connectors_api_001(): bool to report whether WordPress has registered the built-in Akismet connector through the public Connectors API.",
+      "expected_behavior": "`wpbp_connectors_api_001()` uses `wp_is_connector_registered()` to check the `akismet` connector after WordPress connector initialization. The test focuses on public connector discovery, not direct registry access or a hard-coded truthy value.",
+      "requirements": [
+        "Use wp_is_connector_registered()",
+        "Check the connector ID 'akismet'",
+        "Do not access WP_Connector_Registry directly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_connectors_api_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_is_connector_registered",
+            "description": "Uses wp_is_connector_registered",
+            "weight": 1
+          },
+          {
+            "pattern": "akismet",
+            "description": "Checks the built-in Akismet connector ID",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "WP_Connector_Registry",
+            "description": "Does not access the connector registry directly",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_001' ) ) { return false; } return true === wpbp_connectors_api_001() && wp_is_connector_registered( 'akismet' );",
+            "description": "The helper reports the built-in Akismet connector as registered",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_connectors_api_001(): bool { return wp_is_connector_registered( 'akismet' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/connectors.php",
+          "src/wp-includes/class-wp-connector-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-connectors-api-002",
+      "category": "connectors-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_connectors_api_002( string $id ): ?array to safely return connector data for the supplied connector ID through the public Connectors API without triggering a not-found registry notice.",
+      "expected_behavior": "`wpbp_connectors_api_002()` checks whether the supplied ID is registered before retrieving connector data, returning `null` for unknown IDs without causing a `_doing_it_wrong()` notice. Runtime validation checks Akismet's type, authentication, and plugin metadata, plus a missing-ID case.",
+      "requirements": [
+        "Use wp_is_connector_registered() before retrieving the connector",
+        "Use wp_get_connector() for registered connector IDs",
+        "Return null for unknown connector IDs",
+        "Do not access WP_Connector_Registry directly"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_connectors_api_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_connector",
+            "description": "Uses wp_get_connector",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_is_connector_registered",
+            "description": "Checks registration before retrieval",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "WP_Connector_Registry",
+            "description": "Does not access the connector registry directly",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_002' ) ) { return false; } $connector = wpbp_connectors_api_002( 'akismet' ); $missing = wpbp_connectors_api_002( 'wpbp_missing_connector' ); return is_array( $connector ) && 'spam_filtering' === ( $connector['type'] ?? null ) && 'api_key' === ( $connector['authentication']['method'] ?? null ) && 'wordpress_api_key' === ( $connector['authentication']['setting_name'] ?? null ) && 'WPCOM_API_KEY' === ( $connector['authentication']['constant_name'] ?? null ) && 'akismet/akismet.php' === ( $connector['plugin']['file'] ?? null ) && is_callable( $connector['plugin']['is_active'] ?? null ) && null === $missing;",
+            "description": "The helper returns Akismet connector metadata and null for an unknown ID",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_connectors_api_002( string $id ): ?array { if ( ! wp_is_connector_registered( $id ) ) { return null; } return wp_get_connector( $id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/connectors.php",
+          "src/wp-includes/class-wp-connector-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-connectors-api-003",
+      "category": "connectors-api",
+      "difficulty": "intermediate",
+      "prompt": "Register a Connectors API connector with the ID 'wpbp_supportdesk' so it is discoverable by WordPress. It should represent a non-AI support desk provider with no authentication and the plugin file 'wpbp-supportdesk/wpbp-supportdesk.php'.",
+      "expected_behavior": "Adds a callback on `wp_connectors_init` that uses the provided `WP_Connector_Registry` instance to register `wpbp_supportdesk` with type `support_desk`, authentication method `none`, and the requested plugin file. Runtime validation dispatches the connector init hook and verifies discovery through the public query API.",
+      "requirements": [
+        "Register on wp_connectors_init",
+        "Use the WP_Connector_Registry instance provided to the hook",
+        "Use connector type 'support_desk' and authentication method 'none'"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_connectors_init",
+            "description": "Uses the connector initialization hook",
+            "weight": 1
+          },
+          {
+            "pattern": "register",
+            "description": "Registers a connector through the registry",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_supportdesk",
+            "description": "Registers the requested connector ID",
+            "weight": 1
+          },
+          {
+            "pattern": "support_desk",
+            "description": "Uses the requested connector type",
+            "weight": 1
+          },
+          {
+            "pattern": "authentication",
+            "description": "Configures connector authentication metadata",
+            "weight": 1
+          },
+          {
+            "pattern": "none",
+            "description": "Uses no-authentication connector metadata",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-supportdesk/wpbp-supportdesk.php",
+            "description": "Sets the requested plugin file",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Connector_Registry::get_instance(); if ( ! $registry instanceof WP_Connector_Registry ) { return false; } if ( $registry->is_registered( 'wpbp_supportdesk' ) ) { $registry->unregister( 'wpbp_supportdesk' ); } do_action( 'wp_connectors_init', $registry ); $connector = wp_get_connector( 'wpbp_supportdesk' ); return wp_is_connector_registered( 'wpbp_supportdesk' ) && is_array( $connector ) && 'support_desk' === ( $connector['type'] ?? null ) && 'none' === ( $connector['authentication']['method'] ?? null ) && ! isset( $connector['authentication']['setting_name'] ) && 'wpbp-supportdesk/wpbp-supportdesk.php' === ( $connector['plugin']['file'] ?? null ) && is_callable( $connector['plugin']['is_active'] ?? null );",
+            "description": "The custom support desk connector is registered and publicly discoverable",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "add_action( 'wp_connectors_init', function ( WP_Connector_Registry $registry ) { $registry->register( 'wpbp_supportdesk', array( 'name' => 'WPBP Support Desk', 'description' => 'Connects WPBP to a support desk provider.', 'type' => 'support_desk', 'authentication' => array( 'method' => 'none' ), 'plugin' => array( 'file' => 'wpbp-supportdesk/wpbp-supportdesk.php', 'is_active' => '__return_true' ) ) ); } );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/connectors.php",
+          "src/wp-includes/class-wp-connector-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    }
+  ]
+}

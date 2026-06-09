@@ -1,0 +1,292 @@
+{
+  "id": "wp-core-execution-v1-gb_block_hooks",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Hooks",
+    "description": "Code generation tasks for WordPress Block Hooks APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-hooks-001",
+      "category": "gb-block-hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_hooks_001(): bool to register a dynamic block named 'wpbp/cta-hook' that hooks after every core/paragraph block and renders '<p>CTA</p>'.",
+      "expected_behavior": "`wpbp_gb_block_hooks_001()` registers `wpbp/cta-hook` with server-side Block Hooks metadata targeting `core/paragraph` in the `after` position and a render callback. Runtime validation checks the block registry, `get_hooked_blocks()`, serialized insertion from `apply_block_hooks_to_content()`, and rendered output through `do_blocks()`.",
+      "requirements": [
+        "Use the server-side Block Hooks API",
+        "Register the block name 'wpbp/cta-hook'",
+        "Return whether WordPress registered the block"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses the server-side block registration API",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/cta-hook",
+            "description": "Registers the requested hooked block name",
+            "weight": 1
+          },
+          {
+            "pattern": "block_hooks",
+            "description": "Declares Block Hooks metadata",
+            "weight": 1
+          },
+          {
+            "pattern": "core/paragraph",
+            "description": "Targets the paragraph block as the anchor",
+            "weight": 1
+          },
+          {
+            "pattern": "after",
+            "description": "Uses the requested after position",
+            "weight": 1
+          },
+          {
+            "pattern": "render_callback",
+            "description": "Provides dynamic server rendering",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_001' ) ) { return false; } $ok = wpbp_gb_block_hooks_001(); $registry = WP_Block_Type_Registry::get_instance(); $type = $registry->get_registered( 'wpbp/cta-hook' ); $hooked = get_hooked_blocks(); $content = '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->'; $inserted = apply_block_hooks_to_content( $content, array( 'slug' => 'wpbp-pattern' ) ); $rendered = trim( do_blocks( $inserted ) ); $registry->unregister( 'wpbp/cta-hook' ); return true === $ok && $type instanceof WP_Block_Type && $type->is_dynamic() && 'after' === ( $type->block_hooks['core/paragraph'] ?? null ) && in_array( 'wpbp/cta-hook', $hooked['core/paragraph']['after'] ?? array(), true ) && str_contains( $inserted, '<!-- wp:wpbp/cta-hook /-->' ) && str_contains( $rendered, '<p>CTA</p>' );",
+            "description": "The wpbp/cta-hook block is registered, discovered by Block Hooks, inserted after a paragraph, and rendered dynamically",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_001(): bool { register_block_type( 'wpbp/cta-hook', array( 'block_hooks' => array( 'core/paragraph' => 'after' ), 'render_callback' => static fn(): string => '<p>CTA</p>' ) ); return WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/cta-hook' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php",
+          "src/wp-includes/class-wp-block-type-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-hooks-002",
+      "category": "gb-block-hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_hooks_002(): void to add 'wpbp/context-note' as a hooked block only as the first child of core/group blocks when the Block Hooks context array has slug 'wpbp-pattern'.",
+      "expected_behavior": "`wpbp_gb_block_hooks_002()` registers a `hooked_block_types` filter that preserves the incoming list, inspects the relative position, anchor block, and context, and appends `wpbp/context-note` only for `core/group` in the `first_child` position when the context slug is `wpbp-pattern`. Runtime validation checks direct filter output and serialized insertion.",
+      "requirements": [
+        "Use the Block Hooks filter API",
+        "Preserve any existing hooked block types",
+        "Register the filter callback with access to the context argument"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers a WordPress filter",
+            "weight": 1
+          },
+          {
+            "pattern": "hooked_block_types",
+            "description": "Uses the Block Hooks filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/context-note",
+            "description": "Adds the requested hooked block",
+            "weight": 1
+          },
+          {
+            "pattern": "core/group",
+            "description": "Limits the hook to group anchors",
+            "weight": 1
+          },
+          {
+            "pattern": "first_child",
+            "description": "Uses the requested child insertion position",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-pattern",
+            "description": "Checks the requested context slug",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_002' ) ) { return false; } wpbp_gb_block_hooks_002(); $matching = apply_filters( 'hooked_block_types', array( 'wpbp/existing' ), 'first_child', 'core/group', array( 'slug' => 'wpbp-pattern' ) ); $wrong_position = apply_filters( 'hooked_block_types', array(), 'after', 'core/group', array( 'slug' => 'wpbp-pattern' ) ); $wrong_context = apply_filters( 'hooked_block_types', array(), 'first_child', 'core/group', array( 'slug' => 'other-pattern' ) ); $content = '<!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>A</p><!-- /wp:paragraph --></div><!-- /wp:group -->'; $inserted = apply_block_hooks_to_content( $content, array( 'slug' => 'wpbp-pattern' ) ); $other = apply_block_hooks_to_content( $content, array( 'slug' => 'other-pattern' ) ); return in_array( 'wpbp/existing', $matching, true ) && in_array( 'wpbp/context-note', $matching, true ) && ! in_array( 'wpbp/context-note', $wrong_position, true ) && ! in_array( 'wpbp/context-note', $wrong_context, true ) && str_contains( $inserted, '<!-- wp:wpbp/context-note /-->' ) && strpos( $inserted, '<!-- wp:wpbp/context-note /-->' ) < strpos( $inserted, '<!-- wp:paragraph -->' ) && ! str_contains( $other, '<!-- wp:wpbp/context-note /-->' );",
+            "description": "The filter appends wpbp/context-note only for the matching group first-child context and produces first-child serialized insertion",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_002(): void { add_filter( 'hooked_block_types', static function ( array $hooked_block_types, string $relative_position, string $anchor_block_type, $context ): array { if ( 'first_child' !== $relative_position || 'core/group' !== $anchor_block_type ) { return $hooked_block_types; } if ( ! is_array( $context ) || 'wpbp-pattern' !== ( $context['slug'] ?? '' ) ) { return $hooked_block_types; } $hooked_block_types[] = 'wpbp/context-note'; return $hooked_block_types; }, 10, 4 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-hooks-003",
+      "category": "gb-block-hooks",
+      "difficulty": "hard",
+      "prompt": "Implement wpbp_gb_block_hooks_003( WP_Post $post ): array to apply Block Hooks to a post object and return both the updated raw content and the root-level ignored hooked block names WordPress reports.",
+      "expected_behavior": "`wpbp_gb_block_hooks_003()` runs the post-object Block Hooks algorithm with the WordPress callback that inserts hooked blocks and records ignored hooked block metadata. It returns an array with `content` containing the updated raw block markup and `ignored` containing the root-level ignored hooked block names populated by WordPress.",
+      "requirements": [
+        "Use WordPress post-object Block Hooks processing",
+        "Use the callback that inserts hooked blocks and records ignored metadata",
+        "Return an array with keys 'content' and 'ignored'"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "apply_block_hooks_to_content_from_post_object",
+            "description": "Uses post-object Block Hooks processing",
+            "weight": 1
+          },
+          {
+            "pattern": "insert_hooked_blocks_and_set_ignored_hooked_blocks_metadata",
+            "description": "Uses the metadata-recording insertion callback",
+            "weight": 1
+          },
+          {
+            "pattern": "content",
+            "description": "Returns the updated content value",
+            "weight": 1
+          },
+          {
+            "pattern": "ignored",
+            "description": "Returns the ignored hooked blocks value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_gb_block_hooks_003_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Block Hooks Fixture', 'post_status' => 'draft', 'post_type' => 'post', 'post_content' => '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_003' ) ) { return false; } register_block_type( 'wpbp/root-note', array( 'block_hooks' => array( 'core/post-content' => 'first_child' ), 'render_callback' => static fn(): string => '<p>Root</p>' ) ); $post = get_post( (int) ( $GLOBALS['wpbp_gb_block_hooks_003_post_id'] ?? 0 ) ); $result = $post instanceof WP_Post ? wpbp_gb_block_hooks_003( $post ) : null; WP_Block_Type_Registry::get_instance()->unregister( 'wpbp/root-note' ); if ( ! is_array( $result ) ) { return false; } $content = $result['content'] ?? ''; $ignored = $result['ignored'] ?? null; return is_string( $content ) && str_starts_with( $content, '<!-- wp:wpbp/root-note /-->' ) && str_contains( $content, '<!-- wp:paragraph -->' ) && is_array( $ignored ) && in_array( 'wpbp/root-note', $ignored, true );",
+            "description": "Post-object processing inserts a root hooked block and reports the root ignored hooked block name by reference",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_gb_block_hooks_003_post_id'] ) ) { wp_delete_post( (int) $GLOBALS['wpbp_gb_block_hooks_003_post_id'], true ); unset( $GLOBALS['wpbp_gb_block_hooks_003_post_id'] ); }"
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_003( WP_Post $post ): array { $ignored = array(); $content = apply_block_hooks_to_content_from_post_object( $post->post_content, $post, 'insert_hooked_blocks_and_set_ignored_hooked_blocks_metadata', $ignored ); return array( 'content' => $content, 'ignored' => $ignored ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-post.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-hooks-004",
+      "category": "gb-block-hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_hooks_004(): bool to register a dynamic block named 'wpbp/single-hook' that hooks after core/paragraph, renders '<p>Once</p>', and allows only one instance in a context.",
+      "expected_behavior": "`wpbp_gb_block_hooks_004()` registers `wpbp/single-hook` with Block Hooks metadata targeting `core/paragraph` after the anchor, a render callback, and block supports that disable multiple instances. Runtime validation checks the registry support flag and verifies that WordPress inserts the hooked block only once across repeated anchors and does not add another copy when one already exists.",
+      "requirements": [
+        "Use the server-side Block Hooks API",
+        "Disable multiple instances with block supports",
+        "Return whether WordPress registered the block"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_hooks_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses the server-side block registration API",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/single-hook",
+            "description": "Registers the requested hooked block name",
+            "weight": 1
+          },
+          {
+            "pattern": "block_hooks",
+            "description": "Declares Block Hooks metadata",
+            "weight": 1
+          },
+          {
+            "pattern": "core/paragraph",
+            "description": "Targets the paragraph block as the anchor",
+            "weight": 1
+          },
+          {
+            "pattern": "after",
+            "description": "Uses the requested after position",
+            "weight": 1
+          },
+          {
+            "pattern": "multiple",
+            "description": "Declares multiple-instance support",
+            "weight": 1
+          },
+          {
+            "pattern": "false",
+            "description": "Disables multiple instances",
+            "weight": 1
+          },
+          {
+            "pattern": "render_callback",
+            "description": "Provides dynamic server rendering",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_hooks_004' ) ) { return false; } $ok = wpbp_gb_block_hooks_004(); $registry = WP_Block_Type_Registry::get_instance(); $type = $registry->get_registered( 'wpbp/single-hook' ); $content = '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph --><!-- wp:paragraph --><p>B</p><!-- /wp:paragraph -->'; $inserted = apply_block_hooks_to_content( $content, array( 'slug' => 'wpbp-pattern' ) ); $existing = '<!-- wp:wpbp/single-hook /-->' . $content; $existing_out = apply_block_hooks_to_content( $existing, array( 'slug' => 'wpbp-pattern' ) ); $rendered = do_blocks( $inserted ); $registry->unregister( 'wpbp/single-hook' ); return true === $ok && $type instanceof WP_Block_Type && false === ( $type->supports['multiple'] ?? true ) && 1 === substr_count( $inserted, '<!-- wp:wpbp/single-hook /-->' ) && 1 === substr_count( $existing_out, '<!-- wp:wpbp/single-hook /-->' ) && str_contains( $rendered, '<p>Once</p>' );",
+            "description": "The single-hook block is registered with multiple disabled and WordPress suppresses duplicate insertions in one context",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_hooks_004(): bool { register_block_type( 'wpbp/single-hook', array( 'block_hooks' => array( 'core/paragraph' => 'after' ), 'supports' => array( 'multiple' => false ), 'render_callback' => static fn(): string => '<p>Once</p>' ) ); return WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/single-hook' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php",
+          "src/wp-includes/class-wp-block-type-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

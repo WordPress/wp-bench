@@ -30,6 +30,8 @@ grader:
 run:
   suite: wp-core-v1
   # limit: 10            # limit tests per model (null = all)
+  # test_ids: []         # optional explicit test IDs to run
+  # dry_run: false       # load/filter tests without calling models
   concurrency: 5
 
 # Output paths

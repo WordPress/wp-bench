@@ -1,0 +1,238 @@
+{
+  "id": "wp-core-execution-v1-media",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Media",
+    "description": "Code generation tasks for WordPress Media APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-media-001",
+      "category": "media",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_media_001( int $attachment_id, string|array $size = 'thumbnail' ) to return WordPress's image source data for an attachment.",
+      "expected_behavior": "`wpbp_media_001()` delegates to `wp_get_attachment_image_src()` with the supplied attachment ID and size, returning WordPress's four-item source array for full and intermediate image sizes or `false` when no image source is available. Runtime validation uses attachment metadata instead of a real upload file and verifies URL, dimensions, and intermediate-size state.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Accept the attachment ID and requested image size as inputs",
+        "Return the WordPress image source array without parsing attachment metadata manually"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_attachment_image_src",
+            "description": "Uses wp_get_attachment_image_src",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$attachment_id = wp_insert_attachment( array( 'post_title' => 'WPBP Media 001', 'post_mime_type' => 'image/jpeg', 'guid' => home_url( '/wp-content/uploads/2026/06/wpbp-media-001.jpg' ) ) ); update_post_meta( $attachment_id, '_wp_attached_file', '2026/06/wpbp-media-001.jpg' ); update_post_meta( $attachment_id, '_wp_attachment_metadata', array( 'width' => 640, 'height' => 480, 'file' => '2026/06/wpbp-media-001.jpg', 'sizes' => array( 'medium' => array( 'file' => 'wpbp-media-001-300x225.jpg', 'width' => 300, 'height' => 225, 'mime-type' => 'image/jpeg' ) ) ) ); $GLOBALS['wpbp_media_001_attachment'] = (int) $attachment_id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_001' ) ) { return false; } $attachment_id = (int) $GLOBALS['wpbp_media_001_attachment']; $full = wpbp_media_001( $attachment_id, 'full' ); $medium = wpbp_media_001( $attachment_id, 'medium' ); return is_array( $full ) && str_ends_with( $full[0], '/2026/06/wpbp-media-001.jpg' ) && 640 === $full[1] && 480 === $full[2] && false === $full[3] && is_array( $medium ) && str_ends_with( $medium[0], '/2026/06/wpbp-media-001-300x225.jpg' ) && 300 === $medium[1] && 225 === $medium[2] && true === $medium[3] && false === wpbp_media_001( 0, 'full' );",
+            "description": "The function returns WordPress attachment image source arrays for full and intermediate sizes",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_media_001_attachment'] ) ) { wp_delete_attachment( (int) $GLOBALS['wpbp_media_001_attachment'], true ); } unset( $GLOBALS['wpbp_media_001_attachment'] );"
+      },
+      "reference_solution": "function wpbp_media_001( int $attachment_id, string|array $size = 'thumbnail' ): array|false { return wp_get_attachment_image_src( $attachment_id, $size ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-media-002",
+      "category": "media",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_media_002( string $html, ?string $context = null ) to return post content after WordPress applies media tag optimizations.",
+      "expected_behavior": "`wpbp_media_002()` passes the supplied HTML and optional context to `wp_filter_content_tags()`. Runtime validation creates image attachment metadata, filters an image tag with a matching `wp-image-*` class, and checks that WordPress adds dimensions and responsive image attributes rather than leaving the tag unchanged.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Accept the HTML string and optional context as inputs",
+        "Return the filtered HTML string"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_filter_content_tags",
+            "description": "Uses wp_filter_content_tags",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$attachment_id = wp_insert_attachment( array( 'post_title' => 'WPBP Media 002', 'post_mime_type' => 'image/jpeg', 'guid' => home_url( '/wp-content/uploads/2026/06/wpbp-media-002.jpg' ) ) ); update_post_meta( $attachment_id, '_wp_attached_file', '2026/06/wpbp-media-002.jpg' ); update_post_meta( $attachment_id, '_wp_attachment_metadata', array( 'width' => 640, 'height' => 480, 'file' => '2026/06/wpbp-media-002.jpg', 'sizes' => array( 'medium' => array( 'file' => 'wpbp-media-002-300x225.jpg', 'width' => 300, 'height' => 225, 'mime-type' => 'image/jpeg' ) ) ) ); $GLOBALS['wpbp_media_002_attachment'] = (int) $attachment_id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_002' ) ) { return false; } $attachment_id = (int) $GLOBALS['wpbp_media_002_attachment']; $src = wp_get_attachment_url( $attachment_id ); $html = '<p><img class=\"alignnone wp-image-' . $attachment_id . '\" src=\"' . esc_url( $src ) . '\" alt=\"Fixture\" /></p>'; $out = wpbp_media_002( $html, 'the_content' ); return str_contains( $out, 'width=\"640\"' ) && str_contains( $out, 'height=\"480\"' ) && str_contains( $out, 'srcset=' ) && str_contains( $out, 'sizes=' ) && $out !== $html;",
+            "description": "The filtered image tag receives WordPress dimensions and responsive image attributes",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_media_002_attachment'] ) ) { wp_delete_attachment( (int) $GLOBALS['wpbp_media_002_attachment'], true ); } unset( $GLOBALS['wpbp_media_002_attachment'] );"
+      },
+      "reference_solution": "function wpbp_media_002( string $html, ?string $context = null ): string { return wp_filter_content_tags( $html, $context ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-media-003",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_003( int $orig_w, int $orig_h, int $dest_w, int $dest_h, bool|array $crop = false ) to return WordPress image resize dimensions.",
+      "expected_behavior": "`wpbp_media_003()` forwards the original size, requested size, and crop setting to `image_resize_dimensions()`. Runtime validation checks proportional downscaling, verifies WordPress refuses an upscale-only resize, and checks explicit crop positioning.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Accept the original dimensions, requested dimensions, and crop setting as inputs",
+        "Return the WordPress resize dimensions array or false"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "image_resize_dimensions",
+            "description": "Uses image_resize_dimensions",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_003' ) ) { return false; } $scaled = wpbp_media_003( 600, 300, 300, 300, false ); $upscale = wpbp_media_003( 300, 150, 600, 300, false ); $cropped = wpbp_media_003( 600, 300, 200, 200, array( 'left', 'top' ) ); return array( 0, 0, 0, 0, 300, 150, 600, 300 ) === $scaled && false === $upscale && array( 0, 0, 0, 0, 200, 200, 300, 300 ) === $cropped;",
+            "description": "The function returns WordPress resize arrays for scale and crop cases and false for upscaling",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_003( int $orig_w, int $orig_h, int $dest_w, int $dest_h, bool|array $crop = false ): array|false { return image_resize_dimensions( $orig_w, $orig_h, $dest_w, $dest_h, $crop ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-media-004",
+      "category": "media",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_media_004( string $file ) to read embedded image alternative text from a file path.",
+      "expected_behavior": "`wpbp_media_004()` loads the admin image helper if needed and calls `wp_get_image_alttext()` for the supplied file path. Runtime validation uses a temporary image-like file containing IPTC/XMP `AltTextAccessibility` metadata and a second file without XMP data, expecting the embedded alternative text for the first and an empty string for the second.",
+      "requirements": [
+        "Use WordPress media APIs",
+        "Load the admin image helper before calling wp_get_image_alttext",
+        "Return an empty string when no embedded alternative text is present"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_get_image_alttext",
+            "description": "Uses wp_get_image_alttext",
+            "weight": 1
+          },
+          {
+            "pattern": "wp\\-admin\\/includes\\/image\\.php",
+            "description": "Uses wp-admin/includes/image.php",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$base = sys_get_temp_dir() . '/wpbp-alttext-004-' . wp_rand(); $GLOBALS['wpbp_media_004_alt_file'] = $base . '.jpg'; $GLOBALS['wpbp_media_004_plain_file'] = $base . '-plain.jpg'; $xmp = '<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description xmlns:Iptc4xmpCore=\"http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/\"><Iptc4xmpCore:AltTextAccessibility><rdf:Alt><rdf:li xml:lang=\"x-default\">Bench alt text</rdf:li></rdf:Alt></Iptc4xmpCore:AltTextAccessibility></rdf:Description></rdf:RDF></x:xmpmeta>'; file_put_contents( $GLOBALS['wpbp_media_004_alt_file'], 'jpeg-data' . $xmp ); file_put_contents( $GLOBALS['wpbp_media_004_plain_file'], 'jpeg-data-without-xmp' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_004' ) ) { return false; } return 'Bench alt text' === wpbp_media_004( $GLOBALS['wpbp_media_004_alt_file'] ) && '' === wpbp_media_004( $GLOBALS['wpbp_media_004_plain_file'] );",
+            "description": "The function reads embedded IPTC/XMP alternative text and returns an empty string when absent",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_media_004_alt_file', 'wpbp_media_004_plain_file' ) as $key ) { if ( ! empty( $GLOBALS[ $key ] ) && file_exists( $GLOBALS[ $key ] ) ) { unlink( $GLOBALS[ $key ] ); } unset( $GLOBALS[ $key ] ); }"
+      },
+      "reference_solution": "function wpbp_media_004( string $file ): string { require_once ABSPATH . 'wp-admin/includes/image.php'; return (string) wp_get_image_alttext( $file ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/image.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-media-005",
+      "category": "media",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_media_005( string $filename, ?array $mimes = null ) to return WordPress's extension and MIME type result for an upload filename.",
+      "expected_behavior": "`wpbp_media_005()` calls `wp_check_filetype()` with the supplied filename and optional MIME map, returning the `ext` and `type` array from WordPress. Runtime validation checks a normal JPEG filename, an unknown extension, and a custom MIME map to ensure the implementation uses WordPress's extension-based file-type lookup.",
+      "requirements": [
+        "Use WordPress file type APIs",
+        "Accept an optional MIME map",
+        "Do not inspect file contents"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_media_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_check_filetype",
+            "description": "Uses wp_check_filetype",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_005' ) ) { return false; } $jpeg = wpbp_media_005( 'photo.jpg' ); $unknown = wpbp_media_005( 'photo.notallowed' ); $custom = wpbp_media_005( 'payload.wpbp', array( 'wpbp' => 'application/x-wpbp' ) ); return 'jpg' === $jpeg['ext'] && 'image/jpeg' === $jpeg['type'] && false === $unknown['ext'] && false === $unknown['type'] && 'wpbp' === $custom['ext'] && 'application/x-wpbp' === $custom['type'];",
+            "description": "The function returns WordPress file-type results for allowed, unknown, and custom extensions",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_media_005( string $filename, ?array $mimes = null ): array { return wp_check_filetype( $filename, $mimes ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

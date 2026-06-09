@@ -1,68 +1,328 @@
 {
   "id": "wp-core-execution-v1-hooks",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Hooks",
-    "description": "Code generation tasks for WordPress hooks (actions and filters)",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Hooks APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-hooks-001",
       "category": "hooks",
-      "difficulty": "intermediate",
-      "prompt": "Create code that adds a custom column called 'Featured' to the Posts admin list table. The column should display 'Yes' if the post has a meta key '_is_featured' with value '1', otherwise display 'No'.",
-      "expected_behavior": "Admin posts list shows a 'Featured' column with Yes/No values based on post meta",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_hooks_001(): void to attach a filter to the_title that appends the literal suffix ' [WPBP]' to the incoming title string.",
+      "expected_behavior": "`wpbp_hooks_001()` registers a `the_title` filter whose callback returns the original title plus ` [WPBP]`. Runtime validation calls the function and applies the WordPress title filter to sample values to verify the appended result.",
       "requirements": [
-        "Add column header using 'manage_posts_columns' filter",
-        "Populate column content using 'manage_posts_custom_column' action",
-        "Check post meta '_is_featured' for value '1'",
-        "Display 'Yes' or 'No' appropriately",
-        "Escape all output"
+        "Use add_filter() on the the_title filter",
+        "Append the suffix without replacing the original title"
       ],
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "add_filter.*manage_posts_columns",
-            "description": "Must hook into manage_posts_columns",
-            "weight": 1.0
-          },
-          {
-            "pattern": "add_action.*manage_posts_custom_column",
-            "description": "Must hook into manage_posts_custom_column",
-            "weight": 1.0
-          },
-          {
-            "pattern": "get_post_meta",
-            "description": "Must use get_post_meta to check meta value",
+            "pattern": "wpbp_hooks_001",
+            "description": "Defines the requested function",
             "weight": 0.5
           },
           {
-            "pattern": "_is_featured",
-            "description": "Must reference the correct meta key",
-            "weight": 0.5
+            "pattern": "add_filter",
+            "description": "Uses add_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "the_title",
+            "description": "Hooks into the title filter",
+            "weight": 1
+          },
+          {
+            "pattern": "\\[WPBP\\]",
+            "description": "Uses the required suffix",
+            "weight": 1
           }
         ]
       },
       "runtime_checks": {
         "assertions": [
           {
-            "type": "hook_registered",
-            "target": "manage_posts_columns",
-            "description": "Column filter must be registered",
-            "weight": 1.0
-          },
-          {
-            "type": "hook_registered",
-            "target": "manage_posts_custom_column",
-            "description": "Column action must be registered",
-            "weight": 1.0
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_001' ) ) { return false; } wpbp_hooks_001(); return 'Hello [WPBP]' === apply_filters( 'the_title', 'Hello', 123 ) && 'Draft [WPBP]' === apply_filters( 'the_title', 'Draft', 456 );",
+            "description": "The title filter appends the required suffix to filtered titles",
+            "weight": 1
           }
         ]
       },
-      "judge_config": {
-        "rubric_id": "wp-judge-rubric-v1"
+      "reference_solution": "function wpbp_hooks_001(): void { add_filter( 'the_title', function ( $title ) { return $title . ' [WPBP]'; }, 10, 1 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-002",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_002(): void to register an action on wpbp_two_args. When the action fires with two arguments, store them as '<first>:<second>' in the option wpbp_two_args_result.",
+      "expected_behavior": "`wpbp_hooks_002()` registers an action callback for `wpbp_two_args` that accepts both action arguments and writes them to `wpbp_two_args_result` in order. Runtime validation fires the action with two values and reads the option written by the callback.",
+      "requirements": [
+        "Use add_action() with two accepted arguments",
+        "Preserve both action arguments in order"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_action",
+            "description": "Uses add_action",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_two_args",
+            "description": "Registers the expected action hook",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_two_args_result",
+            "description": "Writes the expected option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "delete_option( 'wpbp_two_args_result' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_002' ) ) { return false; } wpbp_hooks_002(); do_action( 'wpbp_two_args', 'alpha', 'beta' ); return 'alpha:beta' === get_option( 'wpbp_two_args_result' );",
+            "description": "The action callback receives both arguments and stores them in order",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_two_args_result' );"
+      },
+      "reference_solution": "function wpbp_hooks_002(): void { add_action( 'wpbp_two_args', function ( $a, $b ) { update_option( 'wpbp_two_args_result', $a . ':' . $b ); }, 10, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-003",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_003( callable $callback ): bool to remove the supplied callback from the wpbp_remove_filter hook at priority 0 and return true only when WordPress reports it was present before removal and absent afterward.",
+      "expected_behavior": "`wpbp_hooks_003()` checks a supplied callback with `has_filter()`, removes it from `wpbp_remove_filter` at priority 0 with `remove_filter()`, and treats priority 0 as a valid registration rather than a falsey miss. Runtime validation pre-registers a callback at priority 0 and verifies the filter no longer changes a value.",
+      "requirements": [
+        "Use has_filter() to inspect the callback registration",
+        "Use remove_filter() with the matching priority",
+        "Treat priority 0 as a valid registered priority"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Uses remove_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "has_filter",
+            "description": "Uses has_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_remove_filter",
+            "description": "Targets the expected filter hook",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_hooks_003_callback'] = static function ( $value ) { return $value . ' changed'; }; add_filter( 'wpbp_remove_filter', $GLOBALS['wpbp_hooks_003_callback'], 0 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_003' ) ) { return false; } $callback = $GLOBALS['wpbp_hooks_003_callback'] ?? null; if ( ! is_callable( $callback ) ) { return false; } $ok = wpbp_hooks_003( $callback ); return true === $ok && false === has_filter( 'wpbp_remove_filter', $callback ) && 'seed' === apply_filters( 'wpbp_remove_filter', 'seed' );",
+            "description": "The priority-0 callback is removed and no longer affects filtered values",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_003( callable $callback ): bool { $before = has_filter( 'wpbp_remove_filter', $callback ); $removed = remove_filter( 'wpbp_remove_filter', $callback, 0 ); $after = has_filter( 'wpbp_remove_filter', $callback ); return 0 === $before && true === $removed && false === $after; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-004",
+      "category": "hooks",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_hooks_004(): string to register two callbacks on wpbp_priority: a lower-priority callback appends 'A' and a later callback appends 'B', then return the filtered value starting from an empty string.",
+      "expected_behavior": "`wpbp_hooks_004()` uses `add_filter()` priorities on `wpbp_priority` and returns the result of `apply_filters()`. Runtime validation expects WordPress to run the lower numeric priority first so the final value is `AB`.",
+      "requirements": [
+        "Use add_filter() with explicit priorities",
+        "Use apply_filters() to return the computed value"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Uses add_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "apply_filters",
+            "description": "Uses apply_filters",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_priority",
+            "description": "Uses the expected custom filter",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_004' ) ) { return false; } return 'AB' === wpbp_hooks_004();",
+            "description": "Filter callbacks run in WordPress priority order",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_004(): string { add_filter( 'wpbp_priority', fn( $v ) => $v . 'B', 20 ); add_filter( 'wpbp_priority', fn( $v ) => $v . 'A', 5 ); return apply_filters( 'wpbp_priority', '' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-005",
+      "category": "hooks",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_hooks_005(): int to fire the custom action wpbp_did_action twice and return WordPress's count for that action.",
+      "expected_behavior": "`wpbp_hooks_005()` dispatches `wpbp_did_action` twice with `do_action()` and returns `did_action( 'wpbp_did_action' )`. Runtime validation checks the returned count and WordPress's recorded action count.",
+      "requirements": [
+        "Use do_action() to fire the action",
+        "Use did_action() to return the action count"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "do_action",
+            "description": "Uses do_action",
+            "weight": 1
+          },
+          {
+            "pattern": "did_action",
+            "description": "Uses did_action",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_did_action",
+            "description": "Uses the expected action hook",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_005' ) ) { return false; } return 2 === wpbp_hooks_005() && 2 === did_action( 'wpbp_did_action' );",
+            "description": "did_action() reports the exact number of dispatched actions",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_005(): int { do_action( 'wpbp_did_action' ); do_action( 'wpbp_did_action' ); return did_action( 'wpbp_did_action' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-hooks-006",
+      "category": "hooks",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_hooks_006(): bool to remove every callback from the wpbp_remove_all filter and return true when applying that filter to 'abc' leaves it unchanged.",
+      "expected_behavior": "`wpbp_hooks_006()` calls `remove_all_filters()` for `wpbp_remove_all` and verifies through `apply_filters()` that callbacks on that hook no longer alter the value. Runtime validation pre-registers callbacks before the submitted code runs and confirms the hook is empty afterward.",
+      "requirements": [
+        "Use remove_all_filters() on the custom filter",
+        "Use apply_filters() to verify the value is no longer changed"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_hooks_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "remove_all_filters",
+            "description": "Uses remove_all_filters",
+            "weight": 1
+          },
+          {
+            "pattern": "apply_filters",
+            "description": "Uses apply_filters",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_remove_all",
+            "description": "Targets the expected filter hook",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_filter( 'wpbp_remove_all', 'strtoupper' ); add_filter( 'wpbp_remove_all', static function ( $value ) { return $value . '!'; }, 20 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_006' ) ) { return false; } return true === wpbp_hooks_006() && false === has_filter( 'wpbp_remove_all' ) && 'abc' === apply_filters( 'wpbp_remove_all', 'abc' );",
+            "description": "All callbacks are removed from the filter hook",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_hooks_006(): bool { remove_all_filters( 'wpbp_remove_all' ); return 'abc' === apply_filters( 'wpbp_remove_all', 'abc' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
       }
     }
   ]

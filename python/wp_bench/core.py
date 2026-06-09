@@ -11,7 +11,13 @@ from typing import Any, Dict, List
 import orjson
 
 from .config import HarnessConfig, ModelConfig
-from .datasets import ExecutionTest, KnowledgeTest, load_tests
+from .datasets import (
+    ExecutionTest,
+    KnowledgeTest,
+    ensure_test_ids_match_type,
+    filter_tests_by_ids,
+    load_tests,
+)
 from .environment import WordPressEnvironment
 from .knowledge import render_knowledge_prompt, score_knowledge_answer
 from .models import ModelInterface
@@ -20,6 +26,7 @@ from .output import (
     print_abort_message,
     print_comparison_table,
     print_model_header,
+    print_reference_solution_failures,
     print_results_path,
     print_test_error,
 )
@@ -44,6 +51,14 @@ def _timestamped_path(path: Path) -> Path:
     return path.parent / f"{path.stem}_{timestamp}{path.suffix}"
 
 
+def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
+    """Apply run limit unless explicit test IDs are selected."""
+    if config.run.test_ids:
+        return tests
+    limit = config.run.limit or len(tests)
+    return tests[:limit]
+
+
 class BenchmarkRunner:
     """Primary benchmark orchestrator for single-model evaluation.
 
@@ -58,7 +73,7 @@ class BenchmarkRunner:
             config: Full harness configuration including model, grader, and output settings.
         """
         self.config = config
-        self.model = ModelInterface(config.model)
+        self.model = ModelInterface(config.model or config.get_models()[0])
         self.environment = WordPressEnvironment(config.grader)
         self.aggregator = ScoreAggregator()
         self.records: List[Dict[str, Any]] = []
@@ -76,16 +91,27 @@ class BenchmarkRunner:
         Raises:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
-        tests = load_tests(self.config.dataset)
+        tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
         test_type = self.config.run.test_type
-        run_knowledge = test_type in (None, "knowledge")
-        run_execution = test_type in (None, "execution")
+        reference_mode = self.config.run.check_reference_solution
+        if reference_mode:
+            if test_type == "knowledge":
+                raise ValueError("--check-reference-solution only supports execution tests")
+            self._ensure_reference_solution_ids_are_execution_tests(tests)
+            run_knowledge = False
+            run_execution = True
+        else:
+            ensure_test_ids_match_type(tests, test_type, self.config.run.test_ids)
+            run_knowledge = test_type in (None, "knowledge")
+            run_execution = test_type in (None, "execution")
         if run_execution:
             self.environment.setup()
         try:
             if run_knowledge:
                 self._run_knowledge_tests(tests["knowledge"])
-            if run_execution:
+            if reference_mode:
+                self._run_reference_solution_tests(tests["execution"])
+            elif run_execution:
                 self._run_execution_tests(tests["execution"])
         except TestError as e:
             print_test_error(e)
@@ -94,23 +120,46 @@ class BenchmarkRunner:
             print_abort_message()
             raise SystemExit(130) from None
         summary = self.aggregator.finalize()
+        model_config = self.config.model.model_dump(mode="json") if self.config.model else None
         payload = {
             "metadata": {
                 "suite": self.config.run.suite,
-                "model": self.config.model.model_dump(mode="json"),
+                "mode": "reference_solution" if reference_mode else "model",
+                "model": model_config,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "scores": {
                     "knowledge": summary.knowledge,
                     "correctness": summary.correctness,
-                    "quality": summary.quality,
                     "overall": summary.overall(),
                 },
             },
             "results": self.records,
         }
         self._write_outputs(payload)
+        if reference_mode:
+            failures = [record for record in self.records if not record.get("passed", False)]
+            if failures:
+                print_reference_solution_failures(failures)
+                raise SystemExit(1)
         return payload
+
+    def _ensure_reference_solution_ids_are_execution_tests(
+        self,
+        tests: Dict[str, List[Any]],
+    ) -> None:
+        """Ensure reference-solution mode is scoped to execution tests."""
+        selected_ids = self.config.run.test_ids
+        if not selected_ids:
+            return
+
+        execution_ids = {test.id for test in tests["execution"]}
+        non_execution_ids = [test_id for test_id in selected_ids if test_id not in execution_ids]
+        if non_execution_ids:
+            raise ValueError(
+                "--check-reference-solution only supports execution test id(s): "
+                + ", ".join(non_execution_ids)
+            )
 
     def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
         """Run knowledge tests in parallel.
@@ -124,8 +173,7 @@ class BenchmarkRunner:
         Raises:
             TestError: If any test fails, stops execution and raises with details.
         """
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
@@ -172,8 +220,7 @@ class BenchmarkRunner:
         Raises:
             TestError: If any test fails, stops execution and raises with details.
         """
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
@@ -185,11 +232,9 @@ class BenchmarkRunner:
                 verification_spec = {
                     "static_checks": test.static_checks,
                     "runtime_checks": test.runtime_checks,
-                    "judge_config": test.judge_config,
                 }
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = self._score_assertions(env_result.raw)
-                quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
                 return {
                     "test_id": test.id,
                     "type": "execution",
@@ -199,7 +244,6 @@ class BenchmarkRunner:
                     "stdout": env_result.stdout,
                     "stderr": env_result.stderr,
                     "correctness": correctness,
-                    "quality": quality,
                 }
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
@@ -212,7 +256,52 @@ class BenchmarkRunner:
                     try:
                         result = future.result()
                         with self._lock:
-                            self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.aggregator.add_execution(result["correctness"])
+                            self.records.append(result)
+                        progress.update(task, advance=1)
+                    except TestError:
+                        for f in futures:
+                            f.cancel()
+                        raise
+
+    def _run_reference_solution_tests(self, tests: List[ExecutionTest]) -> None:
+        """Run execution tests using their reference_solution as candidate code."""
+        tests_to_run = _limit_tests(tests, self.config)
+        concurrency = self.config.run.concurrency
+
+        def process_test(test: ExecutionTest) -> Dict[str, Any]:
+            try:
+                if not test.reference_solution:
+                    raise ValueError("Missing reference_solution")
+                verification_spec = {
+                    "static_checks": test.static_checks,
+                    "runtime_checks": test.runtime_checks,
+                }
+                env_result = self.environment.execute_code(test.reference_solution, verification_spec)
+                correctness = self._score_assertions(env_result.raw)
+                return {
+                    "test_id": test.id,
+                    "type": "execution",
+                    "mode": "reference_solution",
+                    "code": test.reference_solution,
+                    "result": env_result.raw,
+                    "stdout": env_result.stdout,
+                    "stderr": env_result.stderr,
+                    "correctness": correctness,
+                    "passed": env_result.success and correctness >= 0.999,
+                }
+            except Exception as e:
+                raise TestError(test.id, "execution", e) from e
+
+        with create_progress() as progress:
+            task = progress.add_task("Reference solutions", total=len(tests_to_run))
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {executor.submit(process_test, test): test for test in tests_to_run}
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                        with self._lock:
+                            self.aggregator.add_execution(result["correctness"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -252,14 +341,29 @@ class BenchmarkRunner:
 
     @staticmethod
     def _score_assertions(raw: Dict[str, Any]) -> float:
-        """Calculate correctness score from assertion results.
+        """Calculate correctness from static and runtime verifier scores.
+
+        Only sections that actually defined checks contribute to the score.
+        An empty static (or runtime) section reports a perfect score of 1.0
+        (or 0.0), so averaging it in unconditionally would inflate or deflate
+        correctness for tests that exercise only one section.
 
         Args:
-            raw: Raw result dict from WordPress environment containing assertions.
+            raw: Raw result dict from WordPress environment.
 
         Returns:
-            Float between 0.0 and 1.0 representing fraction of passed assertions.
+            Float between 0.0 and 1.0 representing combined verifier score.
         """
+        scores: List[float] = []
+        for section in ("static", "runtime"):
+            result = raw.get(section) or {}
+            score = result.get("score")
+            total_weight = result.get("details", {}).get("total_weight", 0)
+            if isinstance(score, (int, float)) and total_weight:
+                scores.append(float(score))
+        if scores:
+            return round(sum(scores) / len(scores), 4)
+
         assertions = raw.get("assertions") or []
         if not assertions:
             return 0.0
@@ -315,7 +419,12 @@ class MultiModelRunner:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
         models = self.config.get_models()
-        tests = load_tests(self.config.dataset)
+        tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
+        ensure_test_ids_match_type(
+            tests,
+            self.config.run.test_type,
+            self.config.run.test_ids,
+        )
         if self.config.run.test_type != "knowledge":
             self.environment.setup()
 
@@ -414,7 +523,6 @@ class SingleModelRunner:
             "scores": {
                 "knowledge": summary.knowledge,
                 "correctness": summary.correctness,
-                "quality": summary.quality,
                 "overall": summary.overall(),
             },
             "results": self.records,
@@ -422,8 +530,7 @@ class SingleModelRunner:
 
     def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
         """Run knowledge tests in parallel. See BenchmarkRunner._run_knowledge_tests."""
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
@@ -459,8 +566,7 @@ class SingleModelRunner:
 
     def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
         """Run execution tests in parallel. See BenchmarkRunner._run_execution_tests."""
-        limit = self.config.run.limit or len(tests)
-        tests_to_run = tests[:limit]
+        tests_to_run = _limit_tests(tests, self.config)
         concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
@@ -471,17 +577,14 @@ class SingleModelRunner:
                 verification_spec = {
                     "static_checks": test.static_checks,
                     "runtime_checks": test.runtime_checks,
-                    "judge_config": test.judge_config,
                 }
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = BenchmarkRunner._score_assertions(env_result.raw)
-                quality = env_result.raw.get("quality", {}).get("score") if env_result.raw else None
                 return {
                     "test_id": test.id,
                     "type": "execution",
                     "code": code,
                     "correctness": correctness,
-                    "quality": quality,
                 }
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
@@ -494,7 +597,7 @@ class SingleModelRunner:
                     try:
                         result = future.result()
                         with self._lock:
-                            self.aggregator.add_execution(result["correctness"], result["quality"])
+                            self.aggregator.add_execution(result["correctness"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:

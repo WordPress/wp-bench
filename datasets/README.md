@@ -65,6 +65,7 @@ dataset:
 |-------|------|-------------|
 | `id` | string | Unique test ID |
 | `prompt` | string | Task description for the model |
+| `expected_behavior` | string | Reviewer-facing contract describing the behavior assertions should cover |
 | `requirements` | array | List of requirements the solution must meet |
 | `static_checks` | object | Regex patterns to check in generated code |
 | `runtime_checks` | object | Assertions to run in WordPress environment |

@@ -1,0 +1,226 @@
+{
+  "id": "wp-core-execution-v1-rewrite_permalinks",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Rewrite and Permalinks",
+    "description": "Code generation tasks for WordPress Rewrite and Permalinks APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-rewrite-permalinks-001",
+      "category": "rewrite-permalinks",
+      "difficulty": "intermediate",
+      "prompt": "Provide a PHP function named wpbp_rewrite_permalinks_001(): void that registers item URLs under items/<item-slug> as an extra permalink structure using a %wpbp_item% placeholder.",
+      "expected_behavior": "Reviewer contract: The helper must register the %wpbp_item% rewrite tag, expose the wpbp_item query variable, and add a wpbp_item permastruct whose structure contains items/%wpbp_item%. Review focus: Use WordPress rewrite APIs and do not flush rewrite rules during normal runtime. The runtime inspects WordPress rewrite state after calling the helper rather than trusting its return value.",
+      "requirements": [
+        "Use rewrite APIs",
+        "Register the wpbp_item query variable",
+        "Avoid flushing rewrite rules during normal runtime"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rewrite_permalinks_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_rewrite_tag",
+            "description": "Uses add_rewrite_tag",
+            "weight": 1
+          },
+          {
+            "pattern": "add_permastruct",
+            "description": "Uses add_permastruct",
+            "weight": 1
+          },
+          {
+            "pattern": "%wpbp_item%",
+            "description": "Registers the requested rewrite tag",
+            "weight": 0.5
+          },
+          {
+            "pattern": "items/%wpbp_item%",
+            "description": "Registers the requested item permalink structure",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "flush_rewrite_rules\\s*\\(",
+            "description": "Does not flush rewrite rules during normal runtime",
+            "severity": "error"
+          },
+          {
+            "pattern": "->\\s*flush_rules\\s*\\(",
+            "description": "Does not flush rewrite rules during normal runtime",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rewrite_permalinks_001' ) ) { return false; } global $wp, $wp_rewrite; wpbp_rewrite_permalinks_001(); $tag_index = array_search( '%wpbp_item%', $wp_rewrite->rewritecode, true ); if ( false === $tag_index ) { return false; } $regex = $wp_rewrite->rewritereplace[ $tag_index ] ?? ''; $pattern = '~^' . str_replace( '~', '\\\\~', $regex ) . '$~'; $accepts_slug = 1 === @preg_match( $pattern, 'alpha-1' ); $rejects_nested_path = 1 !== @preg_match( $pattern, 'alpha/beta' ); $query_replace = $wp_rewrite->queryreplace[ $tag_index ] ?? ''; $struct = $wp_rewrite->extra_permastructs['wpbp_item']['struct'] ?? ''; return $accepts_slug && $rejects_nested_path && 'wpbp_item=' === $query_replace && in_array( 'wpbp_item', $wp->public_query_vars, true ) && str_contains( $struct, 'items/%wpbp_item%' );",
+            "description": "The helper registers the item rewrite tag, query var, and permastruct in WordPress",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rewrite_permalinks_001(): void { add_rewrite_tag( '%wpbp_item%', '([^/]+)' ); add_permastruct( 'wpbp_item', 'items/%wpbp_item%', array( 'with_front' => false ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rewrite.php",
+          "src/wp-includes/class-wp.php",
+          "src/wp-includes/class-wp-rewrite.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rewrite-permalinks-002",
+      "category": "rewrite-permalinks",
+      "difficulty": "basic",
+      "prompt": "Provide a PHP function named wpbp_rewrite_permalinks_002(): void that registers a top-priority rewrite rule for URLs like wpbp-rule/<code>, mapping the captured code to the wpbp_rule query variable.",
+      "expected_behavior": "Reviewer contract: The helper must add a rewrite rule to WordPress' top rewrite-rule bucket for wpbp-rule/<code> URLs and map the first path segment to the wpbp_rule query variable. Review focus: Use the Rewrite API, use top priority, and do not flush rewrite rules during normal runtime. The runtime inspects $wp_rewrite->extra_rules_top after calling the helper.",
+      "requirements": [
+        "Use rewrite APIs",
+        "Register the rule at top priority",
+        "Avoid flushing rewrite rules during normal runtime"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rewrite_permalinks_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "add_rewrite_rule",
+            "description": "Uses add_rewrite_rule",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-rule",
+            "description": "Targets the requested URL prefix",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wpbp_rule",
+            "description": "Maps to the requested query variable",
+            "weight": 0.5
+          },
+          {
+            "pattern": "top",
+            "description": "Adds the rule at top priority",
+            "weight": 0.5
+          },
+          {
+            "pattern": "\\$matches\\[1\\]",
+            "description": "Uses the first regex capture in the query mapping",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "flush_rewrite_rules\\s*\\(",
+            "description": "Does not flush rewrite rules during normal runtime",
+            "severity": "error"
+          },
+          {
+            "pattern": "->\\s*flush_rules\\s*\\(",
+            "description": "Does not flush rewrite rules during normal runtime",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rewrite_permalinks_002' ) ) { return false; } global $wp_rewrite; wpbp_rewrite_permalinks_002(); foreach ( $wp_rewrite->extra_rules_top as $regex => $query ) { $pattern = '~' . str_replace( '~', '\\\\~', $regex ) . '~'; if ( 1 !== @preg_match( $pattern, 'wpbp-rule/abc-123' ) ) { continue; } if ( is_array( $query ) ) { if ( isset( $query['wpbp_rule'] ) && '$matches[1]' === $query['wpbp_rule'] ) { return true; } continue; } if ( is_string( $query ) && str_contains( $query, 'wpbp_rule=$matches[1]' ) ) { return true; } } return false;",
+            "description": "The helper registers a top rewrite rule that captures wpbp-rule URLs into wpbp_rule",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rewrite_permalinks_002(): void { add_rewrite_rule( '^wpbp-rule/([^/]+)/?', 'index.php?wpbp_rule=$matches[1]', 'top' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rewrite.php",
+          "src/wp-includes/class-wp-rewrite.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-rewrite-permalinks-003",
+      "category": "rewrite-permalinks",
+      "difficulty": "basic",
+      "prompt": "Provide a PHP function named wpbp_rewrite_permalinks_003(): void that makes wpbp_var available as a public query variable without removing existing public query vars.",
+      "expected_behavior": "Reviewer contract: The helper must hook query_vars, append wpbp_var, and preserve the incoming public query vars array. Review focus: Use WordPress hook/query-var APIs and do not flush rewrite rules during normal runtime. The runtime applies the filter to a seed array and verifies both the new and existing vars remain present.",
+      "requirements": [
+        "Use the query_vars filter",
+        "Preserve existing public query vars",
+        "Avoid flushing rewrite rules during normal runtime"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_rewrite_permalinks_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "query_vars",
+            "description": "Uses query_vars",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Uses add_filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_var",
+            "description": "Adds the requested public query var",
+            "weight": 0.5
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "flush_rewrite_rules\\s*\\(",
+            "description": "Does not flush rewrite rules during normal runtime",
+            "severity": "error"
+          },
+          {
+            "pattern": "->\\s*flush_rules\\s*\\(",
+            "description": "Does not flush rewrite rules during normal runtime",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rewrite_permalinks_003' ) ) { return false; } wpbp_rewrite_permalinks_003(); $vars = apply_filters( 'query_vars', array( 'p', 'page_id' ) ); return in_array( 'wpbp_var', $vars, true ) && in_array( 'p', $vars, true ) && in_array( 'page_id', $vars, true ) && 1 === count( array_keys( $vars, 'wpbp_var', true ) );",
+            "description": "The helper appends wpbp_var without dropping existing query vars",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_rewrite_permalinks_003(): void { add_filter( 'query_vars', fn( $vars ) => array_merge( $vars, array( 'wpbp_var' ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp.php",
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

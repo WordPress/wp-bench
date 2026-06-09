@@ -1,43 +1,368 @@
 {
   "id": "wp-core-execution-v1-database",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Database",
-    "description": "Code generation tasks for WordPress database operations and meta queries",
-    "wp_version": "6.9",
-    "created_at": "2025-12-16"
+    "description": "Code generation tasks for WordPress Database APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
   },
   "tests": [
     {
-      "id": "e-meta-query-zero-001",
+      "id": "e-database-001",
       "category": "database",
-      "difficulty": "hard",
-      "prompt": "Write wpbp_zero_price_products() that returns a WP_Query for 'product' posts whose numeric meta key 'price_cents' equals 0 without missing results due to type coercion.",
-      "expected_behavior": "Function returns one post when a product has meta price_cents stored as integer 0; does not return posts with null/missing meta.",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_001( string $item_key, string $item_value ) to add a row to the WordPress-prefixed custom table `wpbp_database_001` and return the new auto-increment ID.",
+      "expected_behavior": "`wpbp_database_001()` inserts into the fixture-owned custom table with `$wpdb->insert()`, writes `item_key`, `item_value`, and `status` as `active`, and returns `$wpdb->insert_id` rather than the rows-affected result. Runtime validation pre-seeds the table so returning `1` from `$wpdb->insert()` cannot pass.",
       "requirements": [
-        "Query post_type=product and post_status=publish",
-        "Use a meta_query with key price_cents, compare '=' and type 'NUMERIC'; do not rely on meta_value=0 string",
-        "Meta results must include rows where meta_value is 0",
-        "Return the WP_Query object"
+        "Target the WordPress-prefixed `wpbp_database_001` custom table",
+        "Write `item_key`, `item_value`, and `status` columns, setting `status` to `active`",
+        "Return the new row's auto-increment ID, not a row count"
       ],
       "static_checks": {
         "required_patterns": [
-          { "pattern": "meta_query", "description": "Uses meta_query", "weight": 1.0 },
-          { "pattern": "type['\"]?\\s*=>\\s*['\"]NUMERIC['\"]", "description": "Numeric type coercion", "weight": 0.8 }
-        ],
-        "forbidden_patterns": [
-          { "pattern": "meta_value\\s*=>\\s*0", "description": "Avoid direct meta_value=0 string shortcut", "severity": "warning" }
+          {
+            "pattern": "wpbp_database_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "->insert",
+            "description": "Uses $wpdb->insert",
+            "weight": 1
+          },
+          {
+            "pattern": "insert_id",
+            "description": "Returns $wpdb->insert_id",
+            "weight": 1
+          },
+          {
+            "pattern": "item_key",
+            "description": "Writes the item_key column",
+            "weight": 1
+          },
+          {
+            "pattern": "item_value",
+            "description": "Writes the item_value column",
+            "weight": 1
+          },
+          {
+            "pattern": "active",
+            "description": "Stores the active status",
+            "weight": 1
+          }
         ]
       },
       "runtime_checks": {
-        "setup": "$id = wp_insert_post(['post_title'=>'Zero Product','post_type'=>'product','post_status'=>'publish']); update_post_meta($id,'price_cents', 0); return true;",
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_001'; $charset_collate = $wpdb->get_charset_collate(); $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, item_key varchar(64) NOT NULL, item_value longtext NOT NULL, status varchar(20) NOT NULL DEFAULT 'new', PRIMARY KEY  (id), KEY item_key (item_key) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } $wpdb->insert( $table, array( 'item_key' => 'seed', 'item_value' => 'seeded', 'status' => 'seed' ), array( '%s', '%s', '%s' ) );",
         "assertions": [
-          { "type": "custom_assertion", "code": "return function_exists('wpbp_zero_price_products') && wpbp_zero_price_products()->post_count === 1;", "description": "Finds zero-priced product", "weight": 1.0 }
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_001' ) ) { return false; } global $wpdb; $table = $wpdb->prefix . 'wpbp_database_001'; $id = wpbp_database_001( 'alpha', 'stored value' ); if ( $id <= 1 ) { return false; } $row = $wpdb->get_row( $wpdb->prepare( \"SELECT id, item_key, item_value, status FROM {$table} WHERE item_key = %s\", 'alpha' ) ); return $row && (int) $row->id === (int) $id && 'stored value' === $row->item_value && 'active' === $row->status;",
+            "description": "The custom table row has the returned insert ID and requested values",
+            "weight": 1
+          }
         ],
-        "teardown": "wp_delete_post({id}, true);"
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_001'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" );"
       },
-      "judge_config": { "rubric_id": "wp-judge-rubric-v1" },
-      "reference_solution": "function wpbp_zero_price_products(): WP_Query {\n    return new WP_Query( array(\n        'post_type'      => 'product',\n        'post_status'    => 'publish',\n        'fields'         => 'ids',\n        'meta_query'     => array(\n            array(\n                'key'     => 'price_cents',\n                'value'   => 0,\n                'compare' => '=',\n                'type'    => 'NUMERIC',\n            ),\n        ),\n    ) );\n}"
+      "reference_solution": "function wpbp_database_001( string $item_key, string $item_value ): int { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_001'; $result = $wpdb->insert( $table, array( 'item_key' => $item_key, 'item_value' => $item_value, 'status' => 'active' ), array( '%s', '%s', '%s' ) ); return false === $result ? 0 : (int) $wpdb->insert_id; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-002",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_002( string $term ) to return a SQL query for the WordPress-prefixed custom table `wpbp_database_002`. Select that table's `id` column, require its `visibility` column to equal 'public', and require its `title` column to contain the supplied literal term.",
+      "expected_behavior": "`wpbp_database_002()` returns a SQL string prepared with `$wpdb->prepare()`, uses `%i` placeholders for the custom table plus its `id`, `visibility`, and `title` column identifiers, and escapes LIKE wildcards before adding surrounding `%` characters. Runtime validation executes the returned SQL against fixture rows, including a wildcard-looking distractor.",
+      "requirements": [
+        "Return a safely parameterized SQL string for the custom table, not queried results",
+        "Treat the table name and `id`, `visibility`, and `title` column names as SQL identifiers",
+        "Treat percent and underscore characters in the term as literal text"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "prepare",
+            "description": "Uses prepare",
+            "weight": 1
+          },
+          {
+            "pattern": "%i",
+            "description": "Uses identifier placeholders",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_like",
+            "description": "Uses esc_like",
+            "weight": 1
+          },
+          {
+            "pattern": "LIKE",
+            "description": "Builds a LIKE query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_002'; $charset_collate = $wpdb->get_charset_collate(); $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, title varchar(191) NOT NULL, visibility varchar(20) NOT NULL, PRIMARY KEY  (id), KEY visibility (visibility) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } $wpdb->insert( $table, array( 'title' => 'WPBP 100%_match target', 'visibility' => 'public' ), array( '%s', '%s' ) ); $target = (int) $wpdb->insert_id; $wpdb->insert( $table, array( 'title' => 'WPBP 100Xmatch target', 'visibility' => 'public' ), array( '%s', '%s' ) ); $distractor = (int) $wpdb->insert_id; $wpdb->insert( $table, array( 'title' => 'WPBP 100%_match hidden', 'visibility' => 'private' ), array( '%s', '%s' ) ); $private = (int) $wpdb->insert_id; $GLOBALS['wpbp_database_002_rows'] = array( 'target' => $target, 'distractor' => $distractor, 'private' => $private );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_002' ) ) { return false; } global $wpdb; $sql = wpbp_database_002( '100%_match' ); if ( ! is_string( $sql ) || ! str_contains( $sql, 'LIKE' ) ) { return false; } $ids = array_map( 'intval', $wpdb->get_col( $sql ) ); $rows = $GLOBALS['wpbp_database_002_rows'] ?? array(); return in_array( $rows['target'] ?? 0, $ids, true ) && ! in_array( $rows['distractor'] ?? 0, $ids, true ) && ! in_array( $rows['private'] ?? 0, $ids, true );",
+            "description": "The prepared SQL matches only public custom-table rows containing the literal LIKE term",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_002'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" ); unset( $GLOBALS['wpbp_database_002_rows'] );"
+      },
+      "reference_solution": "function wpbp_database_002( string $term ): string { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_002'; return $wpdb->prepare( 'SELECT %i FROM %i WHERE %i = %s AND %i LIKE %s', 'id', $table, 'visibility', 'public', 'title', '%' . $wpdb->esc_like( $term ) . '%' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-003",
+      "category": "database",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_database_003( string $lookup_key ) to read one `lookup_value` from the WordPress-prefixed custom table `wpbp_database_003` for the supplied `lookup_key`.",
+      "expected_behavior": "`wpbp_database_003()` uses `$wpdb->get_var()` with a prepared query against the fixture-owned custom table, returning the matching `lookup_value` for the supplied `lookup_key` and `null` when no row exists.",
+      "requirements": [
+        "Target the WordPress-prefixed `wpbp_database_003` custom table",
+        "Handle the `lookup_key` comparison safely",
+        "Return null when the custom-table row is missing"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_var",
+            "description": "Uses get_var",
+            "weight": 1
+          },
+          {
+            "pattern": "prepare",
+            "description": "Uses prepare",
+            "weight": 1
+          },
+          {
+            "pattern": "lookup_value",
+            "description": "Reads the lookup_value column",
+            "weight": 1
+          },
+          {
+            "pattern": "lookup_key",
+            "description": "Matches rows by lookup_key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_003'; $charset_collate = $wpdb->get_charset_collate(); $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, lookup_key varchar(64) NOT NULL, lookup_value longtext NOT NULL, PRIMARY KEY  (id), UNIQUE KEY lookup_key (lookup_key) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } $wpdb->insert( $table, array( 'lookup_key' => 'alpha', 'lookup_value' => 'stored' ), array( '%s', '%s' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_003' ) ) { return false; } return 'stored' === wpbp_database_003( 'alpha' ) && null === wpbp_database_003( 'missing' );",
+            "description": "The function reads the requested custom-table value and returns null for a missing row",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_003'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" );"
+      },
+      "reference_solution": "function wpbp_database_003( string $lookup_key ): ?string { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_003'; return $wpdb->get_var( $wpdb->prepare( \"SELECT lookup_value FROM {$table} WHERE lookup_key = %s\", $lookup_key ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-004",
+      "category": "database",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_database_004( string $lookup_key, string $value ) to update `lookup_value` in the WordPress-prefixed custom table `wpbp_database_004` for the supplied `lookup_key`.",
+      "expected_behavior": "`wpbp_database_004()` calls `$wpdb->update()` on the fixture-owned custom table, identifies rows by `lookup_key`, writes the supplied `lookup_value`, and returns the method's row-count result. Runtime validation checks the target row, an unrelated row, and the zero-row result for a missing key.",
+      "requirements": [
+        "Target the WordPress-prefixed `wpbp_database_004` custom table",
+        "Accept the lookup key and new value as inputs",
+        "Return the affected row count from the database API"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "->update",
+            "description": "Uses $wpdb->update",
+            "weight": 1
+          },
+          {
+            "pattern": "lookup_value",
+            "description": "Writes the lookup_value column",
+            "weight": 1
+          },
+          {
+            "pattern": "lookup_key",
+            "description": "Matches rows by lookup_key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_004'; $charset_collate = $wpdb->get_charset_collate(); $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, lookup_key varchar(64) NOT NULL, lookup_value longtext NOT NULL, PRIMARY KEY  (id), UNIQUE KEY lookup_key (lookup_key) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } $wpdb->insert( $table, array( 'lookup_key' => 'target', 'lookup_value' => 'old' ), array( '%s', '%s' ) ); $wpdb->insert( $table, array( 'lookup_key' => 'keep', 'lookup_value' => 'unchanged' ), array( '%s', '%s' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_004' ) ) { return false; } global $wpdb; $table = $wpdb->prefix . 'wpbp_database_004'; $updated = wpbp_database_004( 'target', 'new' ); $stored = $wpdb->get_var( $wpdb->prepare( \"SELECT lookup_value FROM {$table} WHERE lookup_key = %s\", 'target' ) ); $keep = $wpdb->get_var( $wpdb->prepare( \"SELECT lookup_value FROM {$table} WHERE lookup_key = %s\", 'keep' ) ); $missing = wpbp_database_004( 'missing', 'unused' ); return 1 === $updated && 'new' === $stored && 'unchanged' === $keep && 0 === $missing;",
+            "description": "The function updates only the matching custom-table row and returns row counts",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_004'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" );"
+      },
+      "reference_solution": "function wpbp_database_004( string $lookup_key, string $value ): int|false { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_004'; return $wpdb->update( $table, array( 'lookup_value' => $value ), array( 'lookup_key' => $lookup_key ), array( '%s' ), array( '%s' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-005",
+      "category": "database",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_database_005( string $lookup_key ) to delete exactly the matching row from the WordPress-prefixed custom table `wpbp_database_005`.",
+      "expected_behavior": "`wpbp_database_005()` calls `$wpdb->delete()` on the fixture-owned custom table, matches only the supplied `lookup_key`, and returns the method's row-count result. Runtime validation checks that the target row is removed, an unrelated row remains, and a missing key returns zero affected rows.",
+      "requirements": [
+        "Target the WordPress-prefixed `wpbp_database_005` custom table",
+        "Accept the lookup key as input",
+        "Return the affected row count from the database API"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "->delete",
+            "description": "Uses $wpdb->delete",
+            "weight": 1
+          },
+          {
+            "pattern": "lookup_key",
+            "description": "Matches rows by lookup_key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_005'; $charset_collate = $wpdb->get_charset_collate(); $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, lookup_key varchar(64) NOT NULL, lookup_value longtext NOT NULL, PRIMARY KEY  (id), UNIQUE KEY lookup_key (lookup_key) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } $wpdb->insert( $table, array( 'lookup_key' => 'target', 'lookup_value' => 'remove' ), array( '%s', '%s' ) ); $wpdb->insert( $table, array( 'lookup_key' => 'keep', 'lookup_value' => 'keep' ), array( '%s', '%s' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_005' ) ) { return false; } global $wpdb; $table = $wpdb->prefix . 'wpbp_database_005'; $deleted = wpbp_database_005( 'target' ); $target = $wpdb->get_var( $wpdb->prepare( \"SELECT lookup_value FROM {$table} WHERE lookup_key = %s\", 'target' ) ); $keep = $wpdb->get_var( $wpdb->prepare( \"SELECT lookup_value FROM {$table} WHERE lookup_key = %s\", 'keep' ) ); $missing = wpbp_database_005( 'missing' ); return 1 === $deleted && null === $target && 'keep' === $keep && 0 === $missing;",
+            "description": "The function deletes only the matching custom-table row and returns row counts",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_005'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" );"
+      },
+      "reference_solution": "function wpbp_database_005( string $lookup_key ): int|false { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_005'; return $wpdb->delete( $table, array( 'lookup_key' => $lookup_key ), array( '%s' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-database-006",
+      "category": "database",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_database_006() to create or update the WordPress-prefixed custom table `wpbp_database_006` using WordPress's schema-upgrade path, then return the upgrade result array.",
+      "expected_behavior": "`wpbp_database_006()` loads WordPress's upgrade functions, builds a schema for the fixture-owned custom table with `$wpdb->get_charset_collate()`, and passes it to `dbDelta()`. Runtime validation checks that the table exists with the expected columns, auto-increment primary key, default score value, and slug index.",
+      "requirements": [
+        "Create `id`, `slug`, `score`, and `created_at` columns",
+        "Use the site's charset and collation for the table schema",
+        "Return the schema-upgrade result array"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_database_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "dbDelta",
+            "description": "Uses dbDelta",
+            "weight": 1
+          },
+          {
+            "pattern": "upgrade.php",
+            "description": "Loads the upgrade functions file",
+            "weight": 1
+          },
+          {
+            "pattern": "get_charset_collate",
+            "description": "Uses the site's charset/collation",
+            "weight": 1
+          },
+          {
+            "pattern": "PRIMARY KEY",
+            "description": "Defines the primary key for dbDelta",
+            "weight": 1
+          },
+          {
+            "pattern": "KEY slug",
+            "description": "Defines the slug index",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_006'; if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table ) { throw new \\RuntimeException( 'Fixture table already exists: ' . $table ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_006' ) ) { return false; } global $wpdb; $table = $wpdb->prefix . 'wpbp_database_006'; $result = wpbp_database_006(); $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ); if ( $exists !== $table || ! is_array( $result ) ) { return false; } $columns = $wpdb->get_results( \"SHOW COLUMNS FROM {$table}\", OBJECT_K ); if ( ! isset( $columns['id'], $columns['slug'], $columns['score'], $columns['created_at'] ) ) { return false; } $indexes = $wpdb->get_results( \"SHOW INDEX FROM {$table}\", ARRAY_A ); $has_slug_key = false; foreach ( $indexes as $index ) { if ( 'slug' === ( $index['Key_name'] ?? '' ) && 'slug' === ( $index['Column_name'] ?? '' ) ) { $has_slug_key = true; } } return str_contains( strtolower( (string) $columns['id']->Extra ), 'auto_increment' ) && '0' === (string) $columns['score']->Default && $has_slug_key;",
+            "description": "dbDelta creates the custom table with the expected columns and slug index",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_006'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" );"
+      },
+      "reference_solution": "function wpbp_database_006(): array { global $wpdb; require_once ABSPATH . 'wp-admin/includes/upgrade.php'; $table = $wpdb->prefix . 'wpbp_database_006'; $charset_collate = $wpdb->get_charset_collate(); $sql = \"CREATE TABLE {$table} (\\nid bigint(20) unsigned NOT NULL AUTO_INCREMENT,\\nslug varchar(80) NOT NULL,\\nscore int(11) unsigned NOT NULL DEFAULT 0,\\ncreated_at datetime NOT NULL,\\nPRIMARY KEY  (id),\\nKEY slug (slug)\\n) {$charset_collate};\"; return dbDelta( $sql ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/upgrade.php",
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      }
     }
   ]
 }

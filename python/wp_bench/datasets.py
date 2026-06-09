@@ -19,13 +19,13 @@ class ExecutionTest:
     id: str
     suite: str
     prompt: str
+    expected_behavior: str
     test_type: str
     category: str
     difficulty: str
     requirements: List[str]
     static_checks: Dict[str, Any]
     runtime_checks: Dict[str, Any]
-    judge_config: Optional[Dict[str, Any]]
     reference_solution: Optional[str]
     metadata: Dict[str, Any]
 
@@ -52,6 +52,40 @@ def load_tests(config: DatasetConfig) -> Dict[str, List[Any]]:
     return _load_from_local_files(config)
 
 
+def filter_tests_by_ids(
+    tests: Dict[str, List[Any]],
+    test_ids: List[str],
+) -> Dict[str, List[Any]]:
+    """Filter loaded tests to the requested dataset test IDs."""
+    if not test_ids:
+        return tests
+
+    available_ids = {test.id for group in tests.values() for test in group}
+    missing_ids = [test_id for test_id in test_ids if test_id not in available_ids]
+    if missing_ids:
+        raise ValueError(f"Unknown test id(s): {', '.join(missing_ids)}")
+
+    wanted = set(test_ids)
+    return {
+        kind: [test for test in group if test.id in wanted]
+        for kind, group in tests.items()
+    }
+
+
+def ensure_test_ids_match_type(
+    tests: Dict[str, List[Any]],
+    test_type: str | None,
+    test_ids: List[str],
+) -> None:
+    """Fail clearly when requested IDs do not match an explicit test type."""
+    if not test_ids or test_type is None:
+        return
+    if not tests[test_type]:
+        raise ValueError(
+            f"No {test_type} tests matched requested test id(s): {', '.join(test_ids)}"
+        )
+
+
 def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
     """Load dataset from Hugging Face Hub (Parquet format)."""
     dataset = hf_load_dataset(
@@ -68,7 +102,6 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
         requirements = _parse_json_field(row.get("requirements", "[]"))
         static_checks = _parse_json_field(row.get("static_checks", "{}"))
         runtime_checks = _parse_json_field(row.get("runtime_checks", "{}"))
-        judge_config = _parse_json_field(row.get("judge_config", "{}"))
         choices = _parse_json_field(row.get("choices", "[]"))
 
         if row.get("test_kind") == "execution":
@@ -77,13 +110,13 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     id=row["id"],
                     suite=row.get("suite", config.name),
                     prompt=row["prompt"],
+                    expected_behavior=row.get("expected_behavior", ""),
                     test_type="execution",
                     category=row.get("category", "general"),
                     difficulty=row.get("difficulty", "unknown"),
                     requirements=requirements if isinstance(requirements, list) else [],
                     static_checks=static_checks if isinstance(static_checks, dict) else {},
                     runtime_checks=runtime_checks if isinstance(runtime_checks, dict) else {},
-                    judge_config=judge_config if isinstance(judge_config, dict) else None,
                     reference_solution=row.get("reference_solution"),
                     metadata={},
                 )
@@ -152,13 +185,13 @@ def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
                 id=test["id"],
                 suite=suite_id,
                 prompt=test["prompt"],
+                expected_behavior=test.get("expected_behavior", ""),
                 test_type="execution",
                 category=test.get("category", "general"),
                 difficulty=test.get("difficulty", "unknown"),
                 requirements=test.get("requirements", []),
                 static_checks=test.get("static_checks", {}),
                 runtime_checks=test.get("runtime_checks", {}),
-                judge_config=test.get("judge_config"),
                 reference_solution=test.get("reference_solution"),
                 metadata={"suite_metadata": metadata},
             )

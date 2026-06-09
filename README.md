@@ -7,7 +7,7 @@ The official WordPress AI benchmark. Evaluate how well language models understan
 WP-Bench measures AI model capabilities across two dimensions:
 
 - **Knowledge** — Multiple-choice and short-answer questions testing WordPress concepts, APIs, and best practices
-- **Execution** — Code generation tasks graded by a real WordPress runtime for correctness and quality
+- **Execution** — Code generation tasks graded by static checks and runtime assertions in a real WordPress environment
 
 The benchmark uses WordPress itself as the grader, running generated code in a sandboxed environment with static analysis and runtime assertions.
 
@@ -82,6 +82,8 @@ grader:
 run:
   suite: wp-core-v1
   limit: 10                  # limit tests (null = all)
+  test_ids: []               # optional explicit test IDs to run
+  dry_run: false             # load/filter tests without calling models
   concurrency: 4
 
 output:
@@ -97,7 +99,9 @@ wp-bench run --config wp-bench.yaml          # run with config file
 wp-bench run --model-name gpt-4o --limit 5   # quick single-model test
 wp-bench run --test-type knowledge           # run only knowledge tests (no WordPress env needed)
 wp-bench run --test-type execution           # run only execution tests
-wp-bench dry-run --config wp-bench.yaml      # validate config without calling models
+wp-bench run --test-type execution --test-id e-abilities-api-001
+wp-bench run --test-id e-abilities-api-001 --test-id e-rest-api-001
+wp-bench run --config wp-bench.yaml --dry-run # validate config without calling models
 ```
 
 ## Repository Structure
@@ -146,15 +150,10 @@ The notebook generates:
 ## How Grading Works
 
 1. The harness sends a prompt to the model requesting WordPress code
-2. Generated code is sent to the WordPress runtime via WP-CLI
+2. Generated code is sent to the WordPress runtime
 3. The runtime performs static analysis (syntax, coding standards, security)
 4. Code executes in a sandbox with test assertions
 5. Results return as JSON with scores and detailed feedback
-
-```bash
-# Manual grading example (run from runtime/ directory)
-npm run wp-bench -- verify --payload=$(echo '{"code":"<?php echo 1;"}' | base64)
-```
 
 ## Development
 

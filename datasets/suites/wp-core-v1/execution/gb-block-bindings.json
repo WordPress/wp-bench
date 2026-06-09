@@ -1,0 +1,268 @@
+{
+  "id": "wp-core-execution-v1-gb_block_bindings",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Bindings",
+    "description": "Code generation tasks for WordPress Block Bindings APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-bindings-001",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_001(): bool to register a server-side block binding source named 'wpbp/source' that can replace a bound paragraph's content with the binding's 'text' argument.",
+      "expected_behavior": "`wpbp_gb_block_bindings_001()` registers the `wpbp/source` binding source with WordPress and returns whether the source is registered. Runtime validation renders a paragraph whose `content` attribute is bound to the source and confirms WordPress replaces the fallback text with the binding argument.",
+      "requirements": [
+        "Use register_block_bindings_source()",
+        "Register the source name 'wpbp/source'",
+        "Return whether WordPress registered the source"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_bindings_source",
+            "description": "Uses register_block_bindings_source",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/source",
+            "description": "Registers the requested source name",
+            "weight": 1
+          },
+          {
+            "pattern": "get_value_callback",
+            "description": "Defines a source value callback",
+            "weight": 1
+          },
+          {
+            "pattern": "text",
+            "description": "Reads the requested binding argument",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_001' ) ) { return false; } $ok = wpbp_gb_block_bindings_001(); $source = get_block_bindings_source( 'wpbp/source' ); if ( true !== $ok || ! $source instanceof WP_Block_Bindings_Source ) { return false; } $content = '<!-- wp:paragraph {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"wpbp/source\",\"args\":{\"text\":\"Bound paragraph\"}}}}} --><p>Fallback</p><!-- /wp:paragraph -->'; return '<p class=\"wp-block-paragraph\">Bound paragraph</p>' === trim( do_blocks( $content ) );",
+            "description": "The wpbp/source source is registered and supplies paragraph content through block rendering",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_001(): bool { register_block_bindings_source( 'wpbp/source', array( 'label' => 'WPBP Source', 'get_value_callback' => static function ( array $source_args, WP_Block $block_instance, string $attribute_name ): string { return isset( $source_args['text'] ) ? (string) $source_args['text'] : 'bound'; } ) ); return null !== get_block_bindings_source( 'wpbp/source' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-source.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-bindings-002",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_002(): void so WordPress treats the 'title' attribute of the custom block type 'wpbp/card' as bindable without changing bindable attributes for unrelated block types.",
+      "expected_behavior": "`wpbp_gb_block_bindings_002()` hooks the Block Bindings supported-attributes API for `wpbp/card`, preserves existing attribute lists, and adds `title` only for that block type. Runtime validation registers a dynamic `wpbp/card` fixture, binds its `title` attribute to a source, and confirms WordPress passes the bound title into the block render callback.",
+      "requirements": [
+        "Use the supported block attributes filter",
+        "Target only the 'wpbp/card' block type",
+        "Preserve existing supported attributes"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "block_bindings_supported_attributes",
+            "description": "Uses block_bindings_supported_attributes",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers a filter callback",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/card",
+            "description": "Targets the requested block type",
+            "weight": 1
+          },
+          {
+            "pattern": "title",
+            "description": "Adds the requested bindable attribute",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_002' ) ) { return false; } register_block_type( 'wpbp/card', array( 'attributes' => array( 'title' => array( 'type' => 'string', 'default' => 'Fallback Card' ) ), 'render_callback' => static fn( array $attrs ): string => '<div class=\"wpbp-card\">' . esc_html( $attrs['title'] ?? '' ) . '</div>' ) ); register_block_bindings_source( 'wpbp/card-title-source', array( 'label' => 'Card Title Source', 'get_value_callback' => static fn(): string => 'Bound Card' ) ); wpbp_gb_block_bindings_002(); $card_attrs = get_block_bindings_supported_attributes( 'wpbp/card' ); $paragraph_attrs = get_block_bindings_supported_attributes( 'core/paragraph' ); $content = '<!-- wp:wpbp/card {\"metadata\":{\"bindings\":{\"title\":{\"source\":\"wpbp/card-title-source\"}}}} /-->'; $out = trim( do_blocks( $content ) ); return in_array( 'title', $card_attrs, true ) && ! in_array( 'title', $paragraph_attrs, true ) && '<div class=\"wpbp-card\">Bound Card</div>' === $out;",
+            "description": "Only wpbp/card gains a bindable title attribute, and rendering receives the bound value",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_002(): void { add_filter( 'block_bindings_supported_attributes', static function ( array $supported_attributes, string $block_type ): array { if ( 'wpbp/card' !== $block_type ) { return $supported_attributes; } if ( ! in_array( 'title', $supported_attributes, true ) ) { $supported_attributes[] = 'title'; } return $supported_attributes; }, 10, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-bindings-003",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_003(): bool to register a block binding source named 'wpbp/meta-title' that reads the current block's postId context and returns that post's '_wpbp_title' meta value for bound content.",
+      "expected_behavior": "`wpbp_gb_block_bindings_003()` registers `wpbp/meta-title`, declares the `postId` context needed by the source, and returns whether WordPress registered the source. Runtime validation creates a post fixture with `_wpbp_title`, renders a paragraph block with matching context, and confirms the bound content comes from post meta.",
+      "requirements": [
+        "Use register_block_bindings_source()",
+        "Declare the postId context for the source",
+        "Return whether WordPress registered the source"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_bindings_source",
+            "description": "Uses register_block_bindings_source",
+            "weight": 1
+          },
+          {
+            "pattern": "uses_context",
+            "description": "Uses uses_context",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/meta-title",
+            "description": "Registers the requested source name",
+            "weight": 1
+          },
+          {
+            "pattern": "postId",
+            "description": "Requests postId block context",
+            "weight": 1
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Reads post meta through WordPress",
+            "weight": 1
+          },
+          {
+            "pattern": "_wpbp_title",
+            "description": "Reads the requested meta key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$post_id = wp_insert_post( array( 'post_title' => 'WPBP Binding Fixture', 'post_status' => 'publish', 'post_type' => 'post' ) ); update_post_meta( $post_id, '_wpbp_title', 'Context Meta Title' ); update_option( 'wpbp_gb_block_bindings_003_post_id', $post_id, false );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_003' ) ) { return false; } $post_id = (int) get_option( 'wpbp_gb_block_bindings_003_post_id' ); if ( ! $post_id ) { return false; } $ok = wpbp_gb_block_bindings_003(); $source = get_block_bindings_source( 'wpbp/meta-title' ); if ( true !== $ok || ! $source instanceof WP_Block_Bindings_Source || ! in_array( 'postId', $source->uses_context ?? array(), true ) ) { return false; } $parsed = parse_blocks( '<!-- wp:paragraph {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"wpbp/meta-title\"}}}} --><p>Fallback</p><!-- /wp:paragraph -->' ); $block = new WP_Block( $parsed[0], array( 'postId' => $post_id ) ); return '<p class=\"wp-block-paragraph\">Context Meta Title</p>' === trim( $block->render() );",
+            "description": "The wpbp/meta-title source uses postId context to render post meta as paragraph content",
+            "weight": 1
+          }
+        ],
+        "teardown": "$post_id = (int) get_option( 'wpbp_gb_block_bindings_003_post_id' ); if ( $post_id ) { wp_delete_post( $post_id, true ); } delete_option( 'wpbp_gb_block_bindings_003_post_id' );"
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_003(): bool { register_block_bindings_source( 'wpbp/meta-title', array( 'label' => 'Meta Title', 'uses_context' => array( 'postId' ), 'get_value_callback' => static function ( array $source_args, WP_Block $block_instance, string $attribute_name ): ?string { if ( 'content' !== $attribute_name ) { return null; } $post_id = isset( $block_instance->context['postId'] ) ? (int) $block_instance->context['postId'] : 0; if ( ! $post_id ) { return null; } return (string) get_post_meta( $post_id, '_wpbp_title', true ); } ) ); return null !== get_block_bindings_source( 'wpbp/meta-title' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-source.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-bindings-004",
+      "category": "gb-block-bindings",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_bindings_004(): void to filter block binding source values so only values from the 'wpbp/filter-source' source bound to the 'content' attribute are uppercased.",
+      "expected_behavior": "`wpbp_gb_block_bindings_004()` hooks `block_bindings_source_value` with access to the source name and attribute name, uppercases values only for `wpbp/filter-source` content bindings, and returns unrelated binding values unchanged. Runtime validation renders two bound paragraphs through WordPress to verify both the filtered and unfiltered paths.",
+      "requirements": [
+        "Use the block_bindings_source_value filter",
+        "Check the source name and attribute name before changing the value",
+        "Leave unrelated sources unchanged"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_bindings_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "block_bindings_source_value",
+            "description": "Uses block_bindings_source_value",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers a filter callback",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/filter-source",
+            "description": "Targets the requested binding source",
+            "weight": 1
+          },
+          {
+            "pattern": "content",
+            "description": "Checks the requested bound attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "strtoupper",
+            "description": "Uppercases the filtered value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_bindings_004' ) ) { return false; } register_block_bindings_source( 'wpbp/filter-source', array( 'label' => 'Filter Source', 'get_value_callback' => static fn(): string => 'mixed case' ) ); register_block_bindings_source( 'wpbp/other-filter-source', array( 'label' => 'Other Filter Source', 'get_value_callback' => static fn(): string => 'mixed case' ) ); wpbp_gb_block_bindings_004(); $filtered = trim( do_blocks( '<!-- wp:paragraph {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"wpbp/filter-source\"}}}} --><p>Fallback</p><!-- /wp:paragraph -->' ) ); $unfiltered = trim( do_blocks( '<!-- wp:paragraph {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"wpbp/other-filter-source\"}}}} --><p>Fallback</p><!-- /wp:paragraph -->' ) ); return '<p class=\"wp-block-paragraph\">MIXED CASE</p>' === $filtered && '<p class=\"wp-block-paragraph\">mixed case</p>' === $unfiltered;",
+            "description": "Only wpbp/filter-source content bindings are uppercased during WordPress rendering",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_004(): void { add_filter( 'block_bindings_source_value', static function ( $value, string $source_name, array $source_args, WP_Block $block_instance, string $attribute_name ) { if ( 'wpbp/filter-source' !== $source_name || 'content' !== $attribute_name ) { return $value; } return strtoupper( (string) $value ); }, 10, 5 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/class-wp-block-bindings-source.php",
+          "src/wp-includes/class-wp-block-bindings-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

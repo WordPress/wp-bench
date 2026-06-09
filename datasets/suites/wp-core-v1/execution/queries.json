@@ -1,0 +1,657 @@
+{
+  "id": "wp-core-execution-v1-queries",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Queries",
+    "description": "Code generation tasks for WordPress Queries APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-queries-001",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_001() to return recent published posts by category slug with no_found_rows.",
+      "expected_behavior": "`wpbp_queries_001()` returns a `WP_Query` for published posts matching the supplied category slug, limited by the supplied count and configured with `no_found_rows` for an efficient read-only query.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "no_found_rows",
+            "description": "Uses no_found_rows",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$suffix = (string) wp_rand(); $slug = 'wpbp-news-' . $suffix; $cat = wp_insert_term( 'WPBP News ' . $suffix, 'category', array( 'slug' => $slug ) ); $term_id = is_wp_error( $cat ) ? 0 : (int) $cat['term_id']; $post_id = $term_id ? (int) wp_insert_post( array( 'post_title' => 'Q1 ' . $suffix, 'post_status' => 'publish', 'post_category' => array( $term_id ) ) ) : 0; $GLOBALS['wpbp_queries_001'] = array( 'slug' => $slug, 'term' => $term_id, 'post' => $post_id );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_001' ) ) { return false; } $fixture = $GLOBALS['wpbp_queries_001'] ?? array(); if ( empty( $fixture['post'] ) ) { return false; } $q = wpbp_queries_001( $fixture['slug'], 3 ); return in_array( $fixture['post'], array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ), true );",
+            "description": "The query returns the published post in the requested category",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_queries_001'] ?? array(); if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } if ( ! empty( $fixture['term'] ) ) { wp_delete_term( (int) $fixture['term'], 'category' ); } unset( $GLOBALS['wpbp_queries_001'] );"
+      },
+      "reference_solution": "function wpbp_queries_001( string $slug, int $limit = 5 ): WP_Query { return new WP_Query( array( 'category_name' => $slug, 'posts_per_page' => $limit, 'post_status' => 'publish', 'no_found_rows' => true ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-002",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_002() to return a WP_Query for published posts whose price_cents post meta compares numerically equal to zero.",
+      "expected_behavior": "`wpbp_queries_002()` must use `WP_Query` with a numeric meta query for the `price_cents` key, returning published posts with a zero price while excluding non-zero prices, posts without the meta key, and drafts. Runtime validation creates all four cases and verifies the observable query results.",
+      "requirements": [
+        "Use WP_Query with a meta query",
+        "Compare price_cents numerically",
+        "Limit results to published posts"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "meta_query",
+            "description": "Uses meta_query",
+            "weight": 1
+          },
+          {
+            "pattern": "NUMERIC",
+            "description": "Uses NUMERIC",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "foreach ( ( $GLOBALS['wpbp_queries_002_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } $target = wp_insert_post( array( 'post_title' => 'WPBP Q002 Free', 'post_status' => 'publish' ) ); update_post_meta( $target, 'price_cents', '0' ); $nonzero = wp_insert_post( array( 'post_title' => 'WPBP Q002 Paid', 'post_status' => 'publish' ) ); update_post_meta( $nonzero, 'price_cents', '125' ); $missing = wp_insert_post( array( 'post_title' => 'WPBP Q002 Missing', 'post_status' => 'publish' ) ); $draft = wp_insert_post( array( 'post_title' => 'WPBP Q002 Draft', 'post_status' => 'draft' ) ); update_post_meta( $draft, 'price_cents', '0' ); $GLOBALS['wpbp_queries_002_posts'] = array( 'target' => (int) $target, 'nonzero' => (int) $nonzero, 'missing' => (int) $missing, 'draft' => (int) $draft );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_002' ) ) { return false; } $q = wpbp_queries_002(); if ( ! $q instanceof WP_Query ) { return false; } $ids = array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ); $posts = $GLOBALS['wpbp_queries_002_posts'] ?? array(); return in_array( $posts['target'] ?? 0, $ids, true ) && ! in_array( $posts['nonzero'] ?? 0, $ids, true ) && ! in_array( $posts['missing'] ?? 0, $ids, true ) && ! in_array( $posts['draft'] ?? 0, $ids, true );",
+            "description": "The query returns only published posts whose price_cents meta is numerically zero",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_queries_002_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } unset( $GLOBALS['wpbp_queries_002_posts'] );"
+      },
+      "reference_solution": "function wpbp_queries_002(): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'meta_query' => array( array( 'key' => 'price_cents', 'value' => 0, 'compare' => '=', 'type' => 'NUMERIC' ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-003",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_003() to return only post IDs for a search query.",
+      "expected_behavior": "`wpbp_queries_003()` runs a published-post search with `WP_Query` and returns IDs only by using the `fields` query argument.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "fields",
+            "description": "Uses fields",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$needle = 'Needle' . wp_rand(); $id = (int) wp_insert_post( array( 'post_title' => $needle . ' Alpha', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_queries_003'] = array( 'needle' => $needle, 'post' => $id );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_003' ) ) { return false; } $fixture = $GLOBALS['wpbp_queries_003'] ?? array(); if ( empty( $fixture['post'] ) ) { return false; } $ids = wpbp_queries_003( $fixture['needle'] ); return in_array( $fixture['post'], array_map( 'intval', (array) $ids ), true );",
+            "description": "The search query returns matching post IDs",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_queries_003'] ?? array(); if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } unset( $GLOBALS['wpbp_queries_003'] );"
+      },
+      "reference_solution": "function wpbp_queries_003( string $term ): array { $q = new WP_Query( array( 's' => $term, 'fields' => 'ids', 'post_status' => 'publish' ) ); return $q->posts; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-004",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_004( string $category_slug, array $tag_slugs ) to return a WP_Query for published posts that are in the supplied category slug and in either of the supplied tag slugs.",
+      "expected_behavior": "`wpbp_queries_004()` must query published posts with a taxonomy constraint requiring the category match and at least one matching tag. Runtime validation creates matching posts, category-only posts, tag-only posts, and draft posts to verify the AND/OR taxonomy behavior rather than a single-term tax query.",
+      "requirements": [
+        "Use WP_Query with tax_query",
+        "Require the category constraint",
+        "Allow either supplied tag slug"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "tax_query",
+            "description": "Uses tax_query",
+            "weight": 1
+          },
+          {
+            "pattern": "relation",
+            "description": "Uses relation",
+            "weight": 1
+          },
+          {
+            "pattern": "/\\bAND\\b/i",
+            "description": "Uses an AND relation for the category constraint",
+            "weight": 0.5
+          },
+          {
+            "pattern": "/\\bOR\\b/i",
+            "description": "Uses an OR relation for the tag alternatives",
+            "weight": 0.5
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "foreach ( ( $GLOBALS['wpbp_queries_004']['posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } foreach ( array( 'wpbp-q004-cat' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'category' ); if ( $term ) { wp_delete_term( $term->term_id, 'category' ); } } foreach ( array( 'wpbp-q004-tag-a', 'wpbp-q004-tag-b' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'post_tag' ); if ( $term ) { wp_delete_term( $term->term_id, 'post_tag' ); } } $cat = wp_insert_term( 'WPBP Q004 Category', 'category', array( 'slug' => 'wpbp-q004-cat' ) ); $tag_a = wp_insert_term( 'WPBP Q004 Tag A', 'post_tag', array( 'slug' => 'wpbp-q004-tag-a' ) ); $tag_b = wp_insert_term( 'WPBP Q004 Tag B', 'post_tag', array( 'slug' => 'wpbp-q004-tag-b' ) ); if ( is_wp_error( $cat ) || is_wp_error( $tag_a ) || is_wp_error( $tag_b ) ) { return; } $target_a = wp_insert_post( array( 'post_title' => 'WPBP Q004 Target A', 'post_status' => 'publish' ) ); $target_b = wp_insert_post( array( 'post_title' => 'WPBP Q004 Target B', 'post_status' => 'publish' ) ); $category_only = wp_insert_post( array( 'post_title' => 'WPBP Q004 Category Only', 'post_status' => 'publish' ) ); $tag_only = wp_insert_post( array( 'post_title' => 'WPBP Q004 Tag Only', 'post_status' => 'publish' ) ); $draft = wp_insert_post( array( 'post_title' => 'WPBP Q004 Draft', 'post_status' => 'draft' ) ); foreach ( array( $target_a, $target_b, $category_only, $draft ) as $post_id ) { wp_set_post_terms( $post_id, array( (int) $cat['term_id'] ), 'category' ); } wp_set_post_terms( $target_a, array( (int) $tag_a['term_id'] ), 'post_tag' ); wp_set_post_terms( $target_b, array( (int) $tag_b['term_id'] ), 'post_tag' ); wp_set_post_terms( $tag_only, array( (int) $tag_a['term_id'] ), 'post_tag' ); wp_set_post_terms( $draft, array( (int) $tag_a['term_id'] ), 'post_tag' ); $GLOBALS['wpbp_queries_004'] = array( 'category_slug' => 'wpbp-q004-cat', 'tag_slugs' => array( 'wpbp-q004-tag-a', 'wpbp-q004-tag-b' ), 'posts' => array( 'target_a' => (int) $target_a, 'target_b' => (int) $target_b, 'category_only' => (int) $category_only, 'tag_only' => (int) $tag_only, 'draft' => (int) $draft ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_004' ) ) { return false; } $data = $GLOBALS['wpbp_queries_004'] ?? array(); $q = wpbp_queries_004( $data['category_slug'] ?? '', $data['tag_slugs'] ?? array() ); if ( ! $q instanceof WP_Query ) { return false; } $ids = array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ); $posts = $data['posts'] ?? array(); return in_array( $posts['target_a'] ?? 0, $ids, true ) && in_array( $posts['target_b'] ?? 0, $ids, true ) && ! in_array( $posts['category_only'] ?? 0, $ids, true ) && ! in_array( $posts['tag_only'] ?? 0, $ids, true ) && ! in_array( $posts['draft'] ?? 0, $ids, true );",
+            "description": "The query returns only published posts matching the category and either supplied tag",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_queries_004']['posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } foreach ( array( 'wpbp-q004-cat' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'category' ); if ( $term ) { wp_delete_term( $term->term_id, 'category' ); } } foreach ( array( 'wpbp-q004-tag-a', 'wpbp-q004-tag-b' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'post_tag' ); if ( $term ) { wp_delete_term( $term->term_id, 'post_tag' ); } } unset( $GLOBALS['wpbp_queries_004'] );"
+      },
+      "reference_solution": "function wpbp_queries_004( string $category_slug, array $tag_slugs ): WP_Query { $tag_slugs = array_values( $tag_slugs ); return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => -1, 'tax_query' => array( 'relation' => 'AND', array( 'taxonomy' => 'category', 'field' => 'slug', 'terms' => array( $category_slug ) ), array( 'relation' => 'OR', array( 'taxonomy' => 'post_tag', 'field' => 'slug', 'terms' => array( $tag_slugs[0] ?? '' ) ), array( 'taxonomy' => 'post_tag', 'field' => 'slug', 'terms' => array( $tag_slugs[1] ?? '' ) ) ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-005",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_005() to query future posts after a supplied date.",
+      "expected_behavior": "`wpbp_queries_005()` builds a `WP_Query` for scheduled future posts after the supplied date, using `date_query` and including the `future` post status.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "date_query",
+            "description": "Uses date_query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_queries_005_post'] = (int) wp_insert_post( array( 'post_title' => 'Date ' . wp_rand(), 'post_status' => 'future', 'post_date' => '2099-01-05 00:00:00' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_005' ) ) { return false; } $id = (int) ( $GLOBALS['wpbp_queries_005_post'] ?? 0 ); if ( ! $id ) { return false; } $q = wpbp_queries_005( '2099-01-01' ); return in_array( $id, array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ), true );",
+            "description": "The query returns future posts after the supplied date",
+            "weight": 1
+          }
+        ],
+        "teardown": "$id = (int) ( $GLOBALS['wpbp_queries_005_post'] ?? 0 ); if ( $id ) { wp_delete_post( $id, true ); } unset( $GLOBALS['wpbp_queries_005_post'] );"
+      },
+      "reference_solution": "function wpbp_queries_005( string $after ): WP_Query { return new WP_Query( array( 'post_status' => 'future', 'posts_per_page' => -1, 'date_query' => array( array( 'after' => $after, 'inclusive' => true ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-006",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_006() to build a WP_User_Query for users matching a role.",
+      "expected_behavior": "`wpbp_queries_006()` builds a `WP_User_Query` for users with the supplied role and returns user IDs.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_User_Query",
+            "description": "Uses WP_User_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "role",
+            "description": "Uses role",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$u = wp_insert_user( array( 'user_login' => 'wpbp_query_user_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); $GLOBALS['wpbp_queries_006_user'] = is_wp_error( $u ) ? 0 : (int) $u;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_006' ) ) { return false; } $u = (int) ( $GLOBALS['wpbp_queries_006_user'] ?? 0 ); if ( ! $u ) { return false; } $q = wpbp_queries_006( 'subscriber' ); return in_array( $u, array_map( 'intval', $q->get_results() ), true );",
+            "description": "The user query returns users with the requested role",
+            "weight": 1
+          }
+        ],
+        "teardown": "$u = (int) ( $GLOBALS['wpbp_queries_006_user'] ?? 0 ); if ( $u ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $u ); } unset( $GLOBALS['wpbp_queries_006_user'] );"
+      },
+      "reference_solution": "function wpbp_queries_006( string $role ): WP_User_Query { return new WP_User_Query( array( 'role' => $role, 'fields' => 'ID' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-007",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_007() to return comments for a post using WP_Comment_Query.",
+      "expected_behavior": "`wpbp_queries_007()` uses `WP_Comment_Query` to return approved comments for the supplied post ID.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_007",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Comment_Query",
+            "description": "Uses WP_Comment_Query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$p = (int) wp_insert_post( array( 'post_title' => 'Commented', 'post_status' => 'publish' ) ); $c = $p ? (int) wp_insert_comment( array( 'comment_post_ID' => $p, 'comment_content' => 'Hi', 'comment_approved' => 1 ) ) : 0; $GLOBALS['wpbp_queries_007'] = array( 'post' => $p, 'comment' => $c );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_007' ) ) { return false; } $fixture = $GLOBALS['wpbp_queries_007'] ?? array(); if ( empty( $fixture['comment'] ) ) { return false; } $comments = wpbp_queries_007( $fixture['post'] ); return in_array( $fixture['comment'], array_map( 'intval', wp_list_pluck( $comments, 'comment_ID' ) ), true );",
+            "description": "The comment query returns the approved comment for the post",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_queries_007'] ?? array(); if ( ! empty( $fixture['comment'] ) ) { wp_delete_comment( (int) $fixture['comment'], true ); } if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } unset( $GLOBALS['wpbp_queries_007'] );"
+      },
+      "reference_solution": "function wpbp_queries_007( int $post_id ): array { $q = new WP_Comment_Query( array( 'post_id' => $post_id, 'status' => 'approve' ) ); return $q->comments; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-008",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_008() to query terms with hide_empty disabled.",
+      "expected_behavior": "`wpbp_queries_008()` uses `WP_Term_Query` to return term IDs for the supplied taxonomy with `hide_empty` disabled, so empty terms are included.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_008",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Term_Query",
+            "description": "Uses WP_Term_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "hide_empty",
+            "description": "Uses hide_empty",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$suffix = (string) wp_rand(); $term = wp_insert_term( 'WPBP Empty Term ' . $suffix, 'category', array( 'slug' => 'wpbp-empty-' . $suffix ) ); $GLOBALS['wpbp_queries_008_term'] = is_wp_error( $term ) ? 0 : (int) $term['term_id'];",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_008' ) ) { return false; } $term_id = (int) ( $GLOBALS['wpbp_queries_008_term'] ?? 0 ); if ( ! $term_id ) { return false; } $ids = wpbp_queries_008( 'category' ); return in_array( $term_id, array_map( 'intval', (array) $ids ), true );",
+            "description": "The term query includes empty terms",
+            "weight": 1
+          }
+        ],
+        "teardown": "$term_id = (int) ( $GLOBALS['wpbp_queries_008_term'] ?? 0 ); if ( $term_id ) { wp_delete_term( $term_id, 'category' ); } unset( $GLOBALS['wpbp_queries_008_term'] );"
+      },
+      "reference_solution": "function wpbp_queries_008( string $taxonomy ): array { $q = new WP_Term_Query( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'fields' => 'ids' ) ); return $q->terms; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-009",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_009() to return the adjacent published post in the same category as the current global post.",
+      "expected_behavior": "`wpbp_queries_009()` must delegate to WordPress adjacent-post handling with same-term category constraints. Runtime validation sets a current global post, creates same-date previous and next category neighbors plus closer posts in another category, and verifies the returned `WP_Post` objects honor category matching and WordPress's ID fallback for identical post dates.",
+      "requirements": [
+        "Use WordPress adjacent-post handling",
+        "Constrain results to the category taxonomy",
+        "Return the WP_Post object WordPress finds"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_009",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_adjacent_post",
+            "description": "Uses get_adjacent_post",
+            "weight": 1
+          },
+          {
+            "pattern": "category",
+            "description": "Constrains adjacent lookup to categories",
+            "weight": 0.5
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "foreach ( ( $GLOBALS['wpbp_queries_009']['posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } foreach ( array( 'wpbp-q009-same', 'wpbp-q009-other' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'category' ); if ( $term ) { wp_delete_term( $term->term_id, 'category' ); } } $same = wp_insert_term( 'WPBP Q009 Same', 'category', array( 'slug' => 'wpbp-q009-same' ) ); $other = wp_insert_term( 'WPBP Q009 Other', 'category', array( 'slug' => 'wpbp-q009-other' ) ); if ( is_wp_error( $same ) || is_wp_error( $other ) ) { return; } $date = '2024-01-01 12:00:00'; $previous = wp_insert_post( array( 'post_title' => 'WPBP Q009 Previous', 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); $previous_other = wp_insert_post( array( 'post_title' => 'WPBP Q009 Previous Other', 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); $current = wp_insert_post( array( 'post_title' => 'WPBP Q009 Current', 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); $next_other = wp_insert_post( array( 'post_title' => 'WPBP Q009 Next Other', 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); $next = wp_insert_post( array( 'post_title' => 'WPBP Q009 Next', 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); foreach ( array( $previous, $current, $next ) as $post_id ) { wp_set_post_terms( $post_id, array( (int) $same['term_id'] ), 'category' ); } foreach ( array( $previous_other, $next_other ) as $post_id ) { wp_set_post_terms( $post_id, array( (int) $other['term_id'] ), 'category' ); } $GLOBALS['wpbp_queries_009'] = array( 'posts' => array( 'previous' => (int) $previous, 'previous_other' => (int) $previous_other, 'current' => (int) $current, 'next_other' => (int) $next_other, 'next' => (int) $next ) ); $GLOBALS['post'] = get_post( $current ); setup_postdata( $GLOBALS['post'] );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_009' ) ) { return false; } $posts = $GLOBALS['wpbp_queries_009']['posts'] ?? array(); $GLOBALS['post'] = get_post( $posts['current'] ?? 0 ); if ( ! $GLOBALS['post'] instanceof WP_Post ) { return false; } setup_postdata( $GLOBALS['post'] ); $previous = wpbp_queries_009( true ); $next = wpbp_queries_009( false ); return $previous instanceof WP_Post && (int) $previous->ID === (int) ( $posts['previous'] ?? 0 ) && $next instanceof WP_Post && (int) $next->ID === (int) ( $posts['next'] ?? 0 );",
+            "description": "The helper returns same-category adjacent posts even when neighboring posts share the same date",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_reset_postdata(); unset( $GLOBALS['post'] ); foreach ( ( $GLOBALS['wpbp_queries_009']['posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } foreach ( array( 'wpbp-q009-same', 'wpbp-q009-other' ) as $slug ) { $term = get_term_by( 'slug', $slug, 'category' ); if ( $term ) { wp_delete_term( $term->term_id, 'category' ); } } unset( $GLOBALS['wpbp_queries_009'] );"
+      },
+      "reference_solution": "function wpbp_queries_009( bool $previous = true ): mixed { return get_adjacent_post( true, '', $previous, 'category' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/link-template.php",
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-queries-010",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_010() to preload post meta cache before reading many posts.",
+      "expected_behavior": "`wpbp_queries_010()` primes post meta for the supplied post IDs with `update_meta_cache()` before reading the requested meta key from each post.",
+      "requirements": [
+        "Use the relevant WordPress query class or helper",
+        "Return deterministic query data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_010",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "update_meta_cache",
+            "description": "Uses update_meta_cache",
+            "weight": 1
+          },
+          {
+            "pattern": "get_post_meta",
+            "description": "Uses get_post_meta",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$id = (int) wp_insert_post( array( 'post_title' => 'Meta Cache', 'post_status' => 'publish' ) ); if ( $id ) { update_post_meta( $id, 'wpbp_key', 'yes' ); } $GLOBALS['wpbp_queries_010_post'] = $id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_010' ) ) { return false; } $id = (int) ( $GLOBALS['wpbp_queries_010_post'] ?? 0 ); if ( ! $id ) { return false; } $out = wpbp_queries_010( array( $id ), 'wpbp_key' ); return isset( $out[ $id ] ) && 'yes' === $out[ $id ];",
+            "description": "The helper returns meta values after priming the post meta cache",
+            "weight": 1
+          }
+        ],
+        "teardown": "$id = (int) ( $GLOBALS['wpbp_queries_010_post'] ?? 0 ); if ( $id ) { wp_delete_post( $id, true ); } unset( $GLOBALS['wpbp_queries_010_post'] );"
+      },
+      "reference_solution": "function wpbp_queries_010( array $post_ids, string $key ): array { update_meta_cache( 'post', $post_ids ); $out = array(); foreach ( $post_ids as $post_id ) { $out[ $post_id ] = get_post_meta( $post_id, $key, true ); } return $out; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-tax-query.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-011",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_011() to return one published post with get_posts() while allowing WordPress query filters to modify the query.",
+      "expected_behavior": "`wpbp_queries_011()` must call `get_posts()` with filters enabled, overriding the helper's default suppressed-filter behavior. Runtime validation installs a `posts_where` filter that selects an older fixture post; without `suppress_filters` set to false, `get_posts()` returns the newer distractor instead.",
+      "requirements": [
+        "Use get_posts() for the query",
+        "Allow WordPress query filters to run",
+        "Return the filtered posts"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_011",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "get_posts",
+            "description": "Uses get_posts",
+            "weight": 1
+          },
+          {
+            "pattern": "/suppress_filters['\\\"]?\\s*=>\\s*false/i",
+            "description": "Keeps get_posts filters enabled",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "foreach ( ( $GLOBALS['wpbp_queries_011_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } $target = wp_insert_post( array( 'post_title' => 'WPBP Q011 Filtered Target', 'post_status' => 'publish', 'post_date' => '2024-01-01 10:00:00', 'post_date_gmt' => '2024-01-01 10:00:00' ) ); $distractor = wp_insert_post( array( 'post_title' => 'WPBP Q011 Newer Distractor', 'post_status' => 'publish', 'post_date' => '2024-01-02 10:00:00', 'post_date_gmt' => '2024-01-02 10:00:00' ) ); $GLOBALS['wpbp_queries_011_posts'] = array( 'target' => (int) $target, 'distractor' => (int) $distractor );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_011' ) ) { return false; } $target_id = (int) ( $GLOBALS['wpbp_queries_011_posts']['target'] ?? 0 ); $callback = static function ( $where, $query ) use ( $target_id ) { global $wpdb; return $where . $wpdb->prepare( ' AND ' . $wpdb->posts . '.ID = %d', $target_id ); }; $GLOBALS['wpbp_queries_011_filter'] = $callback; add_filter( 'posts_where', $callback, 10, 2 ); $posts = wpbp_queries_011(); remove_filter( 'posts_where', $callback, 10 ); unset( $GLOBALS['wpbp_queries_011_filter'] ); if ( ! is_array( $posts ) ) { return false; } $ids = array_map( 'intval', wp_list_pluck( $posts, 'ID' ) ); return array( $target_id ) === $ids;",
+            "description": "The get_posts query allows posts_where to select the older target post",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_queries_011_filter'] ) ) { remove_filter( 'posts_where', $GLOBALS['wpbp_queries_011_filter'], 10 ); } foreach ( ( $GLOBALS['wpbp_queries_011_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } unset( $GLOBALS['wpbp_queries_011_posts'], $GLOBALS['wpbp_queries_011_filter'] );"
+      },
+      "reference_solution": "function wpbp_queries_011(): array { $posts = get_posts( array( 'numberposts' => 1, 'suppress_filters' => false, 'post_status' => 'publish' ) ); return $posts; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-queries-012",
+      "category": "queries",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_queries_012() to return only published sticky posts as a WP_Query without relying on home-query sticky prepending.",
+      "expected_behavior": "`wpbp_queries_012()` must read WordPress's sticky post IDs and query those IDs explicitly with `WP_Query`, using `ignore_sticky_posts` so normal home-query sticky relocation is not part of the result. Runtime validation verifies the sticky post is returned, a regular published post is excluded, and an empty sticky list yields no posts.",
+      "requirements": [
+        "Read the sticky post IDs from WordPress",
+        "Query only those posts and preserve sticky order",
+        "Return an empty result when no posts are sticky"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_queries_012",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "get_option",
+            "description": "Reads the sticky_posts option",
+            "weight": 1
+          },
+          {
+            "pattern": "sticky_posts",
+            "description": "Uses WordPress sticky post IDs",
+            "weight": 1
+          },
+          {
+            "pattern": "post__in",
+            "description": "Restricts the query to sticky IDs",
+            "weight": 1
+          },
+          {
+            "pattern": "ignore_sticky_posts",
+            "description": "Uses ignore_sticky_posts",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_queries_012_original_sticky'] = get_option( 'sticky_posts', array() ); foreach ( ( $GLOBALS['wpbp_queries_012_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } $sticky = wp_insert_post( array( 'post_title' => 'WPBP Q012 Sticky', 'post_status' => 'publish', 'post_date' => '2024-01-01 10:00:00', 'post_date_gmt' => '2024-01-01 10:00:00' ) ); $regular = wp_insert_post( array( 'post_title' => 'WPBP Q012 Regular', 'post_status' => 'publish', 'post_date' => '2024-01-02 10:00:00', 'post_date_gmt' => '2024-01-02 10:00:00' ) ); update_option( 'sticky_posts', array( (int) $sticky ) ); $GLOBALS['wpbp_queries_012_posts'] = array( 'sticky' => (int) $sticky, 'regular' => (int) $regular );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_012' ) ) { return false; } $posts = $GLOBALS['wpbp_queries_012_posts'] ?? array(); $q = wpbp_queries_012(); if ( ! $q instanceof WP_Query ) { return false; } $ids = array_map( 'intval', wp_list_pluck( $q->posts, 'ID' ) ); $only_sticky = array( (int) ( $posts['sticky'] ?? 0 ) ) === $ids; update_option( 'sticky_posts', array() ); $empty = wpbp_queries_012(); return $only_sticky && $empty instanceof WP_Query && empty( $empty->posts );",
+            "description": "The query returns only configured sticky posts and handles an empty sticky list",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( array_key_exists( 'wpbp_queries_012_original_sticky', $GLOBALS ) ) { update_option( 'sticky_posts', $GLOBALS['wpbp_queries_012_original_sticky'] ); } foreach ( ( $GLOBALS['wpbp_queries_012_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } unset( $GLOBALS['wpbp_queries_012_original_sticky'], $GLOBALS['wpbp_queries_012_posts'] );"
+      },
+      "reference_solution": "function wpbp_queries_012(): WP_Query { $sticky_ids = array_map( 'intval', (array) get_option( 'sticky_posts', array() ) ); if ( empty( $sticky_ids ) ) { $sticky_ids = array( 0 ); } return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'post__in' => $sticky_ids, 'orderby' => 'post__in', 'posts_per_page' => count( $sticky_ids ), 'ignore_sticky_posts' => true ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/post.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}

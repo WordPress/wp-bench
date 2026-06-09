@@ -45,12 +45,12 @@ class WordPressEnvironment:
             **verification_spec,
         }
         encoded = base64.b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
+        verifier_path = self._runtime_verifier_path()
         cmd = [
             "wp",
-            "bench",
-            "verify",
-            f"--payload={encoded}",
-            "--format=json",
+            "eval-file",
+            verifier_path,
+            encoded,
         ]
         stdout, stderr, rc = self._exec(cmd)
         data: Dict[str, Any] = {}
@@ -63,6 +63,11 @@ class WordPressEnvironment:
         return ExecutionResult(success=success, raw=data, stdout=stdout, stderr=stderr)
 
     # Internal helpers --------------------------------------------------
+    def _runtime_verifier_path(self) -> str:
+        if self.config.wp_env_dir:
+            return "/var/www/html/wp-content/plugins/runtime/verify-runtime.php"
+        return "/var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php"
+
     def _container_exists(self) -> bool:
         result = subprocess.run(
             [

@@ -1,0 +1,198 @@
+{
+  "id": "wp-core-execution-v1-mail_url",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Mail and URL Handling",
+    "description": "Code generation tasks for WordPress Mail and URL Handling APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-mail-url-001",
+      "category": "mail-url",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_mail_url_001( string $url ): string` to sanitize a URL for storage or redirects while preferring HTTPS when WordPress adds a missing scheme.",
+      "expected_behavior": "`wpbp_mail_url_001()` uses WordPress URL sanitization in a non-display context with HTTPS first in the allowed protocol list. A schemeless host should gain `https://`, an existing `http://` URL should remain HTTP, and unsafe protocols should be rejected.",
+      "requirements": [
+        "Use WordPress URL sanitization",
+        "Allow both HTTPS and HTTP with HTTPS preferred"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "sanitize_url",
+            "description": "Uses sanitize_url",
+            "weight": 1
+          },
+          {
+            "pattern": "/https/i",
+            "description": "Supplies HTTPS as the preferred protocol",
+            "weight": 0.5
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_001' ) ) { return false; } return 'https://example.org/path?x=1&y=2' === wpbp_mail_url_001( 'example.org/path?x=1&y=2' ) && 'http://example.org/path' === wpbp_mail_url_001( 'http://example.org/path' ) && '' === wpbp_mail_url_001( 'javascript:alert(1)' );",
+            "description": "Schemeless URLs prefer HTTPS, existing HTTP is preserved, and disallowed protocols are removed",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_001( string $url ): string { return sanitize_url( $url, array( 'https', 'http' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-mail-url-002",
+      "category": "mail-url",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_mail_url_002( string $email ): string|false` to validate an email address and return WordPress's validation result.",
+      "expected_behavior": "`wpbp_mail_url_002()` delegates to `is_email()`, returning the original email string on success and `false` on failure. The test focuses on WordPress's return contract, not boolean-only validation or custom normalization.",
+      "requirements": [
+        "Use WordPress email validation",
+        "Return the successful email string, not boolean true"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "is_email",
+            "description": "Uses is_email",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_002' ) ) { return false; } return 'Person+tag@example.co.uk' === wpbp_mail_url_002( 'Person+tag@example.co.uk' ) && false === wpbp_mail_url_002( 'bad@' ) && false === wpbp_mail_url_002( 'person@example' );",
+            "description": "Valid addresses are returned unchanged and invalid addresses return false",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_002( string $email ): string|false { return is_email( $email ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-mail-url-003",
+      "category": "mail-url",
+      "difficulty": "basic",
+      "prompt": "Implement `wpbp_mail_url_003( string $location ): string` to sanitize a redirect target before it is passed to a redirect function.",
+      "expected_behavior": "`wpbp_mail_url_003()` uses `wp_sanitize_redirect()` and returns the sanitized location string without sending headers. It should encode spaces and strip CR/LF sequences; allowed-host validation belongs to `wp_safe_redirect()` or `wp_validate_redirect()`, not this helper.",
+      "requirements": [
+        "Use WordPress redirect sanitization",
+        "Return the sanitized location without performing a redirect"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_sanitize_redirect",
+            "description": "Uses wp_sanitize_redirect",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_003' ) ) { return false; } $spaced = wpbp_mail_url_003( 'https://example.com/a b' ); $header = wpbp_mail_url_003( 'https://example.com/%0d%0Aadmin' ); return 'https://example.com/a%20b' === $spaced && 'https://example.com/admin' === $header;",
+            "description": "Redirect sanitization encodes spaces and removes CR/LF sequences",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_mail_url_003( string $url ): string { return wp_sanitize_redirect( $url ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-mail-url-004",
+      "category": "mail-url",
+      "difficulty": "intermediate",
+      "prompt": "Implement `wpbp_mail_url_004( string $to, string $subject, string $html, array $embeds ): bool` to send an HTML email through WordPress with embedded image paths.",
+      "expected_behavior": "`wpbp_mail_url_004()` calls `wp_mail()` with the supplied recipient, subject, HTML body, a text/html Content-Type header, no attachments, and the supplied embeds array. The verifier short-circuits delivery with `pre_wp_mail` and checks the arguments passed to WordPress.",
+      "requirements": [
+        "Use wp_mail() rather than PHPMailer directly",
+        "Pass a text/html Content-Type header",
+        "Pass the supplied embeds array to wp_mail() and return its boolean result"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_mail_url_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "wp_mail",
+            "description": "Uses wp_mail",
+            "weight": 1
+          },
+          {
+            "pattern": "/Content-Type/i",
+            "description": "Passes an email content-type header",
+            "weight": 0.5
+          },
+          {
+            "pattern": "embeds",
+            "description": "Passes embedded image paths through wp_mail",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_mail_url_004_seen'] = array(); add_filter( 'pre_wp_mail', function ( $return, $atts ) { $GLOBALS['wpbp_mail_url_004_seen'][] = $atts; return true; }, 10, 2 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_004' ) ) { return false; } $embeds = array( 'logo' => '/tmp/wpbp-logo.png' ); $html = '<p><img src=cid:logo alt=Logo></p>'; $sent = wpbp_mail_url_004( 'nobody@example.com', 'Embedded', $html, $embeds ); $seen = $GLOBALS['wpbp_mail_url_004_seen'] ?? array(); if ( true !== $sent || 1 !== count( $seen ) ) { return false; } $atts = $seen[0]; $headers = $atts['headers'] ?? array(); if ( is_string( $headers ) ) { $headers = array( $headers ); } $has_html_header = false; foreach ( $headers as $header ) { if ( is_string( $header ) && false !== stripos( $header, 'Content-Type' ) && false !== stripos( $header, 'text/html' ) ) { $has_html_header = true; } } return 'nobody@example.com' === ( $atts['to'] ?? null ) && 'Embedded' === ( $atts['subject'] ?? null ) && $html === ( $atts['message'] ?? null ) && $embeds === ( $atts['embeds'] ?? null ) && $has_html_header;",
+            "description": "wp_mail receives the supplied message fields, HTML header, and embeds array",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_wp_mail' ); unset( $GLOBALS['wpbp_mail_url_004_seen'] );"
+      },
+      "reference_solution": "function wpbp_mail_url_004( string $to, string $subject, string $html, array $embeds ): bool { return wp_mail( $to, $subject, $html, array( 'Content-Type: text/html; charset=UTF-8' ), array(), $embeds ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}

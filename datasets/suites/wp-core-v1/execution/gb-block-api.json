@@ -1,0 +1,351 @@
+{
+  "id": "wp-core-execution-v1-gb_block_api",
+  "version": "2.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block API",
+    "description": "Code generation tasks for WordPress Block API APIs",
+    "wp_version": "7.0",
+    "created_at": "2026-05-21"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-api-001",
+      "category": "gb-block-api",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_gb_block_api_001(): bool to register a dynamic block type named 'wpbp/dynamic' that renders '<p>Dynamic</p>' on the server.",
+      "expected_behavior": "`wpbp_gb_block_api_001()` uses `register_block_type()` to register `wpbp/dynamic` with a server-side render callback. Runtime validation invokes the function, checks the block registry, verifies the block is dynamic, and renders the block through WordPress.",
+      "requirements": [
+        "Use the server-side Block API",
+        "Register the block name 'wpbp/dynamic'",
+        "Return whether WordPress registered the block"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_001",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses register_block_type",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/dynamic",
+            "description": "Registers the requested block name",
+            "weight": 1
+          },
+          {
+            "pattern": "render_callback",
+            "description": "Uses render_callback",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_001' ) ) { return false; } $ok = wpbp_gb_block_api_001(); $type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/dynamic' ); return true === $ok && $type instanceof WP_Block_Type && $type->is_dynamic() && '<p>Dynamic</p>' === trim( do_blocks( '<!-- wp:wpbp/dynamic /-->' ) );",
+            "description": "The wpbp/dynamic block is registered as dynamic and renders through do_blocks()",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_001(): bool { register_block_type( 'wpbp/dynamic', array( 'render_callback' => fn() => '<p>Dynamic</p>' ) ); return WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/dynamic' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php",
+          "src/wp-includes/class-wp-block-type-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-api-002",
+      "category": "gb-block-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_api_002(): bool to register a PHP-only block named 'wpbp/auto' that auto-registers for the editor, has a string 'message' attribute defaulting to 'Hi', and renders the message on the server.",
+      "expected_behavior": "`wpbp_gb_block_api_002()` registers `wpbp/auto` with the WordPress 7.0 PHP-only block auto-registration support, defines the requested message attribute, and provides a render callback. Runtime validation checks the registered block type, support flag, attribute default, dynamic status, and rendered output.",
+      "requirements": [
+        "Use the server-side Block API",
+        "Register the block name 'wpbp/auto'",
+        "Enable PHP-only auto-registration",
+        "Return whether WordPress registered the block"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_002",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "autoRegister",
+            "description": "Uses autoRegister",
+            "weight": 1
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Uses register_block_type",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/auto",
+            "description": "Registers the requested block name",
+            "weight": 1
+          },
+          {
+            "pattern": "message",
+            "description": "Defines the requested message attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "render_callback",
+            "description": "Uses a server-side render callback",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_002' ) ) { return false; } $ok = wpbp_gb_block_api_002(); $type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/auto' ); if ( ! $type instanceof WP_Block_Type ) { return false; } $out = trim( do_blocks( '<!-- wp:wpbp/auto {\"message\":\"Hello\"} /-->' ) ); return true === $ok && ! empty( $type->supports['autoRegister'] ) && $type->is_dynamic() && 'Hi' === ( $type->attributes['message']['default'] ?? null ) && '<p>Hello</p>' === $out;",
+            "description": "The wpbp/auto block exposes autoRegister support, a message default, and server rendering",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_002(): bool { register_block_type( 'wpbp/auto', array( 'title' => 'Auto', 'attributes' => array( 'message' => array( 'type' => 'string', 'default' => 'Hi' ) ), 'supports' => array( 'autoRegister' => true ), 'render_callback' => static fn( array $attrs ): string => '<p>' . esc_html( $attrs['message'] ?? '' ) . '</p>' ) ); return WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/auto' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php",
+          "src/wp-includes/class-wp-block-type-registry.php"
+        ],
+        "release_focus": "7.0"
+      }
+    },
+    {
+      "id": "e-gb-block-api-003",
+      "category": "gb-block-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_api_003( string $content ): array to count each explicit block type in the supplied block markup with WP_Block_Processor.",
+      "expected_behavior": "`wpbp_gb_block_api_003()` streams through the supplied block markup with `WP_Block_Processor`, counts every explicit block opening including nested blocks, and returns counts keyed by fully qualified block names. Runtime validation includes freeform HTML, nested blocks, and repeated block types.",
+      "requirements": [
+        "Use WP_Block_Processor instead of parse_blocks()",
+        "Return an associative array keyed by fully qualified block names",
+        "Count nested blocks as they are encountered"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_003",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Block_Processor",
+            "description": "Uses WP_Block_Processor",
+            "weight": 1
+          },
+          {
+            "pattern": "next_block",
+            "description": "Uses next_block",
+            "weight": 1
+          },
+          {
+            "pattern": "get_block_type",
+            "description": "Reads fully qualified block names from the processor",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_003' ) ) { return false; } $content = '<p>Freeform</p><!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>A</p><!-- /wp:paragraph --><!-- wp:image {\"id\":2} /--></div><!-- /wp:group --><!-- wp:paragraph --><p>B</p><!-- /wp:paragraph -->'; $counts = wpbp_gb_block_api_003( $content ); return is_array( $counts ) && 1 === ( $counts['core/group'] ?? null ) && 2 === ( $counts['core/paragraph'] ?? null ) && 1 === ( $counts['core/image'] ?? null ) && ! isset( $counts['core/freeform'] );",
+            "description": "The processor count includes nested and repeated explicit blocks and ignores freeform HTML",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_003( string $content ): array { $processor = new WP_Block_Processor( $content ); $counts = array(); while ( $processor->next_block() ) { $name = $processor->get_block_type(); if ( null !== $name ) { $counts[ $name ] = ( $counts[ $name ] ?? 0 ) + 1; } } return $counts; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "6.9"
+      }
+    },
+    {
+      "id": "e-gb-block-api-004",
+      "category": "gb-block-api",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_gb_block_api_004( array $block ): string to serialize a parsed block array back to WordPress block markup.",
+      "expected_behavior": "`wpbp_gb_block_api_004()` delegates parsed block serialization to WordPress. Runtime validation checks that core block names are serialized with the expected shorthand, inner HTML is preserved, and comment-sensitive attribute characters are escaped by WordPress.",
+      "requirements": [
+        "Use the server-side block serialization helper",
+        "Return the serialized markup string"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_004",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "serialize_block",
+            "description": "Uses serialize_block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_004' ) ) { return false; } $block = array( 'blockName' => 'core/paragraph', 'attrs' => array( 'metadata' => array( 'name' => 'A -- <tag> & \"quote\"' ) ), 'innerBlocks' => array(), 'innerHTML' => '<p>Hi</p>', 'innerContent' => array( '<p>Hi</p>' ) ); $out = wpbp_gb_block_api_004( $block ); return is_string( $out ) && str_starts_with( $out, '<!-- wp:paragraph ' ) && str_contains( $out, '\\\\u002d\\\\u002d' ) && str_contains( $out, '\\\\u003c' ) && str_contains( $out, '\\\\u003e' ) && str_contains( $out, '\\\\u0026' ) && str_contains( $out, '\\\\u0022quote\\\\u0022' ) && str_contains( $out, '<p>Hi</p>' ) && str_contains( $out, '<!-- /wp:paragraph -->' );",
+            "description": "Serialized markup preserves inner HTML and escapes comment-sensitive attributes",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_004( array $block ): string { return serialize_block( $block ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-api-005",
+      "category": "gb-block-api",
+      "difficulty": "basic",
+      "prompt": "Implement wpbp_gb_block_api_005(): bool to register a 'wpbp-muted' block style for 'core/paragraph' labeled 'Muted'.",
+      "expected_behavior": "`wpbp_gb_block_api_005()` uses the server-side block style API to register the `wpbp-muted` style for `core/paragraph`. Runtime validation inspects `WP_Block_Styles_Registry` to confirm the style name and label WordPress registered.",
+      "requirements": [
+        "Use the server-side block style API",
+        "Register the style for 'core/paragraph'",
+        "Return whether WordPress registered the style"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_005",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "register_block_style",
+            "description": "Uses register_block_style",
+            "weight": 1
+          },
+          {
+            "pattern": "core/paragraph",
+            "description": "Targets the paragraph block",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-muted",
+            "description": "Registers the requested style name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_005' ) ) { return false; } $ok = wpbp_gb_block_api_005(); $style = WP_Block_Styles_Registry::get_instance()->get_registered( 'core/paragraph', 'wpbp-muted' ); return true === $ok && is_array( $style ) && 'wpbp-muted' === ( $style['name'] ?? null ) && 'Muted' === ( $style['label'] ?? null );",
+            "description": "The wpbp-muted style is registered for core/paragraph with the requested label",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_005(): bool { register_block_style( 'core/paragraph', array( 'name' => 'wpbp-muted', 'label' => 'Muted' ) ); return WP_Block_Styles_Registry::get_instance()->is_registered( 'core/paragraph', 'wpbp-muted' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-styles-registry.php"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-api-006",
+      "category": "gb-block-api",
+      "difficulty": "intermediate",
+      "prompt": "Implement wpbp_gb_block_api_006( string $content ): array to return the first image block found while scanning only the first ten block openings with WP_Block_Processor.",
+      "expected_behavior": "`wpbp_gb_block_api_006()` streams through block markup with `WP_Block_Processor`, matches image blocks through the processor, and returns the parsed block array from `extract_full_block_and_advance()`. Runtime validation checks both the extracted image attributes and that an image after the first ten block openings is ignored.",
+      "requirements": [
+        "Use WP_Block_Processor",
+        "Return the parsed image block array from WordPress",
+        "Return an empty array when no image appears in the first ten block openings"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_gb_block_api_006",
+            "description": "Defines the requested function",
+            "weight": 0.5
+          },
+          {
+            "pattern": "WP_Block_Processor",
+            "description": "Uses WP_Block_Processor",
+            "weight": 1
+          },
+          {
+            "pattern": "next_block",
+            "description": "Scans block openings with the processor",
+            "weight": 1
+          },
+          {
+            "pattern": "is_block_type",
+            "description": "Matches the image block through the processor",
+            "weight": 1
+          },
+          {
+            "pattern": "extract_full_block_and_advance",
+            "description": "Uses extract_full_block_and_advance",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_006' ) ) { return false; } $out = wpbp_gb_block_api_006( '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph --><!-- wp:image {\"id\":7,\"alt\":\"Hero\"} /--><!-- wp:image {\"id\":8} /-->' ); return is_array( $out ) && 'core/image' === ( $out['blockName'] ?? null ) && 7 === ( $out['attrs']['id'] ?? null ) && 'Hero' === ( $out['attrs']['alt'] ?? null );",
+            "description": "The first image block is extracted as a parsed block with attributes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_block_api_006' ) ) { return false; } $content = str_repeat( '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->', 10 ) . '<!-- wp:image {\"id\":99} /-->'; return array() === wpbp_gb_block_api_006( $content );",
+            "description": "An image after the first ten block openings is ignored",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_api_006( string $content ): array { $processor = new WP_Block_Processor( $content ); $seen = 0; while ( $seen < 10 && $processor->next_block() ) { ++$seen; if ( $processor->is_block_type( 'image' ) ) { return $processor->extract_full_block_and_advance() ?? array(); } } return array(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "6.9"
+      }
+    }
+  ]
+}
