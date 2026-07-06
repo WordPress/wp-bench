@@ -6,6 +6,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from statistics import mean
 from typing import Any, Dict, List
 
 import orjson
@@ -234,7 +235,7 @@ class BenchmarkRunner:
                     "runtime_checks": test.runtime_checks,
                 }
                 env_result = self.environment.execute_code(code, verification_spec)
-                correctness = self._score_assertions(env_result.raw)
+                correctness = self._score_correctness(env_result.raw, test)
                 return {
                     "test_id": test.id,
                     "type": "execution",
@@ -278,7 +279,7 @@ class BenchmarkRunner:
                     "runtime_checks": test.runtime_checks,
                 }
                 env_result = self.environment.execute_code(test.reference_solution, verification_spec)
-                correctness = self._score_assertions(env_result.raw)
+                correctness = self._score_correctness(env_result.raw, test)
                 return {
                     "test_id": test.id,
                     "type": "execution",
@@ -340,35 +341,87 @@ class BenchmarkRunner:
         return "\n".join(lines)
 
     @staticmethod
-    def _score_assertions(raw: Dict[str, Any]) -> float:
-        """Calculate correctness from static and runtime verifier scores.
+    def _score_correctness(raw: Dict[str, Any], test: ExecutionTest) -> float:
+        """Combine static-analysis and runtime-assertion scores into correctness.
 
-        Only sections that actually defined checks contribute to the score.
-        An empty static (or runtime) section reports a perfect score of 1.0
-        (or 0.0), so averaging it in unconditionally would inflate or deflate
-        correctness for tests that exercise only one section.
+        Both sub-scores are already weighted by the WordPress runtime
+        (Static_Analysis::check and Sandbox::execute_and_verify), including the
+        per-pattern/per-assertion weights and the forbidden-pattern hard fail.
+        A dimension contributes only when the test actually defines checks for
+        it, so a test with only runtime assertions is scored purely on runtime,
+        and vice versa. Applicability is read from the test definition rather
+        than the runtime output, since a crash before assertions run leaves the
+        runtime weight at zero even though the dimension was meant to count.
+
+        When the code is supposed to run but crashes (a fatal or execution
+        error before any assertion executes), correctness is forced to 0.0:
+        the runtime is ground truth, and static pattern matches must not rescue
+        code that does not run. This applies only to hard crashes, not to code
+        that runs but fails some assertions, which still earns partial credit.
 
         Args:
-            raw: Raw result dict from WordPress environment.
+            raw: Raw result dict from the WordPress runtime (static/runtime).
+            test: The execution test, used to know which dimensions apply.
 
         Returns:
-            Float between 0.0 and 1.0 representing combined verifier score.
+            Float between 0.0 and 1.0 averaging the applicable dimensions.
         """
-        scores: List[float] = []
-        for section in ("static", "runtime"):
-            result = raw.get(section) or {}
-            score = result.get("score")
-            total_weight = result.get("details", {}).get("total_weight", 0)
-            if isinstance(score, (int, float)) and total_weight:
-                scores.append(float(score))
-        if scores:
-            return round(sum(scores) / len(scores), 4)
-
-        assertions = raw.get("assertions") or []
-        if not assertions:
+        if not raw:
             return 0.0
-        passed = sum(1 for assertion in assertions if assertion.get("passed"))
-        return round(passed / len(assertions), 4)
+
+        static_checks = test.static_checks or {}
+        runtime_checks = test.runtime_checks or {}
+        applicable = {
+            "static": bool(
+                static_checks.get("required_patterns")
+                or static_checks.get("forbidden_patterns")
+            ),
+            "runtime": bool(runtime_checks.get("assertions")),
+        }
+
+        if applicable["runtime"] and BenchmarkRunner._runtime_crashed(raw):
+            return 0.0
+
+        scores: List[float] = []
+        for dimension, is_applicable in applicable.items():
+            if not is_applicable:
+                continue
+            result = raw.get(dimension)
+            score = result.get("score") if isinstance(result, dict) else None
+            scores.append(float(score) if isinstance(score, (int, float)) else 0.0)
+
+        if not scores:
+            return 0.0
+        return round(mean(scores), 4)
+
+    @staticmethod
+    def _runtime_crashed(raw: Dict[str, Any]) -> bool:
+        """Detect a hard execution failure in the runtime result.
+
+        Only call this when the test defines runtime assertions. A crash shows
+        up two ways: the assertion loop never accumulated weight (execution
+        threw before any assertion ran), or the runtime appended a synthetic
+        ``execution_error``/``fatal_error`` entry to the assertions.
+
+        Args:
+            raw: Raw result dict from the WordPress runtime.
+
+        Returns:
+            True if the code failed to run, as opposed to running but failing
+            some assertions.
+        """
+        runtime = raw.get("runtime")
+        if not isinstance(runtime, dict):
+            return True
+        details = runtime.get("details") or {}
+        if not details.get("total_weight"):
+            return True
+        assertions = details.get("assertions") or []
+        return any(
+            isinstance(assertion, dict)
+            and assertion.get("type") in {"execution_error", "fatal_error"}
+            for assertion in assertions
+        )
 
     def _write_outputs(self, payload: Dict[str, Any]) -> None:
         """Write benchmark results to JSON and JSONL files.
@@ -579,7 +632,7 @@ class SingleModelRunner:
                     "runtime_checks": test.runtime_checks,
                 }
                 env_result = self.environment.execute_code(code, verification_spec)
-                correctness = BenchmarkRunner._score_assertions(env_result.raw)
+                correctness = BenchmarkRunner._score_correctness(env_result.raw, test)
                 return {
                     "test_id": test.id,
                     "type": "execution",
