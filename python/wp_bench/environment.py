@@ -1,7 +1,6 @@
 """Bridge between Python harness and WordPress runtime."""
 from __future__ import annotations
 
-import base64
 import json
 import subprocess
 from dataclasses import dataclass
@@ -93,18 +92,17 @@ class WordPressEnvironment:
         timeout and continues with the next test.
         """
         payload = {
+            "payload_version": "1.0",
             "code": code,
             **verification_spec,
         }
-        encoded = base64.b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
         verifier_path = self._runtime_verifier_path()
         cmd = [
             "wp",
             "eval-file",
             verifier_path,
-            encoded,
         ]
-        stdout, stderr, rc, timed_out = self._exec(cmd)
+        stdout, stderr, rc, timed_out = self._exec(cmd, stdin=json.dumps(payload))
         if timed_out:
             return ExecutionResult(
                 success=False,
@@ -158,6 +156,7 @@ class WordPressEnvironment:
         cwd: Optional[str] = None,
         timeout: Optional[float] = None,
         capture_output: bool = True,
+        stdin: Optional[str] = None,
     ) -> ProcessResult:
         """Run a subprocess with a hard timeout.
 
@@ -174,6 +173,7 @@ class WordPressEnvironment:
                 check=False,
                 cwd=cwd,
                 timeout=timeout,
+                input=stdin,
             )
             return ProcessResult(
                 stdout=proc.stdout if capture_output else "",
@@ -238,8 +238,19 @@ class WordPressEnvironment:
                 f"Failed to start container '{self.config.container_name}': {result.stderr.strip()}"
             )
 
-    def _exec(self, command: list[str]) -> tuple[str, str, int, bool]:
+    def _exec(
+        self,
+        command: list[str],
+        *,
+        stdin: Optional[str] = None,
+    ) -> tuple[str, str, int, bool]:
         """Execute a command in the WordPress runtime.
+
+        Args:
+            command: WP-CLI command to run inside the runtime.
+            stdin: Optional data piped to the process. Used for verifier
+                payloads, which must not travel as command arguments
+                (argv size limits, visible in process listings).
 
         Returns:
             Tuple of (stdout, stderr, returncode, timed_out). All paths are
@@ -251,9 +262,10 @@ class WordPressEnvironment:
                 ["npx", "wp-env", "run", "cli", *command],
                 cwd=str(self.config.wp_env_dir),
                 timeout=timeout,
+                stdin=stdin,
             )
         elif self.config.kind == "cli":
-            result = self._run_process(command, timeout=timeout)
+            result = self._run_process(command, timeout=timeout, stdin=stdin)
         else:
             docker_cmd = [
                 "docker",
@@ -262,7 +274,7 @@ class WordPressEnvironment:
                 self.config.container_name,
                 *command,
             ]
-            result = self._run_process(docker_cmd, timeout=timeout)
+            result = self._run_process(docker_cmd, timeout=timeout, stdin=stdin)
         return result.stdout, result.stderr, result.returncode, result.timed_out
 
     def _run_wp_env(self, command: list[str]) -> None:
