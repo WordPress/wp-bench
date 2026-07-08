@@ -81,3 +81,25 @@ dataset:
 | `choices` | array | Optional multiple choice options `[{key, text}]` |
 | `correct_answer` | string | Correct choice key or canonical short answer |
 | `answer_type` | string | Optional short-answer scoring mode such as `exact` or `contains` |
+
+### Per-Test Metadata
+
+Every test (execution and knowledge) may carry a `metadata` object with
+provenance and coverage fields. Metadata is preserved end-to-end: local
+JSON → Parquet export (as a JSON-encoded `metadata` column) → Hugging Face
+loading → benchmark result records. In loaded tests and result records,
+task metadata fields sit at the top level of `metadata` and the containing
+suite file's metadata is nested under `metadata.suite_metadata` (a task
+field named `suite_metadata` would be shadowed — avoid that name).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source_refs` | array | WordPress core source files this task is based on |
+| `release_focus` | string | WordPress release the task targets (e.g. `6.9`, `classic`) |
+| `wordpress_min_version` | string | Optional minimum WordPress version |
+| `wordpress_target_version` | string | Optional intended WordPress version |
+| `requires_multisite` | bool | Optional; task needs a multisite install |
+| `review_status` | string | Optional editorial state (e.g. `reviewed`) |
+
+All fields are optional; unknown fields are preserved as-is. Prefer adding
+new fields here before inventing per-suite conventions.
