@@ -67,6 +67,7 @@ dataset:
 | `prompt` | string | Task description for the model |
 | `expected_behavior` | string | Reviewer-facing contract describing the behavior assertions should cover |
 | `requirements` | array | List of requirements the solution must meet |
+| `test_function` | string | PHP signature of the entry point the verifier calls; shown to the model and checked at runtime via `function_exists()` (unscored) |
 | `static_checks` | object | Regex patterns to check in generated code |
 | `runtime_checks` | object | Assertions to run in WordPress environment |
 | `reference_solution` | string | Example correct solution |

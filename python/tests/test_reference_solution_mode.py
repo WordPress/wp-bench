@@ -42,6 +42,7 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         category="general",
         difficulty="basic",
         requirements=["Requirement"],
+        test_function=None,
         static_checks={"required_patterns": []},
         runtime_checks={"assertions": []},
         reference_solution="function ref() { return true; }",

@@ -24,6 +24,7 @@ class ExecutionTest:
     category: str
     difficulty: str
     requirements: List[str]
+    test_function: Optional[str]
     static_checks: Dict[str, Any]
     runtime_checks: Dict[str, Any]
     reference_solution: Optional[str]
@@ -115,6 +116,7 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     category=row.get("category", "general"),
                     difficulty=row.get("difficulty", "unknown"),
                     requirements=requirements if isinstance(requirements, list) else [],
+                    test_function=row.get("test_function") or None,
                     static_checks=static_checks if isinstance(static_checks, dict) else {},
                     runtime_checks=runtime_checks if isinstance(runtime_checks, dict) else {},
                     reference_solution=row.get("reference_solution"),
@@ -190,6 +192,7 @@ def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
                 category=test.get("category", "general"),
                 difficulty=test.get("difficulty", "unknown"),
                 requirements=test.get("requirements", []),
+                test_function=test.get("test_function"),
                 static_checks=test.get("static_checks", {}),
                 runtime_checks=test.get("runtime_checks", {}),
                 reference_solution=test.get("reference_solution"),

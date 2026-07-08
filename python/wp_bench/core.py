@@ -1,6 +1,7 @@
 """Main orchestration loop for WP-Bench."""
 from __future__ import annotations
 
+import re
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -229,10 +230,7 @@ class BenchmarkRunner:
                 prompt = self._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
                 code = strip_code_fences(completion)
-                verification_spec = {
-                    "static_checks": test.static_checks,
-                    "runtime_checks": test.runtime_checks,
-                }
+                verification_spec = self._build_verification_spec(test)
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = self._score_assertions(env_result.raw)
                 return {
@@ -273,10 +271,7 @@ class BenchmarkRunner:
             try:
                 if not test.reference_solution:
                     raise ValueError("Missing reference_solution")
-                verification_spec = {
-                    "static_checks": test.static_checks,
-                    "runtime_checks": test.runtime_checks,
-                }
+                verification_spec = self._build_verification_spec(test)
                 env_result = self.environment.execute_code(test.reference_solution, verification_spec)
                 correctness = self._score_assertions(env_result.raw)
                 return {
@@ -334,10 +329,46 @@ class BenchmarkRunner:
         lines = [test.prompt, "", "Requirements:"]
         for req in test.requirements:
             lines.append(f"- {req}")
+        if test.test_function:
+            lines.append("")
+            lines.append(f"Define this function: {test.test_function}")
         lines.append(
             "Return only valid PHP code without explanations. Wrap the response in ```php fences."
         )
         return "\n".join(lines)
+
+    @staticmethod
+    def _build_verification_spec(test: ExecutionTest) -> Dict[str, Any]:
+        """Build the verifier payload, deriving a check from test_function.
+
+        test_function is the PHP signature of the entry point the verifier
+        calls; it is shown to the model and checked at runtime with PHP's
+        native function_exists() at weight 0. The function is the harness's
+        gateway for invoking the submission, not a scored WordPress skill, so
+        it earns no credit. When it is missing the behavioral assertions fail
+        on their own; the derived check only makes that failure diagnosable.
+        """
+        runtime_checks = dict(test.runtime_checks)
+        if test.test_function:
+            match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", test.test_function.strip())
+            if not match:
+                raise ValueError(
+                    f"Cannot extract function name from test_function "
+                    f"signature: {test.test_function!r}"
+                )
+            name = match.group(0)
+            derived = {
+                "type": "function_exists",
+                "target": name,
+                "description": f"Defines test function {name}()",
+                "weight": 0,
+            }
+            existing = runtime_checks.get("assertions", [])
+            runtime_checks["assertions"] = [derived, *existing]
+        return {
+            "static_checks": test.static_checks,
+            "runtime_checks": runtime_checks,
+        }
 
     @staticmethod
     def _score_assertions(raw: Dict[str, Any]) -> float:
@@ -574,10 +605,7 @@ class SingleModelRunner:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
                 code = strip_code_fences(completion)
-                verification_spec = {
-                    "static_checks": test.static_checks,
-                    "runtime_checks": test.runtime_checks,
-                }
+                verification_spec = BenchmarkRunner._build_verification_spec(test)
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = BenchmarkRunner._score_assertions(env_result.raw)
                 return {
