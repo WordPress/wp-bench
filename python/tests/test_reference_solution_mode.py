@@ -16,6 +16,7 @@ from wp_bench.config import (
 from wp_bench.core import BenchmarkRunner
 from wp_bench.datasets import ExecutionTest, KnowledgeTest
 from wp_bench.environment import ExecutionResult
+from wp_bench.records import execution_record_passed
 
 
 def _config(tmp_path: Path, test_ids: list[str] | None = None) -> HarnessConfig:
@@ -101,7 +102,10 @@ def test_reference_solution_mode_executes_reference_solution(
     ]
     assert result["metadata"]["mode"] == "reference_solution"
     assert result["metadata"]["scores"]["correctness"] == 1.0
-    assert result["results"][0]["passed"] is True
+    record = result["results"][0]
+    assert record["mode"] == "reference_solution"
+    assert record["model"] is None
+    assert execution_record_passed(record) is True
 
 
 def test_reference_solution_mode_exits_nonzero_on_failed_reference(
@@ -126,8 +130,8 @@ def test_reference_solution_mode_exits_nonzero_on_failed_reference(
         runner.run()
 
     assert exc.value.code == 1
-    assert runner.records[0]["passed"] is False
-    assert runner.records[0]["correctness"] == 0.5
+    assert execution_record_passed(runner.records[0]) is False
+    assert runner.records[0]["scores"]["correctness"] == 0.5
 
 
 def test_reference_solution_mode_rejects_non_execution_test_ids(

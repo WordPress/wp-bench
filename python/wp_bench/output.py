@@ -111,12 +111,14 @@ def print_reference_solution_failures(records: list[Dict[str, Any]]) -> None:
         return f"{value*100:.1f}%" if isinstance(value, (int, float)) else "N/A"
 
     for record in records:
-        result = record.get("result") or {}
+        grader = record.get("grader") or {}
+        raw = grader.get("raw") or {}
+        scores = record.get("scores") or {}
         table.add_row(
             str(record.get("test_id", "")),
-            _fmt_score(record.get("correctness")),
-            _fmt_score((result.get("static") or {}).get("score")),
-            _fmt_score((result.get("runtime") or {}).get("score")),
+            _fmt_score(scores.get("correctness")),
+            _fmt_score((raw.get("static") or {}).get("score")),
+            _fmt_score((raw.get("runtime") or {}).get("score")),
         )
 
     console.print(table)
