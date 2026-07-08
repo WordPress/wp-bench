@@ -78,6 +78,8 @@ models:
 grader:
   kind: docker
   wp_env_dir: ./runtime      # path to wp-env project
+  timeout_seconds: 90        # hard cap per runtime execution (timeout = 0.0 score)
+  setup_timeout_seconds: 600 # hard cap for environment setup
 
 run:
   suite: wp-core-v1
