@@ -43,6 +43,10 @@ run:
   # share mutable WordPress state (not valid for official benchmark runs).
   # execution_isolation: reset_per_test
   # execution_concurrency: 1
+  # Diagnostic-only switches. Official leaderboard runs must grade every
+  # dimension; skipping either invalidates a run for comparison purposes.
+  # skip_runtime: false  # skip runtime assertions (static checks only)
+  # skip_static: false   # skip static checks (runtime assertions only)
 
 # Output paths
 output:

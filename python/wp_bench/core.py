@@ -68,6 +68,45 @@ def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
     return tests[:limit]
 
 
+def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]:
+    """Build the verifier payload honoring run.skip_runtime/skip_static.
+
+    A skipped dimension is sent as empty checks so the runtime does not
+    execute it; scoring treats it as not applicable (see _score_correctness).
+
+    When runtime checks run, a weight-0 ``function_exists`` assertion derived
+    from ``test.test_function`` is prepended. It is the harness's gateway for
+    invoking the submission -- shown to the model and checked at runtime, but
+    earning no score. A missing gateway fails the behavioral assertions on its
+    own; the derived check only makes that failure diagnosable.
+    """
+    static_checks = {} if config.run.skip_static else test.static_checks
+    if config.run.skip_runtime:
+        runtime_checks: Dict[str, Any] = {}
+    else:
+        runtime_checks = dict(test.runtime_checks)
+        if test.test_function:
+            match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", test.test_function.strip())
+            if not match:
+                raise ValueError(
+                    f"Cannot extract function name from test_function "
+                    f"signature: {test.test_function!r}"
+                )
+            name = match.group(0)
+            derived = {
+                "type": "function_exists",
+                "target": name,
+                "description": f"Defines test function {name}()",
+                "weight": 0,
+            }
+            existing = runtime_checks.get("assertions", [])
+            runtime_checks["assertions"] = [derived, *existing]
+    return {
+        "static_checks": static_checks,
+        "runtime_checks": runtime_checks,
+    }
+
+
 def _run_isolated_execution_loop(
     *,
     tests_to_run: List[Any],
@@ -293,9 +332,14 @@ class BenchmarkRunner:
                 prompt = self._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
                 code = strip_code_fences(completion)
-                verification_spec = self._build_verification_spec(test)
+                verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(code, verification_spec)
-                correctness = self._score_correctness(env_result.raw, test)
+                correctness = self._score_correctness(
+                    env_result.raw,
+                    test,
+                    skip_runtime=self.config.run.skip_runtime,
+                    skip_static=self.config.run.skip_static,
+                )
                 return build_execution_record(
                     test=test,
                     mode="model",
@@ -331,9 +375,14 @@ class BenchmarkRunner:
             try:
                 if not test.reference_solution:
                     raise ValueError("Missing reference_solution")
-                verification_spec = self._build_verification_spec(test)
+                verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(test.reference_solution, verification_spec)
-                correctness = self._score_correctness(env_result.raw, test)
+                correctness = self._score_correctness(
+                    env_result.raw,
+                    test,
+                    skip_runtime=self.config.run.skip_runtime,
+                    skip_static=self.config.run.skip_static,
+                )
                 return build_execution_record(
                     test=test,
                     mode="reference_solution",
@@ -395,40 +444,13 @@ class BenchmarkRunner:
         return "\n".join(lines)
 
     @staticmethod
-    def _build_verification_spec(test: ExecutionTest) -> Dict[str, Any]:
-        """Build the verifier payload, deriving a check from test_function.
-
-        test_function is the PHP signature of the entry point the verifier
-        calls; it is shown to the model and checked at runtime with PHP's
-        native function_exists() at weight 0. The function is the harness's
-        gateway for invoking the submission, not a scored WordPress skill, so
-        it earns no credit. When it is missing the behavioral assertions fail
-        on their own; the derived check only makes that failure diagnosable.
-        """
-        runtime_checks = dict(test.runtime_checks)
-        if test.test_function:
-            match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", test.test_function.strip())
-            if not match:
-                raise ValueError(
-                    f"Cannot extract function name from test_function "
-                    f"signature: {test.test_function!r}"
-                )
-            name = match.group(0)
-            derived = {
-                "type": "function_exists",
-                "target": name,
-                "description": f"Defines test function {name}()",
-                "weight": 0,
-            }
-            existing = runtime_checks.get("assertions", [])
-            runtime_checks["assertions"] = [derived, *existing]
-        return {
-            "static_checks": test.static_checks,
-            "runtime_checks": runtime_checks,
-        }
-
-    @staticmethod
-    def _score_correctness(raw: Dict[str, Any], test: ExecutionTest) -> float:
+    def _score_correctness(
+        raw: Dict[str, Any],
+        test: ExecutionTest,
+        *,
+        skip_runtime: bool = False,
+        skip_static: bool = False,
+    ) -> float:
         """Combine static-analysis and runtime-assertion scores into correctness.
 
         Both sub-scores are already weighted by the WordPress runtime
@@ -459,11 +481,12 @@ class BenchmarkRunner:
         static_checks = test.static_checks or {}
         runtime_checks = test.runtime_checks or {}
         applicable = {
-            "static": bool(
+            "static": not skip_static
+            and bool(
                 static_checks.get("required_patterns")
                 or static_checks.get("forbidden_patterns")
             ),
-            "runtime": bool(runtime_checks.get("assertions")),
+            "runtime": not skip_runtime and bool(runtime_checks.get("assertions")),
         }
 
         if applicable["runtime"] and BenchmarkRunner._runtime_crashed(raw):
@@ -718,9 +741,14 @@ class SingleModelRunner:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
                 code = strip_code_fences(completion)
-                verification_spec = BenchmarkRunner._build_verification_spec(test)
+                verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(code, verification_spec)
-                correctness = BenchmarkRunner._score_correctness(env_result.raw, test)
+                correctness = BenchmarkRunner._score_correctness(
+                    env_result.raw,
+                    test,
+                    skip_runtime=self.config.run.skip_runtime,
+                    skip_static=self.config.run.skip_static,
+                )
                 return build_execution_record(
                     test=test,
                     mode="model",
