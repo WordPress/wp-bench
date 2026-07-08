@@ -84,18 +84,29 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
     table.add_column("Execution Pass", justify="right")
     table.add_column("Runtime Partial", justify="right")
     table.add_column("Overall", justify="right", style="bold")
+    table.add_column("Est. Cost", justify="right")
+    table.add_column("Median Latency", justify="right")
 
     def _fmt_score(value: float | None) -> str:
         return f"{value*100:.1f}%" if value is not None else "N/A"
 
+    def _fmt_cost(value: float | None) -> str:
+        return f"${value:.4f}" if value is not None else "N/A"
+
+    def _fmt_latency(value: float | None) -> str:
+        return f"{value:.0f}ms" if value is not None else "N/A"
+
     for model_name, result in results.items():
         scores = result["scores"]
+        usage = result.get("usage") or {}
         table.add_row(
             model_name,
             _fmt_score(scores.get("knowledge")),
             _fmt_score(scores.get("execution_pass_rate")),
             _fmt_score(scores.get("runtime")),
             f"{scores['overall']*100:.1f}%",
+            _fmt_cost(usage.get("estimated_cost_usd")),
+            _fmt_latency(usage.get("median_latency_ms")),
         )
 
     console.print(table)

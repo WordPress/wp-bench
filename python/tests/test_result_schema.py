@@ -20,6 +20,8 @@ from wp_bench.datasets import ExecutionTest, KnowledgeTest
 from wp_bench.environment import ExecutionResult
 from wp_bench.records import RESULT_SCHEMA_VERSION
 
+from conftest import fake_generation
+
 
 def _execution_test(test_id: str = "e-one") -> ExecutionTest:
     return ExecutionTest(
@@ -88,7 +90,7 @@ def _single_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> li
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_code = lambda code, verification_spec: _passing_result()  # type: ignore[method-assign]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "init")
+    monkeypatch.setattr(runner.model, "generate_with_metadata", lambda prompt: fake_generation("init"))
     runner.run()
     return runner.records
 
@@ -115,7 +117,7 @@ def _multi_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> lis
         environment=FakeEnvironment(),  # type: ignore[arg-type]
         tests={"execution": [_execution_test()], "knowledge": [_knowledge_test()]},
     )
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "init")
+    monkeypatch.setattr(runner.model, "generate_with_metadata", lambda prompt: fake_generation("init"))
     runner.run()
     return runner.records
 
@@ -179,11 +181,14 @@ def test_reference_solution_record_uses_canonical_schema(
 
     assert record["mode"] == "reference_solution"
     assert record["model"] is None
-    # model is intentionally null in reference mode, so nested model.* paths
-    # exist only in model mode; the record shape must match otherwise.
-    reference_paths = {p for p in _key_paths(record) if not p.startswith("model.")}
-    model_paths = {p for p in _key_paths(model_execution) if not p.startswith("model.")}
-    assert reference_paths == model_paths
+    # model and model_call are intentionally null in reference mode, so their
+    # nested paths exist only in model mode; the shape must match otherwise.
+    def _comparable(paths: set) -> set:
+        return {
+            p for p in paths if not p.startswith("model.") and not p.startswith("model_call.")
+        }
+
+    assert _comparable(_key_paths(record)) == _comparable(_key_paths(model_execution))
 
 
 def test_jsonl_records_match_json_results(
@@ -205,7 +210,7 @@ def test_jsonl_records_match_json_results(
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_code = lambda code, verification_spec: _passing_result()  # type: ignore[method-assign]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "init")
+    monkeypatch.setattr(runner.model, "generate_with_metadata", lambda prompt: fake_generation("init"))
 
     runner.run()
 
@@ -242,7 +247,9 @@ def test_records_are_sorted_for_stable_output(
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_code = lambda code, verification_spec: _passing_result()  # type: ignore[method-assign]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "```php\ncode\n```")
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
 
     payload = runner.run()
 

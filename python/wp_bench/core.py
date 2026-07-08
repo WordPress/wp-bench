@@ -38,7 +38,7 @@ from .records import (
     execution_record_passed,
     sort_records,
 )
-from .scoring import SCORING_VERSION, ScoreAggregator
+from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
 from .utils import ensure_dir, sha256, strip_code_fences
 
@@ -109,6 +109,15 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]
     }
 
 
+def _model_call_info(generation: Any) -> Dict[str, Any]:
+    """Call-reliability metadata recorded alongside each test result."""
+    return {
+        "retry_count": generation.retry_count,
+        "provider_response_id": generation.provider_response_id,
+        "temperature_fallback": generation.temperature_fallback,
+    }
+
+
 def _run_isolated_execution_loop(
     *,
     tests_to_run: List[Any],
@@ -176,6 +185,7 @@ class BenchmarkRunner:
         self.model = ModelInterface(config.model or config.get_models()[0])
         self.environment = WordPressEnvironment(config.grader)
         self.aggregator = ScoreAggregator()
+        self.usage_aggregator = UsageAggregator()
         self.records: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
 
@@ -236,6 +246,7 @@ class BenchmarkRunner:
                 "selected_test_ids": sorted(
                     {record["test_id"] for record in self.records}
                 ),
+                "usage": self.usage_aggregator.summary(),
                 "scores": {
                     "knowledge": summary.knowledge,
                     "execution_pass_rate": summary.execution_pass_rate,
@@ -292,17 +303,19 @@ class BenchmarkRunner:
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
             try:
                 prompt = self._render_knowledge_prompt(test)
-                raw_completion = self.model.generate(prompt)
-                answer = strip_code_fences(raw_completion).strip()
+                generation = self.model.generate_with_metadata(prompt)
+                answer = strip_code_fences(generation.text).strip()
                 correct = score_knowledge_answer(test, answer)
                 return build_knowledge_record(
                     test=test,
                     mode="model",
                     model_config=self.config.model,
                     prompt_hash=sha256(prompt),
-                    raw_completion=raw_completion,
+                    raw_completion=generation.text,
                     answer=answer,
                     knowledge_score=correct,
+                    usage=generation.usage_dict(),
+                    model_call=_model_call_info(generation),
                 )
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
@@ -316,6 +329,7 @@ class BenchmarkRunner:
                         result = future.result()
                         with self._lock:
                             self.aggregator.add_knowledge(result["scores"]["knowledge"])
+                            self.usage_aggregator.add(result.get("usage"))
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -341,8 +355,8 @@ class BenchmarkRunner:
             """Process a single execution test."""
             try:
                 prompt = self._render_execution_prompt(test)
-                completion = self.model.generate(prompt)
-                code = strip_code_fences(completion)
+                generation = self.model.generate_with_metadata(prompt)
+                code = strip_code_fences(generation.text)
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(code, verification_spec)
                 scores = self._score_execution(
@@ -356,10 +370,12 @@ class BenchmarkRunner:
                     mode="model",
                     model_config=self.config.model,
                     prompt_hash=sha256(prompt),
-                    raw_completion=completion,
+                    raw_completion=generation.text,
                     code=code,
                     env_result=env_result,
                     scores=scores,
+                    usage=generation.usage_dict(),
+                    model_call=_model_call_info(generation),
                 )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
@@ -367,6 +383,7 @@ class BenchmarkRunner:
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
                 self.aggregator.add_execution(result["scores"])
+                self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
         _run_isolated_execution_loop(
@@ -410,6 +427,7 @@ class BenchmarkRunner:
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
                 self.aggregator.add_execution(result["scores"])
+                self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
         _run_isolated_execution_loop(
@@ -720,6 +738,7 @@ class SingleModelRunner:
         self.environment = environment
         self.tests = tests
         self.aggregator = ScoreAggregator()
+        self.usage_aggregator = UsageAggregator()
         self.records: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
 
@@ -738,6 +757,7 @@ class SingleModelRunner:
         return {
             "model_config": self.model_config.model_dump(mode="json"),
             "scoring_version": SCORING_VERSION,
+            "usage": self.usage_aggregator.summary(),
             "scores": {
                 "knowledge": summary.knowledge,
                 "execution_pass_rate": summary.execution_pass_rate,
@@ -757,17 +777,19 @@ class SingleModelRunner:
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
             try:
                 prompt = BenchmarkRunner._render_knowledge_prompt(test)
-                raw_completion = self.model.generate(prompt)
-                answer = strip_code_fences(raw_completion).strip()
+                generation = self.model.generate_with_metadata(prompt)
+                answer = strip_code_fences(generation.text).strip()
                 correct = score_knowledge_answer(test, answer)
                 return build_knowledge_record(
                     test=test,
                     mode="model",
                     model_config=self.model_config,
                     prompt_hash=sha256(prompt),
-                    raw_completion=raw_completion,
+                    raw_completion=generation.text,
                     answer=answer,
                     knowledge_score=correct,
+                    usage=generation.usage_dict(),
+                    model_call=_model_call_info(generation),
                 )
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
@@ -781,6 +803,7 @@ class SingleModelRunner:
                         result = future.result()
                         with self._lock:
                             self.aggregator.add_knowledge(result["scores"]["knowledge"])
+                            self.usage_aggregator.add(result.get("usage"))
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -795,8 +818,8 @@ class SingleModelRunner:
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
             try:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
-                completion = self.model.generate(prompt)
-                code = strip_code_fences(completion)
+                generation = self.model.generate_with_metadata(prompt)
+                code = strip_code_fences(generation.text)
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(code, verification_spec)
                 scores = BenchmarkRunner._score_execution(
@@ -810,10 +833,12 @@ class SingleModelRunner:
                     mode="model",
                     model_config=self.model_config,
                     prompt_hash=sha256(prompt),
-                    raw_completion=completion,
+                    raw_completion=generation.text,
                     code=code,
                     env_result=env_result,
                     scores=scores,
+                    usage=generation.usage_dict(),
+                    model_call=_model_call_info(generation),
                 )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
@@ -821,6 +846,7 @@ class SingleModelRunner:
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
                 self.aggregator.add_execution(result["scores"])
+                self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
         _run_isolated_execution_loop(
