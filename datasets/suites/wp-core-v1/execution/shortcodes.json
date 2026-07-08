@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-shortcodes",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Shortcodes",
     "description": "Code generation tasks for WordPress Shortcodes APIs",
@@ -12,20 +12,16 @@
       "id": "e-shortcodes-001",
       "category": "shortcodes",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_shortcodes_001() to register a wpbp_greeting shortcode that returns a safe greeting for an optional name attribute.",
+      "prompt": "Implement a function that registers a wpbp_greeting shortcode that returns a safe greeting for an optional name attribute.",
       "expected_behavior": "`wpbp_shortcodes_001()` registers `wpbp_greeting`. The shortcode merges the optional `name` attribute with a `World` default via WordPress shortcode attribute handling and returns `Hello, <name>!` with the name escaped for HTML. Runtime validation renders the shortcode with omitted, plain, and HTML-containing names.",
       "requirements": [
         "Register the shortcode tag wpbp_greeting",
         "Default the name to World when omitted",
         "Return escaped shortcode output; do not echo it"
       ],
+      "test_function": "wpbp_shortcodes_001(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_shortcodes_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_shortcode",
             "description": "Uses add_shortcode",
@@ -70,20 +66,16 @@
       "id": "e-shortcodes-002",
       "category": "shortcodes",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_shortcodes_002( string $text ): array to parse a shortcode attribute string into WordPress's attribute array without running shortcode callbacks.",
+      "prompt": "Implement a function that parses a supplied shortcode attribute string into WordPress's attribute array without running shortcode callbacks.",
       "expected_behavior": "`wpbp_shortcodes_002()` delegates parsing to WordPress's shortcode attribute parser, returning lowercase named keys and string values from the supplied attribute text. It must not run shortcode callbacks while parsing. Runtime validation registers a probe shortcode, parses mixed-case attributes plus probe-looking text, and verifies the probe was not executed.",
       "requirements": [
         "Use WordPress's shortcode attribute parser",
         "Return the parsed attributes array",
         "Do not execute shortcode callbacks"
       ],
+      "test_function": "wpbp_shortcodes_002( string $text ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_shortcodes_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "shortcode_parse_atts",
             "description": "Uses shortcode_parse_atts",
@@ -120,20 +112,16 @@
       "id": "e-shortcodes-003",
       "category": "shortcodes",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_shortcodes_003( string $content ): string to remove registered shortcode occurrences from content while leaving unknown shortcode-like text intact.",
+      "prompt": "Implement a function that removes registered shortcode occurrences from supplied content while leaving unknown shortcode-like text intact.",
       "expected_behavior": "`wpbp_shortcodes_003()` uses WordPress shortcode stripping so only currently registered shortcode tags are removed. Enclosing shortcode matches are removed by WordPress, while unregistered bracketed content is preserved. Runtime validation registers one tag and compares the filtered content against an unknown tag.",
       "requirements": [
         "Use WordPress Shortcode API",
         "Accept and return content as a string",
         "Preserve unregistered shortcode-like text"
       ],
+      "test_function": "wpbp_shortcodes_003( string $content ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_shortcodes_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "strip_shortcodes",
             "description": "Uses strip_shortcodes",
@@ -163,20 +151,16 @@
       "id": "e-shortcodes-004",
       "category": "shortcodes",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_shortcodes_004( string $content, string $tag ): bool to report whether content contains a registered shortcode tag, including nested shortcode content.",
+      "prompt": "Implement a function that reports whether supplied content contains a supplied registered shortcode tag, including nested shortcode content.",
       "expected_behavior": "`wpbp_shortcodes_004()` delegates shortcode detection to WordPress, so it only reports true for shortcode tags that are registered and can find a tag nested inside another shortcode's enclosed content. Runtime validation registers outer/inner fixture shortcodes, checks nested detection, then verifies an unregistered tag is not reported.",
       "requirements": [
         "Use WordPress Shortcode API",
         "Accept content and tag inputs",
         "Return a boolean result without rendering the shortcode"
       ],
+      "test_function": "wpbp_shortcodes_004( string $content, string $tag ): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_shortcodes_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "has_shortcode",
             "description": "Uses has_shortcode",
@@ -213,20 +197,16 @@
       "id": "e-shortcodes-005",
       "category": "shortcodes",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_shortcodes_005() to register a wpbp_wrap enclosing shortcode that returns its enclosed content inside a span with the content escaped for HTML.",
+      "prompt": "Implement a function that registers a wpbp_wrap enclosing shortcode that returns its enclosed content inside a span with the content escaped for HTML.",
       "expected_behavior": "`wpbp_shortcodes_005()` registers `wpbp_wrap` as an enclosing shortcode. The callback receives enclosed content, returns `<span>...escaped content...</span>`, and does not echo output. Runtime validation renders plain and HTML-containing enclosed content through `do_shortcode()`.",
       "requirements": [
         "Register the shortcode tag wpbp_wrap",
         "Read the shortcode's enclosed content argument",
         "Return escaped markup; do not echo it"
       ],
+      "test_function": "wpbp_shortcodes_005(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_shortcodes_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_shortcode",
             "description": "Uses add_shortcode",

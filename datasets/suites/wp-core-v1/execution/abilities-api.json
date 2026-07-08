@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-abilities_api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Abilities API",
     "description": "Code generation tasks for WordPress Abilities API APIs",
@@ -133,20 +133,16 @@
       "id": "e-abilities-api-003",
       "category": "abilities-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_abilities_api_003( int $number ) to retrieve the registered 'wpbp/add-one' ability and return the result of executing it with the supplied number.",
+      "prompt": "Implement a function that retrieves the registered 'wpbp/add-one' ability and returns the result of executing it with a supplied number.",
       "expected_behavior": "`wpbp_abilities_api_003()` retrieves the pre-registered `wpbp/add-one` ability with `wp_get_ability()` and returns the result from `WP_Ability::execute()` for the supplied number. The setup registers the fixture ability, and runtime validation checks multiple inputs.",
       "requirements": [
         "Use wp_get_ability to retrieve 'wpbp/add-one'",
         "Call the ability object's execute method",
         "Return the execution result"
       ],
+      "test_function": "wpbp_abilities_api_003( int $number )",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_abilities_api_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_get_ability",
             "description": "Uses wp_get_ability",

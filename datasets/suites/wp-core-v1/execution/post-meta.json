@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-post_meta",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Post Meta",
     "description": "Code generation tasks for WordPress Post Meta APIs",
@@ -12,20 +12,16 @@
       "id": "e-post-meta-001",
       "category": "post-meta",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_meta_001( int $post_id, string $meta_key ) to increment a numeric post meta counter and return the new count.",
+      "prompt": "Implement a function that increments a numeric post meta counter and returns the new count.",
       "expected_behavior": "`wpbp_post_meta_001()` reads the supplied post meta key with `get_post_meta()`, treats a missing value as zero, increments it, persists the new value with `update_post_meta()`, and returns the new integer count. Runtime validation checks consecutive calls and the stored meta value.",
       "requirements": [
         "Use WordPress metadata APIs",
         "Accept the post ID and meta key as inputs",
         "Persist and return the incremented integer value"
       ],
+      "test_function": "wpbp_post_meta_001( int $post_id, string $meta_key ): int",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_meta_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_post_meta",
             "description": "Uses get_post_meta",
@@ -63,20 +59,16 @@
       "id": "e-post-meta-002",
       "category": "post-meta",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_meta_002() to register a protected string post meta field named '_wpbp_subtitle' for REST exposure on posts.",
+      "prompt": "Implement a function that registers a protected string post meta field named '_wpbp_subtitle' for REST exposure on posts.",
       "expected_behavior": "`wpbp_post_meta_002()` registers `_wpbp_subtitle` for the `post` post type with `register_post_meta()`, stores a single string value, exposes it through REST metadata, sanitizes incoming text, and permits access to the protected key through an auth callback. Runtime validation inspects WordPress's registered meta registry and the sanitize/auth filters.",
       "requirements": [
         "Use WordPress metadata APIs",
         "Expose the field through REST metadata",
         "Sanitize the value as plain text"
       ],
+      "test_function": "wpbp_post_meta_002(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_meta_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_post_meta",
             "description": "Uses register_post_meta",
@@ -127,20 +119,16 @@
       "id": "e-post-meta-003",
       "category": "post-meta",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_meta_003( int $post_id, string $meta_key, string $value ) to delete only post meta entries whose stored value matches the supplied value.",
+      "prompt": "Implement a function that deletes only post meta entries whose stored value matches the supplied value.",
       "expected_behavior": "`wpbp_post_meta_003()` calls `delete_post_meta()` with the supplied previous value so non-matching rows are preserved. Runtime validation creates multiple values for the same key, verifies a wrong value deletes nothing, then verifies only the matching value is removed.",
       "requirements": [
         "Use WordPress metadata APIs",
         "Accept the post ID, meta key, and value as inputs",
         "Do not delete non-matching values for the same key"
       ],
+      "test_function": "wpbp_post_meta_003( int $post_id, string $meta_key, string $value ): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_meta_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "delete_post_meta",
             "description": "Uses delete_post_meta",
@@ -173,20 +161,16 @@
       "id": "e-post-meta-004",
       "category": "post-meta",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_post_meta_004( int $post_id, string $meta_key ) to return every stored value for a multi-value post meta key.",
+      "prompt": "Implement a function that returns every stored value for a multi-value post meta key.",
       "expected_behavior": "`wpbp_post_meta_004()` uses `get_post_meta()` in multi-value mode for the supplied key, returning the full array of stored values instead of collapsing to the first value. Runtime validation checks both populated and missing keys.",
       "requirements": [
         "Use WordPress metadata APIs",
         "Accept the post ID and meta key as inputs",
         "Return an array of all stored values"
       ],
+      "test_function": "wpbp_post_meta_004( int $post_id, string $meta_key ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_meta_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_post_meta",
             "description": "Uses get_post_meta",
@@ -219,20 +203,16 @@
       "id": "e-post-meta-005",
       "category": "post-meta",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_meta_005( int $post_id, string $meta_key, string $json ) to store JSON text containing escaped quotes without corrupting it.",
+      "prompt": "Implement a function that stores JSON text containing escaped quotes as post meta without corrupting it.",
       "expected_behavior": "`wpbp_post_meta_005()` compensates for WordPress's unslashing of post meta values by slashing JSON text before calling `update_post_meta()`, then returns the stored value. Runtime validation uses JSON containing escaped quotes and checks both the return value and stored meta.",
       "requirements": [
         "Use WordPress metadata APIs",
         "Accept the post ID, meta key, and JSON text as inputs",
         "Preserve escaped quotes in the stored JSON text"
       ],
+      "test_function": "wpbp_post_meta_005( int $post_id, string $meta_key, string $json ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_meta_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_slash",
             "description": "Uses wp_slash",
@@ -270,20 +250,16 @@
       "id": "e-post-meta-006",
       "category": "post-meta",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_meta_006() to register an integer post meta field named '_wpbp_rating' for the 'post' object subtype with a default value of 0.",
+      "prompt": "Implement a function that registers an integer post meta field named '_wpbp_rating' for the 'post' object subtype with a default value of 0.",
       "expected_behavior": "`wpbp_post_meta_006()` registers `_wpbp_rating` with `register_meta()` for the `post` object type and `post` object subtype, using a single integer value, default `0`, and REST exposure. Runtime validation inspects WordPress's registered meta registry and verifies the default returned for a post without stored rating meta.",
       "requirements": [
         "Use WordPress metadata APIs",
         "Limit the registration to the post object subtype",
         "Set integer type, single value, REST exposure, and default 0"
       ],
+      "test_function": "wpbp_post_meta_006(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_meta_006",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_meta",
             "description": "Uses register_meta",

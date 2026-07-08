@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_bindings",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Bindings",
     "description": "Code generation tasks for WordPress Block Bindings APIs",
@@ -12,20 +12,16 @@
       "id": "e-gb-block-bindings-001",
       "category": "gb-block-bindings",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_bindings_001(): bool to register a server-side block binding source named 'wpbp/source' that can replace a bound paragraph's content with the binding's 'text' argument.",
+      "prompt": "Implement a function that registers a server-side block binding source named 'wpbp/source' that can replace a bound paragraph's content with the binding's 'text' argument.",
       "expected_behavior": "`wpbp_gb_block_bindings_001()` registers the `wpbp/source` binding source with WordPress and returns whether the source is registered. Runtime validation renders a paragraph whose `content` attribute is bound to the source and confirms WordPress replaces the fallback text with the binding argument.",
       "requirements": [
         "Use register_block_bindings_source()",
         "Register the source name 'wpbp/source'",
         "Return whether WordPress registered the source"
       ],
+      "test_function": "wpbp_gb_block_bindings_001(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_bindings_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_block_bindings_source",
             "description": "Uses register_block_bindings_source",
@@ -72,20 +68,16 @@
       "id": "e-gb-block-bindings-002",
       "category": "gb-block-bindings",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_bindings_002(): void so WordPress treats the 'title' attribute of the custom block type 'wpbp/card' as bindable without changing bindable attributes for unrelated block types.",
+      "prompt": "Implement a function that makes WordPress treat the 'title' attribute of the custom block type 'wpbp/card' as bindable without changing bindable attributes for unrelated block types.",
       "expected_behavior": "`wpbp_gb_block_bindings_002()` hooks the Block Bindings supported-attributes API for `wpbp/card`, preserves existing attribute lists, and adds `title` only for that block type. Runtime validation registers a dynamic `wpbp/card` fixture, binds its `title` attribute to a source, and confirms WordPress passes the bound title into the block render callback.",
       "requirements": [
         "Use the supported block attributes filter",
         "Target only the 'wpbp/card' block type",
         "Preserve existing supported attributes"
       ],
+      "test_function": "wpbp_gb_block_bindings_002(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_bindings_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "block_bindings_supported_attributes",
             "description": "Uses block_bindings_supported_attributes",
@@ -131,20 +123,16 @@
       "id": "e-gb-block-bindings-003",
       "category": "gb-block-bindings",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_bindings_003(): bool to register a block binding source named 'wpbp/meta-title' that reads the current block's postId context and returns that post's '_wpbp_title' meta value for bound content.",
+      "prompt": "Implement a function that registers a block binding source named 'wpbp/meta-title' that reads the current block's postId context and returns that post's '_wpbp_title' meta value for bound content.",
       "expected_behavior": "`wpbp_gb_block_bindings_003()` registers `wpbp/meta-title`, declares the `postId` context needed by the source, and returns whether WordPress registered the source. Runtime validation creates a post fixture with `_wpbp_title`, renders a paragraph block with matching context, and confirms the bound content comes from post meta.",
       "requirements": [
         "Use register_block_bindings_source()",
         "Declare the postId context for the source",
         "Return whether WordPress registered the source"
       ],
+      "test_function": "wpbp_gb_block_bindings_003(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_bindings_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_block_bindings_source",
             "description": "Uses register_block_bindings_source",
@@ -203,20 +191,16 @@
       "id": "e-gb-block-bindings-004",
       "category": "gb-block-bindings",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_bindings_004(): void to filter block binding source values so only values from the 'wpbp/filter-source' source bound to the 'content' attribute are uppercased.",
+      "prompt": "Implement a function that filters block binding source values so only values from the 'wpbp/filter-source' source bound to the 'content' attribute are uppercased.",
       "expected_behavior": "`wpbp_gb_block_bindings_004()` hooks `block_bindings_source_value` with access to the source name and attribute name, uppercases values only for `wpbp/filter-source` content bindings, and returns unrelated binding values unchanged. Runtime validation renders two bound paragraphs through WordPress to verify both the filtered and unfiltered paths.",
       "requirements": [
         "Use the block_bindings_source_value filter",
         "Check the source name and attribute name before changing the value",
         "Leave unrelated sources unchanged"
       ],
+      "test_function": "wpbp_gb_block_bindings_004(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_bindings_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "block_bindings_source_value",
             "description": "Uses block_bindings_source_value",

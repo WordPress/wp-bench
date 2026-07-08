@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-media",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Media",
     "description": "Code generation tasks for WordPress Media APIs",
@@ -12,20 +12,16 @@
       "id": "e-media-001",
       "category": "media",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_media_001( int $attachment_id, string|array $size = 'thumbnail' ) to return WordPress's image source data for an attachment.",
+      "prompt": "Implement a function that returns WordPress's image source data for an attachment.",
       "expected_behavior": "`wpbp_media_001()` delegates to `wp_get_attachment_image_src()` with the supplied attachment ID and size, returning WordPress's four-item source array for full and intermediate image sizes or `false` when no image source is available. Runtime validation uses attachment metadata instead of a real upload file and verifies URL, dimensions, and intermediate-size state.",
       "requirements": [
         "Use WordPress media APIs",
         "Accept the attachment ID and requested image size as inputs",
         "Return the WordPress image source array without parsing attachment metadata manually"
       ],
+      "test_function": "wpbp_media_001( int $attachment_id, string|array $size = 'thumbnail' ): array|false",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_media_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_get_attachment_image_src",
             "description": "Uses wp_get_attachment_image_src",
@@ -57,20 +53,16 @@
       "id": "e-media-002",
       "category": "media",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_media_002( string $html, ?string $context = null ) to return post content after WordPress applies media tag optimizations.",
+      "prompt": "Implement a function that returns post content after WordPress applies media tag optimizations.",
       "expected_behavior": "`wpbp_media_002()` passes the supplied HTML and optional context to `wp_filter_content_tags()`. Runtime validation creates image attachment metadata, filters an image tag with a matching `wp-image-*` class, and checks that WordPress adds dimensions and responsive image attributes rather than leaving the tag unchanged.",
       "requirements": [
         "Use WordPress media APIs",
         "Accept the HTML string and optional context as inputs",
         "Return the filtered HTML string"
       ],
+      "test_function": "wpbp_media_002( string $html, ?string $context = null ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_media_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_filter_content_tags",
             "description": "Uses wp_filter_content_tags",
@@ -102,20 +94,16 @@
       "id": "e-media-003",
       "category": "media",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_media_003( int $orig_w, int $orig_h, int $dest_w, int $dest_h, bool|array $crop = false ) to return WordPress image resize dimensions.",
+      "prompt": "Implement a function that returns WordPress image resize dimensions.",
       "expected_behavior": "`wpbp_media_003()` forwards the original size, requested size, and crop setting to `image_resize_dimensions()`. Runtime validation checks proportional downscaling, verifies WordPress refuses an upscale-only resize, and checks explicit crop positioning.",
       "requirements": [
         "Use WordPress media APIs",
         "Accept the original dimensions, requested dimensions, and crop setting as inputs",
         "Return the WordPress resize dimensions array or false"
       ],
+      "test_function": "wpbp_media_003( int $orig_w, int $orig_h, int $dest_w, int $dest_h, bool|array $crop = false ): array|false",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_media_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "image_resize_dimensions",
             "description": "Uses image_resize_dimensions",
@@ -145,20 +133,16 @@
       "id": "e-media-004",
       "category": "media",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_media_004( string $file ) to read embedded image alternative text from a file path.",
+      "prompt": "Implement a function that reads embedded image alternative text from a file path.",
       "expected_behavior": "`wpbp_media_004()` loads the admin image helper if needed and calls `wp_get_image_alttext()` for the supplied file path. Runtime validation uses a temporary image-like file containing IPTC/XMP `AltTextAccessibility` metadata and a second file without XMP data, expecting the embedded alternative text for the first and an empty string for the second.",
       "requirements": [
         "Use WordPress media APIs",
         "Load the admin image helper before calling wp_get_image_alttext",
         "Return an empty string when no embedded alternative text is present"
       ],
+      "test_function": "wpbp_media_004( string $file ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_media_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_get_image_alttext",
             "description": "Uses wp_get_image_alttext",
@@ -195,20 +179,16 @@
       "id": "e-media-005",
       "category": "media",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_media_005( string $filename, ?array $mimes = null ) to return WordPress's extension and MIME type result for an upload filename.",
+      "prompt": "Implement a function that returns WordPress's extension and MIME type result for an upload filename.",
       "expected_behavior": "`wpbp_media_005()` calls `wp_check_filetype()` with the supplied filename and optional MIME map, returning the `ext` and `type` array from WordPress. Runtime validation checks a normal JPEG filename, an unknown extension, and a custom MIME map to ensure the implementation uses WordPress's extension-based file-type lookup.",
       "requirements": [
         "Use WordPress file type APIs",
         "Accept an optional MIME map",
         "Do not inspect file contents"
       ],
+      "test_function": "wpbp_media_005( string $filename, ?array $mimes = null ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_media_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_check_filetype",
             "description": "Uses wp_check_filetype",

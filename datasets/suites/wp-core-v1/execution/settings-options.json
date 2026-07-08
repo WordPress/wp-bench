@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-settings_options",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Settings and Options",
     "description": "Code generation tasks for WordPress Settings and Options APIs",
@@ -12,20 +12,16 @@
       "id": "e-settings-options-001",
       "category": "settings-options",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_settings_options_001() to register the option-backed setting 'wpbp_setting_title' in the 'wpbp' group as a REST-exposed string setting whose saved value is sanitized as plain text.",
+      "prompt": "Implement a function that registers the option-backed setting 'wpbp_setting_title' in the 'wpbp' group as a REST-exposed string setting whose saved value is sanitized as plain text.",
       "expected_behavior": "`wpbp_settings_options_001()` registers `wpbp_setting_title` with `register_setting()` in the `wpbp` group, exposes it through REST settings metadata, declares string data, and registers a sanitizer that strips markup. Runtime validation inspects WordPress's registered settings registry and verifies that `sanitize_option()` applies the registered sanitizer.",
       "requirements": [
         "Use the Settings API",
         "Register the setting under group 'wpbp' with option name 'wpbp_setting_title'",
         "Expose the setting to REST clients and sanitize stored values as plain text"
       ],
+      "test_function": "wpbp_settings_options_001(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_settings_options_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_setting",
             "description": "Uses register_setting",
@@ -71,20 +67,16 @@
       "id": "e-settings-options-002",
       "category": "settings-options",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_settings_options_002( string $value ): bool to create the 'wpbp_noautoload' option with the provided value sanitized as plain text and excluded from WordPress autoloading.",
+      "prompt": "Implement a function that creates the 'wpbp_noautoload' option with a provided value sanitized as plain text and excluded from WordPress autoloading, returning whether the option was added.",
       "expected_behavior": "`wpbp_settings_options_002()` adds `wpbp_noautoload` with `add_option()`, stores the provided value after plain-text sanitization, and disables autoloading using the modern Options API behavior. Runtime validation checks the stored value and confirms the options table autoload marker is not one of WordPress's autoloaded values.",
       "requirements": [
         "Use the Options API",
         "Store the sanitized value in 'wpbp_noautoload'",
         "Disable autoloading for the option"
       ],
+      "test_function": "wpbp_settings_options_002( string $value ): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_settings_options_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_option",
             "description": "Uses add_option",
@@ -127,20 +119,16 @@
       "id": "e-settings-options-003",
       "category": "settings-options",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_settings_options_003( string $key, string $value ): array to update the 'wpbp_nested' option by storing a sanitized plain-text value under a sanitized key, preserving existing entries, and returning the full updated option array.",
+      "prompt": "Implement a function that updates the 'wpbp_nested' option by storing a supplied plain-text-sanitized value under a supplied sanitized key, preserving existing entries, and returning the full updated option array.",
       "expected_behavior": "`wpbp_settings_options_003()` reads the existing `wpbp_nested` array with `get_option()`, normalizes the supplied key with `sanitize_key()`, sanitizes the supplied value as plain text, persists the updated array with `update_option()`, and returns the same persisted array. Runtime validation seeds an existing entry, checks preservation, and verifies the sanitized key and value in both the return value and stored option.",
       "requirements": [
         "Use the Options API to read and update 'wpbp_nested'",
         "Sanitize the supplied key and value before storing",
         "Preserve existing option entries"
       ],
+      "test_function": "wpbp_settings_options_003( string $key, string $value ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_settings_options_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_option",
             "description": "Reads the existing option value",
@@ -193,20 +181,16 @@
       "id": "e-settings-options-004",
       "category": "settings-options",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_settings_options_004(): void to register a settings section 'wpbp_section' and a settings field 'wpbp_field' on the built-in 'reading' settings page, with the field assigned to that section.",
+      "prompt": "Implement a function that registers a settings section 'wpbp_section' and a settings field 'wpbp_field' on the built-in 'reading' settings page, with the field assigned to that section.",
       "expected_behavior": "`wpbp_settings_options_004()` uses the Settings API to register `wpbp_section` on the `reading` page and `wpbp_field` inside that section. Runtime validation inspects the Settings API globals populated by `add_settings_section()` and `add_settings_field()` and checks that both callbacks are callable.",
       "requirements": [
         "Use the Settings API",
         "Register the section and field on the 'reading' settings page",
         "Assign the field to the registered section"
       ],
+      "test_function": "wpbp_settings_options_004(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_settings_options_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_settings_section",
             "description": "Uses add_settings_section",
@@ -256,20 +240,16 @@
       "id": "e-settings-options-005",
       "category": "settings-options",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_settings_options_005( string $name, mixed $fallback ): mixed to delete the named option and then return WordPress's fallback value for that option.",
+      "prompt": "Implement a function that deletes a supplied option name and then returns WordPress's fallback value for that option using a supplied fallback.",
       "expected_behavior": "`wpbp_settings_options_005()` deletes the supplied option name with `delete_option()` and then returns `get_option()` using the supplied fallback, without creating or reseeding the option itself. Runtime validation creates the fixture option before execution, checks that the fallback is returned after deletion, and verifies the option no longer exists.",
       "requirements": [
         "Use the Options API",
         "Delete the provided option name",
         "Return get_option() with the provided fallback after deletion"
       ],
+      "test_function": "wpbp_settings_options_005( string $name, mixed $fallback )",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_settings_options_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "delete_option",
             "description": "Uses delete_option",

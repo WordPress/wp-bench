@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-internationalization",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Internationalization",
     "description": "Code generation tasks for WordPress Internationalization APIs",
@@ -12,19 +12,15 @@
       "id": "e-internationalization-001",
       "category": "internationalization",
       "difficulty": "basic",
-      "prompt": "Implement `wpbp_internationalization_001(): string` to return the translatable label \"Checkout complete\" from the `wpbp-i18n` text domain.",
+      "prompt": "Implement a function that returns the translatable label \"Checkout complete\" from the `wpbp-i18n` text domain.",
       "expected_behavior": "`wpbp_internationalization_001()` uses the core translation helper with the exact source string `Checkout complete` and text domain `wpbp-i18n`. Runtime validation installs a gettext filter for that text/domain pair and expects the filtered translation to be returned.",
       "requirements": [
         "Use a WordPress i18n return helper",
         "Pass the source string and text domain directly to the translation call"
       ],
+      "test_function": "wpbp_internationalization_001(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_internationalization_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "/\\b__\\s*\\(/",
             "description": "Uses the return-oriented translation helper",
@@ -66,19 +62,15 @@
       "id": "e-internationalization-002",
       "category": "internationalization",
       "difficulty": "basic",
-      "prompt": "Implement `wpbp_internationalization_002(): string` to return the label \"Open <settings> & tools\" translated from `wpbp-i18n` and escaped for safe HTML text output.",
+      "prompt": "Implement a function that returns the label \"Open <settings> & tools\" translated from `wpbp-i18n` and escaped for safe HTML text output.",
       "expected_behavior": "`wpbp_internationalization_002()` uses WordPress's combined translate-and-escape helper for HTML text. Runtime validation filters the translation to unsafe markup and expects the returned string to match WordPress HTML escaping.",
       "requirements": [
         "Use the combined WordPress helper for translated HTML text",
         "Pass the source string and text domain directly to the helper"
       ],
+      "test_function": "wpbp_internationalization_002(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_internationalization_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "/\\besc_html__\\s*\\(/",
             "description": "Uses esc_html__ for translated HTML text",
@@ -121,19 +113,15 @@
       "id": "e-internationalization-003",
       "category": "internationalization",
       "difficulty": "intermediate",
-      "prompt": "Implement `wpbp_internationalization_003( string $locale ): bool` to temporarily switch WordPress to the supplied locale and restore the previous locale before returning whether the switch succeeded.",
+      "prompt": "Implement a function that temporarily switches WordPress to a supplied locale and restores the previous locale before returning whether the switch succeeded.",
       "expected_behavior": "`wpbp_internationalization_003()` calls `switch_to_locale()`, restores after a successful switch, returns the boolean switch result, and leaves no switched locale on the stack. Runtime validation forces a non-en_US effective locale so switching to `en_US` succeeds, then checks WordPress's switch and restore hooks.",
       "requirements": [
         "Use WordPress locale switching APIs",
         "Restore the previous locale after a successful switch"
       ],
+      "test_function": "wpbp_internationalization_003( string $locale ): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_internationalization_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "switch_to_locale",
             "description": "Uses switch_to_locale",
@@ -171,19 +159,15 @@
       "id": "e-internationalization-004",
       "category": "internationalization",
       "difficulty": "intermediate",
-      "prompt": "Implement `wpbp_internationalization_004(): bool` to register the plugin text domain `wpbp-i18n-loader` with the relative languages directory `wp-bench-runtime/languages` when the function is called.",
+      "prompt": "Implement a function that registers the plugin text domain `wpbp-i18n-loader` with the relative languages directory `wp-bench-runtime/languages` when it is called.",
       "expected_behavior": "`wpbp_internationalization_004()` calls `load_plugin_textdomain()` with the requested domain and relative plugin languages path. Runtime validation checks WordPress's textdomain registry for the custom path instead of expecting translations to load immediately, matching the just-in-time loading behavior in modern WordPress.",
       "requirements": [
         "Use load_plugin_textdomain()",
         "Use the relative path parameter rather than an absolute MO file path"
       ],
+      "test_function": "wpbp_internationalization_004(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_internationalization_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "load_plugin_textdomain",
             "description": "Uses load_plugin_textdomain",
@@ -224,19 +208,15 @@
       "id": "e-internationalization-005",
       "category": "internationalization",
       "difficulty": "intermediate",
-      "prompt": "Implement `wpbp_internationalization_005( string $text, string $domain ): string` to return WordPress's translation for the supplied source text and text domain, allowing gettext filters to affect the result.",
+      "prompt": "Implement a function that returns WordPress's translation for a supplied source text and text domain, allowing gettext filters to affect the result.",
       "expected_behavior": "`wpbp_internationalization_005()` delegates to WordPress translation with both caller-supplied arguments. Runtime validation installs a gettext filter and verifies that only the matching source string and domain are changed.",
       "requirements": [
         "Use the WordPress translation API that applies gettext filters",
         "Pass through the caller-supplied text and domain"
       ],
+      "test_function": "wpbp_internationalization_005( string $text, string $domain ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_internationalization_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "/\\btranslate\\s*\\(/",
             "description": "Uses translate to apply WordPress gettext behavior",
