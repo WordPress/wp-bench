@@ -11,6 +11,7 @@ from rich.console import Console
 from .config import HarnessConfig, ModelConfig
 from .core import BenchmarkRunner, MultiModelRunner
 from .datasets import ensure_test_ids_match_type, filter_tests_by_ids, load_tests
+from .selection import select_tests
 
 # Load .env file for API keys
 load_dotenv()
@@ -52,19 +53,25 @@ def _load_filtered_tests(harness_config: HarnessConfig) -> dict[str, list[object
 
 
 def _count_selected_tests(tests: list[object], harness_config: HarnessConfig) -> int:
-    """Count tests selected by current run settings."""
-    if harness_config.run.test_ids:
-        return len(tests)
-    if harness_config.run.limit is None:
-        return len(tests)
-    return min(harness_config.run.limit, len(tests))
+    """Count tests selected by current run settings (uses the real selector)."""
+    return len(_select_for_config(tests, harness_config))
+
+
+def _select_for_config(tests: list[object], harness_config: HarnessConfig) -> list[object]:
+    """Run the seeded stratified selector with this config's settings."""
+    return select_tests(
+        tests,
+        limit=harness_config.run.limit,
+        test_ids=harness_config.run.test_ids,
+        seed=harness_config.run.seed,
+    )
 
 
 def _print_dry_run_counts(
     tests: dict[str, list[object]],
     harness_config: HarnessConfig,
 ) -> None:
-    """Print test counts for a dry run."""
+    """Print test counts (and selected IDs when limited) for a dry run."""
     test_type = harness_config.run.test_type
     if test_type == "knowledge":
         console.print(f"Knowledge tests: {_count_selected_tests(tests['knowledge'], harness_config)}")
@@ -76,6 +83,15 @@ def _print_dry_run_counts(
             f"{_count_selected_tests(tests['execution'], harness_config)}, "
             f"Knowledge tests: {_count_selected_tests(tests['knowledge'], harness_config)}"
         )
+    if harness_config.run.limit is not None and not harness_config.run.test_ids:
+        console.print(f"Selection seed: {harness_config.run.seed}")
+        for kind in ("execution", "knowledge"):
+            if test_type not in (None, kind):
+                continue
+            selected = _select_for_config(tests[kind], harness_config)
+            if selected:
+                ids = ", ".join(test.id for test in selected)  # type: ignore[attr-defined]
+                console.print(f"Selected {kind} ids: {ids}")
 
 
 @app.command()
@@ -83,7 +99,8 @@ def run(
     config: Optional[Path] = typer.Option(None, help="Path to wp-bench YAML config"),
     suite: Optional[str] = typer.Option(None, help="Override suite name"),
     model_name: Optional[str] = typer.Option(None, help="Override model name (single model mode)"),
-    limit: Optional[int] = typer.Option(None, help="Limit number of tests"),
+    limit: Optional[int] = typer.Option(None, help="Limit number of tests (seeded stratified selection)"),
+    seed: Optional[int] = typer.Option(None, help="Seed for deterministic limited-test selection"),
     test_type: Optional[str] = typer.Option(None, help="Run only 'knowledge' or 'execution' tests"),
     dry_run: bool = typer.Option(False, help="Load and filter tests without calling models"),
     check_reference_solution: bool = typer.Option(
@@ -103,6 +120,8 @@ def run(
         harness_config.dataset.name = suite if "/" not in suite else suite
     if limit is not None:
         harness_config.run.limit = limit
+    if seed is not None:
+        harness_config.run.seed = seed
     if dry_run:
         harness_config.run.dry_run = True
     if check_reference_solution:
