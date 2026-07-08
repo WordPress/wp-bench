@@ -11,6 +11,7 @@ use WPBench\Runtime\Verifier;
 
 require_once __DIR__ . '/src/class-sandbox.php';
 require_once __DIR__ . '/src/class-static-analysis.php';
+require_once __DIR__ . '/src/class-artifact-installer.php';
 require_once __DIR__ . '/src/class-verifier.php';
 
 $payload_json = file_get_contents( 'php://stdin' );

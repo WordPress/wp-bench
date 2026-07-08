@@ -29,6 +29,11 @@ class ExecutionTest:
     runtime_checks: Dict[str, Any]
     reference_solution: Optional[str]
     metadata: Dict[str, Any]
+    #: What the model must produce: 'php_snippet' (default) or
+    #: 'wp_plugin_files' (JSON files map installed as a plugin).
+    artifact_kind: str = "php_snippet"
+    #: Reference files for wp_plugin_files reference-solution runs.
+    reference_files: Optional[Dict[str, str]] = None
 
 
 @dataclass
@@ -121,6 +126,8 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     runtime_checks=runtime_checks if isinstance(runtime_checks, dict) else {},
                     reference_solution=row.get("reference_solution"),
                     metadata=_row_metadata(row),
+                    artifact_kind=row.get("artifact_kind") or "php_snippet",
+                    reference_files=_parse_optional_dict(row.get("reference_files")),
                 )
             )
         else:
@@ -171,6 +178,12 @@ def _row_metadata(row: Dict[str, Any]) -> Dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _parse_optional_dict(value: Any) -> Optional[Dict[str, Any]]:
+    """Parse an optional JSON-encoded dict column; empty means None."""
+    parsed = _parse_json_field(value) if value else None
+    return parsed if isinstance(parsed, dict) and parsed else None
+
+
 def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
     suite = config.name.split("/")[-1]
     suite_dir = DATASET_SUITES_DIR / suite
@@ -216,6 +229,8 @@ def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
                 runtime_checks=test.get("runtime_checks", {}),
                 reference_solution=test.get("reference_solution"),
                 metadata=_merge_metadata(test.get("metadata", {}), metadata),
+                artifact_kind=test.get("artifact_kind", "php_snippet"),
+                reference_files=test.get("reference_files"),
             )
         )
     return tests

@@ -83,11 +83,11 @@ def test_reference_solution_mode_executes_reference_solution(
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
 
-    def fake_execute_code(code: str, verification_spec: dict) -> ExecutionResult:
-        calls.append((code, verification_spec))
+    def fake_execute_artifact(artifact: Any, verification_spec: dict) -> ExecutionResult:
+        calls.append((artifact.code, verification_spec))
         return _passing_result()
 
-    runner.environment.execute_code = fake_execute_code  # type: ignore[method-assign]
+    runner.environment.execute_artifact = fake_execute_artifact  # type: ignore[method-assign]
 
     result = runner.run()
 
@@ -121,10 +121,10 @@ def test_reference_solution_mode_exits_nonzero_on_failed_reference(
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
 
-    def fake_execute_code(code: str, verification_spec: dict[str, Any]) -> ExecutionResult:
+    def fake_execute_artifact(artifact: Any, verification_spec: dict[str, Any]) -> ExecutionResult:
         return _failing_result()
 
-    runner.environment.execute_code = fake_execute_code  # type: ignore[method-assign]
+    runner.environment.execute_artifact = fake_execute_artifact  # type: ignore[method-assign]
 
     with pytest.raises(SystemExit) as exc:
         runner.run()
