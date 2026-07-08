@@ -84,7 +84,9 @@ run:
   limit: 10                  # limit tests (null = all)
   test_ids: []               # optional explicit test IDs to run
   dry_run: false             # load/filter tests without calling models
-  concurrency: 4
+  concurrency: 4             # model-call concurrency (knowledge tests)
+  execution_isolation: reset_per_test  # reset WordPress before each execution test
+  execution_concurrency: 1   # must stay 1 under reset_per_test isolation
 
 output:
   path: output/results.json

@@ -61,6 +61,56 @@ def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
     return tests[:limit]
 
 
+def _run_isolated_execution_loop(
+    *,
+    tests_to_run: List[Any],
+    config: HarnessConfig,
+    environment: WordPressEnvironment,
+    process_test: Any,
+    on_result: Any,
+    progress_label: str,
+) -> None:
+    """Run execution-style tests honoring the configured isolation strategy.
+
+    ``reset_per_test`` (default): tests run serially and the WordPress
+    environment is reset to a known baseline before every test, so no test
+    can observe state (options, posts, roles, hooks persisted to DB, etc.)
+    left behind by a previous test or a previous model run.
+
+    ``none``: legacy concurrent behavior against a shared environment,
+    bounded by ``run.execution_concurrency``. Not valid for official runs.
+
+    Args:
+        tests_to_run: Tests to execute, already limited/filtered.
+        config: Harness configuration (isolation strategy, concurrency).
+        environment: WordPress environment shared by this run.
+        process_test: Callable taking a test and returning a record dict.
+        on_result: Callable invoked with each record (aggregation/appending).
+        progress_label: Label for the progress bar.
+    """
+    isolation = config.run.execution_isolation
+    with create_progress() as progress:
+        task = progress.add_task(progress_label, total=len(tests_to_run))
+        if isolation == "reset_per_test":
+            for test in tests_to_run:
+                environment.reset()
+                result = process_test(test)
+                on_result(result)
+                progress.update(task, advance=1)
+            return
+        with ThreadPoolExecutor(max_workers=config.run.execution_concurrency) as executor:
+            futures = {executor.submit(process_test, test): test for test in tests_to_run}
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    on_result(result)
+                    progress.update(task, advance=1)
+                except TestError:
+                    for f in futures:
+                        f.cancel()
+                    raise
+
+
 class BenchmarkRunner:
     """Primary benchmark orchestrator for single-model evaluation.
 
@@ -130,6 +180,7 @@ class BenchmarkRunner:
                 "model": model_config,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
+                "runtime_isolation": self.config.run.execution_isolation,
                 "scores": {
                     "knowledge": summary.knowledge,
                     "correctness": summary.correctness,
@@ -223,10 +274,9 @@ class BenchmarkRunner:
             TestError: If any test fails, stops execution and raises with details.
         """
         tests_to_run = _limit_tests(tests, self.config)
-        concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
-            """Process a single execution test (runs in thread pool)."""
+            """Process a single execution test."""
             try:
                 prompt = self._render_execution_prompt(test)
                 completion = self.model.generate(prompt)
@@ -247,26 +297,23 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        with create_progress() as progress:
-            task = progress.add_task("Execution", total=len(tests_to_run))
-            with ThreadPoolExecutor(max_workers=concurrency) as executor:
-                futures = {executor.submit(process_test, test): test for test in tests_to_run}
-                for future in as_completed(futures):
-                    try:
-                        result = future.result()
-                        with self._lock:
-                            self.aggregator.add_execution(result["correctness"])
-                            self.records.append(result)
-                        progress.update(task, advance=1)
-                    except TestError:
-                        for f in futures:
-                            f.cancel()
-                        raise
+        def on_result(result: Dict[str, Any]) -> None:
+            with self._lock:
+                self.aggregator.add_execution(result["correctness"])
+                self.records.append(result)
+
+        _run_isolated_execution_loop(
+            tests_to_run=tests_to_run,
+            config=self.config,
+            environment=self.environment,
+            process_test=process_test,
+            on_result=on_result,
+            progress_label="Execution",
+        )
 
     def _run_reference_solution_tests(self, tests: List[ExecutionTest]) -> None:
         """Run execution tests using their reference_solution as candidate code."""
         tests_to_run = _limit_tests(tests, self.config)
-        concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
             try:
@@ -289,21 +336,19 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        with create_progress() as progress:
-            task = progress.add_task("Reference solutions", total=len(tests_to_run))
-            with ThreadPoolExecutor(max_workers=concurrency) as executor:
-                futures = {executor.submit(process_test, test): test for test in tests_to_run}
-                for future in as_completed(futures):
-                    try:
-                        result = future.result()
-                        with self._lock:
-                            self.aggregator.add_execution(result["correctness"])
-                            self.records.append(result)
-                        progress.update(task, advance=1)
-                    except TestError:
-                        for f in futures:
-                            f.cancel()
-                        raise
+        def on_result(result: Dict[str, Any]) -> None:
+            with self._lock:
+                self.aggregator.add_execution(result["correctness"])
+                self.records.append(result)
+
+        _run_isolated_execution_loop(
+            tests_to_run=tests_to_run,
+            config=self.config,
+            environment=self.environment,
+            process_test=process_test,
+            on_result=on_result,
+            progress_label="Reference solutions",
+        )
 
     @staticmethod
     def _render_knowledge_prompt(test: KnowledgeTest) -> str:
@@ -543,6 +588,7 @@ class MultiModelRunner:
                 "suite": self.config.run.suite,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
+                "runtime_isolation": self.config.run.execution_isolation,
             },
             "models": {
                 name: {
@@ -649,9 +695,8 @@ class SingleModelRunner:
                         raise
 
     def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
-        """Run execution tests in parallel. See BenchmarkRunner._run_execution_tests."""
+        """Run execution tests with isolation. See BenchmarkRunner._run_execution_tests."""
         tests_to_run = _limit_tests(tests, self.config)
-        concurrency = self.config.run.concurrency
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
             try:
@@ -670,18 +715,16 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        with create_progress() as progress:
-            task = progress.add_task("Execution", total=len(tests_to_run))
-            with ThreadPoolExecutor(max_workers=concurrency) as executor:
-                futures = {executor.submit(process_test, test): test for test in tests_to_run}
-                for future in as_completed(futures):
-                    try:
-                        result = future.result()
-                        with self._lock:
-                            self.aggregator.add_execution(result["correctness"])
-                            self.records.append(result)
-                        progress.update(task, advance=1)
-                    except TestError:
-                        for f in futures:
-                            f.cancel()
-                        raise
+        def on_result(result: Dict[str, Any]) -> None:
+            with self._lock:
+                self.aggregator.add_execution(result["correctness"])
+                self.records.append(result)
+
+        _run_isolated_execution_loop(
+            tests_to_run=tests_to_run,
+            config=self.config,
+            environment=self.environment,
+            process_test=process_test,
+            on_result=on_result,
+            progress_label="Execution",
+        )
