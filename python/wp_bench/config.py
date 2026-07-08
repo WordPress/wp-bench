@@ -44,12 +44,31 @@ class ModelConfig(StrictModel):
     max_tokens: Optional[int] = None
     top_p: Optional[float] = None
     request_timeout: float = 300.0
+    #: Additional attempts after the first call fails with a transient
+    #: provider error (rate limit, timeout, connection, 5xx).
+    max_retries: int = 3
+    retry_min_seconds: float = 1.0
+    retry_max_seconds: float = 30.0
+    retry_on_rate_limit: bool = True
+    retry_on_timeout: bool = True
 
     @validator("temperature")
     def _clamp_temperature(cls, value: float) -> float:
         if value < 0 or value > 2:
             raise ValueError("temperature must be between 0 and 2")
         return value
+
+    @model_validator(mode="after")
+    def _validate_retry_policy(self) -> "ModelConfig":
+        if self.max_retries < 0:
+            raise ValueError("model.max_retries must be >= 0")
+        if self.retry_min_seconds <= 0 or self.retry_max_seconds <= 0:
+            raise ValueError("model retry backoff bounds must be positive")
+        if self.retry_min_seconds > self.retry_max_seconds:
+            raise ValueError(
+                "model.retry_min_seconds cannot exceed model.retry_max_seconds"
+            )
+        return self
 
 
 class GraderConfig(StrictModel):

@@ -20,6 +20,13 @@ models:
 # Or use single model (legacy format):
 # model:
 #   name: gpt-4o
+#   # Retry policy for transient provider errors (rate limit, timeout,
+#   # connection, 5xx). Deterministic errors are never retried.
+#   # max_retries: 3
+#   # retry_min_seconds: 1.0
+#   # retry_max_seconds: 30.0
+#   # retry_on_rate_limit: true
+#   # retry_on_timeout: true
 
 # WordPress runtime grader
 grader:
