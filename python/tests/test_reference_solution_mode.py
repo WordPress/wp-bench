@@ -131,7 +131,10 @@ def test_reference_solution_mode_exits_nonzero_on_failed_reference(
 
     assert exc.value.code == 1
     assert execution_record_passed(runner.records[0]) is False
-    assert runner.records[0]["scores"]["correctness"] == 0.5
+    # v2 scoring: runtime is the behavioral signal; a full static match no
+    # longer contributes correctness credit when runtime fails.
+    assert runner.records[0]["scores"]["correctness"] == 0.0
+    assert runner.records[0]["scores"]["static"] == 1.0
 
 
 def test_reference_solution_mode_rejects_non_execution_test_ids(

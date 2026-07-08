@@ -39,17 +39,6 @@ def _empty_usage() -> Dict[str, Any]:
     }
 
 
-def _dimension_score(raw: Optional[Dict[str, Any]], dimension: str) -> Optional[float]:
-    """Extract a dimension score (runtime/static) from the raw grader result."""
-    if not isinstance(raw, dict):
-        return None
-    result = raw.get(dimension)
-    if not isinstance(result, dict):
-        return None
-    score = result.get("score")
-    return float(score) if isinstance(score, (int, float)) else None
-
-
 def build_knowledge_record(
     *,
     test: Any,
@@ -78,8 +67,10 @@ def build_knowledge_record(
         "scores": {
             "knowledge": knowledge_score,
             "correctness": None,
+            "execution_pass": None,
             "runtime": None,
             "static": None,
+            "static_policy_pass": None,
         },
         "grader": None,
         "usage": _empty_usage(),
@@ -96,9 +87,15 @@ def build_execution_record(
     raw_completion: Optional[str],
     code: str,
     env_result: Any,
-    correctness: float,
+    scores: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Build the canonical record for an execution test result."""
+    """Build the canonical record for an execution test result.
+
+    Args:
+        scores: Scores object from BenchmarkRunner._score_execution, carrying
+            correctness (legacy), execution_pass (primary), runtime, static,
+            and static_policy_pass.
+    """
     raw = env_result.raw or {}
     return {
         "test_id": test.id,
@@ -114,12 +111,7 @@ def build_execution_record(
             "code": code,
             "answer": None,
         },
-        "scores": {
-            "knowledge": None,
-            "correctness": correctness,
-            "runtime": _dimension_score(raw, "runtime"),
-            "static": _dimension_score(raw, "static"),
-        },
+        "scores": scores,
         "grader": {
             "success": env_result.success,
             "raw": raw,
@@ -135,12 +127,10 @@ def build_execution_record(
 def execution_record_passed(record: Dict[str, Any]) -> bool:
     """Whether an execution record represents a strict pass.
 
-    Used by reference-solution mode to decide failures: the grader must
-    report success and correctness must be effectively 1.0.
+    Reads the primary execution_pass metric (SCORING_VERSION 2.0). Used by
+    reference-solution mode to decide failures.
     """
-    grader = record.get("grader") or {}
-    correctness = (record.get("scores") or {}).get("correctness")
-    return bool(grader.get("success")) and isinstance(correctness, (int, float)) and correctness >= 0.999
+    return bool((record.get("scores") or {}).get("execution_pass"))
 
 
 def sort_records(records: list) -> list:

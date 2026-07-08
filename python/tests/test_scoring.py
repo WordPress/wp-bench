@@ -1,9 +1,11 @@
+"""Tests for runtime-primary execution scoring (SCORING_VERSION 2.0)."""
 from __future__ import annotations
 
 from typing import Any, Dict
 
 from wp_bench.core import BenchmarkRunner
 from wp_bench.datasets import ExecutionTest
+from wp_bench.scoring import ScoreAggregator
 
 
 def _make_test(
@@ -27,65 +29,113 @@ def _make_test(
     )
 
 
-def test_correctness_averages_static_and_runtime_dimensions() -> None:
-    test = _make_test(
+def _both_dimensions_test() -> ExecutionTest:
+    return _make_test(
         static_checks={"required_patterns": [{"pattern": "add_filter", "weight": 1.0}]},
         runtime_checks={"assertions": [{"type": "hook_registered", "target": "x"}]},
     )
+
+
+def test_runtime_pass_static_required_miss_still_passes() -> None:
+    """Valid alternate implementations are not punished by regex misses."""
+    test = _both_dimensions_test()
     raw = {
-        "static": {"score": 0.5},
+        "static": {"score": 0.5, "details": {"forbidden": []}},
         "runtime": {"score": 1.0, "details": {"total_weight": 1.0}},
     }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.75
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is True
+    assert scores["correctness"] == 1.0
+    assert scores["runtime"] == 1.0
+    assert scores["static"] == 0.5  # diagnostic preserved
+    assert scores["static_policy_pass"] is True
 
 
-def test_correctness_uses_only_runtime_when_no_static_checks() -> None:
-    test = _make_test(
-        runtime_checks={"assertions": [{"type": "hook_registered", "target": "x"}]},
-    )
-    # Runtime returns 1.0 for absent static checks, which must NOT inflate the score.
+def test_runtime_fail_static_match_does_not_pass() -> None:
+    """Regex matches cannot rescue code whose behavior is wrong."""
+    test = _both_dimensions_test()
     raw = {
-        "static": {"score": 1.0},
-        "runtime": {"score": 0.4, "details": {"total_weight": 1.0}},
+        "static": {"score": 1.0, "details": {"forbidden": []}},
+        "runtime": {"score": 0.0, "details": {"total_weight": 1.0}},
     }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.4
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.0
+    assert scores["runtime"] == 0.0
 
 
-def test_correctness_uses_only_static_when_no_runtime_checks() -> None:
-    test = _make_test(
-        static_checks={"required_patterns": [{"pattern": "esc_html", "weight": 1.0}]},
-    )
-    # Runtime returns 0.0 when no assertions are defined; it must be ignored here.
-    raw = {"static": {"score": 0.8}, "runtime": {"score": 0.0}}
+def test_partial_runtime_gives_partial_correctness_but_no_pass() -> None:
+    test = _both_dimensions_test()
+    raw = {
+        "static": {"score": 1.0, "details": {"forbidden": []}},
+        "runtime": {"score": 0.5, "details": {"total_weight": 2.0}},
+    }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.8
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.5
+    assert scores["runtime"] == 0.5
 
 
-def test_correctness_respects_forbidden_pattern_hard_fail() -> None:
+def test_forbidden_static_error_blocks_pass() -> None:
+    """A hard policy guardrail failure fails the task even with perfect runtime."""
     test = _make_test(
         static_checks={"forbidden_patterns": [{"pattern": "eval\\(", "severity": "error"}]},
         runtime_checks={"assertions": [{"type": "hook_registered", "target": "x"}]},
     )
-    # Static hard-failed to 0.0 via a forbidden pattern; runtime passed fully.
     raw = {
-        "static": {"score": 0.0},
+        "static": {
+            "score": 0.0,
+            "details": {
+                "forbidden": [
+                    {"pattern": "eval\\(", "found": True, "severity": "error"}
+                ],
+                "failure_reason": "Forbidden pattern found: eval(",
+            },
+        },
         "runtime": {"score": 1.0, "details": {"total_weight": 1.0}},
     }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.5
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["static_policy_pass"] is False
+    assert scores["execution_pass"] is False
 
 
-def test_correctness_hard_zeroes_on_crash_despite_perfect_static() -> None:
+def test_forbidden_warning_severity_does_not_block_pass() -> None:
+    """Only severity=error forbidden patterns are guardrail failures."""
     test = _make_test(
-        static_checks={"required_patterns": [{"pattern": "add_filter", "weight": 1.0}]},
+        static_checks={"forbidden_patterns": [{"pattern": "extract\\(", "severity": "warning"}]},
         runtime_checks={"assertions": [{"type": "hook_registered", "target": "x"}]},
     )
-    # Static is perfect, but the code crashed before any assertion ran
-    # (runtime accumulated no weight). Static must not rescue unrunnable code.
     raw = {
-        "static": {"score": 1.0},
+        "static": {
+            "score": 1.0,
+            "details": {
+                "forbidden": [
+                    {"pattern": "extract\\(", "found": True, "severity": "warning"}
+                ],
+            },
+        },
+        "runtime": {"score": 1.0, "details": {"total_weight": 1.0}},
+    }
+
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["static_policy_pass"] is True
+    assert scores["execution_pass"] is True
+
+
+def test_runtime_crash_forces_execution_fail() -> None:
+    """Crash handling is preserved: static cannot rescue unrunnable code."""
+    test = _both_dimensions_test()
+    raw = {
+        "static": {"score": 1.0, "details": {"forbidden": []}},
         "runtime": {
             "score": 0.0,
             "details": {
@@ -95,14 +145,17 @@ def test_correctness_hard_zeroes_on_crash_despite_perfect_static() -> None:
         },
     }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.0
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.0
+    assert scores["runtime"] == 0.0
 
 
-def test_correctness_crash_detected_by_error_assertion_type() -> None:
+def test_crash_detected_by_error_assertion_type() -> None:
     test = _make_test(
         runtime_checks={"assertions": [{"type": "hook_registered", "target": "x"}]},
     )
-    # An execution_error entry signals a crash even if some weight accumulated.
     raw = {
         "runtime": {
             "score": 0.5,
@@ -116,38 +169,101 @@ def test_correctness_crash_detected_by_error_assertion_type() -> None:
         },
     }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.0
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.0
 
 
-def test_correctness_keeps_partial_credit_when_code_runs() -> None:
+def test_static_only_test_scored_on_static() -> None:
+    """Tests without runtime assertions remain gradable on static score."""
     test = _make_test(
-        runtime_checks={
-            "assertions": [
-                {"type": "hook_registered", "target": "x"},
-                {"type": "hook_registered", "target": "y"},
-            ]
-        },
+        static_checks={"required_patterns": [{"pattern": "esc_html", "weight": 1.0}]},
     )
-    # Code ran fine but only half the assertions passed: partial credit stays.
+    raw = {"static": {"score": 1.0, "details": {"forbidden": []}}, "runtime": {"score": 0.0}}
+
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is True
+    assert scores["correctness"] == 1.0
+    assert scores["runtime"] is None
+
+
+def test_static_only_partial_score_no_pass() -> None:
+    test = _make_test(
+        static_checks={"required_patterns": [{"pattern": "esc_html", "weight": 1.0}]},
+    )
+    raw = {"static": {"score": 0.8, "details": {"forbidden": []}}}
+
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.8
+
+
+def test_empty_raw_scores_zero() -> None:
+    test = _both_dimensions_test()
+
+    scores = BenchmarkRunner._score_execution({}, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.0
+
+
+def test_timeout_raw_scores_zero() -> None:
+    """The timeout payload from the environment scores as a failed test."""
+    test = _both_dimensions_test()
     raw = {
+        "success": False,
+        "timeout": True,
         "runtime": {
-            "score": 0.5,
+            "score": 0.0,
             "details": {
-                "assertions": [
-                    {"type": "hook_registered", "passed": True, "weight": 1.0},
-                    {"type": "hook_registered", "passed": False, "weight": 1.0},
-                ],
-                "total_weight": 2.0,
+                "assertions": [{"type": "timeout", "passed": False}],
+                "total_weight": 0,
+                "passed_weight": 0,
             },
         },
+        "static": {"score": 0.0, "details": {}},
     }
 
-    assert BenchmarkRunner._score_correctness(raw, test) == 0.5
+    scores = BenchmarkRunner._score_execution(raw, test)
+
+    assert scores["execution_pass"] is False
+    assert scores["correctness"] == 0.0
 
 
-def test_correctness_returns_zero_for_empty_raw() -> None:
-    test = _make_test(
-        runtime_checks={"assertions": [{"type": "hook_registered", "target": "x"}]},
+def test_aggregator_reports_strict_pass_rate() -> None:
+    aggregator = ScoreAggregator()
+    aggregator.add_execution(
+        {"correctness": 1.0, "execution_pass": True, "runtime": 1.0, "static_policy_pass": True}
+    )
+    aggregator.add_execution(
+        {"correctness": 0.5, "execution_pass": False, "runtime": 0.5, "static_policy_pass": True}
+    )
+    aggregator.add_execution(
+        {"correctness": 0.0, "execution_pass": False, "runtime": 1.0, "static_policy_pass": False}
     )
 
-    assert BenchmarkRunner._score_correctness({}, test) == 0.0
+    summary = aggregator.finalize()
+
+    assert summary.execution_pass_rate == round(1 / 3, 4)
+    assert summary.runtime == round((1.0 + 0.5 + 1.0) / 3, 4)
+    assert summary.static_policy_pass_rate == round(2 / 3, 4)
+    assert summary.correctness == 0.5
+
+
+def test_overall_uses_strict_pass_rate() -> None:
+    aggregator = ScoreAggregator()
+    aggregator.add_knowledge(1.0)
+    aggregator.add_execution(
+        {"correctness": 1.0, "execution_pass": True, "runtime": 1.0, "static_policy_pass": True}
+    )
+    aggregator.add_execution(
+        {"correctness": 0.9, "execution_pass": False, "runtime": 0.9, "static_policy_pass": True}
+    )
+
+    summary = aggregator.finalize()
+
+    # overall = 0.3 * 1.0 + 0.7 * 0.5 = 0.65
+    assert summary.overall() == 0.65

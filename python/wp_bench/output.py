@@ -81,7 +81,8 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
     table = Table(title="WP-Bench Results")
     table.add_column("Model", style="cyan")
     table.add_column("Knowledge", justify="right")
-    table.add_column("Correctness", justify="right")
+    table.add_column("Execution Pass", justify="right")
+    table.add_column("Runtime Partial", justify="right")
     table.add_column("Overall", justify="right", style="bold")
 
     def _fmt_score(value: float | None) -> str:
@@ -91,8 +92,9 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
         scores = result["scores"]
         table.add_row(
             model_name,
-            _fmt_score(scores["knowledge"]),
-            _fmt_score(scores["correctness"]),
+            _fmt_score(scores.get("knowledge")),
+            _fmt_score(scores.get("execution_pass_rate")),
+            _fmt_score(scores.get("runtime")),
             f"{scores['overall']*100:.1f}%",
         )
 
