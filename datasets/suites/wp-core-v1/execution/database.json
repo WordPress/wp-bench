@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-database",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Database",
     "description": "Code generation tasks for WordPress Database APIs",
@@ -12,20 +12,16 @@
       "id": "e-database-001",
       "category": "database",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_database_001( string $item_key, string $item_value ) to add a row to the WordPress-prefixed custom table `wpbp_database_001` and return the new auto-increment ID.",
+      "prompt": "Implement a function that adds a row to a WordPress-prefixed custom table and returns the new auto-increment ID.",
       "expected_behavior": "`wpbp_database_001()` inserts into the fixture-owned custom table with `$wpdb->insert()`, writes `item_key`, `item_value`, and `status` as `active`, and returns `$wpdb->insert_id` rather than the rows-affected result. Runtime validation pre-seeds the table so returning `1` from `$wpdb->insert()` cannot pass.",
       "requirements": [
         "Target the WordPress-prefixed `wpbp_database_001` custom table",
         "Write `item_key`, `item_value`, and `status` columns, setting `status` to `active`",
         "Return the new row's auto-increment ID, not a row count"
       ],
+      "test_function": "wpbp_database_001( string $item_key, string $item_value ): int",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_database_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "->insert",
             "description": "Uses $wpdb->insert",
@@ -77,20 +73,17 @@
       "id": "e-database-002",
       "category": "database",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_database_002( string $term ) to return a SQL query for the WordPress-prefixed custom table `wpbp_database_002`. Select that table's `id` column, require its `visibility` column to equal 'public', and require its `title` column to contain the supplied literal term.",
+      "prompt": "Implement a function that returns a SQL query for a WordPress-prefixed custom table. Select that table's `id` column, require its `visibility` column to equal 'public', and require its `title` column to contain the supplied literal term.",
       "expected_behavior": "`wpbp_database_002()` returns a SQL string prepared with `$wpdb->prepare()`, uses `%i` placeholders for the custom table plus its `id`, `visibility`, and `title` column identifiers, and escapes LIKE wildcards before adding surrounding `%` characters. Runtime validation executes the returned SQL against fixture rows, including a wildcard-looking distractor.",
       "requirements": [
+        "Target the WordPress-prefixed `wpbp_database_002` custom table",
         "Return a safely parameterized SQL string for the custom table, not queried results",
         "Treat the table name and `id`, `visibility`, and `title` column names as SQL identifiers",
         "Treat percent and underscore characters in the term as literal text"
       ],
+      "test_function": "wpbp_database_002( string $term ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_database_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "prepare",
             "description": "Uses prepare",
@@ -137,20 +130,16 @@
       "id": "e-database-003",
       "category": "database",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_database_003( string $lookup_key ) to read one `lookup_value` from the WordPress-prefixed custom table `wpbp_database_003` for the supplied `lookup_key`.",
+      "prompt": "Implement a function that reads one `lookup_value` from a WordPress-prefixed custom table for the supplied `lookup_key`.",
       "expected_behavior": "`wpbp_database_003()` uses `$wpdb->get_var()` with a prepared query against the fixture-owned custom table, returning the matching `lookup_value` for the supplied `lookup_key` and `null` when no row exists.",
       "requirements": [
         "Target the WordPress-prefixed `wpbp_database_003` custom table",
         "Handle the `lookup_key` comparison safely",
         "Return null when the custom-table row is missing"
       ],
+      "test_function": "wpbp_database_003( string $lookup_key ): ?string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_database_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_var",
             "description": "Uses get_var",
@@ -197,20 +186,16 @@
       "id": "e-database-004",
       "category": "database",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_database_004( string $lookup_key, string $value ) to update `lookup_value` in the WordPress-prefixed custom table `wpbp_database_004` for the supplied `lookup_key`.",
+      "prompt": "Implement a function that updates `lookup_value` in a WordPress-prefixed custom table for the supplied `lookup_key`.",
       "expected_behavior": "`wpbp_database_004()` calls `$wpdb->update()` on the fixture-owned custom table, identifies rows by `lookup_key`, writes the supplied `lookup_value`, and returns the method's row-count result. Runtime validation checks the target row, an unrelated row, and the zero-row result for a missing key.",
       "requirements": [
         "Target the WordPress-prefixed `wpbp_database_004` custom table",
         "Accept the lookup key and new value as inputs",
         "Return the affected row count from the database API"
       ],
+      "test_function": "wpbp_database_004( string $lookup_key, string $value ): int|false",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_database_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "->update",
             "description": "Uses $wpdb->update",
@@ -252,20 +237,16 @@
       "id": "e-database-005",
       "category": "database",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_database_005( string $lookup_key ) to delete exactly the matching row from the WordPress-prefixed custom table `wpbp_database_005`.",
+      "prompt": "Implement a function that deletes exactly the row matching the supplied `lookup_key` from a WordPress-prefixed custom table.",
       "expected_behavior": "`wpbp_database_005()` calls `$wpdb->delete()` on the fixture-owned custom table, matches only the supplied `lookup_key`, and returns the method's row-count result. Runtime validation checks that the target row is removed, an unrelated row remains, and a missing key returns zero affected rows.",
       "requirements": [
         "Target the WordPress-prefixed `wpbp_database_005` custom table",
         "Accept the lookup key as input",
         "Return the affected row count from the database API"
       ],
+      "test_function": "wpbp_database_005( string $lookup_key ): int|false",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_database_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "->delete",
             "description": "Uses $wpdb->delete",
@@ -302,20 +283,17 @@
       "id": "e-database-006",
       "category": "database",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_database_006() to create or update the WordPress-prefixed custom table `wpbp_database_006` using WordPress's schema-upgrade path, then return the upgrade result array.",
+      "prompt": "Implement a function that creates or updates a WordPress-prefixed custom table using WordPress's schema-upgrade path, then returns the upgrade result array.",
       "expected_behavior": "`wpbp_database_006()` loads WordPress's upgrade functions, builds a schema for the fixture-owned custom table with `$wpdb->get_charset_collate()`, and passes it to `dbDelta()`. Runtime validation checks that the table exists with the expected columns, auto-increment primary key, default score value, and slug index.",
       "requirements": [
+        "Target the WordPress-prefixed `wpbp_database_006` custom table",
         "Create `id`, `slug`, `score`, and `created_at` columns",
         "Use the site's charset and collation for the table schema",
         "Return the schema-upgrade result array"
       ],
+      "test_function": "wpbp_database_006(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_database_006",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "dbDelta",
             "description": "Uses dbDelta",

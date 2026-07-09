@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-post_types_taxonomy",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Post Types and Taxonomy",
     "description": "Code generation tasks for WordPress Post Types and Taxonomy APIs",
@@ -12,19 +12,15 @@
       "id": "e-post-types-taxonomy-001",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_001() to register a public book post type with REST support.",
+      "prompt": "Implement a function that registers a public book post type with REST support.",
       "expected_behavior": "`wpbp_post_types_taxonomy_001()` registers a public `wpbp_book` post type with REST API exposure. Runtime validation checks the registered post type through WordPress and unregisters it afterward.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_001(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_post_type",
             "description": "Uses register_post_type",
@@ -60,19 +56,15 @@
       "id": "e-post-types-taxonomy-002",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_002() to register a hierarchical genre taxonomy for posts.",
+      "prompt": "Implement a function that registers a hierarchical genre taxonomy for posts.",
       "expected_behavior": "`wpbp_post_types_taxonomy_002()` registers a hierarchical `wpbp_genre` taxonomy for posts. Runtime validation checks the taxonomy through WordPress and unregisters it afterward.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_002(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_taxonomy",
             "description": "Uses register_taxonomy",
@@ -108,19 +100,15 @@
       "id": "e-post-types-taxonomy-003",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_003() to attach an existing taxonomy to a custom post type.",
+      "prompt": "Implement a function that attaches an existing taxonomy to a custom post type.",
       "expected_behavior": "`wpbp_post_types_taxonomy_003()` registers a fixture post type and taxonomy, then attaches the taxonomy to that post type with WordPress registration APIs. Runtime validation checks the attachment result.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_003(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_taxonomy_for_object_type",
             "description": "Uses register_taxonomy_for_object_type",
@@ -151,19 +139,15 @@
       "id": "e-post-types-taxonomy-004",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_004() to create a post type with custom capabilities mapped from meta caps.",
+      "prompt": "Implement a function that creates a post type with custom capabilities mapped from meta caps.",
       "expected_behavior": "`wpbp_post_types_taxonomy_004()` registers a custom post type using singular/plural capability types with meta-cap mapping enabled, then returns the generated edit capabilities from the registered post type object.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_004(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "capability_type",
             "description": "Uses capability_type",
@@ -199,19 +183,15 @@
       "id": "e-post-types-taxonomy-005",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_005() to insert a term and return its slug and taxonomy.",
+      "prompt": "Implement a function that inserts a term and returns its slug and taxonomy.",
       "expected_behavior": "`wpbp_post_types_taxonomy_005()` inserts a category term with the supplied name, reads it back through WordPress term APIs, and returns its slug, taxonomy, and term ID.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_005( string $name ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_insert_term",
             "description": "Uses wp_insert_term",
@@ -249,20 +229,16 @@
       "id": "e-post-types-taxonomy-006",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Provide a PHP function named wpbp_post_types_taxonomy_006( int $post_id, array $term_ids ): array that adds the given category term IDs to the post without removing category terms already assigned to it.",
+      "prompt": "Implement a function that adds the given category term IDs to a post without removing category terms already assigned to it.",
       "expected_behavior": "The helper appends the supplied category term IDs to the given post while preserving any category terms already assigned. Runtime validation creates a post with one existing category, invokes the helper with a second category, verifies both relationships remain, verifies the returned IDs include the appended term_taxonomy_id, and removes the fixtures in teardown.",
       "requirements": [
         "Use WordPress taxonomy relationship APIs",
         "Preserve existing category relationships",
         "Return the term_taxonomy_ids reported by WordPress"
       ],
+      "test_function": "wpbp_post_types_taxonomy_006( int $post_id, array $term_ids ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_006",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_set_object_terms",
             "description": "Uses wp_set_object_terms",
@@ -305,19 +281,15 @@
       "id": "e-post-types-taxonomy-007",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_007() to read a post type archive link for a public CPT.",
+      "prompt": "Implement a function that reads a post type archive link for a public CPT.",
       "expected_behavior": "`wpbp_post_types_taxonomy_007()` registers a public custom post type with archives enabled and returns the archive link generated by WordPress.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_007(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_007",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_post_type_archive_link",
             "description": "Uses get_post_type_archive_link",
@@ -353,19 +325,15 @@
       "id": "e-post-types-taxonomy-008",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_post_types_taxonomy_008() to register a taxonomy with a custom REST base.",
+      "prompt": "Implement a function that registers a taxonomy with a custom REST base.",
       "expected_behavior": "`wpbp_post_types_taxonomy_008()` registers a taxonomy exposed through the REST API with the custom REST base `wpbp-tax`, then returns the REST base from the registered taxonomy object.",
       "requirements": [
         "Use registration APIs",
         "Clean up registered types when possible"
       ],
+      "test_function": "wpbp_post_types_taxonomy_008(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_post_types_taxonomy_008",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_taxonomy",
             "description": "Uses register_taxonomy",

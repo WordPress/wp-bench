@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-connectors_api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Connectors API",
     "description": "Code generation tasks for WordPress Connectors API APIs",
@@ -12,20 +12,16 @@
       "id": "e-connectors-api-001",
       "category": "connectors-api",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_connectors_api_001(): bool to report whether WordPress has registered the built-in Akismet connector through the public Connectors API.",
+      "prompt": "Implement a function that reports whether WordPress has registered the built-in Akismet connector through the public Connectors API.",
       "expected_behavior": "`wpbp_connectors_api_001()` uses `wp_is_connector_registered()` to check the `akismet` connector after WordPress connector initialization. The test focuses on public connector discovery, not direct registry access or a hard-coded truthy value.",
       "requirements": [
         "Use wp_is_connector_registered()",
         "Check the connector ID 'akismet'",
         "Do not access WP_Connector_Registry directly"
       ],
+      "test_function": "wpbp_connectors_api_001(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_connectors_api_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_is_connector_registered",
             "description": "Uses wp_is_connector_registered",
@@ -68,7 +64,7 @@
       "id": "e-connectors-api-002",
       "category": "connectors-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_connectors_api_002( string $id ): ?array to safely return connector data for the supplied connector ID through the public Connectors API without triggering a not-found registry notice.",
+      "prompt": "Implement a function that safely returns connector data for the supplied connector ID through the public Connectors API without triggering a not-found registry notice.",
       "expected_behavior": "`wpbp_connectors_api_002()` checks whether the supplied ID is registered before retrieving connector data, returning `null` for unknown IDs without causing a `_doing_it_wrong()` notice. Runtime validation checks Akismet's type, authentication, and plugin metadata, plus a missing-ID case.",
       "requirements": [
         "Use wp_is_connector_registered() before retrieving the connector",
@@ -76,13 +72,9 @@
         "Return null for unknown connector IDs",
         "Do not access WP_Connector_Registry directly"
       ],
+      "test_function": "wpbp_connectors_api_002( string $connector_id ): ?array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_connectors_api_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_get_connector",
             "description": "Uses wp_get_connector",

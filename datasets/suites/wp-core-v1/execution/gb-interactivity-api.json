@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_interactivity_api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Interactivity API",
     "description": "Code generation tasks for WordPress Interactivity API APIs",
@@ -12,20 +12,16 @@
       "id": "e-gb-interactivity-api-001",
       "category": "gb-interactivity-api",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_gb_interactivity_api_001() to initialize the 'wpbp/store' Interactivity API state with a count of 2 and return the store state from WordPress.",
+      "prompt": "Implement a function that initializes the 'wpbp/store' Interactivity API state with a count of 2 and returns the store state from WordPress.",
       "expected_behavior": "`wpbp_gb_interactivity_api_001()` uses `wp_interactivity_state()` for the `wpbp/store` namespace and returns the state array reported by WordPress. Runtime validation confirms the requested `count` value is present without replacing unrelated state that was already registered for the same namespace.",
       "requirements": [
         "Use the WordPress Interactivity API state helper",
         "Use the store namespace 'wpbp/store'",
         "Return the final state array"
       ],
+      "test_function": "wpbp_gb_interactivity_api_001(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_interactivity_api_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_interactivity_state",
             "description": "Uses wp_interactivity_state",
@@ -67,20 +63,16 @@
       "id": "e-gb-interactivity-api-002",
       "category": "gb-interactivity-api",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_gb_interactivity_api_002( array $context ) to return a safe Interactivity API context attribute for the 'wpbp/store' namespace.",
+      "prompt": "Implement a function that returns a safe Interactivity API context attribute for the supplied context data in the 'wpbp/store' namespace.",
       "expected_behavior": "`wpbp_gb_interactivity_api_002()` delegates context attribute generation to `wp_interactivity_data_wp_context()` with the `wpbp/store` namespace. Runtime validation passes context containing quotes, angle brackets, and ampersands, then verifies WordPress returns a `data-wp-context` attribute with the namespace prefix and JSON_HEX-escaped data.",
       "requirements": [
         "Use the WordPress Interactivity API context helper",
         "Use the store namespace 'wpbp/store'",
         "Return the complete attribute string"
       ],
+      "test_function": "wpbp_gb_interactivity_api_002( array $context ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_interactivity_api_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_interactivity_data_wp_context",
             "description": "Uses wp_interactivity_data_wp_context",
@@ -116,20 +108,16 @@
       "id": "e-gb-interactivity-api-003",
       "category": "gb-interactivity-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_interactivity_api_003( string $html ) to register derived Interactivity API state for 'wpbp/iapi-derived' and return the server-processed markup.",
+      "prompt": "Implement a function that registers derived Interactivity API state for 'wpbp/iapi-derived' and returns the supplied HTML as server-processed markup.",
       "expected_behavior": "`wpbp_gb_interactivity_api_003()` registers state for `wpbp/iapi-derived` with a base count and a PHP Closure-derived `summary` value, then runs the supplied HTML through `wp_interactivity_process_directives()`. Runtime validation checks that a `data-wp-text=\"state.summary\"` element is rendered with the derived text from WordPress instead of its fallback text.",
       "requirements": [
         "Use wp_interactivity_state for the 'wpbp/iapi-derived' namespace",
         "Use a PHP Closure for the derived summary value",
         "Process the supplied HTML with the WordPress directive processor"
       ],
+      "test_function": "wpbp_gb_interactivity_api_003( string $html ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_interactivity_api_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_interactivity_process_directives",
             "description": "Uses wp_interactivity_process_directives",
@@ -180,20 +168,16 @@
       "id": "e-gb-interactivity-api-004",
       "category": "gb-interactivity-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_interactivity_api_004() to return server-processed markup for one interactive element where two independent plugins toggle the same class suffix using unique Interactivity API directive IDs.",
+      "prompt": "Implement a function that returns server-processed markup for one interactive element where two independent plugins toggle the same class suffix using unique Interactivity API directive IDs.",
       "expected_behavior": "`wpbp_gb_interactivity_api_004()` uses WordPress 6.9 unique directive ID syntax with `data-wp-class` directives on a single element, registers true state flags, and processes the markup through `wp_interactivity_process_directives()`. Runtime validation checks that WordPress preserves both independent directives by adding both unique class names to the rendered element.",
       "requirements": [
         "Use the 'wpbp/iapi-unique' namespace",
         "Use triple-dash unique IDs for both class directives",
         "Return the markup after WordPress processes the directives"
       ],
+      "test_function": "wpbp_gb_interactivity_api_004(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_interactivity_api_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_interactivity_process_directives",
             "description": "Processes directives on the server",

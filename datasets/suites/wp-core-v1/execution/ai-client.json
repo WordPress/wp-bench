@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-ai_client",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - AI Client",
     "description": "Code generation tasks for WordPress AI Client APIs",
@@ -12,20 +12,16 @@
       "id": "e-ai-client-001",
       "category": "ai-client",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_ai_client_001(): bool so it temporarily disables WordPress AI support for its own check, returns the disabled support result, and leaves AI support enabled afterward.",
+      "prompt": "Implement a function that temporarily disables WordPress AI support for its own check, returns the disabled support result, and leaves AI support enabled afterward.",
       "expected_behavior": "`wpbp_ai_client_001()` uses the `wp_supports_ai` filter only around a call to `wp_supports_ai()`, returns `false` for that temporary check, and removes the filter before returning. The test focuses on the AI support gate and cleanup, not a hard-coded return value.",
       "requirements": [
         "Use wp_supports_ai() to read the support state",
         "Use the wp_supports_ai filter to force support off for the temporary check",
         "Remove the filter before returning"
       ],
+      "test_function": "wpbp_ai_client_001(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_ai_client_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_supports_ai",
             "description": "Uses wp_supports_ai",
@@ -65,20 +61,16 @@
       "id": "e-ai-client-002",
       "category": "ai-client",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_ai_client_002(): WP_AI_Client_Prompt_Builder to create a text prompt builder with a concise system instruction, temperature 0.2, and a model preference order of 'gpt-4o-mini' then 'gpt-4o'. Return the builder without generating content.",
+      "prompt": "Implement a function that creates a text prompt builder with a concise system instruction, temperature 0.2, and a model preference order of 'gpt-4o-mini' then 'gpt-4o'. Return the builder without generating content.",
       "expected_behavior": "`wpbp_ai_client_002()` returns a `WP_AI_Client_Prompt_Builder` from `wp_ai_client_prompt()` after configuring text-generation options with snake_case AI Client methods. It must not call a generating method; runtime validation later prevents generation and confirms the returned builder is not already in an error state.",
       "requirements": [
         "Use wp_ai_client_prompt()",
         "Configure temperature, system instruction, and model preference",
         "Return the builder without generating content"
       ],
+      "test_function": "wpbp_ai_client_002(): WP_AI_Client_Prompt_Builder",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_ai_client_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_ai_client_prompt",
             "description": "Uses wp_ai_client_prompt",
@@ -132,20 +124,16 @@
       "id": "e-ai-client-003",
       "category": "ai-client",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_ai_client_003(): string to prevent a single AI text generation attempt and return the resulting WP_Error code.",
+      "prompt": "Implement a function that prevents a single AI text generation attempt and returns the resulting WP_Error code.",
       "expected_behavior": "`wpbp_ai_client_003()` temporarily enables `wp_ai_client_prevent_prompt`, calls `generate_text()` on an AI Client prompt, returns the resulting `WP_Error` code, and removes the prevention filter. The expected code is `prompt_prevented`, with no live provider call.",
       "requirements": [
         "Use wp_ai_client_prompt() and generate_text()",
         "Use wp_ai_client_prevent_prompt to prevent the generation call",
         "Remove the filter before returning"
       ],
+      "test_function": "wpbp_ai_client_003(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_ai_client_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "wp_ai_client_prevent_prompt",
             "description": "Uses wp_ai_client_prevent_prompt",
@@ -191,20 +179,16 @@
       "id": "e-ai-client-004",
       "category": "ai-client",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_ai_client_004( string $ability_name ): array to return the AI Client function-call name for the ability and the ability name obtained by converting it back.",
+      "prompt": "Implement a function that returns the AI Client function-call name for a supplied ability name and the ability name obtained by converting it back.",
       "expected_behavior": "`wpbp_ai_client_004()` uses `WP_AI_Client_Ability_Function_Resolver` conversion helpers to return `array( $function_name, $round_trip_ability_name )` for any supplied ability name. Runtime validation checks multiple ability names so hard-coded output does not pass.",
       "requirements": [
         "Use WP_AI_Client_Ability_Function_Resolver",
         "Use both conversion directions",
         "Return the function-call name and round-tripped ability name"
       ],
+      "test_function": "wpbp_ai_client_004( string $ability_name ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_ai_client_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_AI_Client_Ability_Function_Resolver",
             "description": "Uses WP_AI_Client_Ability_Function_Resolver",
@@ -244,20 +228,16 @@
       "id": "e-ai-client-005",
       "category": "ai-client",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_ai_client_005(): bool to return the text-generation support check result while AI prompt execution is temporarily prevented.",
+      "prompt": "Implement a function that returns the text-generation support check result while AI prompt execution is temporarily prevented.",
       "expected_behavior": "`wpbp_ai_client_005()` temporarily enables `wp_ai_client_prevent_prompt`, calls `is_supported_for_text_generation()` on an AI Client prompt, returns that support-check result, and removes the filter. The support check should return `false` without making a provider call.",
       "requirements": [
         "Use wp_ai_client_prompt()",
         "Use is_supported_for_text_generation()",
         "Remove the prevention filter before returning"
       ],
+      "test_function": "wpbp_ai_client_005(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_ai_client_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "is_supported_for_text_generation",
             "description": "Uses is_supported_for_text_generation",

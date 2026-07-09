@@ -23,6 +23,7 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 
 - `prompt`: The task sent to the model.
 - `requirements`: Additional model-facing constraints.
+- `test_function`: PHP signature of the entry point the verifier calls, e.g. `wpbp_queries_004( string $category_slug, array $tag_slugs ): WP_Query`. Set it whenever assertions invoke the function. Shown to the model and checked at runtime with an unscored `function_exists` assertion. Use parameter names that convey meaning; pin the return type only when assertions check it.
 - `expected_behavior`: Reviewer documentation.
 - `reference_solution`: Canonical passing code used for author verification.
 - `static_checks`: Coarse guardrails for required or forbidden code patterns.
@@ -63,6 +64,9 @@ Good:
 Avoid:
 
 - Requiring a wrapper function name unless implementing that function is the real task.
+- Naming the gateway function in the prompt — `test_function` owns the naming; write the prompt as a natural task.
+- Repeating the `test_function` name in `static_checks` or giving it scoring weight — it is harness scaffolding, not a WordPress skill.
+- Needing two entry points in one test — split it into two tests.
 - Requiring the model to call the same checker API that the runtime assertion can call.
 - Putting fixture cleanup inside assertions instead of `runtime_checks.teardown`.
 - Adding cleanup by habit when the state is process-local.

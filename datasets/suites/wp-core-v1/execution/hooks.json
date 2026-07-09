@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-hooks",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Hooks",
     "description": "Code generation tasks for WordPress Hooks APIs",
@@ -12,19 +12,15 @@
       "id": "e-hooks-001",
       "category": "hooks",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_hooks_001(): void to attach a filter to the_title that appends the literal suffix ' [WPBP]' to the incoming title string.",
+      "prompt": "Implement a function that attaches a filter to the_title that appends the literal suffix ' [WPBP]' to the incoming title string.",
       "expected_behavior": "`wpbp_hooks_001()` registers a `the_title` filter whose callback returns the original title plus ` [WPBP]`. Runtime validation calls the function and applies the WordPress title filter to sample values to verify the appended result.",
       "requirements": [
         "Use add_filter() on the the_title filter",
         "Append the suffix without replacing the original title"
       ],
+      "test_function": "wpbp_hooks_001(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_hooks_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_filter",
             "description": "Uses add_filter",
@@ -64,19 +60,15 @@
       "id": "e-hooks-002",
       "category": "hooks",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_hooks_002(): void to register an action on wpbp_two_args. When the action fires with two arguments, store them as '<first>:<second>' in the option wpbp_two_args_result.",
+      "prompt": "Implement a function that registers an action on wpbp_two_args. When the action fires with two arguments, store them as '<first>:<second>' in the option wpbp_two_args_result.",
       "expected_behavior": "`wpbp_hooks_002()` registers an action callback for `wpbp_two_args` that accepts both action arguments and writes them to `wpbp_two_args_result` in order. Runtime validation fires the action with two values and reads the option written by the callback.",
       "requirements": [
         "Use add_action() with two accepted arguments",
         "Preserve both action arguments in order"
       ],
+      "test_function": "wpbp_hooks_002(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_hooks_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_action",
             "description": "Uses add_action",
@@ -118,20 +110,16 @@
       "id": "e-hooks-003",
       "category": "hooks",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_hooks_003( callable $callback ): bool to remove the supplied callback from the wpbp_remove_filter hook at priority 0 and return true only when WordPress reports it was present before removal and absent afterward.",
+      "prompt": "Implement a function that removes a supplied callback from the wpbp_remove_filter hook at priority 0 and returns true only when WordPress reports it was present before removal and absent afterward.",
       "expected_behavior": "`wpbp_hooks_003()` checks a supplied callback with `has_filter()`, removes it from `wpbp_remove_filter` at priority 0 with `remove_filter()`, and treats priority 0 as a valid registration rather than a falsey miss. Runtime validation pre-registers a callback at priority 0 and verifies the filter no longer changes a value.",
       "requirements": [
         "Use has_filter() to inspect the callback registration",
         "Use remove_filter() with the matching priority",
         "Treat priority 0 as a valid registered priority"
       ],
+      "test_function": "wpbp_hooks_003( callable $callback ): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_hooks_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "remove_filter",
             "description": "Uses remove_filter",
@@ -172,19 +160,15 @@
       "id": "e-hooks-004",
       "category": "hooks",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_hooks_004(): string to register two callbacks on wpbp_priority: a lower-priority callback appends 'A' and a later callback appends 'B', then return the filtered value starting from an empty string.",
+      "prompt": "Implement a function that registers two callbacks on wpbp_priority: a lower-priority callback appends 'A' and a later callback appends 'B', then returns the filtered value starting from an empty string.",
       "expected_behavior": "`wpbp_hooks_004()` uses `add_filter()` priorities on `wpbp_priority` and returns the result of `apply_filters()`. Runtime validation expects WordPress to run the lower numeric priority first so the final value is `AB`.",
       "requirements": [
         "Use add_filter() with explicit priorities",
         "Use apply_filters() to return the computed value"
       ],
+      "test_function": "wpbp_hooks_004(): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_hooks_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_filter",
             "description": "Uses add_filter",
@@ -224,19 +208,15 @@
       "id": "e-hooks-005",
       "category": "hooks",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_hooks_005(): int to fire the custom action wpbp_did_action twice and return WordPress's count for that action.",
+      "prompt": "Implement a function that fires the custom action wpbp_did_action twice and returns WordPress's count for that action.",
       "expected_behavior": "`wpbp_hooks_005()` dispatches `wpbp_did_action` twice with `do_action()` and returns `did_action( 'wpbp_did_action' )`. Runtime validation checks the returned count and WordPress's recorded action count.",
       "requirements": [
         "Use do_action() to fire the action",
         "Use did_action() to return the action count"
       ],
+      "test_function": "wpbp_hooks_005(): int",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_hooks_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "do_action",
             "description": "Uses do_action",
@@ -276,19 +256,15 @@
       "id": "e-hooks-006",
       "category": "hooks",
       "difficulty": "basic",
-      "prompt": "Implement wpbp_hooks_006(): bool to remove every callback from the wpbp_remove_all filter and return true when applying that filter to 'abc' leaves it unchanged.",
+      "prompt": "Implement a function that removes every callback from the wpbp_remove_all filter and returns true when applying that filter to 'abc' leaves it unchanged.",
       "expected_behavior": "`wpbp_hooks_006()` calls `remove_all_filters()` for `wpbp_remove_all` and verifies through `apply_filters()` that callbacks on that hook no longer alter the value. Runtime validation pre-registers callbacks before the submitted code runs and confirms the hook is empty afterward.",
       "requirements": [
         "Use remove_all_filters() on the custom filter",
         "Use apply_filters() to verify the value is no longer changed"
       ],
+      "test_function": "wpbp_hooks_006(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_hooks_006",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "remove_all_filters",
             "description": "Uses remove_all_filters",

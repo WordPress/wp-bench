@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-rewrite_permalinks",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Rewrite and Permalinks",
     "description": "Code generation tasks for WordPress Rewrite and Permalinks APIs",
@@ -12,20 +12,16 @@
       "id": "e-rewrite-permalinks-001",
       "category": "rewrite-permalinks",
       "difficulty": "intermediate",
-      "prompt": "Provide a PHP function named wpbp_rewrite_permalinks_001(): void that registers item URLs under items/<item-slug> as an extra permalink structure using a %wpbp_item% placeholder.",
+      "prompt": "Implement a function that registers item URLs under items/<item-slug> as an extra permalink structure using a %wpbp_item% placeholder.",
       "expected_behavior": "Reviewer contract: The helper must register the %wpbp_item% rewrite tag, expose the wpbp_item query variable, and add a wpbp_item permastruct whose structure contains items/%wpbp_item%. Review focus: Use WordPress rewrite APIs and do not flush rewrite rules during normal runtime. The runtime inspects WordPress rewrite state after calling the helper rather than trusting its return value.",
       "requirements": [
         "Use rewrite APIs",
         "Register the wpbp_item query variable",
         "Avoid flushing rewrite rules during normal runtime"
       ],
+      "test_function": "wpbp_rewrite_permalinks_001(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rewrite_permalinks_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_rewrite_tag",
             "description": "Uses add_rewrite_tag",
@@ -84,20 +80,16 @@
       "id": "e-rewrite-permalinks-002",
       "category": "rewrite-permalinks",
       "difficulty": "basic",
-      "prompt": "Provide a PHP function named wpbp_rewrite_permalinks_002(): void that registers a top-priority rewrite rule for URLs like wpbp-rule/<code>, mapping the captured code to the wpbp_rule query variable.",
+      "prompt": "Implement a function that registers a top-priority rewrite rule for URLs like wpbp-rule/<code>, mapping the captured code to the wpbp_rule query variable.",
       "expected_behavior": "Reviewer contract: The helper must add a rewrite rule to WordPress' top rewrite-rule bucket for wpbp-rule/<code> URLs and map the first path segment to the wpbp_rule query variable. Review focus: Use the Rewrite API, use top priority, and do not flush rewrite rules during normal runtime. The runtime inspects $wp_rewrite->extra_rules_top after calling the helper.",
       "requirements": [
         "Use rewrite APIs",
         "Register the rule at top priority",
         "Avoid flushing rewrite rules during normal runtime"
       ],
+      "test_function": "wpbp_rewrite_permalinks_002(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rewrite_permalinks_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "add_rewrite_rule",
             "description": "Uses add_rewrite_rule",
@@ -160,20 +152,16 @@
       "id": "e-rewrite-permalinks-003",
       "category": "rewrite-permalinks",
       "difficulty": "basic",
-      "prompt": "Provide a PHP function named wpbp_rewrite_permalinks_003(): void that makes wpbp_var available as a public query variable without removing existing public query vars.",
+      "prompt": "Implement a function that makes wpbp_var available as a public query variable without removing existing public query vars.",
       "expected_behavior": "Reviewer contract: The helper must hook query_vars, append wpbp_var, and preserve the incoming public query vars array. Review focus: Use WordPress hook/query-var APIs and do not flush rewrite rules during normal runtime. The runtime applies the filter to a seed array and verifies both the new and existing vars remain present.",
       "requirements": [
         "Use the query_vars filter",
         "Preserve existing public query vars",
         "Avoid flushing rewrite rules during normal runtime"
       ],
+      "test_function": "wpbp_rewrite_permalinks_003(): void",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rewrite_permalinks_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "query_vars",
             "description": "Uses query_vars",

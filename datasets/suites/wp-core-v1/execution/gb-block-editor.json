@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_editor",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Editor",
     "description": "Code generation tasks for WordPress Block Editor APIs",
@@ -12,20 +12,16 @@
       "id": "e-gb-block-editor-001",
       "category": "gb-block-editor",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_editor_001(): array to define dimension size presets in a WP_Theme_JSON object and return the presets WordPress exposes from theme settings.",
+      "prompt": "Implement a function that defines dimension size presets in a WP_Theme_JSON object and returns the presets WordPress exposes from theme settings.",
       "expected_behavior": "`wpbp_gb_block_editor_001()` builds theme.json data with the latest schema, defines the requested dimension size presets, reads settings through `WP_Theme_JSON`, and returns the theme-origin presets exactly as WordPress normalizes them.",
       "requirements": [
         "Use WP_Theme_JSON with the latest schema",
         "Define Small and Large dimension size presets",
         "Return the normalized theme-origin dimension size presets"
       ],
+      "test_function": "wpbp_gb_block_editor_001(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_editor_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Theme_JSON",
             "description": "Uses WP_Theme_JSON",
@@ -72,20 +68,16 @@
       "id": "e-gb-block-editor-002",
       "category": "gb-block-editor",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_editor_002( string $content ): string to render supplied block markup through WordPress so blocks hidden with block visibility metadata are omitted.",
+      "prompt": "Implement a function that renders supplied block markup through WordPress so blocks hidden with block visibility metadata are omitted.",
       "expected_behavior": "`wpbp_gb_block_editor_002()` delegates rendering to the WordPress block parser/renderer. Runtime validation passes visible and hidden paragraph blocks together and expects only the visible block's rendered HTML to remain.",
       "requirements": [
         "Use the server-side block rendering pipeline",
         "Return rendered HTML for the supplied content",
         "Do not strip hidden blocks with ad hoc string replacement"
       ],
+      "test_function": "wpbp_gb_block_editor_002( string $content ): string",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_editor_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "do_blocks",
             "description": "Uses do_blocks",
@@ -124,20 +116,16 @@
       "id": "e-gb-block-editor-003",
       "category": "gb-block-editor",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_editor_003(): bool to register a server-rendered block named 'wpbp/dimensions' that opts into width and height controls through dimensions support.",
+      "prompt": "Implement a function that registers a server-rendered block named 'wpbp/dimensions' that opts into width and height controls through dimensions support.",
       "expected_behavior": "`wpbp_gb_block_editor_003()` registers `wpbp/dimensions` with the server-side Block API and declares `supports.dimensions.width` and `supports.dimensions.height`. Runtime validation inspects the registered `WP_Block_Type` rather than trusting the function's return value alone.",
       "requirements": [
         "Use register_block_type()",
         "Register the block name 'wpbp/dimensions'",
         "Return whether WordPress registered the block"
       ],
+      "test_function": "wpbp_gb_block_editor_003(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_editor_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_block_type",
             "description": "Uses register_block_type",
@@ -195,20 +183,16 @@
       "id": "e-gb-block-editor-004",
       "category": "gb-block-editor",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_gb_block_editor_004(): bool to register a server-rendered block named 'wpbp/text-indent' that opts into the typography textIndent support.",
+      "prompt": "Implement a function that registers a server-rendered block named 'wpbp/text-indent' that opts into the typography textIndent support.",
       "expected_behavior": "`wpbp_gb_block_editor_004()` registers `wpbp/text-indent` with the server-side Block API and declares `supports.typography.textIndent`. Runtime validation inspects the registered block type so a stubbed return value does not pass.",
       "requirements": [
         "Use register_block_type()",
         "Register the block name 'wpbp/text-indent'",
         "Return whether WordPress registered the block"
       ],
+      "test_function": "wpbp_gb_block_editor_004(): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_gb_block_editor_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "register_block_type",
             "description": "Uses register_block_type",

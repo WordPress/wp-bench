@@ -19,6 +19,7 @@ def _make_test(
         category="hooks",
         difficulty="intermediate",
         requirements=[],
+        test_function=None,
         static_checks=static_checks or {},
         runtime_checks=runtime_checks or {},
         reference_solution=None,

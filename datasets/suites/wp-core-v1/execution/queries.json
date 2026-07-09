@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-queries",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Queries",
     "description": "Code generation tasks for WordPress Queries APIs",
@@ -12,19 +12,15 @@
       "id": "e-queries-001",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_001() to return recent published posts by category slug with no_found_rows.",
+      "prompt": "Implement a function that returns recent published posts for a supplied category slug with no_found_rows.",
       "expected_behavior": "`wpbp_queries_001()` returns a `WP_Query` for published posts matching the supplied category slug, limited by the supplied count and configured with `no_found_rows` for an efficient read-only query.",
       "requirements": [
         "Use the relevant WordPress query class or helper",
         "Return deterministic query data"
       ],
+      "test_function": "wpbp_queries_001( string $category_slug, int $limit ): WP_Query",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_001",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Query",
             "description": "Uses WP_Query",
@@ -63,20 +59,16 @@
       "id": "e-queries-002",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_002() to return a WP_Query for published posts whose price_cents post meta compares numerically equal to zero.",
+      "prompt": "Implement a function that returns a WP_Query for published posts whose price_cents post meta compares numerically equal to zero.",
       "expected_behavior": "`wpbp_queries_002()` must use `WP_Query` with a numeric meta query for the `price_cents` key, returning published posts with a zero price while excluding non-zero prices, posts without the meta key, and drafts. Runtime validation creates all four cases and verifies the observable query results.",
       "requirements": [
         "Use WP_Query with a meta query",
         "Compare price_cents numerically",
         "Limit results to published posts"
       ],
+      "test_function": "wpbp_queries_002(): WP_Query",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_002",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Query",
             "description": "Uses WP_Query",
@@ -120,19 +112,15 @@
       "id": "e-queries-003",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_003() to return only post IDs for a search query.",
+      "prompt": "Implement a function that returns only post IDs for a search query.",
       "expected_behavior": "`wpbp_queries_003()` runs a published-post search with `WP_Query` and returns IDs only by using the `fields` query argument.",
       "requirements": [
         "Use the relevant WordPress query class or helper",
         "Return deterministic query data"
       ],
+      "test_function": "wpbp_queries_003( string $search_term ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_003",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Query",
             "description": "Uses WP_Query",
@@ -171,20 +159,16 @@
       "id": "e-queries-004",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_004( string $category_slug, array $tag_slugs ) to return a WP_Query for published posts that are in the supplied category slug and in either of the supplied tag slugs.",
+      "prompt": "Implement a function that returns a WP_Query for published posts that are in the supplied category slug and in either of the supplied tag slugs.",
       "expected_behavior": "`wpbp_queries_004()` must query published posts with a taxonomy constraint requiring the category match and at least one matching tag. Runtime validation creates matching posts, category-only posts, tag-only posts, and draft posts to verify the AND/OR taxonomy behavior rather than a single-term tax query.",
       "requirements": [
         "Use WP_Query with tax_query",
         "Require the category constraint",
         "Allow either supplied tag slug"
       ],
+      "test_function": "wpbp_queries_004( string $category_slug, array $tag_slugs ): WP_Query",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_004",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Query",
             "description": "Uses WP_Query",
@@ -237,19 +221,15 @@
       "id": "e-queries-005",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_005() to query future posts after a supplied date.",
+      "prompt": "Implement a function that queries scheduled future posts after a supplied date.",
       "expected_behavior": "`wpbp_queries_005()` builds a `WP_Query` for scheduled future posts after the supplied date, using `date_query` and including the `future` post status.",
       "requirements": [
         "Use the relevant WordPress query class or helper",
         "Return deterministic query data"
       ],
+      "test_function": "wpbp_queries_005( string $after_date ): WP_Query",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Query",
             "description": "Uses WP_Query",
@@ -288,19 +268,15 @@
       "id": "e-queries-006",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_006() to build a WP_User_Query for users matching a role.",
+      "prompt": "Implement a function that builds a WP_User_Query for users matching a supplied role.",
       "expected_behavior": "`wpbp_queries_006()` builds a `WP_User_Query` for users with the supplied role and returns user IDs.",
       "requirements": [
         "Use the relevant WordPress query class or helper",
         "Return deterministic query data"
       ],
+      "test_function": "wpbp_queries_006( string $role ): WP_User_Query",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_006",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_User_Query",
             "description": "Uses WP_User_Query",
@@ -339,19 +315,15 @@
       "id": "e-queries-007",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_007() to return comments for a post using WP_Comment_Query.",
+      "prompt": "Implement a function that returns approved comments for a post using WP_Comment_Query.",
       "expected_behavior": "`wpbp_queries_007()` uses `WP_Comment_Query` to return approved comments for the supplied post ID.",
       "requirements": [
         "Use the relevant WordPress query class or helper",
         "Return deterministic query data"
       ],
+      "test_function": "wpbp_queries_007( int $post_id ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_007",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Comment_Query",
             "description": "Uses WP_Comment_Query",
@@ -385,19 +357,15 @@
       "id": "e-queries-008",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_008() to query terms with hide_empty disabled.",
+      "prompt": "Implement a function that queries terms for a supplied taxonomy with hide_empty disabled.",
       "expected_behavior": "`wpbp_queries_008()` uses `WP_Term_Query` to return term IDs for the supplied taxonomy with `hide_empty` disabled, so empty terms are included.",
       "requirements": [
         "Use the relevant WordPress query class or helper",
         "Return deterministic query data"
       ],
+      "test_function": "wpbp_queries_008( string $taxonomy ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_008",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Term_Query",
             "description": "Uses WP_Term_Query",
@@ -436,20 +404,16 @@
       "id": "e-queries-009",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_009() to return the adjacent published post in the same category as the current global post.",
+      "prompt": "Implement a function that returns the adjacent published post in the same category as the current global post.",
       "expected_behavior": "`wpbp_queries_009()` must delegate to WordPress adjacent-post handling with same-term category constraints. Runtime validation sets a current global post, creates same-date previous and next category neighbors plus closer posts in another category, and verifies the returned `WP_Post` objects honor category matching and WordPress's ID fallback for identical post dates.",
       "requirements": [
         "Use WordPress adjacent-post handling",
         "Constrain results to the category taxonomy",
         "Return the WP_Post object WordPress finds"
       ],
+      "test_function": "wpbp_queries_009( bool $previous = true )",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_009",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_adjacent_post",
             "description": "Uses get_adjacent_post",
@@ -488,19 +452,15 @@
       "id": "e-queries-010",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_010() to preload post meta cache before reading many posts.",
+      "prompt": "Implement a function that preloads the post meta cache before reading a meta key from many posts.",
       "expected_behavior": "`wpbp_queries_010()` primes post meta for the supplied post IDs with `update_meta_cache()` before reading the requested meta key from each post.",
       "requirements": [
-        "Use the relevant WordPress query class or helper",
-        "Return deterministic query data"
+        "Prime the post meta cache before reading individual values",
+        "Return each post's single meta value keyed by post ID"
       ],
+      "test_function": "wpbp_queries_010( array $post_ids, string $meta_key ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_010",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "update_meta_cache",
             "description": "Uses update_meta_cache",
@@ -539,20 +499,16 @@
       "id": "e-queries-011",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_011() to return one published post with get_posts() while allowing WordPress query filters to modify the query.",
+      "prompt": "Implement a function that returns one published post with get_posts() while allowing WordPress query filters to modify the query.",
       "expected_behavior": "`wpbp_queries_011()` must call `get_posts()` with filters enabled, overriding the helper's default suppressed-filter behavior. Runtime validation installs a `posts_where` filter that selects an older fixture post; without `suppress_filters` set to false, `get_posts()` returns the newer distractor instead.",
       "requirements": [
         "Use get_posts() for the query",
         "Allow WordPress query filters to run",
         "Return the filtered posts"
       ],
+      "test_function": "wpbp_queries_011(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_011",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "get_posts",
             "description": "Uses get_posts",
@@ -590,20 +546,16 @@
       "id": "e-queries-012",
       "category": "queries",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_queries_012() to return only published sticky posts as a WP_Query without relying on home-query sticky prepending.",
+      "prompt": "Implement a function that returns only published sticky posts as a WP_Query without relying on home-query sticky prepending.",
       "expected_behavior": "`wpbp_queries_012()` must read WordPress's sticky post IDs and query those IDs explicitly with `WP_Query`, using `ignore_sticky_posts` so normal home-query sticky relocation is not part of the result. Runtime validation verifies the sticky post is returned, a regular published post is excluded, and an empty sticky list yields no posts.",
       "requirements": [
         "Read the sticky post IDs from WordPress",
         "Query only those posts and preserve sticky order",
         "Return an empty result when no posts are sticky"
       ],
+      "test_function": "wpbp_queries_012(): WP_Query",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_queries_012",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_Query",
             "description": "Uses WP_Query",

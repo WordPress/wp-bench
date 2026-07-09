@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,51 @@ def test_execution_assertion_types_are_supported() -> None:
         assert assertions, test["id"]
         for assertion in assertions:
             assert assertion.get("type") in SUPPORTED_ASSERTIONS, test["id"]
+
+
+def test_execution_test_function_is_valid_signature() -> None:
+    """test_function must start with an extractable function name, and that
+    name must not be duplicated as a hand-written static pattern."""
+    signature_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(")
+    for test in _execution_tests():
+        signature = test.get("test_function")
+        if signature is None:
+            continue
+        assert signature_re.match(signature.strip()), test["id"]
+        name = signature.strip().split("(", 1)[0].strip()
+        patterns = test.get("static_checks", {}).get("required_patterns", [])
+        duplicates = [p for p in patterns if name in p.get("pattern", "")]
+        assert not duplicates, (
+            f"{test['id']}: test function {name} is auto-checked; "
+            "remove it from static_checks.required_patterns"
+        )
+
+
+def test_execution_gateway_calls_declare_test_function() -> None:
+    """A test whose assertions invoke a model-defined wpbp_* function must
+    declare it in test_function, and the prompt must not name the gateway —
+    test_function is the only channel for the entry-point contract."""
+    call_re = re.compile(r"\b(wpbp_[a-z0-9_]+)\s*\(")
+    problems: list[str] = []
+    for test in _execution_tests():
+        assertions = test.get("runtime_checks", {}).get("assertions", [])
+        code = " ".join(a.get("code", "") for a in assertions if isinstance(a, dict))
+        called = set(call_re.findall(code))
+        declared = (test.get("test_function") or "").split("(", 1)[0].strip()
+        if called and not declared:
+            problems.append(
+                f"{test['id']}: assertions call {sorted(called)} but test_function is missing"
+            )
+        elif called and declared not in called:
+            problems.append(
+                f"{test['id']}: test_function {declared} is never called; "
+                f"assertions call {sorted(called)}"
+            )
+        if declared and declared in test.get("prompt", ""):
+            problems.append(
+                f"{test['id']}: prompt names {declared}; test_function owns the naming"
+            )
+    assert not problems, "\n".join(problems)
 
 
 def test_execution_suite_includes_modern_wordpress_coverage() -> None:

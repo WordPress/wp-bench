@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-rest_api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - REST API",
     "description": "Code generation tasks for WordPress REST API APIs",
@@ -239,19 +239,15 @@
       "id": "e-rest-api-005",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_005() to normalize a WP_Error into a REST response array with code, message, and status.",
+      "prompt": "Implement a function that normalizes a WP_Error into a REST response array with code, message, and status.",
       "expected_behavior": "`wpbp_rest_api_005()` converts a `WP_Error` to a REST response with `rest_convert_error_to_response()` and returns the response status plus response data, preserving the error code and HTTP status.",
       "requirements": [
         "Use rest_convert_error_to_response",
         "Preserve the status code"
       ],
+      "test_function": "wpbp_rest_api_005( WP_Error $error ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_005",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "rest_convert_error_to_response",
             "description": "Uses rest_convert_error_to_response",
@@ -287,19 +283,15 @@
       "id": "e-rest-api-006",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_006() to ensure arbitrary callback data is converted to a WP_REST_Response.",
+      "prompt": "Implement a function that ensures arbitrary callback data is converted to a WP_REST_Response.",
       "expected_behavior": "`wpbp_rest_api_006()` passes arbitrary callback data through `rest_ensure_response()` and returns the resulting `WP_REST_Response` status and data.",
       "requirements": [
         "Use rest_ensure_response",
         "Return the response status and data"
       ],
+      "test_function": "wpbp_rest_api_006( array $data ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_006",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "rest_ensure_response",
             "description": "Uses rest_ensure_response",
@@ -335,19 +327,15 @@
       "id": "e-rest-api-007",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_007() to build a collection response with X-WP-Total and X-WP-TotalPages headers.",
+      "prompt": "Implement a function that builds a collection response with X-WP-Total and X-WP-TotalPages headers.",
       "expected_behavior": "`wpbp_rest_api_007()` returns a WP_REST_Response for the provided collection items and sets WordPress pagination headers X-WP-Total and X-WP-TotalPages. Runtime validation checks the computed headers for a non-even page count.",
       "requirements": [
         "Use WP_REST_Response",
         "Set X-WP-Total and X-WP-TotalPages headers"
       ],
+      "test_function": "wpbp_rest_api_007( array $items, int $total, int $per_page ): WP_REST_Response",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_007",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_REST_Response",
             "description": "Uses WP_REST_Response",
@@ -388,20 +376,16 @@
       "id": "e-rest-api-008",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_008() to return a REST schema for settings data where mode is required and may only be light or dark.",
+      "prompt": "Implement a function that returns a REST schema for settings data where mode is required and may only be light or dark.",
       "expected_behavior": "`wpbp_rest_api_008()` returns an object schema with a required mode property constrained to the light and dark string enum values. Runtime validation uses WordPress REST schema validation to confirm valid data passes while missing or unsupported modes fail.",
       "requirements": [
         "Return an object schema with a mode property",
         "Require mode",
         "Limit mode to light or dark"
       ],
+      "test_function": "wpbp_rest_api_008(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_008",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "enum",
             "description": "Uses enum",
@@ -442,20 +426,16 @@
       "id": "e-rest-api-009",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_009() to check whether a value passes WordPress REST schema validation as a positive integer.",
+      "prompt": "Implement a function that checks whether a value passes WordPress REST schema validation as a positive integer.",
       "expected_behavior": "`wpbp_rest_api_009()` builds an integer schema with minimum 1 and returns true only when WordPress REST schema validation accepts the value. Runtime validation covers an integer, an integer-like request string, a below-minimum value, and a nonnumeric value.",
       "requirements": [
         "Build a REST schema with integer type and minimum 1",
         "Use WordPress REST schema validation",
         "Return true only when validation passes"
       ],
+      "test_function": "wpbp_rest_api_009( mixed $value ): bool",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_009",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "rest_validate_value_from_schema",
             "description": "Uses rest_validate_value_from_schema",
@@ -496,19 +476,15 @@
       "id": "e-rest-api-010",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_010() to sanitize REST array input using rest_sanitize_value_from_schema.",
+      "prompt": "Implement a function that sanitizes REST array input using rest_sanitize_value_from_schema.",
       "expected_behavior": "`wpbp_rest_api_010()` sanitizes an array of values against a REST schema whose `items` are integers, returning the integer-normalized values from WordPress schema sanitization.",
       "requirements": [
         "Declare an array item schema",
         "Return sanitized integers"
       ],
+      "test_function": "wpbp_rest_api_010( array $values ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_010",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "rest_sanitize_value_from_schema",
             "description": "Uses rest_sanitize_value_from_schema",
@@ -544,19 +520,15 @@
       "id": "e-rest-api-011",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_011() to return the correct authorization status for logged-out and logged-in users.",
+      "prompt": "Implement a function that returns the correct authorization status for logged-out and logged-in users.",
       "expected_behavior": "`wpbp_rest_api_011()` checks `rest_authorization_required_code()` as an anonymous user and again as a logged-in user, returning both status codes so WordPress determines the 401/403 distinction.",
       "requirements": [
         "Use rest_authorization_required_code",
         "Do not hard-code only one status"
       ],
+      "test_function": "wpbp_rest_api_011(): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_011",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "rest_authorization_required_code",
             "description": "Uses rest_authorization_required_code",
@@ -594,19 +566,15 @@
       "id": "e-rest-api-012",
       "category": "rest-api",
       "difficulty": "intermediate",
-      "prompt": "Implement wpbp_rest_api_012() to add a custom link relation to a WP_REST_Response.",
+      "prompt": "Implement a function that adds a custom link relation to a WP_REST_Response.",
       "expected_behavior": "`wpbp_rest_api_012()` creates a `WP_REST_Response`, adds the supplied URL under the `https://api.w.org/related` link relation, and returns the response links.",
       "requirements": [
         "Use add_link",
         "Return links from response"
       ],
+      "test_function": "wpbp_rest_api_012( string $url ): array",
       "static_checks": {
         "required_patterns": [
-          {
-            "pattern": "wpbp_rest_api_012",
-            "description": "Defines the requested function",
-            "weight": 0.5
-          },
           {
             "pattern": "WP_REST_Response",
             "description": "Uses WP_REST_Response",
