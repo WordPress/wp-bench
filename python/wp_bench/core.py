@@ -39,6 +39,7 @@ from .records import (
     sort_records,
 )
 from .scoring import SCORING_VERSION, ScoreAggregator
+from .selection import select_tests
 from .utils import ensure_dir, sha256, strip_code_fences
 
 
@@ -60,11 +61,13 @@ def _timestamped_path(path: Path) -> Path:
 
 
 def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
-    """Apply run limit unless explicit test IDs are selected."""
-    if config.run.test_ids:
-        return tests
-    limit = config.run.limit or len(tests)
-    return tests[:limit]
+    """Select tests for this run (seeded stratified selection when limited)."""
+    return select_tests(
+        tests,
+        limit=config.run.limit,
+        test_ids=config.run.test_ids,
+        seed=config.run.seed,
+    )
 
 
 def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]:
@@ -228,6 +231,11 @@ class BenchmarkRunner:
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
                 "scoring_version": SCORING_VERSION,
+                "seed": self.config.run.seed,
+                "limit": self.config.run.limit,
+                "selected_test_ids": sorted(
+                    {record["test_id"] for record in self.records}
+                ),
                 "scores": {
                     "knowledge": summary.knowledge,
                     "execution_pass_rate": summary.execution_pass_rate,

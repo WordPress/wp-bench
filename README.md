@@ -83,7 +83,8 @@ grader:
 
 run:
   suite: wp-core-v1
-  limit: 10                  # limit tests (null = all)
+  limit: 10                  # limit tests (null = all); seeded stratified selection
+  seed: 1337                 # selection seed (same seed = same subset)
   test_ids: []               # optional explicit test IDs to run
   dry_run: false             # load/filter tests without calling models
   concurrency: 4             # model-call concurrency (knowledge tests)
@@ -100,7 +101,8 @@ output:
 ```bash
 # Run from project root
 wp-bench run --config wp-bench.yaml          # run with config file
-wp-bench run --model-name gpt-4o --limit 5   # quick single-model test
+wp-bench run --model-name gpt-4o --limit 5   # quick single-model test (stratified subset)
+wp-bench run --limit 5 --seed 42             # different deterministic subset
 wp-bench run --test-type knowledge           # run only knowledge tests (no WordPress env needed)
 wp-bench run --test-type execution           # run only execution tests
 wp-bench run --test-type execution --test-id e-abilities-api-001
