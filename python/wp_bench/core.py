@@ -31,6 +31,7 @@ from .output import (
     print_results_path,
     print_test_error,
 )
+from .artifacts import Artifact, ArtifactError, parse_artifact, render_artifact_instructions
 from .records import (
     RESULT_SCHEMA_VERSION,
     build_execution_record,
@@ -74,7 +75,7 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]
     """Build the verifier payload honoring run.skip_runtime/skip_static.
 
     A skipped dimension is sent as empty checks so the runtime does not
-    execute it; scoring treats it as not applicable (see _score_correctness).
+    execute it; scoring treats it as not applicable (see _score_execution).
 
     When runtime checks run, a weight-0 ``function_exists`` assertion derived
     from ``test.test_function`` is prepended. It is the harness's gateway for
@@ -107,6 +108,34 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]
         "static_checks": static_checks,
         "runtime_checks": runtime_checks,
     }
+
+
+def _artifact_failure_scores() -> Dict[str, Any]:
+    """Scores for a completion that failed artifact parsing/validation."""
+    return {
+        "knowledge": None,
+        "correctness": 0.0,
+        "execution_pass": False,
+        "runtime": 0.0,
+        "static": None,
+        "static_policy_pass": None,
+    }
+
+
+class _ArtifactFailureResult:
+    """Stand-in env result recording an artifact parse/validation failure."""
+
+    def __init__(self, error: ArtifactError):
+        self.success = False
+        self.stdout = ""
+        self.stderr = str(error)
+        self.timed_out = False
+        self.raw = {
+            "success": False,
+            "artifact_error": str(error),
+            "runtime": {"score": 0.0, "details": {"assertions": [], "total_weight": 0}},
+            "static": {"score": 0.0, "details": {}},
+        }
 
 
 def _model_call_info(generation: Any) -> Dict[str, Any]:
@@ -356,9 +385,24 @@ class BenchmarkRunner:
             try:
                 prompt = self._render_execution_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
-                code = strip_code_fences(generation.text)
+                artifact_kind = getattr(test, "artifact_kind", "php_snippet")
+                try:
+                    artifact = parse_artifact(generation.text, artifact_kind)
+                except ArtifactError as artifact_error:
+                    return build_execution_record(
+                        test=test,
+                        mode="model",
+                        model_config=self.config.model,
+                        prompt_hash=sha256(prompt),
+                        raw_completion=generation.text,
+                        code="",
+                        env_result=_ArtifactFailureResult(artifact_error),
+                        scores=_artifact_failure_scores(),
+                        usage=generation.usage_dict(),
+                        model_call=_model_call_info(generation),
+                    )
                 verification_spec = _build_verification_spec(test, self.config)
-                env_result = self.environment.execute_code(code, verification_spec)
+                env_result = self.environment.execute_artifact(artifact, verification_spec)
                 scores = self._score_execution(
                     env_result.raw,
                     test,
@@ -371,7 +415,7 @@ class BenchmarkRunner:
                     model_config=self.config.model,
                     prompt_hash=sha256(prompt),
                     raw_completion=generation.text,
-                    code=code,
+                    code=artifact.code,
                     env_result=env_result,
                     scores=scores,
                     usage=generation.usage_dict(),
@@ -401,10 +445,17 @@ class BenchmarkRunner:
 
         def process_test(test: ExecutionTest) -> Dict[str, Any]:
             try:
-                if not test.reference_solution:
-                    raise ValueError("Missing reference_solution")
+                artifact_kind = getattr(test, "artifact_kind", "php_snippet")
+                if artifact_kind == "wp_plugin_files":
+                    if not test.reference_files:
+                        raise ValueError("Missing reference_files for plugin artifact test")
+                    artifact = Artifact(kind="wp_plugin_files", files=test.reference_files)
+                else:
+                    if not test.reference_solution:
+                        raise ValueError("Missing reference_solution")
+                    artifact = Artifact(kind="php_snippet", code=test.reference_solution)
                 verification_spec = _build_verification_spec(test, self.config)
-                env_result = self.environment.execute_code(test.reference_solution, verification_spec)
+                env_result = self.environment.execute_artifact(artifact, verification_spec)
                 scores = self._score_execution(
                     env_result.raw,
                     test,
@@ -417,7 +468,7 @@ class BenchmarkRunner:
                     model_config=None,
                     prompt_hash=None,
                     raw_completion=None,
-                    code=test.reference_solution,
+                    code=artifact.code,
                     env_result=env_result,
                     scores=scores,
                 )
@@ -468,7 +519,7 @@ class BenchmarkRunner:
             lines.append("")
             lines.append(f"Define this function: {test.test_function}")
         lines.append(
-            "Return only valid PHP code without explanations. Wrap the response in ```php fences."
+            render_artifact_instructions(getattr(test, "artifact_kind", "php_snippet"))
         )
         return "\n".join(lines)
 
@@ -819,9 +870,24 @@ class SingleModelRunner:
             try:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
-                code = strip_code_fences(generation.text)
+                artifact_kind = getattr(test, "artifact_kind", "php_snippet")
+                try:
+                    artifact = parse_artifact(generation.text, artifact_kind)
+                except ArtifactError as artifact_error:
+                    return build_execution_record(
+                        test=test,
+                        mode="model",
+                        model_config=self.model_config,
+                        prompt_hash=sha256(prompt),
+                        raw_completion=generation.text,
+                        code="",
+                        env_result=_ArtifactFailureResult(artifact_error),
+                        scores=_artifact_failure_scores(),
+                        usage=generation.usage_dict(),
+                        model_call=_model_call_info(generation),
+                    )
                 verification_spec = _build_verification_spec(test, self.config)
-                env_result = self.environment.execute_code(code, verification_spec)
+                env_result = self.environment.execute_artifact(artifact, verification_spec)
                 scores = BenchmarkRunner._score_execution(
                     env_result.raw,
                     test,
@@ -834,7 +900,7 @@ class SingleModelRunner:
                     model_config=self.model_config,
                     prompt_hash=sha256(prompt),
                     raw_completion=generation.text,
-                    code=code,
+                    code=artifact.code,
                     env_result=env_result,
                     scores=scores,
                     usage=generation.usage_dict(),

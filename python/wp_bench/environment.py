@@ -84,18 +84,39 @@ class WordPressEnvironment:
             self._exec(install_cmd)
 
     def execute_code(self, code: str, verification_spec: Dict[str, Any]) -> ExecutionResult:
-        """Run candidate code through the runtime verifier.
+        """Run a candidate PHP snippet through the runtime verifier.
 
-        A runtime timeout is a per-test failure, not a harness crash: it
-        returns a structured ``ExecutionResult`` with ``timed_out=True`` and
-        a synthetic zero-score runtime payload, so the benchmark records the
-        timeout and continues with the next test.
+        Compatibility wrapper over execute_artifact() for snippet payloads.
         """
         payload = {
             "payload_version": "1.0",
             "code": code,
             **verification_spec,
         }
+        return self._run_verifier(payload)
+
+    def execute_artifact(self, artifact: Any, verification_spec: Dict[str, Any]) -> ExecutionResult:
+        """Run a candidate artifact (snippet or plugin files) through the verifier.
+
+        Args:
+            artifact: An Artifact with kind, code, and optional files map.
+            verification_spec: static_checks/runtime_checks for the test.
+        """
+        payload = {
+            "payload_version": "1.0",
+            **artifact.payload_fields(),
+            **verification_spec,
+        }
+        return self._run_verifier(payload)
+
+    def _run_verifier(self, payload: Dict[str, Any]) -> ExecutionResult:
+        """Send a payload to the runtime verifier and parse the result.
+
+        A runtime timeout is a per-test failure, not a harness crash: it
+        returns a structured ``ExecutionResult`` with ``timed_out=True`` and
+        a synthetic zero-score runtime payload, so the benchmark records the
+        timeout and continues with the next test.
+        """
         verifier_path = self._runtime_verifier_path()
         cmd = [
             "wp",

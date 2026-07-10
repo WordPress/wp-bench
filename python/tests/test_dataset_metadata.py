@@ -167,14 +167,14 @@ def test_result_record_includes_task_metadata(
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
 
-    def fake_execute(code: str, verification_spec: dict) -> ExecutionResult:
+    def fake_execute(artifact: object, verification_spec: dict) -> ExecutionResult:
         raw: dict[str, Any] = {
             "success": True,
             "runtime": {"score": 1.0, "details": {"total_weight": 1}},
         }
         return ExecutionResult(success=True, raw=raw, stdout="", stderr="")
 
-    runner.environment.execute_code = fake_execute  # type: ignore[method-assign]
+    runner.environment.execute_artifact = fake_execute  # type: ignore[method-assign]
     monkeypatch.setattr(
         runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
     )

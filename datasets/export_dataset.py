@@ -48,6 +48,8 @@ def load_suite(suite_name: str) -> list[dict]:
                     "runtime_checks": orjson.dumps(t.get("runtime_checks", {})).decode(),
                     "reference_solution": t.get("reference_solution", ""),
                     "metadata": orjson.dumps(t.get("metadata", {})).decode(),
+                    "artifact_kind": t.get("artifact_kind", "php_snippet"),
+                    "reference_files": orjson.dumps(t.get("reference_files") or {}).decode(),
                 })
 
     # Load all knowledge tests from knowledge/ directory
@@ -74,6 +76,8 @@ def load_suite(suite_name: str) -> list[dict]:
                     "runtime_checks": "{}",
                     "reference_solution": "",
                     "metadata": orjson.dumps(t.get("metadata", {})).decode(),
+                    "artifact_kind": "",
+                    "reference_files": "{}",
                 })
 
     return rows

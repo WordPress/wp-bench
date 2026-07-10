@@ -71,6 +71,15 @@ dataset:
 | `static_checks` | object | Regex patterns to check in generated code |
 | `runtime_checks` | object | Assertions to run in WordPress environment |
 | `reference_solution` | string | Example correct solution |
+| `artifact_kind` | string | What the model must produce: `php_snippet` (default) or `wp_plugin_files` |
+| `reference_files` | object | For `wp_plugin_files` tests: reference plugin files (relative path → contents) |
+
+For `wp_plugin_files` tasks the model must return a JSON object with a
+`files` map (relative paths → complete file contents), including one
+top-level PHP file with a `Plugin Name:` header. The runtime installs
+the files as a plugin, loads it, runs the task's assertions, and removes
+it. Artifacts are validated before install: no absolute paths, no `..`
+traversal, limited file count and total size.
 
 ### Knowledge Tests
 | Field | Type | Description |

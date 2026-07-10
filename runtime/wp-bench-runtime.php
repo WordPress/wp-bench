@@ -20,5 +20,6 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 } else {
 	require_once __DIR__ . '/src/class-sandbox.php';
 	require_once __DIR__ . '/src/class-static-analysis.php';
+	require_once __DIR__ . '/src/class-artifact-installer.php';
 	require_once __DIR__ . '/src/class-verifier.php';
 }

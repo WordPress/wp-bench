@@ -70,7 +70,7 @@ class SpyEnvironment:
     def reset(self) -> None:
         self.calls.append("reset")
 
-    def execute_code(self, code: str, verification_spec: dict) -> ExecutionResult:
+    def execute_artifact(self, artifact: object, verification_spec: dict) -> ExecutionResult:
         self.calls.append("execute")
         return _passing_result()
 
