@@ -49,6 +49,55 @@ class ScoreBreakdown:
         return round(total / total_weight, 4)
 
 
+def _percentile(values: List[float], fraction: float) -> float:
+    """Nearest-rank percentile; values need not be pre-sorted."""
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, max(0, round(fraction * (len(ordered) - 1))))
+    return ordered[index]
+
+
+class UsageAggregator:
+    """Accumulates per-call usage into a run-level summary."""
+
+    def __init__(self) -> None:
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+        self.cost_usd = 0.0
+        self.has_cost = False
+        self.latencies_ms: List[float] = []
+
+    def add(self, usage: Optional[Dict[str, Any]]) -> None:
+        if not isinstance(usage, dict):
+            return
+        for token_field in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            value = usage.get(token_field)
+            if isinstance(value, (int, float)):
+                setattr(self, token_field, getattr(self, token_field) + int(value))
+        cost = usage.get("cost_usd")
+        if isinstance(cost, (int, float)):
+            self.cost_usd += float(cost)
+            self.has_cost = True
+        latency = usage.get("latency_ms")
+        if isinstance(latency, (int, float)):
+            self.latencies_ms.append(float(latency))
+
+    def summary(self) -> Dict[str, Any]:
+        """Run-level usage summary; cost is an estimate, not billing truth."""
+        return {
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "estimated_cost_usd": round(self.cost_usd, 6) if self.has_cost else None,
+            "median_latency_ms": (
+                round(_percentile(self.latencies_ms, 0.5), 1) if self.latencies_ms else None
+            ),
+            "p95_latency_ms": (
+                round(_percentile(self.latencies_ms, 0.95), 1) if self.latencies_ms else None
+            ),
+        }
+
+
 class ScoreAggregator:
     def __init__(self) -> None:
         self.knowledge_scores: List[float] = []

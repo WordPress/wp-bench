@@ -18,6 +18,8 @@ from wp_bench.core import BenchmarkRunner, MultiModelRunner
 from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
 
+from conftest import fake_generation
+
 
 def _execution_test(test_id: str) -> ExecutionTest:
     return ExecutionTest(
@@ -87,7 +89,9 @@ def test_execution_runner_resets_between_tests(
     runner = BenchmarkRunner(config)
     spy = SpyEnvironment()
     runner.environment = spy  # type: ignore[assignment]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "```php\ncode\n```")
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
 
     runner.run()
 
@@ -142,7 +146,9 @@ def test_multi_model_runner_resets_between_models(
     monkeypatch.setattr(
         "wp_bench.core.ModelInterface",
         lambda model_config: type(
-            "FakeModel", (), {"generate": staticmethod(lambda prompt: "```php\ncode\n```")}
+            "FakeModel",
+            (),
+            {"generate_with_metadata": staticmethod(lambda prompt: fake_generation("```php\ncode\n```"))},
         )(),
     )
 
@@ -182,7 +188,9 @@ def test_result_metadata_records_isolation_mode(
     runner = BenchmarkRunner(config)
     spy = SpyEnvironment()
     runner.environment = spy  # type: ignore[assignment]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "```php\ncode\n```")
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
 
     payload = runner.run()
 
@@ -203,7 +211,9 @@ def test_isolation_none_still_runs_all_tests(
     runner = BenchmarkRunner(config)
     spy = SpyEnvironment()
     runner.environment = spy  # type: ignore[assignment]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "```php\ncode\n```")
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
 
     payload = runner.run()
 

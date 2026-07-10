@@ -48,6 +48,8 @@ def build_knowledge_record(
     raw_completion: str,
     answer: str,
     knowledge_score: float,
+    usage: Optional[Dict[str, Any]] = None,
+    model_call: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build the canonical record for a knowledge test result."""
     return {
@@ -74,7 +76,8 @@ def build_knowledge_record(
             "static_policy_pass": None,
         },
         "grader": None,
-        "usage": _empty_usage(),
+        "usage": usage if usage is not None else _empty_usage(),
+        "model_call": model_call,
         "error": None,
     }
 
@@ -89,6 +92,8 @@ def build_execution_record(
     code: str,
     env_result: Any,
     scores: Dict[str, Any],
+    usage: Optional[Dict[str, Any]] = None,
+    model_call: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build the canonical record for an execution test result.
 
@@ -121,7 +126,8 @@ def build_execution_record(
             "stderr": env_result.stderr,
             "timeout": bool(raw.get("timeout", False)) or getattr(env_result, "timed_out", False),
         },
-        "usage": _empty_usage(),
+        "usage": usage if usage is not None else _empty_usage(),
+        "model_call": model_call,
         "error": None,
     }
 

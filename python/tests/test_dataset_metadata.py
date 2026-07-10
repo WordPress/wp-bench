@@ -24,6 +24,8 @@ from wp_bench.datasets import (
 )
 from wp_bench.environment import ExecutionResult
 
+from conftest import fake_generation
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -173,7 +175,9 @@ def test_result_record_includes_task_metadata(
         return ExecutionResult(success=True, raw=raw, stdout="", stderr="")
 
     runner.environment.execute_code = fake_execute  # type: ignore[method-assign]
-    monkeypatch.setattr(runner.model, "generate", lambda prompt: "```php\ncode\n```")
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
 
     payload = runner.run()
 

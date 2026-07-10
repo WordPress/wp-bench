@@ -53,6 +53,20 @@ class ModelGeneration:
     latency_ms: float
     provider_response_id: Optional[str]
     temperature_fallback: bool = False
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    cost_usd: Optional[float] = None
+
+    def usage_dict(self) -> dict[str, Any]:
+        """Usage object in the canonical result-record shape."""
+        return {
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "cost_usd": self.cost_usd,
+            "latency_ms": round(self.latency_ms, 1),
+        }
 
 
 class ModelInterface:
@@ -121,6 +135,7 @@ class ModelInterface:
         assert response is not None  # Retrying(reraise=True) raises otherwise
         latency_ms = (time.perf_counter() - started) * 1000
         choice = response.choices[0]
+        usage = _extract_usage(response)
         return ModelGeneration(
             text=choice.message["content"],  # type: ignore[union-attr, index]
             raw_response=response,
@@ -128,6 +143,10 @@ class ModelInterface:
             latency_ms=latency_ms,
             provider_response_id=getattr(response, "id", None),
             temperature_fallback=temperature_fallback,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+            cost_usd=_estimate_cost_safe(response),
         )
 
     def _retry_enabled_for(self, error: BaseException) -> bool:
@@ -156,3 +175,38 @@ class ModelInterface:
 
 def _is_deprecated_temperature_error(error: BadRequestError) -> bool:
     return "`temperature` is deprecated" in str(error)
+
+
+def _extract_usage(response: Any) -> dict[str, Optional[int]]:
+    """Read token usage defensively; providers may omit any field."""
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage")
+
+    def _read(field: str) -> Optional[int]:
+        if usage is None:
+            return None
+        value = getattr(usage, field, None)
+        if value is None and isinstance(usage, dict):
+            value = usage.get(field)
+        return int(value) if isinstance(value, (int, float)) else None
+
+    return {
+        "prompt_tokens": _read("prompt_tokens"),
+        "completion_tokens": _read("completion_tokens"),
+        "total_tokens": _read("total_tokens"),
+    }
+
+
+def _estimate_cost_safe(response: Any) -> Optional[float]:
+    """Best-effort cost estimate via LiteLLM; None when unpriceable.
+
+    Cost is an estimate, not billing truth: unknown models, custom
+    endpoints, and local providers have no pricing data, and estimation
+    failures must never abort a benchmark run.
+    """
+    try:
+        cost = completion_cost(response)
+    except Exception:
+        return None
+    return float(cost) if isinstance(cost, (int, float)) else None
