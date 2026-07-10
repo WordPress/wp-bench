@@ -119,7 +119,8 @@ def test_skipped_dimension_not_scored() -> None:
     # Runtime skipped: raw has no runtime result, static passed fully.
     raw = {"success": True, "static": {"score": 1.0, "details": {"total_weight": 1}}}
 
-    score = BenchmarkRunner._score_correctness(raw, test, skip_runtime=True)
+    scores = BenchmarkRunner._score_execution(raw, test, skip_runtime=True)
 
-    # Without the skip flag this would crash-detect (no runtime weight) -> 0.0.
-    assert score == 1.0
+    # Without the skip flag this would crash-detect (no runtime weight) -> fail.
+    assert scores["execution_pass"] is True
+    assert scores["correctness"] == 1.0

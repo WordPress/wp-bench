@@ -7,7 +7,6 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from statistics import mean
 from typing import Any, Dict, List
 
 import orjson
@@ -39,7 +38,7 @@ from .records import (
     execution_record_passed,
     sort_records,
 )
-from .scoring import ScoreAggregator
+from .scoring import SCORING_VERSION, ScoreAggregator
 from .utils import ensure_dir, sha256, strip_code_fences
 
 
@@ -228,8 +227,12 @@ class BenchmarkRunner:
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
+                "scoring_version": SCORING_VERSION,
                 "scores": {
                     "knowledge": summary.knowledge,
+                    "execution_pass_rate": summary.execution_pass_rate,
+                    "runtime": summary.runtime,
+                    "static_policy_pass_rate": summary.static_policy_pass_rate,
                     "correctness": summary.correctness,
                     "overall": summary.overall(),
                 },
@@ -334,7 +337,7 @@ class BenchmarkRunner:
                 code = strip_code_fences(completion)
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(code, verification_spec)
-                correctness = self._score_correctness(
+                scores = self._score_execution(
                     env_result.raw,
                     test,
                     skip_runtime=self.config.run.skip_runtime,
@@ -348,14 +351,14 @@ class BenchmarkRunner:
                     raw_completion=completion,
                     code=code,
                     env_result=env_result,
-                    correctness=correctness,
+                    scores=scores,
                 )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
-                self.aggregator.add_execution(result["scores"]["correctness"])
+                self.aggregator.add_execution(result["scores"])
                 self.records.append(result)
 
         _run_isolated_execution_loop(
@@ -377,7 +380,7 @@ class BenchmarkRunner:
                     raise ValueError("Missing reference_solution")
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(test.reference_solution, verification_spec)
-                correctness = self._score_correctness(
+                scores = self._score_execution(
                     env_result.raw,
                     test,
                     skip_runtime=self.config.run.skip_runtime,
@@ -391,14 +394,14 @@ class BenchmarkRunner:
                     raw_completion=None,
                     code=test.reference_solution,
                     env_result=env_result,
-                    correctness=correctness,
+                    scores=scores,
                 )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
-                self.aggregator.add_execution(result["scores"]["correctness"])
+                self.aggregator.add_execution(result["scores"])
                 self.records.append(result)
 
         _run_isolated_execution_loop(
@@ -444,65 +447,105 @@ class BenchmarkRunner:
         return "\n".join(lines)
 
     @staticmethod
-    def _score_correctness(
+    def _score_execution(
         raw: Dict[str, Any],
         test: ExecutionTest,
         *,
         skip_runtime: bool = False,
         skip_static: bool = False,
-    ) -> float:
-        """Combine static-analysis and runtime-assertion scores into correctness.
+    ) -> Dict[str, Any]:
+        """Score an execution test with runtime behavior as the primary signal.
 
-        Both sub-scores are already weighted by the WordPress runtime
-        (Static_Analysis::check and Sandbox::execute_and_verify), including the
-        per-pattern/per-assertion weights and the forbidden-pattern hard fail.
-        A dimension contributes only when the test actually defines checks for
-        it, so a test with only runtime assertions is scored purely on runtime,
-        and vice versa. Applicability is read from the test definition rather
-        than the runtime output, since a crash before assertions run leaves the
-        runtime weight at zero even though the dimension was meant to count.
+        Scoring model (SCORING_VERSION 2.0):
 
-        When the code is supposed to run but crashes (a fatal or execution
-        error before any assertion executes), correctness is forced to 0.0:
-        the runtime is ground truth, and static pattern matches must not rescue
-        code that does not run. This applies only to hard crashes, not to code
-        that runs but fails some assertions, which still earns partial credit.
+        - ``execution_pass`` (bool, primary): the code executed without a
+          hard crash/timeout, its runtime assertions effectively all passed
+          (runtime score >= 0.999), and no forbidden static pattern with
+          severity ``error`` matched. When runtime assertions are skipped or
+          absent, the runtime requirement falls back to the static score so
+          static-only tests remain gradable.
+        - ``runtime_score`` (float): weighted partial runtime assertion
+          score, 0.0 unless the code actually ran.
+        - ``static_score`` (float): regex diagnostic score. Never grants
+          correctness credit on its own; kept for authoring/diagnostics.
+        - ``static_policy_pass`` (bool): False when a forbidden pattern with
+          severity ``error`` matched (a hard guardrail failure).
+        - ``correctness`` (float, legacy): 1.0 on strict pass, otherwise
+          partial runtime credit (0.0 on crash/policy failure semantics
+          preserved through the runtime score). Kept one release for
+          consumers of the old key.
 
-        Args:
-            raw: Raw result dict from the WordPress runtime (static/runtime).
-            test: The execution test, used to know which dimensions apply.
-
-        Returns:
-            Float between 0.0 and 1.0 averaging the applicable dimensions.
+        Rationale: regex checks are gameable and can punish valid alternate
+        implementations. Behavior is ground truth; static checks remain as
+        diagnostics and hard security/policy guardrails only.
         """
-        if not raw:
-            return 0.0
-
         static_checks = test.static_checks or {}
         runtime_checks = test.runtime_checks or {}
-        applicable = {
-            "static": not skip_static
-            and bool(
-                static_checks.get("required_patterns")
-                or static_checks.get("forbidden_patterns")
-            ),
-            "runtime": not skip_runtime and bool(runtime_checks.get("assertions")),
+        runtime_applicable = not skip_runtime and bool(runtime_checks.get("assertions"))
+        static_applicable = not skip_static and bool(
+            static_checks.get("required_patterns") or static_checks.get("forbidden_patterns")
+        )
+
+        static_result = raw.get("static") if isinstance(raw, dict) else None
+        static_score = None
+        if static_applicable and isinstance(static_result, dict):
+            value = static_result.get("score")
+            static_score = float(value) if isinstance(value, (int, float)) else 0.0
+
+        static_policy_pass = not (
+            static_applicable
+            and BenchmarkRunner._forbidden_error_found(static_result)
+        )
+
+        crashed = runtime_applicable and (not raw or BenchmarkRunner._runtime_crashed(raw))
+        runtime_score = 0.0
+        if runtime_applicable and not crashed and isinstance(raw, dict):
+            runtime_result = raw.get("runtime")
+            value = runtime_result.get("score") if isinstance(runtime_result, dict) else None
+            runtime_score = float(value) if isinstance(value, (int, float)) else 0.0
+
+        if runtime_applicable:
+            behavior_passed = not crashed and runtime_score >= 0.999
+        elif static_applicable:
+            # Static-only tests: behavior cannot be observed, so the static
+            # score is the only gradable dimension.
+            behavior_passed = (static_score or 0.0) >= 0.999
+        else:
+            behavior_passed = False
+
+        execution_pass = behavior_passed and static_policy_pass
+
+        if execution_pass:
+            correctness = 1.0
+        elif runtime_applicable:
+            correctness = 0.0 if crashed else round(runtime_score, 4)
+        else:
+            correctness = round(static_score or 0.0, 4)
+
+        return {
+            "knowledge": None,
+            "correctness": correctness,
+            "execution_pass": execution_pass,
+            "runtime": round(runtime_score, 4) if runtime_applicable else None,
+            "static": round(static_score, 4) if static_score is not None else None,
+            "static_policy_pass": static_policy_pass if static_applicable else None,
         }
 
-        if applicable["runtime"] and BenchmarkRunner._runtime_crashed(raw):
-            return 0.0
-
-        scores: List[float] = []
-        for dimension, is_applicable in applicable.items():
-            if not is_applicable:
-                continue
-            result = raw.get(dimension)
-            score = result.get("score") if isinstance(result, dict) else None
-            scores.append(float(score) if isinstance(score, (int, float)) else 0.0)
-
-        if not scores:
-            return 0.0
-        return round(mean(scores), 4)
+    @staticmethod
+    def _forbidden_error_found(static_result: Any) -> bool:
+        """Whether the static analysis found a forbidden pattern with severity error."""
+        if not isinstance(static_result, dict):
+            return False
+        details = static_result.get("details") or {}
+        if details.get("failure_reason"):
+            return True
+        forbidden = details.get("forbidden") or []
+        return any(
+            isinstance(entry, dict)
+            and entry.get("found")
+            and entry.get("severity") == "error"
+            for entry in forbidden
+        )
 
     @staticmethod
     def _runtime_crashed(raw: Dict[str, Any]) -> bool:
@@ -621,6 +664,7 @@ class MultiModelRunner:
             "metadata": {
                 "suite": self.config.run.suite,
                 "result_schema_version": RESULT_SCHEMA_VERSION,
+                "scoring_version": SCORING_VERSION,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
@@ -685,8 +729,12 @@ class SingleModelRunner:
         summary = self.aggregator.finalize()
         return {
             "model_config": self.model_config.model_dump(mode="json"),
+            "scoring_version": SCORING_VERSION,
             "scores": {
                 "knowledge": summary.knowledge,
+                "execution_pass_rate": summary.execution_pass_rate,
+                "runtime": summary.runtime,
+                "static_policy_pass_rate": summary.static_policy_pass_rate,
                 "correctness": summary.correctness,
                 "overall": summary.overall(),
             },
@@ -743,7 +791,7 @@ class SingleModelRunner:
                 code = strip_code_fences(completion)
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_code(code, verification_spec)
-                correctness = BenchmarkRunner._score_correctness(
+                scores = BenchmarkRunner._score_execution(
                     env_result.raw,
                     test,
                     skip_runtime=self.config.run.skip_runtime,
@@ -757,14 +805,14 @@ class SingleModelRunner:
                     raw_completion=completion,
                     code=code,
                     env_result=env_result,
-                    correctness=correctness,
+                    scores=scores,
                 )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
-                self.aggregator.add_execution(result["scores"]["correctness"])
+                self.aggregator.add_execution(result["scores"])
                 self.records.append(result)
 
         _run_isolated_execution_loop(
