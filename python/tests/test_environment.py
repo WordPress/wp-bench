@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
+from typing import Optional
 
 from wp_bench.config import GraderConfig
 from wp_bench.environment import WordPressEnvironment
 
 
 def test_execute_code_uses_internal_runtime_verifier_for_wp_env() -> None:
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], Optional[str]]] = []
     environment = WordPressEnvironment(GraderConfig(kind="docker", wp_env_dir=Path("runtime")))
 
-    def fake_exec(command: list[str]) -> tuple[str, str, int, bool]:
-        calls.append(command)
-        payload = json.loads(base64.b64decode(command[3]).decode("utf-8"))
+    def fake_exec(command: list[str], *, stdin: Optional[str] = None) -> tuple[str, str, int, bool]:
+        calls.append((command, stdin))
+        assert stdin is not None
+        payload = json.loads(stdin)
         assert payload["code"] == "function demo() { return true; }"
         assert payload["static_checks"] == {"required_patterns": []}
         assert payload["runtime_checks"] == {"assertions": []}
@@ -31,11 +32,8 @@ def test_execute_code_uses_internal_runtime_verifier_for_wp_env() -> None:
     )
 
     assert result.success is True
-    assert calls == [
-        [
-            "wp",
-            "eval-file",
-            "/var/www/html/wp-content/plugins/runtime/verify-runtime.php",
-            calls[0][3],
-        ]
+    assert calls[0][0] == [
+        "wp",
+        "eval-file",
+        "/var/www/html/wp-content/plugins/runtime/verify-runtime.php",
     ]
