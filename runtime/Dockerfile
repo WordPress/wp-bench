@@ -3,12 +3,13 @@ FROM wordpress:cli-php8.2
 ENV WORDPRESS_VERSION=7.0 \
     WP_CLI_ALLOW_ROOT=1
 
-RUN apt-get update && apt-get install -y default-mysql-client && rm -rf /var/lib/apt/lists/*
+USER root
+RUN apk add --no-cache mysql-client
 
 WORKDIR /var/www/html
 
 RUN rm -rf ./* && \
-    wp core download --version=${WORDPRESS_VERSION} --force
+    php -d memory_limit=512M "$(command -v wp)" core download --version=${WORDPRESS_VERSION} --force
 
 COPY wp-bench-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/wp-bench-runtime.php
 COPY verify-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php
