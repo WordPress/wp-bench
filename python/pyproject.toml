@@ -30,7 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 http = ["uvicorn>=0.30", "fastapi>=0.111"]
-dev = ["pytest>=8.3", "ruff>=0.6", "mypy>=1.10"]
+dev = ["pytest>=8.3", "ruff>=0.6", "mypy>=1.10", "types-PyYAML>=6.0"]
 
 [project.scripts]
 wp-bench = "wp_bench.cli:app"

@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [trunk]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python lint, types, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install harness with dev tooling
+        run: pip install -e ./python[dev]
+
+      - name: Lint (ruff)
+        run: ruff check python
+
+      - name: Type check (mypy)
+        run: mypy python
+
+      - name: Unit tests (pytest)
+        run: pytest python -q
+
+  dataset:
+    name: Dataset validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install harness with dev tooling
+        run: pip install -e ./python[dev]
+
+      - name: Dataset shape and metadata tests
+        run: pytest python/tests/test_execution_dataset.py python/tests/test_knowledge.py python/tests/test_dataset_metadata.py -q
+
+      - name: Parquet export builds
+        run: |
+          pip install pyarrow
+          python datasets/export_dataset.py
+
+  runtime:
+    name: PHP runtime syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+
+      - name: PHP syntax check
+        run: find runtime -name '*.php' -print0 | xargs -0 -n1 php -l
+
+  docker:
+    name: Runtime Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build grader image
+        run: docker build -t wp-bench-grader:ci ./runtime

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import orjson
-from datasets import load_dataset as hf_load_dataset
+from datasets import load_dataset as hf_load_dataset  # type: ignore[attr-defined]
 
 from .config import DatasetConfig
 

@@ -15,7 +15,7 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 4. Keep `requirements` concise and model-facing. They are appended to the prompt.
 5. Keep `expected_behavior` reviewer-facing. It documents the contract and review focus; it is not used for scoring.
 6. Use `reference_solution` as the canonical passing implementation. It is for verification and maintenance, not model input.
-7. Make static checks robust for the contract: require expected functions, methods, classes, hooks, slugs, schema keys, and other identifiers when their use is essential to the task. Do not require incidental helpers or checker calls that the runtime assertion can perform itself.
+7. Make static checks robust for the contract: require expected functions, methods, classes, hooks, slugs, schema keys, and other identifiers when their use is essential to the task. Do not require incidental helpers or checker calls that the runtime assertion can perform itself. Under scoring v2.0, required patterns are diagnostics only — runtime assertions decide the pass — while forbidden patterns with severity `error` fail the test outright, so reserve them for genuine policy violations.
 8. Make runtime checks test the behavior inside WordPress. Use built-in assertion types when they directly express the check, such as output containment or REST response checks. Use `custom_assertion` when the verifier needs PHP to inspect the result, such as checking a registered category, returned value, database state, capability result, dispatched hook, or computed WordPress output.
 9. Verify `reference_solution` with `wp-bench run --check-reference-solution` for every new or modified execution test.
 
@@ -26,6 +26,8 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 - `test_function`: PHP signature of the entry point the verifier calls, e.g. `wpbp_queries_004( string $category_slug, array $tag_slugs ): WP_Query`. Set it whenever assertions invoke the function. Shown to the model and checked at runtime with an unscored `function_exists` assertion. Use parameter names that convey meaning; pin the return type only when assertions check it.
 - `expected_behavior`: Reviewer documentation.
 - `reference_solution`: Canonical passing code used for author verification.
+- `artifact_kind`: What the model must produce. `php_snippet` (default) or `wp_plugin_files` (a JSON `files` map installed as a plugin before assertions run).
+- `reference_files`: For `wp_plugin_files` tests, the reference plugin files (relative path → contents) used by `--check-reference-solution` in place of `reference_solution`.
 - `static_checks`: Coarse guardrails for required or forbidden code patterns.
 - `runtime_checks.setup`: Optional PHP fixture setup evaluated before the submitted code.
 - `runtime_checks.assertions`: WordPress-executed behavioral assertions evaluated after the submitted code.
@@ -86,6 +88,12 @@ Treat `difficulty` as author-estimated implementation complexity, not scoring.
 
 Do not mark a test `hard` only because the API is new.
 
+## Scoring (v2.0)
+
+Runtime behavior is the primary signal. A test passes strictly (`execution_pass`) when the code runs without crash or timeout, every runtime assertion passes, and no forbidden static pattern with severity `error` matches. Static required-pattern scores are recorded as diagnostics and do not grant or deny credit. Author accordingly: the runtime assertions must fully express the contract on their own.
+
+Each runtime execution is capped by `grader.timeout_seconds` (default 90s); a timed-out test scores 0.0. Keep setup, submitted-code expectations, and assertions comfortably inside that budget.
+
 ## Setup, Teardown, And Isolation
 
 Runtime order is `setup`, submitted code, assertions, then `teardown`.
@@ -100,6 +108,12 @@ Clean up state in `teardown` when it persists beyond the PHP process or can affe
 - files or uploads created during the test
 
 Avoid cleanup for in-process-only registries when each verifier run starts a fresh WP-CLI process. Extra cleanup can make failing cases noisy and less diagnostic.
+
+The harness also resets the WordPress environment between execution tests by default (`run.execution_isolation: reset_per_test` — database reset plus fresh install), so cross-test leakage is prevented even when a teardown is missed. Teardown still matters within a single test: assertions run in the same process and site state as the submitted code.
+
+## Plugin Artifact Tests
+
+For `artifact_kind: wp_plugin_files`, the model must return a JSON object with a `files` map (relative paths → complete file contents) including one top-level PHP file with a `Plugin Name:` header. The runtime installs the files as a plugin, loads the main file, runs the assertions, and removes the plugin directory. Provide `reference_files` instead of `reference_solution`, and keep artifacts within the validation limits: 20 files, 256KB per file, 1MB total, no path traversal. A completion that fails artifact validation scores as a failed test.
 
 ## Validation
 
