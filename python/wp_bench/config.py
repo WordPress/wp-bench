@@ -47,6 +47,7 @@ class GraderConfig(BaseModel):
     base_url: str = "http://localhost:8888"
     concurrency: int = 4
     timeout_seconds: int = 90
+    setup_timeout_seconds: int = 600
     wp_env_dir: Optional[Path] = None
 
 
