@@ -34,10 +34,32 @@ class WordPressEnvironment:
             self._start_container()
 
     def reset(self) -> None:
+        """Restore the WordPress runtime to a known clean baseline.
+
+        ``wp db reset`` drops every table, which leaves WordPress uninstalled,
+        so a fresh ``wp core install`` follows to return to a deterministic
+        just-installed state. Called before every execution test when
+        ``run.execution_isolation`` is ``reset_per_test`` so no test can
+        observe database state (options, posts, roles, transients, cron
+        events, etc.) left behind by an earlier test or model run.
+        """
+        install_cmd = [
+            "wp",
+            "core",
+            "install",
+            f"--url={self.config.base_url}",
+            "--title=WP-Bench",
+            "--admin_user=admin",
+            "--admin_password=password",
+            "--admin_email=admin@wp-bench.test",
+            "--skip-email",
+        ]
         if self.config.wp_env_dir:
             self._run_wp_env(["npx", "wp-env", "run", "cli", "wp", "db", "reset", "--yes"])
+            self._run_wp_env(["npx", "wp-env", "run", "cli", *install_cmd])
         elif self.config.kind == "docker":
             self._exec(["wp", "db", "reset", "--yes"])
+            self._exec(install_cmd)
 
     def execute_code(self, code: str, verification_spec: Dict[str, Any]) -> ExecutionResult:
         payload = {

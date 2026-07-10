@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, validator
+from pydantic import BaseModel, Field, HttpUrl, model_validator, validator
 
 ArtifactKind = Literal[
     "php_snippet",
@@ -44,9 +44,13 @@ class GraderConfig(BaseModel):
     image: str = "ghcr.io/wordpress/wp-bench-grader:latest"
     container_name: str = "wp-bench-grader"
     url: Optional[HttpUrl] = None
+    base_url: str = "http://localhost:8888"
     concurrency: int = 4
     timeout_seconds: int = 90
     wp_env_dir: Optional[Path] = None
+
+
+ExecutionIsolation = Literal["reset_per_test", "none"]
 
 
 class RunConfig(BaseModel):
@@ -56,10 +60,33 @@ class RunConfig(BaseModel):
     test_ids: List[str] = Field(default_factory=list)
     seed: int = 1337
     concurrency: int = 5
+    execution_isolation: ExecutionIsolation = "reset_per_test"
+    execution_concurrency: int = 1
     dry_run: bool = False
     check_reference_solution: bool = False
     skip_runtime: bool = False
     skip_static: bool = False
+
+    @model_validator(mode="after")
+    def _validate_execution_concurrency(self) -> "RunConfig":
+        """Reject concurrency the isolation strategy cannot support.
+
+        ``reset_per_test`` isolation resets one shared WordPress runtime
+        before every execution test, which is only sound when execution
+        tests run serially. Fail loudly instead of silently sharing mutable
+        WordPress state across concurrent tests.
+        """
+        if self.execution_concurrency < 1:
+            raise ValueError("run.execution_concurrency must be >= 1")
+        if self.execution_isolation == "reset_per_test" and self.execution_concurrency > 1:
+            raise ValueError(
+                "run.execution_concurrency must be 1 when "
+                "run.execution_isolation is 'reset_per_test': concurrent tests "
+                "would share one mutable WordPress runtime. Set "
+                "run.execution_isolation to 'none' to opt out of isolation "
+                "(not valid for official benchmark runs)."
+            )
+        return self
 
 
 class OutputConfig(BaseModel):
