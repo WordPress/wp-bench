@@ -32,6 +32,13 @@ from .output import (
     print_results_path,
     print_test_error,
 )
+from .records import (
+    RESULT_SCHEMA_VERSION,
+    build_execution_record,
+    build_knowledge_record,
+    execution_record_passed,
+    sort_records,
+)
 from .scoring import ScoreAggregator
 from .utils import ensure_dir, sha256, strip_code_fences
 
@@ -177,6 +184,7 @@ class BenchmarkRunner:
             "metadata": {
                 "suite": self.config.run.suite,
                 "mode": "reference_solution" if reference_mode else "model",
+                "result_schema_version": RESULT_SCHEMA_VERSION,
                 "model": model_config,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
@@ -187,11 +195,13 @@ class BenchmarkRunner:
                     "overall": summary.overall(),
                 },
             },
-            "results": self.records,
+            "results": sort_records(self.records),
         }
         self._write_outputs(payload)
         if reference_mode:
-            failures = [record for record in self.records if not record.get("passed", False)]
+            failures = [
+                record for record in self.records if not execution_record_passed(record)
+            ]
             if failures:
                 print_reference_solution_failures(failures)
                 raise SystemExit(1)
@@ -232,16 +242,18 @@ class BenchmarkRunner:
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
             try:
                 prompt = self._render_knowledge_prompt(test)
-                answer = strip_code_fences(self.model.generate(prompt)).strip()
+                raw_completion = self.model.generate(prompt)
+                answer = strip_code_fences(raw_completion).strip()
                 correct = score_knowledge_answer(test, answer)
-                return {
-                    "test_id": test.id,
-                    "type": "knowledge",
-                    "prompt_hash": sha256(prompt),
-                    "answer": answer,
-                    "correct": bool(correct),
-                    "score": correct,
-                }
+                return build_knowledge_record(
+                    test=test,
+                    mode="model",
+                    model_config=self.config.model,
+                    prompt_hash=sha256(prompt),
+                    raw_completion=raw_completion,
+                    answer=answer,
+                    knowledge_score=correct,
+                )
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
 
@@ -253,7 +265,7 @@ class BenchmarkRunner:
                     try:
                         result = future.result()
                         with self._lock:
-                            self.aggregator.add_knowledge(result["score"])
+                            self.aggregator.add_knowledge(result["scores"]["knowledge"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -284,22 +296,22 @@ class BenchmarkRunner:
                 verification_spec = self._build_verification_spec(test)
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = self._score_correctness(env_result.raw, test)
-                return {
-                    "test_id": test.id,
-                    "type": "execution",
-                    "prompt_hash": sha256(prompt),
-                    "code": code,
-                    "result": env_result.raw,
-                    "stdout": env_result.stdout,
-                    "stderr": env_result.stderr,
-                    "correctness": correctness,
-                }
+                return build_execution_record(
+                    test=test,
+                    mode="model",
+                    model_config=self.config.model,
+                    prompt_hash=sha256(prompt),
+                    raw_completion=completion,
+                    code=code,
+                    env_result=env_result,
+                    correctness=correctness,
+                )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
-                self.aggregator.add_execution(result["correctness"])
+                self.aggregator.add_execution(result["scores"]["correctness"])
                 self.records.append(result)
 
         _run_isolated_execution_loop(
@@ -322,23 +334,22 @@ class BenchmarkRunner:
                 verification_spec = self._build_verification_spec(test)
                 env_result = self.environment.execute_code(test.reference_solution, verification_spec)
                 correctness = self._score_correctness(env_result.raw, test)
-                return {
-                    "test_id": test.id,
-                    "type": "execution",
-                    "mode": "reference_solution",
-                    "code": test.reference_solution,
-                    "result": env_result.raw,
-                    "stdout": env_result.stdout,
-                    "stderr": env_result.stderr,
-                    "correctness": correctness,
-                    "passed": env_result.success and correctness >= 0.999,
-                }
+                return build_execution_record(
+                    test=test,
+                    mode="reference_solution",
+                    model_config=None,
+                    prompt_hash=None,
+                    raw_completion=None,
+                    code=test.reference_solution,
+                    env_result=env_result,
+                    correctness=correctness,
+                )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
-                self.aggregator.add_execution(result["correctness"])
+                self.aggregator.add_execution(result["scores"]["correctness"])
                 self.records.append(result)
 
         _run_isolated_execution_loop(
@@ -513,7 +524,7 @@ class BenchmarkRunner:
             jsonl_path = _timestamped_path(self.config.output.jsonl_path)
             ensure_dir(jsonl_path.parent)
             with jsonl_path.open("w", encoding="utf-8") as handle:
-                for record in self.records:
+                for record in payload["results"]:
                     handle.write(orjson.dumps(record).decode("utf-8"))
                     handle.write("\n")
 
@@ -586,6 +597,7 @@ class MultiModelRunner:
         payload = {
             "metadata": {
                 "suite": self.config.run.suite,
+                "result_schema_version": RESULT_SCHEMA_VERSION,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
@@ -655,7 +667,7 @@ class SingleModelRunner:
                 "correctness": summary.correctness,
                 "overall": summary.overall(),
             },
-            "results": self.records,
+            "results": sort_records(self.records),
         }
 
     def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
@@ -666,15 +678,18 @@ class SingleModelRunner:
         def process_test(test: KnowledgeTest) -> Dict[str, Any]:
             try:
                 prompt = BenchmarkRunner._render_knowledge_prompt(test)
-                answer = strip_code_fences(self.model.generate(prompt)).strip()
+                raw_completion = self.model.generate(prompt)
+                answer = strip_code_fences(raw_completion).strip()
                 correct = score_knowledge_answer(test, answer)
-                return {
-                    "test_id": test.id,
-                    "type": "knowledge",
-                    "answer": answer,
-                    "correct": bool(correct),
-                    "score": correct,
-                }
+                return build_knowledge_record(
+                    test=test,
+                    mode="model",
+                    model_config=self.model_config,
+                    prompt_hash=sha256(prompt),
+                    raw_completion=raw_completion,
+                    answer=answer,
+                    knowledge_score=correct,
+                )
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
 
@@ -686,7 +701,7 @@ class SingleModelRunner:
                     try:
                         result = future.result()
                         with self._lock:
-                            self.aggregator.add_knowledge(result["score"])
+                            self.aggregator.add_knowledge(result["scores"]["knowledge"])
                             self.records.append(result)
                         progress.update(task, advance=1)
                     except TestError:
@@ -706,18 +721,22 @@ class SingleModelRunner:
                 verification_spec = BenchmarkRunner._build_verification_spec(test)
                 env_result = self.environment.execute_code(code, verification_spec)
                 correctness = BenchmarkRunner._score_correctness(env_result.raw, test)
-                return {
-                    "test_id": test.id,
-                    "type": "execution",
-                    "code": code,
-                    "correctness": correctness,
-                }
+                return build_execution_record(
+                    test=test,
+                    mode="model",
+                    model_config=self.model_config,
+                    prompt_hash=sha256(prompt),
+                    raw_completion=completion,
+                    code=code,
+                    env_result=env_result,
+                    correctness=correctness,
+                )
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
         def on_result(result: Dict[str, Any]) -> None:
             with self._lock:
-                self.aggregator.add_execution(result["correctness"])
+                self.aggregator.add_execution(result["scores"]["correctness"])
                 self.records.append(result)
 
         _run_isolated_execution_loop(
