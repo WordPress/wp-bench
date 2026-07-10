@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ArtifactKind = Literal[
     "php_snippet",
@@ -43,7 +43,7 @@ class ModelConfig(StrictModel):
     temperature: float = 0.0
     max_tokens: Optional[int] = None
     top_p: Optional[float] = None
-    request_timeout: float = 300.0
+    request_timeout: float = Field(default=300.0, gt=0)
     #: Additional attempts after the first call fails with a transient
     #: provider error (rate limit, timeout, connection, 5xx).
     max_retries: int = 3
@@ -52,10 +52,18 @@ class ModelConfig(StrictModel):
     retry_on_rate_limit: bool = True
     retry_on_timeout: bool = True
 
-    @validator("temperature")
+    @field_validator("temperature")
+    @classmethod
     def _clamp_temperature(cls, value: float) -> float:
         if value < 0 or value > 2:
             raise ValueError("temperature must be between 0 and 2")
+        return value
+
+    @field_validator("top_p")
+    @classmethod
+    def _validate_top_p(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and not 0 <= value <= 1:
+            raise ValueError("top_p must be between 0 and 1")
         return value
 
     @model_validator(mode="after")
@@ -76,8 +84,8 @@ class GraderConfig(StrictModel):
     image: str = "ghcr.io/wordpress/wp-bench-grader:latest"
     container_name: str = "wp-bench-grader"
     base_url: str = "http://localhost:8888"
-    timeout_seconds: int = 90
-    setup_timeout_seconds: int = 600
+    timeout_seconds: int = Field(default=90, gt=0)
+    setup_timeout_seconds: int = Field(default=600, gt=0)
     wp_env_dir: Optional[Path] = None
 
     @model_validator(mode="before")
@@ -102,12 +110,12 @@ ExecutionIsolation = Literal["reset_per_test", "none"]
 class RunConfig(StrictModel):
     suite: str = "wp-core-v1"
     test_type: Optional[Literal["knowledge", "execution"]] = None
-    limit: Optional[int] = None
+    limit: Optional[int] = Field(default=None, gt=0)
     test_ids: List[str] = Field(default_factory=list)
     #: Reserved for deterministic subset selection; wired by seeded
     #: stratified test limiting. Not yet consumed elsewhere.
     seed: int = 1337
-    concurrency: int = 5
+    concurrency: int = Field(default=5, gt=0)
     execution_isolation: ExecutionIsolation = "reset_per_test"
     execution_concurrency: int = 1
     dry_run: bool = False
