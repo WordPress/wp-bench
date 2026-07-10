@@ -1,10 +1,15 @@
-"""Typed configuration models for the WP-Bench harness."""
+"""Typed configuration models for the WP-Bench harness.
+
+Every field on these models is either implemented or rejected loudly.
+``extra="forbid"`` on all models means unknown (or removed) fields fail
+at load time instead of becoming silent no-ops: config means behavior.
+"""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, model_validator, validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, validator
 
 ArtifactKind = Literal[
     "php_snippet",
@@ -16,7 +21,13 @@ ArtifactKind = Literal[
 ]
 
 
-class DatasetConfig(BaseModel):
+class StrictModel(BaseModel):
+    """Base for config models: unknown fields are errors, not no-ops."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DatasetConfig(StrictModel):
     source: Literal["huggingface", "local"] = "huggingface"
     name: str = "WordPress/wp-bench-v1"
     revision: Optional[str] = None
@@ -24,7 +35,9 @@ class DatasetConfig(BaseModel):
     cache_dir: Optional[Path] = None
 
 
-class ModelConfig(BaseModel):
+class ModelConfig(StrictModel):
+    #: Informational provider family, recorded in result records for audit.
+    #: Routing itself is driven by ``name`` (a LiteLLM model string).
     kind: Literal["openai", "anthropic", "ollama", "openai-compatible"] = "openai"
     name: str = "gpt-4o-mini"
     temperature: float = 0.0
@@ -39,33 +52,52 @@ class ModelConfig(BaseModel):
         return value
 
 
-class GraderConfig(BaseModel):
-    kind: Literal["docker", "http", "cli"] = "docker"
+class GraderConfig(StrictModel):
+    kind: Literal["docker", "cli"] = "docker"
     image: str = "ghcr.io/wordpress/wp-bench-grader:latest"
     container_name: str = "wp-bench-grader"
-    url: Optional[HttpUrl] = None
     base_url: str = "http://localhost:8888"
-    concurrency: int = 4
     timeout_seconds: int = 90
     setup_timeout_seconds: int = 600
     wp_env_dir: Optional[Path] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_unsupported_kinds(cls, data: object) -> object:
+        """Fail early with a clear message for the unimplemented HTTP grader.
+
+        A Literal error alone ('input should be docker or cli') would be
+        confusing for users following older docs that mentioned 'http'.
+        """
+        if isinstance(data, dict) and data.get("kind") == "http":
+            raise ValueError(
+                "grader.kind='http' is not supported yet. Use 'docker' (default) "
+                "or 'cli'. Remote HTTP grading is planned but not implemented."
+            )
+        return data
 
 
 ExecutionIsolation = Literal["reset_per_test", "none"]
 
 
-class RunConfig(BaseModel):
+class RunConfig(StrictModel):
     suite: str = "wp-core-v1"
     test_type: Optional[Literal["knowledge", "execution"]] = None
     limit: Optional[int] = None
     test_ids: List[str] = Field(default_factory=list)
+    #: Reserved for deterministic subset selection; wired by seeded
+    #: stratified test limiting. Not yet consumed elsewhere.
     seed: int = 1337
     concurrency: int = 5
     execution_isolation: ExecutionIsolation = "reset_per_test"
     execution_concurrency: int = 1
     dry_run: bool = False
     check_reference_solution: bool = False
+    #: Skip runtime assertions (diagnostic runs only). Official leaderboard
+    #: runs must not skip grading dimensions.
     skip_runtime: bool = False
+    #: Skip static checks (diagnostic runs only). Official leaderboard
+    #: runs must not skip grading dimensions.
     skip_static: bool = False
 
     @model_validator(mode="after")
@@ -89,15 +121,22 @@ class RunConfig(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_skips(self) -> "RunConfig":
+        if self.skip_runtime and self.skip_static:
+            raise ValueError(
+                "run.skip_runtime and run.skip_static cannot both be true: "
+                "execution tests would have no grading dimension left."
+            )
+        return self
 
-class OutputConfig(BaseModel):
+
+class OutputConfig(StrictModel):
     path: Path = Path("results.json")
     jsonl_path: Optional[Path] = Field(default=Path("results.jsonl"))
-    save_prompts: bool = True
-    save_artifacts_dir: Optional[Path] = Field(default=Path("artifacts"))
 
 
-class HarnessConfig(BaseModel):
+class HarnessConfig(StrictModel):
     dataset: DatasetConfig = DatasetConfig()
     model: Optional[ModelConfig] = None  # Single model (legacy)
     models: Optional[List[ModelConfig]] = None  # Multiple models
@@ -140,7 +179,7 @@ class HarnessConfig(BaseModel):
                 data["grader"]["wp_env_dir"] = resolve_path(wp_env_dir)
 
         if "output" in data and isinstance(data["output"], dict):
-            for key in ("path", "jsonl_path", "save_artifacts_dir"):
+            for key in ("path", "jsonl_path"):
                 if key in data["output"] and data["output"][key]:
                     data["output"][key] = resolve_path(data["output"][key])
 
