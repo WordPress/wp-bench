@@ -120,7 +120,7 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     static_checks=static_checks if isinstance(static_checks, dict) else {},
                     runtime_checks=runtime_checks if isinstance(runtime_checks, dict) else {},
                     reference_solution=row.get("reference_solution"),
-                    metadata={},
+                    metadata=_row_metadata(row),
                 )
             )
         else:
@@ -136,7 +136,7 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
                     choices=choice_list,
                     correct_answer=row.get("correct_answer"),
                     answer_type=row.get("answer_type"),
-                    metadata={},
+                    metadata=_row_metadata(row),
                 )
             )
     return {"execution": execution, "knowledge": knowledge}
@@ -150,6 +150,25 @@ def _parse_json_field(value: Any) -> Any:
         except (orjson.JSONDecodeError, TypeError):
             return value
     return value
+
+
+def _merge_metadata(task_metadata: Any, suite_metadata: Any) -> Dict[str, Any]:
+    """Combine per-task and suite-level metadata without losing either.
+
+    Task fields (source_refs, release_focus, version targets, ...) sit at
+    the top level for easy querying; suite metadata is nested under
+    ``suite_metadata``. A task field named ``suite_metadata`` would be
+    shadowed, which is acceptable and documented in the dataset README.
+    """
+    merged: Dict[str, Any] = dict(task_metadata) if isinstance(task_metadata, dict) else {}
+    merged["suite_metadata"] = suite_metadata if isinstance(suite_metadata, dict) else {}
+    return merged
+
+
+def _row_metadata(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse the metadata column from a Hugging Face row."""
+    parsed = _parse_json_field(row.get("metadata", "{}"))
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
@@ -196,7 +215,7 @@ def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
                 static_checks=test.get("static_checks", {}),
                 runtime_checks=test.get("runtime_checks", {}),
                 reference_solution=test.get("reference_solution"),
-                metadata={"suite_metadata": metadata},
+                metadata=_merge_metadata(test.get("metadata", {}), metadata),
             )
         )
     return tests
@@ -219,7 +238,7 @@ def _parse_knowledge_suite(path: Path) -> List[KnowledgeTest]:
                 choices=test.get("choices"),
                 correct_answer=test.get("correct_answer"),
                 answer_type=test.get("answer_type"),
-                metadata={"suite_metadata": metadata},
+                metadata=_merge_metadata(test.get("metadata", {}), metadata),
             )
         )
     return tests
