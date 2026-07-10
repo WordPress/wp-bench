@@ -132,6 +132,55 @@ def build_execution_record(
     }
 
 
+def build_error_record(
+    *,
+    test: Any,
+    test_type: str,
+    mode: str,
+    model_config: Optional[ModelConfig],
+    error_type: str,
+    error_message: str,
+) -> Dict[str, Any]:
+    """Build the canonical record for a test that errored before grading.
+
+    Used by ``run.continue_on_error``: the record fills the reserved
+    ``error`` field, carries null scores (an ungraded test has no score,
+    pass or fail), and keeps the exact canonical key structure so consumers
+    never need a separate parser for errored tests.
+    """
+    return {
+        "test_id": test.id,
+        "suite": test.suite,
+        "type": test_type,
+        "category": test.category,
+        "difficulty": test.difficulty,
+        "metadata": getattr(test, "metadata", None) or {},
+        "mode": mode,
+        "prompt_hash": None,
+        "model": _model_info(model_config),
+        "output": {
+            "raw_completion": None,
+            "code": None,
+            "answer": None,
+        },
+        "scores": {
+            "knowledge": None,
+            "correctness": None,
+            "execution_pass": None,
+            "runtime": None,
+            "static": None,
+            "static_policy_pass": None,
+        },
+        "grader": None,
+        "usage": _empty_usage(),
+        "model_call": None,
+        "error": {
+            "type": error_type,
+            "message": error_message,
+        },
+    }
+
+
 def execution_record_passed(record: Dict[str, Any]) -> bool:
     """Whether an execution record represents a strict pass.
 
