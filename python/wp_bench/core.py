@@ -26,6 +26,7 @@ from .output import (
     create_progress,
     print_abort_message,
     print_comparison_table,
+    print_exploit_findings,
     print_model_header,
     print_reference_solution_failures,
     print_results_path,
@@ -34,6 +35,7 @@ from .output import (
     print_test_warning,
 )
 from .artifacts import Artifact, ArtifactError, parse_artifact, render_artifact_instructions
+from .exploits import exploit_candidates
 from .records import (
     RESULT_SCHEMA_VERSION,
     build_error_record,
@@ -387,6 +389,8 @@ class BenchmarkRunner:
         """
         tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
         test_type = self.config.run.test_type
+        if self.config.run.check_exploits:
+            return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
         if reference_mode:
             if test_type == "knowledge":
@@ -656,6 +660,119 @@ class BenchmarkRunner:
             on_error=on_error,
             progress_label="Reference solutions",
         )
+
+    def _run_exploit_audit(self, tests: Dict[str, List[Any]]) -> Dict[str, Any]:
+        """Adversarial assertion audit: prove zero-effort cheats fail.
+
+        For every execution test, run each exploit candidate (generic
+        battery + any authored exploit_solutions) through the real verifier
+        and check whether it earns ``execution_pass``. A test a cheat can
+        pass is under-specified — its assertions check a predictable output
+        rather than the WordPress behavior the task describes. Exits non-zero
+        when any test is exploitable, mirroring reference-solution mode.
+        """
+        if self.config.run.test_type == "knowledge":
+            raise ValueError("--check-exploits only supports execution tests")
+        self._ensure_execution_only_ids("--check-exploits", tests)
+        self.environment.setup()
+        try:
+            self._run_exploit_audit_tests(tests["execution"])
+        except TestError as e:
+            print_test_error(e)
+            raise SystemExit(1) from e
+        except KeyboardInterrupt:
+            print_abort_message()
+            raise SystemExit(130) from None
+
+        exploitable = [record for record in self.records if record["exploitable"]]
+        auditable = [record for record in self.records if record["auditable"]]
+        payload = {
+            "metadata": {
+                "suite": self.config.run.suite,
+                "mode": "exploit_audit",
+                "result_schema_version": RESULT_SCHEMA_VERSION,
+                "scoring_version": SCORING_VERSION,
+                "grader": self.config.grader.model_dump(mode="json"),
+                "dataset": self.config.dataset.model_dump(mode="json"),
+                "runtime_isolation": self.config.run.execution_isolation,
+                "audit": {
+                    "total": len(self.records),
+                    "auditable": len(auditable),
+                    "not_auditable": len(self.records) - len(auditable),
+                    "exploitable": len(exploitable),
+                    "exploitable_test_ids": sorted(
+                        record["test_id"] for record in exploitable
+                    ),
+                },
+            },
+            "results": sort_records(self.records),
+        }
+        self._write_outputs(payload)
+        print_exploit_findings(self.records)
+        if exploitable:
+            raise SystemExit(1)
+        return payload
+
+    def _run_exploit_audit_tests(self, tests: List[ExecutionTest]) -> None:
+        """Run every exploit candidate for each test; record exploitable ones.
+
+        Serial and reset-before-each-candidate: candidates share a gateway
+        function name and rely on per-test fixtures, so state must not leak
+        between attempts. Short-circuits a test as soon as one cheat passes.
+        """
+        tests_to_run = _limit_tests(tests, self.config)
+        with create_progress() as progress:
+            task = progress.add_task("Exploit audit", total=len(tests_to_run))
+            for test in tests_to_run:
+                candidates = exploit_candidates(test)
+                record: Dict[str, Any] = {
+                    "test_id": test.id,
+                    "suite": test.suite,
+                    "type": "execution",
+                    "category": test.category,
+                    "difficulty": test.difficulty,
+                    "auditable": bool(candidates),
+                    "candidates_tried": len(candidates),
+                    "exploitable": False,
+                    "passing_exploit": None,
+                    "exploit_code": None,
+                }
+                try:
+                    for label, code in candidates:
+                        self.environment.reset()
+                        env_result = self.environment.execute_artifact(
+                            Artifact(kind="php_snippet", code=code),
+                            _build_verification_spec(test, self.config),
+                        )
+                        scores = self._score_execution(
+                            env_result.raw,
+                            test,
+                            skip_runtime=self.config.run.skip_runtime,
+                            skip_static=self.config.run.skip_static,
+                        )
+                        if scores.get("execution_pass"):
+                            record["exploitable"] = True
+                            record["passing_exploit"] = label
+                            record["exploit_code"] = code
+                            break
+                except Exception as e:
+                    raise TestError(test.id, "execution", e) from e
+                with self._lock:
+                    self.records.append(record)
+                progress.update(task, advance=1)
+
+    def _ensure_execution_only_ids(self, mode_flag: str, tests: Dict[str, List[Any]]) -> None:
+        """Ensure explicitly selected test ids are execution tests for audit modes."""
+        selected_ids = self.config.run.test_ids
+        if not selected_ids:
+            return
+        execution_ids = {test.id for test in tests["execution"]}
+        non_execution_ids = [test_id for test_id in selected_ids if test_id not in execution_ids]
+        if non_execution_ids:
+            raise ValueError(
+                f"{mode_flag} only supports execution test id(s): "
+                + ", ".join(non_execution_ids)
+            )
 
     @staticmethod
     def _render_knowledge_prompt(test: KnowledgeTest) -> str:

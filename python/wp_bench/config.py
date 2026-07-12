@@ -125,6 +125,12 @@ class RunConfig(StrictModel):
     #: score aggregates and listed in result metadata. Diagnostic runs only:
     #: official leaderboard runs must grade every selected test.
     continue_on_error: bool = False
+    #: Adversarial assertion audit: run zero-effort cheats against each test
+    #: and flag any whose assertions a cheat can satisfy (they are
+    #: under-specified). The mirror of check_reference_solution — that proves
+    #: correct code passes; this proves wrong code fails. Diagnostic tooling,
+    #: not a scored run.
+    check_exploits: bool = False
     #: Skip runtime assertions (diagnostic runs only). Official leaderboard
     #: runs must not skip grading dimensions.
     skip_runtime: bool = False
@@ -160,6 +166,17 @@ class RunConfig(StrictModel):
                 "run.skip_runtime and run.skip_static cannot both be true: "
                 "execution tests would have no grading dimension left."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_exclusive_modes(self) -> "RunConfig":
+        if self.check_exploits and self.check_reference_solution:
+            raise ValueError(
+                "run.check_exploits and run.check_reference_solution are "
+                "separate audit modes and cannot both be enabled."
+            )
+        if self.check_exploits and self.dry_run:
+            raise ValueError("run.check_exploits cannot be combined with run.dry_run.")
         return self
 
 
