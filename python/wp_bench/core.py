@@ -7,7 +7,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import orjson
 
@@ -39,6 +39,7 @@ from .records import (
     build_error_record,
     build_execution_record,
     build_knowledge_record,
+    errored_test_ids,
     execution_record_passed,
     sort_records,
 )
@@ -150,6 +151,28 @@ def _model_call_info(generation: Any) -> Dict[str, Any]:
     }
 
 
+def _error_record(
+    test: Any,
+    error: TestError,
+    *,
+    mode: str,
+    model_config: Optional[ModelConfig],
+) -> Dict[str, Any]:
+    """Canonical record for a test the runner caught erroring.
+
+    Unwraps the TestError (type/message/test-type) so each ``on_error``
+    call site is a one-liner rather than repeating the extraction.
+    """
+    return build_error_record(
+        test=test,
+        test_type=error.test_type,
+        mode=mode,
+        model_config=model_config,
+        error_type=type(error.original_error).__name__,
+        error_message=str(error.original_error),
+    )
+
+
 class _ContinueOnErrorPolicy:
     """Decides whether a per-test error aborts the run.
 
@@ -161,6 +184,10 @@ class _ContinueOnErrorPolicy:
     runtime) rather than per-test, and burning through the remaining suite
     would waste hours and API spend for an unusable result. Fail loudly
     instead.
+
+    Scope is intentionally per-loop: a fresh policy is created for each
+    test-type loop, so "systemic" is judged within a loop. In a combined run
+    knowledge runs first and would abort before execution starts.
     """
 
     SYSTEMIC_THRESHOLD = 5
@@ -174,8 +201,8 @@ class _ContinueOnErrorPolicy:
     def record_success(self) -> None:
         self.successes += 1
 
-    def should_abort(self, error: TestError) -> bool:
-        """Record an error and decide whether it aborts the run."""
+    def register_error(self, error: TestError) -> bool:
+        """Record a per-test error and return whether it aborts the run."""
         if not self.enabled:
             return True
         self.errors += 1
@@ -233,33 +260,62 @@ def _run_isolated_execution_loop(
         on_error: Callable (test, TestError) -> error record.
         progress_label: Label for the progress bar.
     """
-    isolation = config.run.execution_isolation
     policy = _ContinueOnErrorPolicy(config.run.continue_on_error)
+    if config.run.execution_isolation != "reset_per_test":
+        _run_concurrent_loop(
+            tests_to_run=tests_to_run,
+            max_workers=config.run.execution_concurrency,
+            progress_label=progress_label,
+            process_test=process_test,
+            on_result=on_result,
+            on_error=on_error,
+            policy=policy,
+        )
+        return
     with create_progress() as progress:
         task = progress.add_task(progress_label, total=len(tests_to_run))
-        if isolation == "reset_per_test":
-            for test in tests_to_run:
-                environment.reset()
-                try:
-                    result = process_test(test)
-                except TestError as error:
-                    if policy.should_abort(error):
-                        raise
-                    print_test_warning(error)
-                    result = on_error(test, error)
-                else:
-                    policy.record_success()
-                on_result(result)
-                progress.update(task, advance=1)
-            policy.finish()
-            return
-        with ThreadPoolExecutor(max_workers=config.run.execution_concurrency) as executor:
+        for test in tests_to_run:
+            environment.reset()
+            try:
+                result = process_test(test)
+            except TestError as error:
+                if policy.register_error(error):
+                    raise
+                print_test_warning(error)
+                result = on_error(test, error)
+            else:
+                policy.record_success()
+            on_result(result)
+            progress.update(task, advance=1)
+    policy.finish()
+
+
+def _run_concurrent_loop(
+    *,
+    tests_to_run: List[Any],
+    max_workers: int,
+    progress_label: str,
+    process_test: Any,
+    on_result: Any,
+    on_error: Any,
+    policy: "_ContinueOnErrorPolicy",
+) -> None:
+    """Run tests concurrently, honoring the continue-on-error policy.
+
+    The shared concurrent core for the knowledge loop and the ``none``
+    isolation execution branch — the only differences are the worker count
+    and progress label. A per-test error aborts (cancelling pending futures)
+    unless the policy records it and lets the run continue.
+    """
+    with create_progress() as progress:
+        task = progress.add_task(progress_label, total=len(tests_to_run))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(process_test, test): test for test in tests_to_run}
             for future in as_completed(futures):
                 try:
                     result = future.result()
                 except TestError as error:
-                    if policy.should_abort(error):
+                    if policy.register_error(error):
                         for f in futures:
                             f.cancel()
                         raise
@@ -285,26 +341,15 @@ def _run_knowledge_loop(
     Shared by the single- and multi-model runners. Per-test errors abort
     unless ``run.continue_on_error`` is set (see _ContinueOnErrorPolicy).
     """
-    policy = _ContinueOnErrorPolicy(config.run.continue_on_error)
-    with create_progress() as progress:
-        task = progress.add_task("Knowledge", total=len(tests_to_run))
-        with ThreadPoolExecutor(max_workers=config.run.concurrency) as executor:
-            futures = {executor.submit(process_test, test): test for test in tests_to_run}
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                except TestError as error:
-                    if policy.should_abort(error):
-                        for f in futures:
-                            f.cancel()
-                        raise
-                    print_test_warning(error)
-                    result = on_error(futures[future], error)
-                else:
-                    policy.record_success()
-                on_result(result)
-                progress.update(task, advance=1)
-    policy.finish()
+    _run_concurrent_loop(
+        tests_to_run=tests_to_run,
+        max_workers=config.run.concurrency,
+        progress_label="Knowledge",
+        process_test=process_test,
+        on_result=on_result,
+        on_error=on_error,
+        policy=_ContinueOnErrorPolicy(config.run.continue_on_error),
+    )
 
 
 class BenchmarkRunner:
@@ -386,11 +431,7 @@ class BenchmarkRunner:
                     {record["test_id"] for record in self.records}
                 ),
                 "continue_on_error": self.config.run.continue_on_error,
-                "errored_test_ids": sorted(
-                    record["test_id"]
-                    for record in self.records
-                    if record.get("error") is not None
-                ),
+                "errored_test_ids": errored_test_ids(self.records),
                 "usage": self.usage_aggregator.summary(),
                 "scores": {
                     "knowledge": summary.knowledge,
@@ -472,14 +513,7 @@ class BenchmarkRunner:
                 self.records.append(result)
 
         def on_error(test: KnowledgeTest, error: TestError) -> Dict[str, Any]:
-            return build_error_record(
-                test=test,
-                test_type="knowledge",
-                mode="model",
-                model_config=self.config.model,
-                error_type=type(error.original_error).__name__,
-                error_message=str(error.original_error),
-            )
+            return _error_record(test, error, mode="model", model_config=self.config.model)
 
         _run_knowledge_loop(
             tests_to_run=tests_to_run,
@@ -555,14 +589,7 @@ class BenchmarkRunner:
                 self.records.append(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> Dict[str, Any]:
-            return build_error_record(
-                test=test,
-                test_type="execution",
-                mode="model",
-                model_config=self.config.model,
-                error_type=type(error.original_error).__name__,
-                error_message=str(error.original_error),
-            )
+            return _error_record(test, error, mode="model", model_config=self.config.model)
 
         _run_isolated_execution_loop(
             tests_to_run=tests_to_run,
@@ -618,14 +645,7 @@ class BenchmarkRunner:
                 self.records.append(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> Dict[str, Any]:
-            return build_error_record(
-                test=test,
-                test_type="execution",
-                mode="reference_solution",
-                model_config=None,
-                error_type=type(error.original_error).__name__,
-                error_message=str(error.original_error),
-            )
+            return _error_record(test, error, mode="reference_solution", model_config=None)
 
         _run_isolated_execution_loop(
             tests_to_run=tests_to_run,
@@ -957,11 +977,7 @@ class SingleModelRunner:
             "model_config": self.model_config.model_dump(mode="json"),
             "scoring_version": SCORING_VERSION,
             "usage": self.usage_aggregator.summary(),
-            "errored_test_ids": sorted(
-                record["test_id"]
-                for record in self.records
-                if record.get("error") is not None
-            ),
+            "errored_test_ids": errored_test_ids(self.records),
             "scores": {
                 "knowledge": summary.knowledge,
                 "execution_pass_rate": summary.execution_pass_rate,
@@ -1005,14 +1021,7 @@ class SingleModelRunner:
                 self.records.append(result)
 
         def on_error(test: KnowledgeTest, error: TestError) -> Dict[str, Any]:
-            return build_error_record(
-                test=test,
-                test_type="knowledge",
-                mode="model",
-                model_config=self.model_config,
-                error_type=type(error.original_error).__name__,
-                error_message=str(error.original_error),
-            )
+            return _error_record(test, error, mode="model", model_config=self.model_config)
 
         _run_knowledge_loop(
             tests_to_run=tests_to_run,
@@ -1077,14 +1086,7 @@ class SingleModelRunner:
                 self.records.append(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> Dict[str, Any]:
-            return build_error_record(
-                test=test,
-                test_type="execution",
-                mode="model",
-                model_config=self.model_config,
-                error_type=type(error.original_error).__name__,
-                error_message=str(error.original_error),
-            )
+            return _error_record(test, error, mode="model", model_config=self.model_config)
 
         _run_isolated_execution_loop(
             tests_to_run=tests_to_run,

@@ -39,6 +39,50 @@ def _empty_usage() -> Dict[str, Any]:
     }
 
 
+def _null_scores() -> Dict[str, Any]:
+    """The full score key set, all null — a record that carries no score."""
+    return {
+        "knowledge": None,
+        "correctness": None,
+        "execution_pass": None,
+        "runtime": None,
+        "static": None,
+        "static_policy_pass": None,
+    }
+
+
+def _base_record(
+    *,
+    test: Any,
+    test_type: str,
+    mode: str,
+    model_config: Optional[ModelConfig],
+) -> Dict[str, Any]:
+    """The canonical per-test record skeleton shared by every builder.
+
+    Every field defaults to its null/empty form; each builder overrides only
+    the ones its record populates. Centralizing the key structure here keeps
+    the builders from drifting (the key set is asserted identical in tests).
+    """
+    return {
+        "test_id": test.id,
+        "suite": test.suite,
+        "type": test_type,
+        "category": test.category,
+        "difficulty": test.difficulty,
+        "metadata": getattr(test, "metadata", None) or {},
+        "mode": mode,
+        "prompt_hash": None,
+        "model": _model_info(model_config),
+        "output": {"raw_completion": None, "code": None, "answer": None},
+        "scores": _null_scores(),
+        "grader": None,
+        "usage": _empty_usage(),
+        "model_call": None,
+        "error": None,
+    }
+
+
 def build_knowledge_record(
     *,
     test: Any,
@@ -52,34 +96,13 @@ def build_knowledge_record(
     model_call: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build the canonical record for a knowledge test result."""
-    return {
-        "test_id": test.id,
-        "suite": test.suite,
-        "type": "knowledge",
-        "category": test.category,
-        "difficulty": test.difficulty,
-        "metadata": getattr(test, "metadata", None) or {},
-        "mode": mode,
-        "prompt_hash": prompt_hash,
-        "model": _model_info(model_config),
-        "output": {
-            "raw_completion": raw_completion,
-            "code": None,
-            "answer": answer,
-        },
-        "scores": {
-            "knowledge": knowledge_score,
-            "correctness": None,
-            "execution_pass": None,
-            "runtime": None,
-            "static": None,
-            "static_policy_pass": None,
-        },
-        "grader": None,
-        "usage": usage if usage is not None else _empty_usage(),
-        "model_call": model_call,
-        "error": None,
-    }
+    record = _base_record(test=test, test_type="knowledge", mode=mode, model_config=model_config)
+    record["prompt_hash"] = prompt_hash
+    record["output"] = {"raw_completion": raw_completion, "code": None, "answer": answer}
+    record["scores"]["knowledge"] = knowledge_score
+    record["usage"] = usage if usage is not None else _empty_usage()
+    record["model_call"] = model_call
+    return record
 
 
 def build_execution_record(
@@ -103,33 +126,20 @@ def build_execution_record(
             and static_policy_pass.
     """
     raw = env_result.raw or {}
-    return {
-        "test_id": test.id,
-        "suite": test.suite,
-        "type": "execution",
-        "category": test.category,
-        "difficulty": test.difficulty,
-        "metadata": getattr(test, "metadata", None) or {},
-        "mode": mode,
-        "prompt_hash": prompt_hash,
-        "model": _model_info(model_config),
-        "output": {
-            "raw_completion": raw_completion,
-            "code": code,
-            "answer": None,
-        },
-        "scores": scores,
-        "grader": {
-            "success": env_result.success,
-            "raw": raw,
-            "stdout": env_result.stdout,
-            "stderr": env_result.stderr,
-            "timeout": bool(raw.get("timeout", False)) or getattr(env_result, "timed_out", False),
-        },
-        "usage": usage if usage is not None else _empty_usage(),
-        "model_call": model_call,
-        "error": None,
+    record = _base_record(test=test, test_type="execution", mode=mode, model_config=model_config)
+    record["prompt_hash"] = prompt_hash
+    record["output"] = {"raw_completion": raw_completion, "code": code, "answer": None}
+    record["scores"] = scores
+    record["grader"] = {
+        "success": env_result.success,
+        "raw": raw,
+        "stdout": env_result.stdout,
+        "stderr": env_result.stderr,
+        "timeout": bool(raw.get("timeout", False)) or getattr(env_result, "timed_out", False),
     }
+    record["usage"] = usage if usage is not None else _empty_usage()
+    record["model_call"] = model_call
+    return record
 
 
 def build_error_record(
@@ -148,37 +158,9 @@ def build_error_record(
     pass or fail), and keeps the exact canonical key structure so consumers
     never need a separate parser for errored tests.
     """
-    return {
-        "test_id": test.id,
-        "suite": test.suite,
-        "type": test_type,
-        "category": test.category,
-        "difficulty": test.difficulty,
-        "metadata": getattr(test, "metadata", None) or {},
-        "mode": mode,
-        "prompt_hash": None,
-        "model": _model_info(model_config),
-        "output": {
-            "raw_completion": None,
-            "code": None,
-            "answer": None,
-        },
-        "scores": {
-            "knowledge": None,
-            "correctness": None,
-            "execution_pass": None,
-            "runtime": None,
-            "static": None,
-            "static_policy_pass": None,
-        },
-        "grader": None,
-        "usage": _empty_usage(),
-        "model_call": None,
-        "error": {
-            "type": error_type,
-            "message": error_message,
-        },
-    }
+    record = _base_record(test=test, test_type=test_type, mode=mode, model_config=model_config)
+    record["error"] = {"type": error_type, "message": error_message}
+    return record
 
 
 def execution_record_passed(record: Dict[str, Any]) -> bool:
@@ -193,3 +175,8 @@ def execution_record_passed(record: Dict[str, Any]) -> bool:
 def sort_records(records: list) -> list:
     """Order records deterministically for stable output diffs."""
     return sorted(records, key=lambda record: (record.get("type", ""), record.get("test_id", "")))
+
+
+def errored_test_ids(records: list) -> list:
+    """Sorted ids of records that errored (run.continue_on_error)."""
+    return sorted(record["test_id"] for record in records if record.get("error") is not None)
