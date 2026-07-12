@@ -1,13 +1,12 @@
 """Main orchestration loop for WP-Bench."""
 from __future__ import annotations
 
-import re
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import orjson
 
@@ -35,11 +34,12 @@ from .output import (
     print_test_warning,
 )
 from .artifacts import Artifact, ArtifactError, parse_artifact, render_artifact_instructions
-from .exploits import exploit_candidates
+from .exploits import exploit_candidates, gateway_name
 from .records import (
     RESULT_SCHEMA_VERSION,
     build_error_record,
     build_execution_record,
+    build_exploit_audit_record,
     build_knowledge_record,
     errored_test_ids,
     execution_record_passed,
@@ -95,13 +95,12 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]
     else:
         runtime_checks = dict(test.runtime_checks)
         if test.test_function:
-            match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", test.test_function.strip())
-            if not match:
+            name = gateway_name(test)
+            if not name:
                 raise ValueError(
                     f"Cannot extract function name from test_function "
                     f"signature: {test.test_function!r}"
                 )
-            name = match.group(0)
             derived = {
                 "type": "function_exists",
                 "target": name,
@@ -395,7 +394,7 @@ class BenchmarkRunner:
         if reference_mode:
             if test_type == "knowledge":
                 raise ValueError("--check-reference-solution only supports execution tests")
-            self._ensure_reference_solution_ids_are_execution_tests(tests)
+            self._ensure_execution_only_ids("--check-reference-solution", tests)
             run_knowledge = False
             run_execution = True
         else:
@@ -457,23 +456,6 @@ class BenchmarkRunner:
                 print_reference_solution_failures(failures)
                 raise SystemExit(1)
         return payload
-
-    def _ensure_reference_solution_ids_are_execution_tests(
-        self,
-        tests: Dict[str, List[Any]],
-    ) -> None:
-        """Ensure reference-solution mode is scoped to execution tests."""
-        selected_ids = self.config.run.test_ids
-        if not selected_ids:
-            return
-
-        execution_ids = {test.id for test in tests["execution"]}
-        non_execution_ids = [test_id for test_id in selected_ids if test_id not in execution_ids]
-        if non_execution_ids:
-            raise ValueError(
-                "--check-reference-solution only supports execution test id(s): "
-                + ", ".join(non_execution_ids)
-            )
 
     def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
         """Run knowledge tests in parallel.
@@ -685,7 +667,14 @@ class BenchmarkRunner:
             raise SystemExit(130) from None
 
         exploitable = [record for record in self.records if record["exploitable"]]
-        auditable = [record for record in self.records if record["auditable"]]
+        auditable = sum(1 for record in self.records if record["candidates_tried"] > 0)
+        audit = {
+            "total": len(self.records),
+            "auditable": auditable,
+            "not_auditable": len(self.records) - auditable,
+            "exploitable": len(exploitable),
+            "exploitable_test_ids": sorted(record["test_id"] for record in exploitable),
+        }
         payload = {
             "metadata": {
                 "suite": self.config.run.suite,
@@ -695,20 +684,12 @@ class BenchmarkRunner:
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
-                "audit": {
-                    "total": len(self.records),
-                    "auditable": len(auditable),
-                    "not_auditable": len(self.records) - len(auditable),
-                    "exploitable": len(exploitable),
-                    "exploitable_test_ids": sorted(
-                        record["test_id"] for record in exploitable
-                    ),
-                },
+                "audit": audit,
             },
             "results": sort_records(self.records),
         }
         self._write_outputs(payload)
-        print_exploit_findings(self.records)
+        print_exploit_findings(audit, exploitable)
         if exploitable:
             raise SystemExit(1)
         return payload
@@ -725,41 +706,47 @@ class BenchmarkRunner:
             task = progress.add_task("Exploit audit", total=len(tests_to_run))
             for test in tests_to_run:
                 candidates = exploit_candidates(test)
-                record: Dict[str, Any] = {
-                    "test_id": test.id,
-                    "suite": test.suite,
-                    "type": "execution",
-                    "category": test.category,
-                    "difficulty": test.difficulty,
-                    "auditable": bool(candidates),
-                    "candidates_tried": len(candidates),
-                    "exploitable": False,
-                    "passing_exploit": None,
-                    "exploit_code": None,
-                }
                 try:
-                    for label, code in candidates:
-                        self.environment.reset()
-                        env_result = self.environment.execute_artifact(
-                            Artifact(kind="php_snippet", code=code),
-                            _build_verification_spec(test, self.config),
-                        )
-                        scores = self._score_execution(
-                            env_result.raw,
-                            test,
-                            skip_runtime=self.config.run.skip_runtime,
-                            skip_static=self.config.run.skip_static,
-                        )
-                        if scores.get("execution_pass"):
-                            record["exploitable"] = True
-                            record["passing_exploit"] = label
-                            record["exploit_code"] = code
-                            break
+                    hit = self._first_passing_exploit(test, candidates)
                 except Exception as e:
                     raise TestError(test.id, "execution", e) from e
+                record = build_exploit_audit_record(
+                    test=test,
+                    candidates_tried=len(candidates),
+                    passing_exploit=hit[0] if hit else None,
+                    exploit_code=hit[1] if hit else None,
+                )
                 with self._lock:
                     self.records.append(record)
                 progress.update(task, advance=1)
+
+    def _first_passing_exploit(
+        self,
+        test: ExecutionTest,
+        candidates: List[Tuple[str, str]],
+    ) -> Optional[Tuple[str, str]]:
+        """Return the first (label, code) cheat that satisfies the assertions.
+
+        The verification spec is identical across a test's candidates, so it
+        is built once here rather than per candidate. Returns None when no
+        cheat passes — the test's assertions rejected every zero-effort stub.
+        """
+        verification_spec = _build_verification_spec(test, self.config)
+        for label, code in candidates:
+            self.environment.reset()
+            env_result = self.environment.execute_artifact(
+                Artifact(kind="php_snippet", code=code),
+                verification_spec,
+            )
+            scores = self._score_execution(
+                env_result.raw,
+                test,
+                skip_runtime=self.config.run.skip_runtime,
+                skip_static=self.config.run.skip_static,
+            )
+            if scores.get("execution_pass"):
+                return (label, code)
+        return None
 
     def _ensure_execution_only_ids(self, mode_flag: str, tests: Dict[str, List[Any]]) -> None:
         """Ensure explicitly selected test ids are execution tests for audit modes."""
