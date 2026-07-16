@@ -11,6 +11,10 @@ WP-Bench measures AI model capabilities across two dimensions:
 
 The benchmark uses WordPress itself as the grader, running generated code in a sandboxed environment with static analysis and runtime assertions.
 
+## Requirements
+
+Requires Python version 3.10 or later
+
 ## Quick Start
 
 ### 1. Install
