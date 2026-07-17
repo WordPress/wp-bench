@@ -238,6 +238,588 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-gb-block-markup-005",
+      "category": "gb-block-markup",
+      "difficulty": "basic",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a minimal template section containing, in order: a Site Title block, a default Separator block, and a Post Content block, exactly as the site editor saves them.",
+      "expected_behavior": "Reviewer contract: the returned string parses into exactly three blocks in order: core/site-title, core/separator, core/post-content. The site title and post content serialize in the self-closing void form with no inner HTML, while the separator wraps an hr element carrying the editor's default classes. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Use the self-closing delimiter form for blocks the editor saves without content.",
+        "Use the wrapper element and class names the current site editor saves for the separator."
+      ],
+      "test_function": "wpbp_gb_markup_005(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:site-title|core\\/site-title",
+            "description": "Produces a core site title block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:post-content|core\\/post-content",
+            "description": "Produces a core post content block",
+            "weight": 1
+          },
+          {
+            "pattern": "\\/-->",
+            "description": "Uses the self-closing block delimiter form",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_005' ) ) { return false; } $out = wpbp_gb_markup_005(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 3 !== count( $blocks ) || 'core/site-title' !== $blocks[0]['blockName'] || 'core/separator' !== $blocks[1]['blockName'] || 'core/post-content' !== $blocks[2]['blockName'] ) { return false; } foreach ( array( 0, 2 ) as $i ) { if ( array() !== $blocks[ $i ]['attrs'] || '' !== $blocks[ $i ]['innerHTML'] || array() !== $blocks[ $i ]['innerContent'] ) { return false; } } if ( 1 !== preg_match_all( '~<!--\\s+/wp:~', $out ) || 2 !== preg_match_all( '~/-->~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "Site title and post content are attribute-free void blocks and the separator is the only closed block",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_005' ) ) { return false; } $out = wpbp_gb_markup_005(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 3 !== count( $blocks ) || 'core/separator' !== $blocks[1]['blockName'] || array() !== $blocks[1]['attrs'] ) { return false; } $hr = new WP_HTML_Tag_Processor( $blocks[1]['innerHTML'] ); if ( ! $hr->next_tag( 'HR' ) ) { return false; } $class = ' ' . trim( (string) $hr->get_attribute( 'class' ) ) . ' '; return str_contains( $class, ' wp-block-separator ' ) && str_contains( $class, ' has-alpha-channel-opacity ' );",
+            "description": "The separator serializes an hr with the wp-block-separator and has-alpha-channel-opacity classes",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_005(): string { return '<!-- wp:site-title /--><!-- wp:separator --><hr class=\"wp-block-separator has-alpha-channel-opacity\"/><!-- /wp:separator --><!-- wp:post-content /-->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/site-title",
+          "src/wp-includes/blocks/separator",
+          "src/wp-includes/blocks/post-content"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-006",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a two-column layout where the first column contains a paragraph reading 'Left' and the second column contains a paragraph reading 'Right'. The markup must match what the current block editor saves, including its nesting structure and wrapper classes.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one attribute-free core/columns block containing exactly two attribute-free core/column blocks, each wrapping one paragraph inner block. Every level uses the current editor's wrapper element and class, with no legacy column-count attribute or class. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Nest each column and its content using the inner block structure the current editor saves.",
+        "Serialize only non-default attributes in the block comment JSON."
+      ],
+      "test_function": "wpbp_gb_markup_006(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:columns|core\\/columns",
+            "description": "Produces a core columns block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:column\\b|core\\/column\\b",
+            "description": "Serializes individual columns as inner blocks",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-column\\b",
+            "description": "Includes the column wrapper class saved by the current editor",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_006' ) ) { return false; } $out = wpbp_gb_markup_006(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/columns' !== $blocks[0]['blockName'] || array() !== $blocks[0]['attrs'] ) { return false; } $cols = $blocks[0]['innerBlocks']; if ( 2 !== count( $cols ) ) { return false; } $texts = array( 'Left', 'Right' ); foreach ( $cols as $i => $col ) { if ( 'core/column' !== $col['blockName'] || array() !== $col['attrs'] || 1 !== count( $col['innerBlocks'] ) || 'core/paragraph' !== $col['innerBlocks'][0]['blockName'] || ! str_contains( $col['innerBlocks'][0]['innerHTML'], $texts[ $i ] ) ) { return false; } } if ( 5 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The columns block nests two columns each wrapping one paragraph, with no legacy attributes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_006' ) ) { return false; } $out = wpbp_gb_markup_006(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/columns' !== $blocks[0]['blockName'] || 2 !== count( $blocks[0]['innerBlocks'] ) ) { return false; } $wrap = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $wrap->next_tag( 'DIV' ) || 'wp-block-columns' !== trim( (string) $wrap->get_attribute( 'class' ) ) ) { return false; } foreach ( $blocks[0]['innerBlocks'] as $col ) { $cw = new WP_HTML_Tag_Processor( $col['innerHTML'] ); if ( ! $cw->next_tag( 'DIV' ) || 'wp-block-column' !== trim( (string) $cw->get_attribute( 'class' ) ) ) { return false; } } return true;",
+            "description": "The wrappers are div.wp-block-columns and div.wp-block-column with no extra legacy classes",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_006(): string { return '<!-- wp:columns --><div class=\"wp-block-columns\"><!-- wp:column --><div class=\"wp-block-column\"><!-- wp:paragraph --><p>Left</p><!-- /wp:paragraph --></div><!-- /wp:column --><!-- wp:column --><div class=\"wp-block-column\"><!-- wp:paragraph --><p>Right</p><!-- /wp:paragraph --></div><!-- /wp:column --></div><!-- /wp:columns -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/columns",
+          "src/wp-includes/blocks/column"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-007",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a buttons row with two link buttons: 'Download' linking to https://example.com/download and 'Learn More' linking to https://example.com/learn-more. The markup must match what the current block editor saves, including where the link URL is stored.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one core/buttons block containing two core/button inner blocks. Link URLs and button text live only in the saved HTML anchor, never in the block comment JSON. Each button wraps an anchor carrying both the wp-block-button__link and wp-element-button classes inside a div.wp-block-button wrapper. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Store each button's URL and text in the saved HTML, not the block comment JSON.",
+        "Use the wrapper elements and class names the current editor saves for buttons."
+      ],
+      "test_function": "wpbp_gb_markup_007(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:buttons|core\\/buttons",
+            "description": "Produces a core buttons block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-button__link",
+            "description": "Includes the button link class saved by the current editor",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-element-button",
+            "description": "Includes the element button class saved by the current editor",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_007' ) ) { return false; } $out = wpbp_gb_markup_007(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/buttons' !== $blocks[0]['blockName'] ) { return false; } $btns = $blocks[0]['innerBlocks']; if ( 2 !== count( $btns ) ) { return false; } foreach ( $btns as $btn ) { if ( 'core/button' !== $btn['blockName'] ) { return false; } foreach ( array( 'url', 'text', 'title', 'linkTarget' ) as $key ) { if ( array_key_exists( $key, $btn['attrs'] ) ) { return false; } } } if ( 3 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The buttons block nests two buttons whose URL and text stay out of the comment JSON",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_007' ) ) { return false; } $out = wpbp_gb_markup_007(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/buttons' !== $blocks[0]['blockName'] || 2 !== count( $blocks[0]['innerBlocks'] ) ) { return false; } $wrap = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $wrap->next_tag( 'DIV' ) || ! str_contains( ' ' . trim( (string) $wrap->get_attribute( 'class' ) ) . ' ', ' wp-block-buttons ' ) ) { return false; } $expected = array( array( 'https://example.com/download', 'Download' ), array( 'https://example.com/learn-more', 'Learn More' ) ); foreach ( $blocks[0]['innerBlocks'] as $i => $btn ) { $bp = new WP_HTML_Tag_Processor( $btn['innerHTML'] ); if ( ! $bp->next_tag( 'DIV' ) || ! str_contains( ' ' . trim( (string) $bp->get_attribute( 'class' ) ) . ' ', ' wp-block-button ' ) ) { return false; } if ( ! $bp->next_tag( 'A' ) ) { return false; } $class = ' ' . trim( (string) $bp->get_attribute( 'class' ) ) . ' '; if ( ! str_contains( $class, ' wp-block-button__link ' ) || ! str_contains( $class, ' wp-element-button ' ) || $expected[ $i ][0] !== $bp->get_attribute( 'href' ) || ! str_contains( $btn['innerHTML'], $expected[ $i ][1] ) ) { return false; } } return true;",
+            "description": "Each button anchor carries the editor's link classes, the requested href, and the requested text",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_007(): string { return '<!-- wp:buttons --><div class=\"wp-block-buttons\"><!-- wp:button --><div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://example.com/download\">Download</a></div><!-- /wp:button --><!-- wp:button --><div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://example.com/learn-more\">Learn More</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/buttons",
+          "src/wp-includes/blocks/button"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-008",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a table with a header row of 'Plan' and 'Price' and two body rows: 'Basic' with '$10' and 'Pro' with '$20'. The markup must match what the current block editor saves for a default table, including its wrapper structure and default-attribute handling.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one attribute-free core/table block. Because fixed layout is the block's default it is expressed only as the has-fixed-layout class on the table element, never as a comment attribute. The table lives inside a figure.wp-block-table wrapper with a thead of th cells and a tbody of td cells holding the requested values. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize only non-default attributes in the block comment JSON.",
+        "Use the wrapper element, table classes, and section structure the current editor saves."
+      ],
+      "test_function": "wpbp_gb_markup_008(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:table|core\\/table",
+            "description": "Produces a core table block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-table",
+            "description": "Includes the table wrapper class saved by the current editor",
+            "weight": 1
+          },
+          {
+            "pattern": "has-fixed-layout",
+            "description": "Expresses the default fixed layout as a table class",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_008' ) ) { return false; } $out = wpbp_gb_markup_008(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/table' !== $blocks[0]['blockName'] || array() !== $blocks[0]['attrs'] ) { return false; } if ( 1 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The table parses as a single attribute-free block with fixed layout left to its default",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_008' ) ) { return false; } $out = wpbp_gb_markup_008(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/table' !== $blocks[0]['blockName'] ) { return false; } $html = $blocks[0]['innerHTML']; $proc = new WP_HTML_Tag_Processor( $html ); if ( ! $proc->next_tag( 'FIGURE' ) || ! str_contains( ' ' . trim( (string) $proc->get_attribute( 'class' ) ) . ' ', ' wp-block-table ' ) ) { return false; } if ( ! $proc->next_tag( 'TABLE' ) || ! str_contains( ' ' . trim( (string) $proc->get_attribute( 'class' ) ) . ' ', ' has-fixed-layout ' ) ) { return false; } $counts = array( 'TH' => 0, 'TD' => 0, 'THEAD' => 0, 'TBODY' => 0 ); $scan = new WP_HTML_Tag_Processor( $html ); while ( $scan->next_tag() ) { $name = $scan->get_tag(); if ( isset( $counts[ $name ] ) ) { $counts[ $name ]++; } } if ( 1 !== $counts['THEAD'] || 1 !== $counts['TBODY'] || 2 !== $counts['TH'] || 4 !== $counts['TD'] ) { return false; } foreach ( array( 'Plan', 'Price', 'Basic', '$10', 'Pro', '$20' ) as $text ) { if ( ! str_contains( $html, $text ) ) { return false; } } return true;",
+            "description": "The figure wraps a fixed-layout table with a two-cell thead and a two-row tbody holding the requested values",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_008(): string { return '<!-- wp:table --><figure class=\"wp-block-table\"><table class=\"has-fixed-layout\"><thead><tr><th>Plan</th><th>Price</th></tr></thead><tbody><tr><td>Basic</td><td>$10</td></tr><tr><td>Pro</td><td>$20</td></tr></tbody></table></figure><!-- /wp:table -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/table"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-009",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a cover block using the background image https://example.com/wp-content/uploads/2026/07/hero.jpg with a 40% dim overlay, containing a single paragraph reading 'Stargazing'. The markup must match what the current block editor saves, including the overlay and inner container structure.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one core/cover block whose comment JSON carries the background url and the non-default dimRatio of 40, wrapping exactly one paragraph inner block. The saved HTML contains the wp-block-cover wrapper, an img with the wp-block-cover__image-background class and the background src, an aria-hidden overlay span carrying wp-block-cover__background with the dim classes, and a wp-block-cover__inner-container div around the content. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize the background url and dim ratio in the block comment JSON.",
+        "Use the overlay span, image class, and inner container structure the current editor saves."
+      ],
+      "test_function": "wpbp_gb_markup_009(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:cover|core\\/cover",
+            "description": "Produces a core cover block",
+            "weight": 1
+          },
+          {
+            "pattern": "dimRatio",
+            "description": "Serializes the non-default dim ratio",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-cover__inner-container",
+            "description": "Includes the inner container saved by the current editor",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_009' ) ) { return false; } $out = wpbp_gb_markup_009(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/cover' !== $blocks[0]['blockName'] ) { return false; } $attrs = $blocks[0]['attrs']; if ( 'https://example.com/wp-content/uploads/2026/07/hero.jpg' !== ( $attrs['url'] ?? null ) || 40 != ( $attrs['dimRatio'] ?? null ) ) { return false; } $inner = $blocks[0]['innerBlocks']; if ( 1 !== count( $inner ) || 'core/paragraph' !== $inner[0]['blockName'] || ! str_contains( $inner[0]['innerHTML'], 'Stargazing' ) ) { return false; } if ( 2 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The cover carries the url and dimRatio attributes and wraps a single paragraph inner block",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_009' ) ) { return false; } $out = wpbp_gb_markup_009(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/cover' !== $blocks[0]['blockName'] ) { return false; } $html = $blocks[0]['innerHTML']; $wrap = new WP_HTML_Tag_Processor( $html ); if ( ! $wrap->next_tag( 'DIV' ) || ! str_contains( ' ' . trim( (string) $wrap->get_attribute( 'class' ) ) . ' ', ' wp-block-cover ' ) ) { return false; } $img = new WP_HTML_Tag_Processor( $html ); if ( ! $img->next_tag( 'IMG' ) || ! str_contains( (string) $img->get_attribute( 'class' ), 'wp-block-cover__image-background' ) || 'https://example.com/wp-content/uploads/2026/07/hero.jpg' !== $img->get_attribute( 'src' ) ) { return false; } $span = new WP_HTML_Tag_Processor( $html ); if ( ! $span->next_tag( 'SPAN' ) || null === $span->get_attribute( 'aria-hidden' ) ) { return false; } $span_class = ' ' . trim( (string) $span->get_attribute( 'class' ) ) . ' '; if ( ! str_contains( $span_class, ' wp-block-cover__background ' ) || ! str_contains( $span_class, ' has-background-dim-40 ' ) || ! str_contains( $span_class, ' has-background-dim ' ) ) { return false; } return str_contains( $html, 'wp-block-cover__inner-container' );",
+            "description": "The saved HTML has the background image, the aria-hidden dim overlay span, and the inner container",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_009(): string { return '<!-- wp:cover {\"url\":\"https://example.com/wp-content/uploads/2026/07/hero.jpg\",\"dimRatio\":40} --><div class=\"wp-block-cover\"><img class=\"wp-block-cover__image-background\" alt=\"\" src=\"https://example.com/wp-content/uploads/2026/07/hero.jpg\" data-object-fit=\"cover\"/><span aria-hidden=\"true\" class=\"wp-block-cover__background has-background-dim-40 has-background-dim\"></span><div class=\"wp-block-cover__inner-container\"><!-- wp:paragraph --><p>Stargazing</p><!-- /wp:paragraph --></div></div><!-- /wp:cover -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/cover"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-010",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a gallery of two images that link to nothing: attachment ID 201 at https://example.com/wp-content/uploads/2026/07/a.jpg with alt text 'First' and attachment ID 202 at https://example.com/wp-content/uploads/2026/07/b.jpg with alt text 'Second', both using the 'large' size slug. The markup must match what the current block editor saves, including how the gallery nests its images.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one core/gallery block whose comment JSON sets linkTo to none, wrapping exactly two core/image inner blocks in the modern nested-images structure. The gallery figure carries the wp-block-gallery and has-nested-images classes, and each nested image serializes like a standalone attached image: id and sizeSlug in its comment JSON, src and alt only in its HTML, with the size and attachment classes on its own figure and img. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Nest each image as its own inner block, the structure the current editor saves.",
+        "Store each image's id and size slug in its comment JSON and its src and alt only in the HTML."
+      ],
+      "test_function": "wpbp_gb_markup_010(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:gallery|core\\/gallery",
+            "description": "Produces a core gallery block",
+            "weight": 1
+          },
+          {
+            "pattern": "has-nested-images",
+            "description": "Uses the modern nested-images gallery structure",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:image|core\\/image",
+            "description": "Nests core image blocks inside the gallery",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_010' ) ) { return false; } $out = wpbp_gb_markup_010(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/gallery' !== $blocks[0]['blockName'] || 'none' !== ( $blocks[0]['attrs']['linkTo'] ?? null ) ) { return false; } $imgs = $blocks[0]['innerBlocks']; if ( 2 !== count( $imgs ) ) { return false; } $ids = array( 201, 202 ); foreach ( $imgs as $i => $img ) { if ( 'core/image' !== $img['blockName'] || $ids[ $i ] !== ( $img['attrs']['id'] ?? null ) || 'large' !== ( $img['attrs']['sizeSlug'] ?? null ) ) { return false; } foreach ( array( 'src', 'url', 'alt' ) as $key ) { if ( array_key_exists( $key, $img['attrs'] ) ) { return false; } } } if ( 3 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The gallery nests two image blocks with id and sizeSlug in their comment JSON and linkTo none on the gallery",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_010' ) ) { return false; } $out = wpbp_gb_markup_010(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/gallery' !== $blocks[0]['blockName'] || 2 !== count( $blocks[0]['innerBlocks'] ) ) { return false; } $wrap = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $wrap->next_tag( 'FIGURE' ) ) { return false; } $class = ' ' . trim( (string) $wrap->get_attribute( 'class' ) ) . ' '; if ( ! str_contains( $class, ' wp-block-gallery ' ) || ! str_contains( $class, ' has-nested-images ' ) ) { return false; } $expected = array( array( 'https://example.com/wp-content/uploads/2026/07/a.jpg', 'First', ' wp-image-201 ' ), array( 'https://example.com/wp-content/uploads/2026/07/b.jpg', 'Second', ' wp-image-202 ' ) ); foreach ( $blocks[0]['innerBlocks'] as $i => $img ) { $ip = new WP_HTML_Tag_Processor( $img['innerHTML'] ); if ( ! $ip->next_tag( 'FIGURE' ) || ! str_contains( ' ' . trim( (string) $ip->get_attribute( 'class' ) ) . ' ', ' size-large ' ) ) { return false; } if ( ! $ip->next_tag( 'IMG' ) ) { return false; } if ( $expected[ $i ][0] !== $ip->get_attribute( 'src' ) || $expected[ $i ][1] !== $ip->get_attribute( 'alt' ) || ! str_contains( ' ' . trim( (string) $ip->get_attribute( 'class' ) ) . ' ', $expected[ $i ][2] ) ) { return false; } } return true;",
+            "description": "The gallery figure and each nested image carry the editor's classes, sources, and alt text",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_010(): string { return '<!-- wp:gallery {\"linkTo\":\"none\"} --><figure class=\"wp-block-gallery has-nested-images columns-default is-cropped\"><!-- wp:image {\"id\":201,\"sizeSlug\":\"large\",\"linkDestination\":\"none\"} --><figure class=\"wp-block-image size-large\"><img src=\"https://example.com/wp-content/uploads/2026/07/a.jpg\" alt=\"First\" class=\"wp-image-201\"/></figure><!-- /wp:image --><!-- wp:image {\"id\":202,\"sizeSlug\":\"large\",\"linkDestination\":\"none\"} --><figure class=\"wp-block-image size-large\"><img src=\"https://example.com/wp-content/uploads/2026/07/b.jpg\" alt=\"Second\" class=\"wp-image-202\"/></figure><!-- /wp:image --></figure><!-- /wp:gallery -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/gallery",
+          "src/wp-includes/blocks/image"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-011",
+      "category": "gb-block-markup",
+      "difficulty": "hard",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a Query Loop that lists the titles of 3 published posts ordered by title ascending, not inheriting the main query. Post titles should render through the block that displays each post's title inside the loop. The markup must match what the current block editor saves, including its wrapper and nesting structure.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one core/query block whose comment JSON carries a queryId and a query object with perPage 3, postType post, ascending title ordering, and inherit false. The saved HTML wraps a div.wp-block-query containing a core/post-template inner block that nests a void core/post-title block. Rendering the markup through WordPress lists exactly the first three posts by title and omits the rest.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Configure the loop entirely through the query attribute in the comment JSON.",
+        "Nest the post template and post title blocks the way the current editor saves them."
+      ],
+      "test_function": "wpbp_gb_markup_011(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:query|core\\/query",
+            "description": "Produces a core query block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:post-template|core\\/post-template",
+            "description": "Nests a post template inner block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:post-title|core\\/post-title",
+            "description": "Nests a post title block inside the loop",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_011' ) ) { return false; } $out = wpbp_gb_markup_011(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/query' !== $blocks[0]['blockName'] ) { return false; } $attrs = $blocks[0]['attrs']; if ( ! isset( $attrs['queryId'] ) || ! is_int( $attrs['queryId'] ) ) { return false; } $query = $attrs['query'] ?? null; if ( ! is_array( $query ) || 3 != ( $query['perPage'] ?? null ) || 'post' !== ( $query['postType'] ?? null ) || 'title' !== ( $query['orderBy'] ?? null ) || 'asc' !== ( $query['order'] ?? null ) || false !== ( $query['inherit'] ?? null ) ) { return false; } if ( ! str_contains( $blocks[0]['innerHTML'], 'wp-block-query' ) ) { return false; } $tpl = $blocks[0]['innerBlocks']; if ( 1 !== count( $tpl ) || 'core/post-template' !== $tpl[0]['blockName'] ) { return false; } $title = $tpl[0]['innerBlocks']; if ( 1 !== count( $title ) || 'core/post-title' !== $title[0]['blockName'] || '' !== $title[0]['innerHTML'] ) { return false; } if ( 2 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The query block carries the requested query configuration and nests post-template around a void post-title",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_011' ) ) { return false; } $out = wpbp_gb_markup_011(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/query' !== $blocks[0]['blockName'] ) { return false; } $titles = array( 'AAA Plugin Guide', 'AAB Theme Guide', 'AAC Block Guide', 'AAD Hook Guide', 'AAE REST Guide' ); foreach ( $titles as $title ) { wp_insert_post( array( 'post_title' => $title, 'post_content' => 'Body', 'post_status' => 'publish' ) ); } $html = do_blocks( $out ); if ( ! is_string( $html ) ) { return false; } foreach ( array( 'AAA Plugin Guide', 'AAB Theme Guide', 'AAC Block Guide' ) as $title ) { if ( ! str_contains( $html, $title ) ) { return false; } } foreach ( array( 'AAD Hook Guide', 'AAE REST Guide' ) as $title ) { if ( str_contains( $html, $title ) ) { return false; } } return true;",
+            "description": "Rendering the markup lists exactly the first three posts by title and omits the rest",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_011(): string { return '<!-- wp:query {\"queryId\":1,\"query\":{\"perPage\":3,\"pages\":0,\"offset\":0,\"postType\":\"post\",\"order\":\"asc\",\"orderBy\":\"title\",\"author\":\"\",\"search\":\"\",\"exclude\":[],\"sticky\":\"\",\"inherit\":false}} --><div class=\"wp-block-query\"><!-- wp:post-template --><!-- wp:post-title /--><!-- /wp:post-template --></div><!-- /wp:query -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/query",
+          "src/wp-includes/blocks/post-template",
+          "src/wp-includes/blocks/post-title"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-012",
+      "category": "gb-block-markup",
+      "difficulty": "hard",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a navigation menu containing a top-level custom link 'Home' pointing to '/', followed by a submenu labeled 'About' that contains two custom links: 'Team' pointing to '/team' and 'History' pointing to '/history'. The markup must match what the current block editor saves for menu items defined inline.",
+      "expected_behavior": "Reviewer contract: the returned string parses into one core/navigation block with two inner blocks: a void core/navigation-link for Home and a core/navigation-submenu labeled About wrapping two void core/navigation-link blocks for Team and History. Navigation links serialize in the self-closing form with label and url in the comment JSON and no inner HTML. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize each menu link in the self-closing form with its label and url in the comment JSON.",
+        "Nest the submenu's links as inner blocks of the submenu block."
+      ],
+      "test_function": "wpbp_gb_markup_012(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:navigation\\b|core\\/navigation\\b",
+            "description": "Produces a core navigation block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:navigation-submenu|core\\/navigation-submenu",
+            "description": "Serializes the submenu as its own block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:navigation-link|core\\/navigation-link",
+            "description": "Serializes menu links as navigation link blocks",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_012' ) ) { return false; } $out = wpbp_gb_markup_012(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/navigation' !== $blocks[0]['blockName'] ) { return false; } $items = $blocks[0]['innerBlocks']; if ( 2 !== count( $items ) ) { return false; } $home = $items[0]; if ( 'core/navigation-link' !== $home['blockName'] || 'Home' !== ( $home['attrs']['label'] ?? null ) || '/' !== ( $home['attrs']['url'] ?? null ) || '' !== $home['innerHTML'] ) { return false; } $sub = $items[1]; if ( 'core/navigation-submenu' !== $sub['blockName'] || 'About' !== ( $sub['attrs']['label'] ?? null ) || 2 !== count( $sub['innerBlocks'] ) ) { return false; } $expected = array( array( 'Team', '/team' ), array( 'History', '/history' ) ); foreach ( $sub['innerBlocks'] as $i => $link ) { if ( 'core/navigation-link' !== $link['blockName'] || $expected[ $i ][0] !== ( $link['attrs']['label'] ?? null ) || $expected[ $i ][1] !== ( $link['attrs']['url'] ?? null ) || '' !== $link['innerHTML'] ) { return false; } } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The navigation nests a void Home link and an About submenu wrapping two void links with label and url attributes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_012' ) ) { return false; } $out = wpbp_gb_markup_012(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/navigation' !== $blocks[0]['blockName'] ) { return false; } return 2 === preg_match_all( '~<!--\\s+/wp:~', $out ) && 3 === preg_match_all( '~/-->~', $out );",
+            "description": "Exactly the navigation and submenu blocks close with delimiters while all three links are self-closing",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_012(): string { return '<!-- wp:navigation --><!-- wp:navigation-link {\"label\":\"Home\",\"url\":\"/\"} /--><!-- wp:navigation-submenu {\"label\":\"About\"} --><!-- wp:navigation-link {\"label\":\"Team\",\"url\":\"/team\"} /--><!-- wp:navigation-link {\"label\":\"History\",\"url\":\"/history\"} /--><!-- /wp:navigation-submenu --><!-- /wp:navigation -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/navigation",
+          "src/wp-includes/blocks/navigation-link",
+          "src/wp-includes/blocks/navigation-submenu"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-013",
+      "category": "gb-block-markup",
+      "difficulty": "hard",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a paragraph reading 'Escape check' whose block metadata name (the custom name shown in the editor's List View, stored under the metadata attribute) is exactly: A --> B & \"C\". The comment JSON must use the escaping WordPress applies when serializing block attributes so the delimiter survives inside an HTML comment.",
+      "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/paragraph block whose metadata.name attribute decodes to the literal text A --> B & \"C\". Serializing that value requires the character escapes WordPress applies to block attribute JSON: double hyphens become \\u002d\\u002d so the comment cannot terminate early, and >, &, and double quotes are hex-escaped. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Store the custom block name under the metadata attribute in the comment JSON.",
+        "Escape the attribute JSON the way WordPress serializes block attributes."
+      ],
+      "test_function": "wpbp_gb_markup_013(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:paragraph|core\\/paragraph",
+            "description": "Produces a core paragraph block",
+            "weight": 1
+          },
+          {
+            "pattern": "metadata",
+            "description": "Stores the custom name under the metadata attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "u002d|serialize_block",
+            "description": "Escapes double hyphens in the attribute JSON or delegates to the core serializer",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_013' ) ) { return false; } $out = wpbp_gb_markup_013(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/paragraph' !== $blocks[0]['blockName'] ) { return false; } if ( 'A --> B & \"C\"' !== ( $blocks[0]['attrs']['metadata']['name'] ?? null ) ) { return false; } if ( ! str_contains( $blocks[0]['innerHTML'], 'Escape check' ) ) { return false; } if ( 1 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The paragraph parses cleanly and its metadata name decodes to the exact requested text",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_013' ) ) { return false; } $out = wpbp_gb_markup_013(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) ) { return false; } $bs = chr( 92 ); return str_contains( $out, $bs . 'u002d' . $bs . 'u002d' ) && str_contains( $out, $bs . 'u003e' ) && str_contains( $out, $bs . 'u0026' ) && str_contains( $out, $bs . 'u0022' );",
+            "description": "The comment JSON hex-escapes double hyphens, the greater-than sign, the ampersand, and double quotes",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_013(): string { return '<!-- wp:paragraph {\"metadata\":{\"name\":\"A \\u002d\\u002d\\u003e B \\u0026 \\u0022C\\u0022\"}} --><p>Escape check</p><!-- /wp:paragraph -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/paragraph"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-014",
+      "category": "gb-block-markup",
+      "difficulty": "hard",
+      "prompt": "Implement a function that returns the serialized WordPress block markup equivalent of this plain HTML, exactly as the current block editor would save it after conversion: <h2>Features</h2><ul><li>Fast</li><li>Secure</li></ul><p>Get started today.</p>",
+      "expected_behavior": "Reviewer contract: the returned string parses into three sibling blocks with no invalid fragments: a core/heading with no attributes (level 2 is the default) rendering an h2 with the wp-block-heading class, a core/list whose two core/list-item inner blocks wrap the li elements inside a ul with the wp-block-list class, and an attribute-free core/paragraph with an unclassed p element. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize only non-default attributes in the block comment JSON.",
+        "Use the wrapper classes and inner block structure the current editor saves for each block."
+      ],
+      "test_function": "wpbp_gb_markup_014(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:heading|core\\/heading",
+            "description": "Produces a core heading block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:list-item|core\\/list-item",
+            "description": "Serializes list items as inner blocks",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:paragraph|core\\/paragraph",
+            "description": "Produces a core paragraph block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_014' ) ) { return false; } $out = wpbp_gb_markup_014(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 3 !== count( $blocks ) || 'core/heading' !== $blocks[0]['blockName'] || 'core/list' !== $blocks[1]['blockName'] || 'core/paragraph' !== $blocks[2]['blockName'] ) { return false; } if ( array() !== $blocks[0]['attrs'] || array() !== $blocks[1]['attrs'] || array() !== $blocks[2]['attrs'] ) { return false; } $items = $blocks[1]['innerBlocks']; if ( 2 !== count( $items ) ) { return false; } $texts = array( 'Fast', 'Secure' ); foreach ( $items as $i => $item ) { if ( 'core/list-item' !== $item['blockName'] || ! str_contains( $item['innerHTML'], $texts[ $i ] ) ) { return false; } } if ( 5 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The HTML converts to heading, list with two list items, and paragraph blocks with only default attributes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_014' ) ) { return false; } $out = wpbp_gb_markup_014(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 3 !== count( $blocks ) || 'core/heading' !== $blocks[0]['blockName'] || 'core/list' !== $blocks[1]['blockName'] || 'core/paragraph' !== $blocks[2]['blockName'] ) { return false; } $h = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $h->next_tag( 'H2' ) || 'wp-block-heading' !== trim( (string) $h->get_attribute( 'class' ) ) || ! str_contains( $blocks[0]['innerHTML'], 'Features' ) ) { return false; } $l = new WP_HTML_Tag_Processor( $blocks[1]['innerHTML'] ); if ( ! $l->next_tag( 'UL' ) || 'wp-block-list' !== trim( (string) $l->get_attribute( 'class' ) ) ) { return false; } $p = new WP_HTML_Tag_Processor( $blocks[2]['innerHTML'] ); if ( ! $p->next_tag( 'P' ) || null !== $p->get_attribute( 'class' ) || ! str_contains( $blocks[2]['innerHTML'], 'Get started today.' ) ) { return false; } return true;",
+            "description": "The converted blocks carry the editor's wrapper classes: classed h2 and ul, unclassed p",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_014(): string { return '<!-- wp:heading --><h2 class=\"wp-block-heading\">Features</h2><!-- /wp:heading --><!-- wp:list --><ul class=\"wp-block-list\"><!-- wp:list-item --><li>Fast</li><!-- /wp:list-item --><!-- wp:list-item --><li>Secure</li><!-- /wp:list-item --></ul><!-- /wp:list --><!-- wp:paragraph --><p>Get started today.</p><!-- /wp:paragraph -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/heading",
+          "src/wp-includes/blocks/list",
+          "src/wp-includes/blocks/list-item",
+          "src/wp-includes/blocks/paragraph"
+        ],
+        "release_focus": "classic"
+      }
     }
   ]
 }
