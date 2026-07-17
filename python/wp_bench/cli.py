@@ -107,6 +107,10 @@ def run(
         False,
         help="Run execution tests with their reference_solution instead of calling models",
     ),
+    check_exploits: bool = typer.Option(
+        False,
+        help="Adversarial assertion audit: flag execution tests a zero-effort cheat can pass",
+    ),
     test_id: Optional[List[str]] = typer.Option(
         None,
         "--test-id",
@@ -126,6 +130,8 @@ def run(
         harness_config.run.dry_run = True
     if check_reference_solution:
         harness_config.run.check_reference_solution = True
+    if check_exploits:
+        harness_config.run.check_exploits = True
     normalized_test_ids = _normalize_test_ids(test_id)
     if normalized_test_ids:
         harness_config.run.test_ids = normalized_test_ids
@@ -156,6 +162,16 @@ def run(
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(1) from exc
         console.print("[bold green]Reference solution check completed[/bold green]", result["metadata"]["scores"])
+        return
+
+    if harness_config.run.check_exploits:
+        exploit_runner = BenchmarkRunner(harness_config)
+        try:
+            result = exploit_runner.run()
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1) from exc
+        console.print("[bold green]Exploit audit completed[/bold green]", result["metadata"]["audit"])
         return
 
     # Check if multi-model mode

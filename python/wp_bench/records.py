@@ -163,6 +163,35 @@ def build_error_record(
     return record
 
 
+def build_exploit_audit_record(
+    *,
+    test: Any,
+    candidates_tried: int,
+    passing_exploit: Optional[str],
+    exploit_code: Optional[str],
+) -> Dict[str, Any]:
+    """Build the record for one test in the adversarial assertion audit.
+
+    Shares the canonical header (test_id/suite/type/category/difficulty)
+    with the other builders; the tail is audit-specific — an exploit
+    outcome rather than scores. ``candidates_tried == 0`` means the generic
+    battery did not cover the test (no gateway function, or a plugin
+    artifact), not that it is safe. A non-null ``passing_exploit`` means a
+    zero-effort cheat satisfied the assertions.
+    """
+    return {
+        "test_id": test.id,
+        "suite": test.suite,
+        "type": "execution",
+        "category": test.category,
+        "difficulty": test.difficulty,
+        "candidates_tried": candidates_tried,
+        "exploitable": passing_exploit is not None,
+        "passing_exploit": passing_exploit,
+        "exploit_code": exploit_code,
+    }
+
+
 def execution_record_passed(record: Dict[str, Any]) -> bool:
     """Whether an execution record represents a strict pass.
 

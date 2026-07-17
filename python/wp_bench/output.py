@@ -155,6 +155,35 @@ def print_reference_solution_failures(records: list[Dict[str, Any]]) -> None:
     console.print(table)
 
 
+def print_exploit_findings(audit: Dict[str, Any], exploitable: list[Dict[str, Any]]) -> None:
+    """Render the adversarial assertion audit summary and exploitable tests.
+
+    ``audit`` is the summary dict assembled by the runner (counts +
+    exploitable ids); ``exploitable`` is the list of exploitable records.
+    The runner owns the partition so it is not recomputed here.
+    """
+    if exploitable:
+        table = Table(title="Exploitable Tests (a zero-effort cheat passed)")
+        table.add_column("Test ID", style="cyan")
+        table.add_column("Category", style="magenta")
+        table.add_column("Passing cheat", style="red")
+        for record in exploitable:
+            table.add_row(
+                str(record.get("test_id", "")),
+                str(record.get("category", "")),
+                str(record.get("passing_exploit", "")),
+            )
+        console.print(table)
+
+    style = "red" if audit["exploitable"] else "green"
+    console.print(
+        f"[{style}]Exploit audit: {audit['exploitable']}/{audit['auditable']} "
+        f"auditable tests exploitable[/{style}] "
+        f"[dim]({audit['not_auditable']} not covered by the generic battery — "
+        f"no test_function or plugin artifact)[/dim]"
+    )
+
+
 def create_progress() -> Progress:
     """Create a Progress instance for tracking test execution."""
     return Progress()

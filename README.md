@@ -114,6 +114,23 @@ wp-bench run --test-type execution           # run only execution tests
 wp-bench run --test-type execution --test-id e-abilities-api-001
 wp-bench run --test-id e-abilities-api-001 --test-id e-rest-api-001
 wp-bench run --config wp-bench.yaml --dry-run # validate config without calling models
+wp-bench run --check-reference-solution --test-type execution  # verify reference solutions pass
+wp-bench run --check-exploits --test-type execution            # adversarial assertion audit (see below)
+```
+
+### Adversarial assertion audit
+
+`--check-reference-solution` proves a correct solution *passes*; `--check-exploits`
+proves that trivial cheats *fail*. For every execution test it runs a battery of
+zero-effort stubs (an empty function, `return 1`, `return true`, `return array()`, …)
+through the real WordPress verifier and flags any test whose assertions a cheat can
+satisfy. Such a test is under-specified — its assertions check a predictable output
+(one fixture's answer) rather than the WordPress behavior the task describes, so a
+model could score on it without doing the work. Exits non-zero if any test is
+exploitable; results (with the passing cheat per test) are written to the output file.
+
+```bash
+wp-bench run --check-exploits --test-type execution
 ```
 
 ## Repository Structure
