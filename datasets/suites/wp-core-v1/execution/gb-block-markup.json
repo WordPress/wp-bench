@@ -1,0 +1,243 @@
+{
+  "id": "wp-core-execution-v1-gb_block_markup",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Markup Authoring",
+    "description": "Code generation tasks that require authoring serialized Gutenberg block markup as stored in post_content",
+    "wp_version": "7.0",
+    "created_at": "2026-07-17"
+  },
+  "tests": [
+    {
+      "id": "e-gb-block-markup-001",
+      "category": "gb-block-markup",
+      "difficulty": "basic",
+      "prompt": "Implement a function that returns the serialized WordPress block markup (as stored in post_content) for two sibling blocks: a paragraph reading 'Hello from WP-Bench' followed by a level 3 heading reading 'Getting Started'. The markup must match what the current block editor saves, including block comment delimiters, wrapper classes, and attributes.",
+      "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/paragraph block and one core/heading block with no invalid fragments. The paragraph serializes with no attributes and an unclassed <p> element; the heading carries the non-default level attribute in its comment JSON and renders an <h3> with the wp-block-heading class. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize only non-default attributes in the block comment JSON.",
+        "Use the wrapper element and class names the current block editor saves for each block."
+      ],
+      "test_function": "wpbp_gb_markup_001(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:paragraph|core\\/paragraph",
+            "description": "Produces a core paragraph block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:heading|core\\/heading",
+            "description": "Produces a core heading block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-heading",
+            "description": "Includes the heading wrapper class saved by the current editor",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_001' ) ) { return false; } $out = wpbp_gb_markup_001(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 2 !== count( $blocks ) ) { return false; } foreach ( $blocks as $b ) { if ( null === $b['blockName'] ) { return false; } } if ( 'core/paragraph' !== $blocks[0]['blockName'] || 'core/heading' !== $blocks[1]['blockName'] ) { return false; } if ( 2 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } return array() === $blocks[0]['attrs'] && array( 'level' => 3 ) == $blocks[1]['attrs'];",
+            "description": "The markup parses into a paragraph and a heading with correct comment attributes and no invalid fragments",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_001' ) ) { return false; } $out = wpbp_gb_markup_001(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 2 !== count( $blocks ) || 'core/paragraph' !== $blocks[0]['blockName'] || 'core/heading' !== $blocks[1]['blockName'] ) { return false; } $p = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $p->next_tag( 'P' ) || null !== $p->get_attribute( 'class' ) || ! str_contains( $blocks[0]['innerHTML'], 'Hello from WP-Bench' ) ) { return false; } $h = new WP_HTML_Tag_Processor( $blocks[1]['innerHTML'] ); if ( ! $h->next_tag( 'H3' ) || 'wp-block-heading' !== trim( (string) $h->get_attribute( 'class' ) ) || ! str_contains( $blocks[1]['innerHTML'], 'Getting Started' ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The paragraph is unclassed, the heading uses h3 with wp-block-heading, and the markup is round-trip stable",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_001(): string { return '<!-- wp:paragraph --><p>Hello from WP-Bench</p><!-- /wp:paragraph --><!-- wp:heading {\"level\":3} --><h3 class=\"wp-block-heading\">Getting Started</h3><!-- /wp:heading -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/paragraph",
+          "src/wp-includes/blocks/heading"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-002",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for an image block referencing media attachment ID 123, source URL https://example.com/wp-content/uploads/2026/07/team.jpg, the 'large' size slug, and alt text 'Team photo'. The markup must match what the current block editor saves for an attached image, with each attribute stored where the editor stores it: in the block comment JSON or in the saved HTML.",
+      "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/image block. The attachment ID and size slug live in the comment JSON; the source URL and alt text live only in the HTML. The wrapper is a <figure> carrying the wp-block-image and size-large classes, and the <img> carries the wp-image-123 class alongside the correct src and alt.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Store the attachment ID and size slug in the block comment JSON, not the HTML-sourced attributes.",
+        "Use the figure wrapper and image class names the current block editor saves for an attached image."
+      ],
+      "test_function": "wpbp_gb_markup_002(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:image|core\\/image",
+            "description": "Produces a core image block",
+            "weight": 1
+          },
+          {
+            "pattern": "sizeSlug",
+            "description": "Serializes the size slug attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-image-123",
+            "description": "Includes the attachment-derived image class",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_002' ) ) { return false; } $out = wpbp_gb_markup_002(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/image' !== $blocks[0]['blockName'] ) { return false; } if ( 1 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } $attrs = $blocks[0]['attrs']; if ( 123 !== ( $attrs['id'] ?? null ) || 'large' !== ( $attrs['sizeSlug'] ?? null ) ) { return false; } foreach ( array( 'src', 'url', 'alt', 'caption' ) as $key ) { if ( array_key_exists( $key, $attrs ) ) { return false; } } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The image parses cleanly with id and sizeSlug in the comment JSON and no HTML-sourced attributes leaked into it",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_002' ) ) { return false; } $out = wpbp_gb_markup_002(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/image' !== $blocks[0]['blockName'] ) { return false; } $proc = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $proc->next_tag( 'FIGURE' ) ) { return false; } $figure_class = ' ' . trim( (string) $proc->get_attribute( 'class' ) ) . ' '; if ( ! str_contains( $figure_class, ' wp-block-image ' ) || ! str_contains( $figure_class, ' size-large ' ) ) { return false; } if ( ! $proc->next_tag( 'IMG' ) ) { return false; } $img_class = ' ' . trim( (string) $proc->get_attribute( 'class' ) ) . ' '; return 'https://example.com/wp-content/uploads/2026/07/team.jpg' === $proc->get_attribute( 'src' ) && 'Team photo' === $proc->get_attribute( 'alt' ) && str_contains( $img_class, ' wp-image-123 ' );",
+            "description": "The figure and img elements carry the editor's wrapper classes, source URL, and alt text",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_002(): string { return '<!-- wp:image {\"id\":123,\"sizeSlug\":\"large\",\"linkDestination\":\"none\"} --><figure class=\"wp-block-image size-large\"><img src=\"https://example.com/wp-content/uploads/2026/07/team.jpg\" alt=\"Team photo\" class=\"wp-image-123\"/></figure><!-- /wp:image -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/image"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-003",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for an unordered list with exactly three items reading 'Alpha', 'Beta', and 'Gamma', in that order. The markup must match what the current block editor saves, including the inner block structure the editor uses for individual list items.",
+      "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/list block with no attributes whose inner blocks are three core/list-item blocks in the requested order. The wrapper is a <ul> with the wp-block-list class and each item serializes its own <li> element inside its own block delimiters. The markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize each list item using the inner block structure the current editor saves.",
+        "Serialize only non-default attributes in the block comment JSON."
+      ],
+      "test_function": "wpbp_gb_markup_003(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:list|core\\/list",
+            "description": "Produces a core list block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp:list-item|core\\/list-item",
+            "description": "Serializes individual list items as inner blocks",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-list",
+            "description": "Includes the list wrapper class saved by the current editor",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_003' ) ) { return false; } $out = wpbp_gb_markup_003(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/list' !== $blocks[0]['blockName'] || array() !== $blocks[0]['attrs'] ) { return false; } if ( 4 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } $items = $blocks[0]['innerBlocks']; if ( 3 !== count( $items ) ) { return false; } $texts = array( 'Alpha', 'Beta', 'Gamma' ); foreach ( $items as $i => $item ) { if ( 'core/list-item' !== $item['blockName'] || ! str_contains( $item['innerHTML'], $texts[ $i ] ) ) { return false; } } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The list parses into one attribute-free core/list with three core/list-item inner blocks in order",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_003' ) ) { return false; } $out = wpbp_gb_markup_003(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/list' !== $blocks[0]['blockName'] || 3 !== count( $blocks[0]['innerBlocks'] ) ) { return false; } $list = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $list->next_tag( 'UL' ) || 'wp-block-list' !== trim( (string) $list->get_attribute( 'class' ) ) ) { return false; } foreach ( $blocks[0]['innerBlocks'] as $item ) { $li = new WP_HTML_Tag_Processor( $item['innerHTML'] ); if ( ! $li->next_tag( 'LI' ) ) { return false; } } return 3 === count( array_filter( $blocks[0]['innerContent'], 'is_null' ) );",
+            "description": "The ul carries wp-block-list, each item owns its li element, and innerContent reserves one slot per item",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_003(): string { return '<!-- wp:list --><ul class=\"wp-block-list\"><!-- wp:list-item --><li>Alpha</li><!-- /wp:list-item --><!-- wp:list-item --><li>Beta</li><!-- /wp:list-item --><!-- wp:list-item --><li>Gamma</li><!-- /wp:list-item --></ul><!-- /wp:list -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/list",
+          "src/wp-includes/blocks/list-item"
+        ],
+        "release_focus": "classic"
+      }
+    },
+    {
+      "id": "e-gb-block-markup-004",
+      "category": "gb-block-markup",
+      "difficulty": "intermediate",
+      "prompt": "Implement a function that returns the serialized WordPress block markup for a quote block whose quoted content is the single paragraph 'Code is poetry.' and whose citation reads 'WordPress'. The markup must match what the current block editor saves, including where the quoted content and the citation each live in the saved structure.",
+      "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/quote block with no attributes. The quoted text is an inner core/paragraph block, while the citation is a <cite> element in the quote's own wrapper HTML rather than a nested block or comment attribute. The blockquote wrapper carries the wp-block-quote class and the markup survives a parse/serialize round trip unchanged.",
+      "requirements": [
+        "Return the markup as a string using HTML comment block delimiters.",
+        "Serialize the quoted paragraph as an inner block of the quote.",
+        "Place the citation where the current editor saves it in the quote's HTML."
+      ],
+      "test_function": "wpbp_gb_markup_004(): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp:quote|core\\/quote",
+            "description": "Produces a core quote block",
+            "weight": 1
+          },
+          {
+            "pattern": "wp-block-quote",
+            "description": "Includes the quote wrapper class saved by the current editor",
+            "weight": 1
+          },
+          {
+            "pattern": "<cite",
+            "description": "Serializes the citation as a cite element",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_004' ) ) { return false; } $out = wpbp_gb_markup_004(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/quote' !== $blocks[0]['blockName'] || array() !== $blocks[0]['attrs'] ) { return false; } if ( 2 !== preg_match_all( '~<!--\\s+/wp:~', $out ) ) { return false; } $inner = $blocks[0]['innerBlocks']; if ( 1 !== count( $inner ) || 'core/paragraph' !== $inner[0]['blockName'] || ! str_contains( $inner[0]['innerHTML'], 'Code is poetry.' ) ) { return false; } return parse_blocks( serialize_blocks( $blocks ) ) == $blocks;",
+            "description": "The quote parses into one attribute-free core/quote wrapping a single paragraph inner block",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_markup_004' ) ) { return false; } $out = wpbp_gb_markup_004(); if ( ! is_string( $out ) ) { return false; } $blocks = array_values( array_filter( parse_blocks( $out ), static function ( $b ) { return null !== $b['blockName'] || '' !== trim( $b['innerHTML'] ); } ) ); if ( 1 !== count( $blocks ) || 'core/quote' !== $blocks[0]['blockName'] || 1 !== count( $blocks[0]['innerBlocks'] ) ) { return false; } $bq = new WP_HTML_Tag_Processor( $blocks[0]['innerHTML'] ); if ( ! $bq->next_tag( 'BLOCKQUOTE' ) ) { return false; } $bq_class = ' ' . trim( (string) $bq->get_attribute( 'class' ) ) . ' '; if ( ! str_contains( $bq_class, ' wp-block-quote ' ) ) { return false; } if ( ! preg_match( '~<cite[^>]*>\\s*WordPress\\s*</cite>~', $blocks[0]['innerHTML'] ) ) { return false; } return ! str_contains( $blocks[0]['innerBlocks'][0]['innerHTML'], '<cite' );",
+            "description": "The blockquote carries wp-block-quote and the citation lives in the quote's own HTML, not in the paragraph",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_markup_004(): string { return '<!-- wp:quote --><blockquote class=\"wp-block-quote\"><!-- wp:paragraph --><p>Code is poetry.</p><!-- /wp:paragraph --><cite>WordPress</cite></blockquote><!-- /wp:quote -->'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-parser.php",
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/blocks/quote",
+          "src/wp-includes/blocks/paragraph"
+        ],
+        "release_focus": "classic"
+      }
+    }
+  ]
+}
