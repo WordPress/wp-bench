@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-post_types_taxonomy",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Post Types and Taxonomy",
     "description": "Code generation tasks for WordPress Post Types and Taxonomy APIs",
@@ -12,11 +12,11 @@
       "id": "e-post-types-taxonomy-001",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that registers a public book post type with REST support.",
-      "expected_behavior": "`wpbp_post_types_taxonomy_001()` registers a public `wpbp_book` post type with REST API exposure. Runtime validation checks the registered post type through WordPress and unregisters it afterward.",
+      "prompt": "Implement a function that registers a public book post type named 'wpbp_book' with REST support.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_001()` registers a public `wpbp_book` post type with REST API exposure. Runtime validation inspects the registered post type object itself (public and show_in_rest), so a hard-coded truthy return fails, and unregisters it afterward.",
       "requirements": [
-        "Use registration APIs",
-        "Clean up registered types when possible"
+        "Use register_post_type() with the wpbp_book slug",
+        "Make the post type public and available in the REST API"
       ],
       "test_function": "wpbp_post_types_taxonomy_001(): bool",
       "static_checks": {
@@ -37,8 +37,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_001' ) ) { return false; } $ok = wpbp_post_types_taxonomy_001(); unregister_post_type( 'wpbp_book' ); return $ok;",
-            "description": "The book post type is registered and REST-enabled",
+            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_001' ) ) { return false; } wpbp_post_types_taxonomy_001(); $type = get_post_type_object( 'wpbp_book' ); $ok = $type instanceof WP_Post_Type && $type->public && $type->show_in_rest; unregister_post_type( 'wpbp_book' ); return $ok;",
+            "description": "The wpbp_book post type is actually registered, public, and REST-enabled",
             "weight": 1
           }
         ]
@@ -56,11 +56,11 @@
       "id": "e-post-types-taxonomy-002",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that registers a hierarchical genre taxonomy for posts.",
-      "expected_behavior": "`wpbp_post_types_taxonomy_002()` registers a hierarchical `wpbp_genre` taxonomy for posts. Runtime validation checks the taxonomy through WordPress and unregisters it afterward.",
+      "prompt": "Implement a function that registers a hierarchical genre taxonomy named 'wpbp_genre' for posts.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_002()` registers a hierarchical `wpbp_genre` taxonomy for posts. Runtime validation inspects the registered taxonomy object itself (hierarchical and attached to post), so a hard-coded truthy return fails, and unregisters it afterward.",
       "requirements": [
-        "Use registration APIs",
-        "Clean up registered types when possible"
+        "Use register_taxonomy() with the wpbp_genre slug",
+        "Make the taxonomy hierarchical and attach it to posts"
       ],
       "test_function": "wpbp_post_types_taxonomy_002(): bool",
       "static_checks": {
@@ -81,8 +81,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_002' ) ) { return false; } $ok = wpbp_post_types_taxonomy_002(); unregister_taxonomy( 'wpbp_genre' ); return $ok;",
-            "description": "The genre taxonomy is registered as hierarchical",
+            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_002' ) ) { return false; } wpbp_post_types_taxonomy_002(); $taxonomy = get_taxonomy( 'wpbp_genre' ); $ok = $taxonomy instanceof WP_Taxonomy && $taxonomy->hierarchical && in_array( 'post', (array) $taxonomy->object_type, true ); unregister_taxonomy( 'wpbp_genre' ); return $ok;",
+            "description": "The wpbp_genre taxonomy is actually registered, hierarchical, and attached to posts",
             "weight": 1
           }
         ]
@@ -100,11 +100,11 @@
       "id": "e-post-types-taxonomy-003",
       "category": "post-types-taxonomy",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that attaches an existing taxonomy to a custom post type.",
-      "expected_behavior": "`wpbp_post_types_taxonomy_003()` registers a fixture post type and taxonomy, then attaches the taxonomy to that post type with WordPress registration APIs. Runtime validation checks the attachment result.",
+      "prompt": "Implement a function that attaches the existing 'wpbp_topic' taxonomy to the existing 'wpbp_movie' custom post type.",
+      "expected_behavior": "`wpbp_post_types_taxonomy_003()` attaches the `wpbp_topic` taxonomy (pre-registered by the runtime along with the `wpbp_movie` post type) using `register_taxonomy_for_object_type()`. Runtime validation checks the actual attachment through `is_object_in_taxonomy()`, so a hard-coded truthy return fails; fixtures are unregistered in teardown.",
       "requirements": [
-        "Use registration APIs",
-        "Clean up registered types when possible"
+        "Use register_taxonomy_for_object_type()",
+        "Return whether the attachment succeeded"
       ],
       "test_function": "wpbp_post_types_taxonomy_003(): bool",
       "static_checks": {
@@ -117,16 +117,18 @@
         ]
       },
       "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_movie', array( 'label' => 'WPBP Movies' ) ); register_taxonomy( 'wpbp_topic', 'post', array( 'label' => 'WPBP Topics' ) );",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_003' ) ) { return false; } return wpbp_post_types_taxonomy_003();",
-            "description": "The taxonomy is attached to the custom post type",
+            "code": "if ( ! function_exists( 'wpbp_post_types_taxonomy_003' ) ) { return false; } $ok = wpbp_post_types_taxonomy_003(); return true === $ok && is_object_in_taxonomy( 'wpbp_movie', 'wpbp_topic' );",
+            "description": "The wpbp_topic taxonomy is actually attached to the wpbp_movie post type",
             "weight": 1
           }
-        ]
+        ],
+        "teardown": "unregister_taxonomy( 'wpbp_topic' ); unregister_post_type( 'wpbp_movie' );"
       },
-      "reference_solution": "function wpbp_post_types_taxonomy_003(): bool { register_post_type( 'wpbp_movie' ); register_taxonomy( 'wpbp_topic', 'post' ); $ok = register_taxonomy_for_object_type( 'wpbp_topic', 'wpbp_movie' ); unregister_post_type( 'wpbp_movie' ); unregister_taxonomy( 'wpbp_topic' ); return $ok; }",
+      "reference_solution": "function wpbp_post_types_taxonomy_003(): bool { return register_taxonomy_for_object_type( 'wpbp_topic', 'wpbp_movie' ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/post.php",

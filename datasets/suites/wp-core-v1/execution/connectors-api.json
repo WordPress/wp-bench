@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-connectors_api",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Connectors API",
     "description": "Code generation tasks for WordPress Connectors API APIs",
@@ -13,7 +13,7 @@
       "category": "connectors-api",
       "difficulty": "basic",
       "prompt": "Implement a function that reports whether WordPress has registered the built-in Akismet connector through the public Connectors API.",
-      "expected_behavior": "`wpbp_connectors_api_001()` uses `wp_is_connector_registered()` to check the `akismet` connector after WordPress connector initialization. The test focuses on public connector discovery, not direct registry access or a hard-coded truthy value.",
+      "expected_behavior": "`wpbp_connectors_api_001()` uses `wp_is_connector_registered()` to check the `akismet` connector after WordPress connector initialization. The runtime calls the helper twice: once with Akismet registered (expects true) and once with Akismet temporarily unregistered (expects false), so a hard-coded `return true` fails; the connector is restored afterward.",
       "requirements": [
         "Use wp_is_connector_registered()",
         "Check the connector ID 'akismet'",
@@ -45,8 +45,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_connectors_api_001' ) ) { return false; } return true === wpbp_connectors_api_001() && wp_is_connector_registered( 'akismet' );",
-            "description": "The helper reports the built-in Akismet connector as registered",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_001' ) ) { return false; } $registry = WP_Connector_Registry::get_instance(); if ( ! $registry instanceof WP_Connector_Registry ) { return false; } $first = wpbp_connectors_api_001(); $removed = $registry->unregister( 'akismet' ); $second = wpbp_connectors_api_001(); if ( is_array( $removed ) ) { $registry->register( 'akismet', $removed ); } return true === $first && false === $second;",
+            "description": "The helper reflects live registry state: true with Akismet registered, false while it is unregistered",
             "weight": 1
           }
         ]

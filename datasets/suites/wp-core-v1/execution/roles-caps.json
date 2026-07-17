@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-roles_caps",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Roles and Capabilities",
     "description": "Code generation tasks for WordPress Roles and Capabilities APIs",
@@ -64,7 +64,7 @@
       "category": "roles-caps",
       "difficulty": "basic",
       "prompt": "Implement a function that adds wpbp_temp_cap to the Subscriber role, verifies the role has it, removes it again, and reports whether both transitions succeeded.",
-      "expected_behavior": "Reviewer contract: The function should mutate the Subscriber role through WP_Role methods and leave the temporary capability removed. The runtime checks both the returned result and the final Subscriber role state.",
+      "expected_behavior": "Reviewer contract: The function should mutate the Subscriber role through WP_Role methods and leave the temporary capability removed. The runtime spies on `updated_option` for the roles option to observe `wpbp_temp_cap` actually being added during the call, so a hard-coded `return true` fails, and checks the final Subscriber role state.",
       "requirements": [
         "Use WordPress roles/capabilities APIs",
         "Leave the Subscriber role without the temporary capability"
@@ -98,8 +98,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_roles_caps_002' ) ) { return false; } $ok = wpbp_roles_caps_002(); $role = get_role( 'subscriber' ); return (bool) $ok && $role instanceof WP_Role && ! $role->has_cap( 'wpbp_temp_cap' );",
-            "description": "The temporary Subscriber capability is added, observed, and removed",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_002' ) ) { return false; } $saw_cap_added = false; $spy = function ( $option, $old_value, $value ) use ( &$saw_cap_added ) { if ( false !== strpos( (string) $option, 'user_roles' ) && is_array( $value ) && ! empty( $value['subscriber']['capabilities']['wpbp_temp_cap'] ) ) { $saw_cap_added = true; } }; add_action( 'updated_option', $spy, 10, 3 ); $ok = wpbp_roles_caps_002(); remove_action( 'updated_option', $spy, 10 ); $role = get_role( 'subscriber' ); return true === $ok && $saw_cap_added && $role instanceof WP_Role && ! $role->has_cap( 'wpbp_temp_cap' );",
+            "description": "The temporary capability is observed being added to the Subscriber role and is removed afterward",
             "weight": 1
           }
         ],
