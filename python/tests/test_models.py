@@ -33,6 +33,18 @@ def test_generate_retries_without_temperature_on_deprecated_error(monkeypatch) -
     assert "temperature" not in calls[1]
 
 
+def test_generate_normalizes_none_content_to_empty_string(monkeypatch) -> None:
+    def fake_completion(**kwargs):
+        return SimpleNamespace(choices=[SimpleNamespace(message={"content": None})])
+
+    monkeypatch.setattr(models_module, "completion", fake_completion)
+
+    model = ModelInterface(ModelConfig(name="gemini/gemini-2.5-pro"))
+    result = model.generate_with_metadata("hello")
+
+    assert result.text == ""
+
+
 def test_generate_does_not_retry_other_bad_request_errors(monkeypatch) -> None:
     def fake_completion(**kwargs):
         raise BadRequestError(

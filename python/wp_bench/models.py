@@ -137,7 +137,10 @@ class ModelInterface:
         choice = response.choices[0]
         usage = _extract_usage(response)
         return ModelGeneration(
-            text=choice.message["content"],  # type: ignore[union-attr, index]
+            # Providers can return None content (safety block, thinking-only
+            # response, truncation). That is a model output, not a harness
+            # fault: normalize to "" so it grades as an empty answer.
+            text=choice.message["content"] or "",  # type: ignore[union-attr, index]
             raw_response=response,
             retry_count=attempt_count - 1,
             latency_ms=latency_ms,
