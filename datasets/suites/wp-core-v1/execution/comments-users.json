@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-comments_users",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Comments and Users",
     "description": "Code generation tasks for WordPress Comments and Users APIs",
@@ -175,7 +175,7 @@
       "category": "comments-users",
       "difficulty": "basic",
       "prompt": "Implement a function that returns the number of approved comments for a supplied post.",
-      "expected_behavior": "Reviewer contract: The function should use WordPress comment-count APIs for the supplied post and return only the approved count. The runtime creates one approved and one pending comment, expects an exact count of one, and removes all fixtures in teardown.",
+      "expected_behavior": "Reviewer contract: The function should use WordPress comment-count APIs for the supplied post and return only the approved count. The runtime creates one post with two approved and one pending comment plus a second post with no comments, expects exact counts of two and zero respectively (so no single constant can pass), and removes all fixtures in teardown.",
       "requirements": [
         "Use WordPress comment APIs",
         "Accept the post ID as input",
@@ -197,16 +197,16 @@
         ]
       },
       "runtime_checks": {
-        "setup": "$GLOBALS['wpbp_comments_users_004_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Comment Count', 'post_status' => 'publish' ) ); if ( is_int( $GLOBALS['wpbp_comments_users_004_post_id'] ) ) { $GLOBALS['wpbp_comments_users_004_approved_id'] = wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Approved', 'comment_approved' => 1 ) ); $GLOBALS['wpbp_comments_users_004_pending_id'] = wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Pending', 'comment_approved' => 0 ) ); }",
+        "setup": "$GLOBALS['wpbp_comments_users_004_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Comment Count', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_comments_users_004_empty_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Comment Count Empty', 'post_status' => 'publish' ) ); if ( is_int( $GLOBALS['wpbp_comments_users_004_post_id'] ) ) { $GLOBALS['wpbp_comments_users_004_comment_ids'] = array( wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Approved one', 'comment_approved' => 1 ) ), wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Approved two', 'comment_approved' => 1 ) ), wp_insert_comment( array( 'comment_post_ID' => $GLOBALS['wpbp_comments_users_004_post_id'], 'comment_content' => 'Pending', 'comment_approved' => 0 ) ) ); }",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "$post_id = $GLOBALS['wpbp_comments_users_004_post_id'] ?? 0; if ( ! function_exists( 'wpbp_comments_users_004' ) || ! is_int( $post_id ) ) { return false; } return 1 === wpbp_comments_users_004( $post_id );",
-            "description": "Only the approved comment is counted for the supplied post",
+            "code": "$post_id = $GLOBALS['wpbp_comments_users_004_post_id'] ?? 0; $empty_post_id = $GLOBALS['wpbp_comments_users_004_empty_post_id'] ?? 0; if ( ! function_exists( 'wpbp_comments_users_004' ) || ! is_int( $post_id ) || ! is_int( $empty_post_id ) ) { return false; } return 2 === wpbp_comments_users_004( $post_id ) && 0 === wpbp_comments_users_004( $empty_post_id );",
+            "description": "Only approved comments are counted: two for the fixture post, zero for the empty post",
             "weight": 1
           }
         ],
-        "teardown": "foreach ( array( 'wpbp_comments_users_004_approved_id', 'wpbp_comments_users_004_pending_id' ) as $key ) { $comment_id = $GLOBALS[ $key ] ?? 0; if ( is_int( $comment_id ) && $comment_id > 0 ) { wp_delete_comment( $comment_id, true ); } unset( $GLOBALS[ $key ] ); } $post_id = $GLOBALS['wpbp_comments_users_004_post_id'] ?? 0; if ( is_int( $post_id ) ) { wp_delete_post( $post_id, true ); } unset( $GLOBALS['wpbp_comments_users_004_post_id'] );"
+        "teardown": "foreach ( ( $GLOBALS['wpbp_comments_users_004_comment_ids'] ?? array() ) as $comment_id ) { if ( is_int( $comment_id ) && $comment_id > 0 ) { wp_delete_comment( $comment_id, true ); } } unset( $GLOBALS['wpbp_comments_users_004_comment_ids'] ); foreach ( array( 'wpbp_comments_users_004_post_id', 'wpbp_comments_users_004_empty_post_id' ) as $key ) { $post_id = $GLOBALS[ $key ] ?? 0; if ( is_int( $post_id ) && $post_id > 0 ) { wp_delete_post( $post_id, true ); } unset( $GLOBALS[ $key ] ); }"
       },
       "reference_solution": "function wpbp_comments_users_004( int $post_id ): int { $counts = wp_count_comments( $post_id ); return (int) $counts->approved; }",
       "metadata": {

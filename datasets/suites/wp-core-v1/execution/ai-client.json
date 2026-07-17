@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-ai_client",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - AI Client",
     "description": "Code generation tasks for WordPress AI Client APIs",
@@ -13,7 +13,7 @@
       "category": "ai-client",
       "difficulty": "basic",
       "prompt": "Implement a function that temporarily disables WordPress AI support for its own check, returns the disabled support result, and leaves AI support enabled afterward.",
-      "expected_behavior": "`wpbp_ai_client_001()` uses the `wp_supports_ai` filter only around a call to `wp_supports_ai()`, returns `false` for that temporary check, and removes the filter before returning. The test focuses on the AI support gate and cleanup, not a hard-coded return value.",
+      "expected_behavior": "`wpbp_ai_client_001()` uses the `wp_supports_ai` filter only around a call to `wp_supports_ai()`, returns `false` for that temporary check, and removes the filter before returning. The runtime attaches a counting spy to the `wp_supports_ai` filter, so a hard-coded `return false` fails: the support state must actually be read through `wp_supports_ai()` during the call, and support must be enabled again afterward.",
       "requirements": [
         "Use wp_supports_ai() to read the support state",
         "Use the wp_supports_ai filter to force support off for the temporary check",
@@ -43,8 +43,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_001' ) ) { return false; } $result = wpbp_ai_client_001(); return false === $result && true === wp_supports_ai();",
-            "description": "The support check is disabled only temporarily",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_001' ) ) { return false; } $calls = 0; $spy = function ( $supported ) use ( &$calls ) { $calls++; return $supported; }; add_filter( 'wp_supports_ai', $spy, 1 ); $result = wpbp_ai_client_001(); remove_filter( 'wp_supports_ai', $spy, 1 ); return false === $result && $calls > 0 && true === wp_supports_ai();",
+            "description": "The support state is read through wp_supports_ai() during the call, returns false, and support is enabled again afterward",
             "weight": 1
           }
         ]
@@ -229,7 +229,7 @@
       "category": "ai-client",
       "difficulty": "intermediate",
       "prompt": "Implement a function that returns the text-generation support check result while AI prompt execution is temporarily prevented.",
-      "expected_behavior": "`wpbp_ai_client_005()` temporarily enables `wp_ai_client_prevent_prompt`, calls `is_supported_for_text_generation()` on an AI Client prompt, returns that support-check result, and removes the filter. The support check should return `false` without making a provider call.",
+      "expected_behavior": "`wpbp_ai_client_005()` forces the `wp_ai_client_prevent_prompt` filter on around a text-generation support check and removes it before returning. The runtime attaches a late spy to that filter, so a hard-coded `return false` fails: prevention must be observed active during the call, and the filter must be gone afterward.",
       "requirements": [
         "Use wp_ai_client_prompt()",
         "Use is_supported_for_text_generation()",
@@ -271,8 +271,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_005' ) ) { return false; } $supported = wpbp_ai_client_005(); $prevented_after = apply_filters( 'wp_ai_client_prevent_prompt', false, wp_ai_client_prompt( 'Probe' ) ); return false === $supported && false === $prevented_after;",
-            "description": "The support check returns false while prevention is active and the filter is restored",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_005' ) ) { return false; } $seen_prevented = false; $spy = function ( $prevent ) use ( &$seen_prevented ) { if ( true === $prevent ) { $seen_prevented = true; } return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, PHP_INT_MAX ); $supported = wpbp_ai_client_005(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, PHP_INT_MAX ); $prevented_after = apply_filters( 'wp_ai_client_prevent_prompt', false, wp_ai_client_prompt( 'Probe' ) ); return false === $supported && true === $seen_prevented && false === $prevented_after;",
+            "description": "Prevention is observed active during the support check and the filter is restored afterward",
             "weight": 1
           }
         ]
