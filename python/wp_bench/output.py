@@ -49,6 +49,24 @@ def print_test_error(error: TestError) -> None:
     console.print(panel)
 
 
+def print_test_warning(error: TestError) -> None:
+    """Display a one-line warning for a test recorded as errored, not aborting."""
+    console.print(
+        f"[yellow]⚠ Test errored[/yellow] [cyan]{error.test_id}[/cyan] "
+        f"([magenta]{error.test_type}[/magenta]): "
+        f"[red]{type(error.original_error).__name__}[/red] {error.original_error}"
+    )
+
+
+def print_systemic_abort(error_count: int) -> None:
+    """Explain why continue_on_error still aborted: every test errored."""
+    console.print(
+        f"[red]✖ Aborting despite run.continue_on_error: {error_count} "
+        f"test(s) errored with zero successes — this looks systemic "
+        f"(bad credentials, unreachable runtime), not per-test.[/red]"
+    )
+
+
 def print_abort_message() -> None:
     """Display a message when the benchmark is aborted by the user."""
     panel = Panel(

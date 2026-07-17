@@ -56,6 +56,13 @@ run:
   # dimension; skipping either invalidates a run for comparison purposes.
   # skip_runtime: false  # skip runtime assertions (static checks only)
   # skip_static: false   # skip static checks (runtime assertions only)
+  # Record per-test errors (provider blips, harness exceptions) and keep
+  # going instead of aborting the run. Errored tests carry an `error` object
+  # in results, are excluded from score aggregates, and are listed in
+  # metadata.errored_test_ids. A run where every test errors still aborts
+  # (that is systemic failure, not per-test). Diagnostic runs only: official
+  # leaderboard runs must grade every selected test.
+  # continue_on_error: false
 
 # Output paths
 output:

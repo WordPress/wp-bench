@@ -120,6 +120,11 @@ class RunConfig(StrictModel):
     execution_concurrency: int = 1
     dry_run: bool = False
     check_reference_solution: bool = False
+    #: Record per-test errors (provider failures, harness exceptions) and
+    #: continue instead of aborting the run. Errored tests are excluded from
+    #: score aggregates and listed in result metadata. Diagnostic runs only:
+    #: official leaderboard runs must grade every selected test.
+    continue_on_error: bool = False
     #: Skip runtime assertions (diagnostic runs only). Official leaderboard
     #: runs must not skip grading dimensions.
     skip_runtime: bool = False

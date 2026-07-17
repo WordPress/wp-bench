@@ -94,6 +94,8 @@ run:
   concurrency: 4             # model-call concurrency (knowledge tests)
   execution_isolation: reset_per_test  # reset WordPress before each execution test
   execution_concurrency: 1   # must stay 1 under reset_per_test isolation
+  continue_on_error: false   # record per-test errors and keep going (diagnostic
+                             # only; errored tests are excluded from aggregates)
 
 output:
   path: output/results.json
