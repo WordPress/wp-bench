@@ -308,8 +308,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_connectors_api_008' ) ) { return false; } $enabled = wpbp_connectors_api_008(); $present = wp_is_connector_registered( 'wpbp_ai_probe' ); $registry = WP_Connector_Registry::get_instance(); if ( $registry instanceof WP_Connector_Registry && $present ) { $registry->unregister( 'wpbp_ai_probe' ); } add_filter( 'wp_supports_ai', '__return_false' ); $disabled = wpbp_connectors_api_008(); $absent = ! wp_is_connector_registered( 'wpbp_ai_probe' ); remove_filter( 'wp_supports_ai', '__return_false' ); return true === $enabled && $present && false === $disabled && $absent;",
-            "description": "Registration succeeds with AI enabled and is silently rejected with AI disabled",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_008' ) ) { return false; } $enabled = wpbp_connectors_api_008(); $present = wp_is_connector_registered( 'wpbp_ai_probe' ); $stored = $present ? wp_get_connector( 'wpbp_ai_probe' ) : null; $registry = WP_Connector_Registry::get_instance(); if ( $registry instanceof WP_Connector_Registry && $present ) { $registry->unregister( 'wpbp_ai_probe' ); } add_filter( 'wp_supports_ai', '__return_false' ); $disabled = wpbp_connectors_api_008(); $absent = ! wp_is_connector_registered( 'wpbp_ai_probe' ); remove_filter( 'wp_supports_ai', '__return_false' ); return true === $enabled && $present && is_array( $stored ) && 'WPBP AI Probe' === $stored['name'] && 'ai_provider' === $stored['type'] && 'api_key' === $stored['authentication']['method'] && false === $disabled && $absent;",
+            "description": "The ai_provider connector registers with the requested data when AI is on and is silently rejected when AI is off",
             "weight": 1
           }
         ]
@@ -328,7 +328,7 @@
       "category": "connectors-api",
       "difficulty": "basic",
       "prompt": "Implement a function that reports whether the plugin backing the supplied connector is currently active, by invoking the connector's own plugin is_active callback. Return null when the connector is not registered, without triggering any registry notice.",
-      "expected_behavior": "`wpbp_connectors_api_009()` gates with `wp_is_connector_registered()`, reads `plugin.is_active` from the connector data, and invokes it. The runtime probes akismet (inactive in this environment), a fixture with the default always-active callback, and an unknown ID.",
+      "expected_behavior": "`wpbp_connectors_api_009()` gates with `wp_is_connector_registered()`, reads `plugin.is_active` from the connector data, and invokes it. The runtime registers a fixture whose callback reads a mutable global and probes both toggle states on the same connector (forcing real invocation), plus akismet (inactive here) and an unknown ID.",
       "requirements": [
         "Gate with wp_is_connector_registered()",
         "Invoke the connector's plugin is_active callback"
@@ -356,12 +356,12 @@
         ]
       },
       "runtime_checks": {
-        "setup": "$registry = WP_Connector_Registry::get_instance(); if ( $registry instanceof WP_Connector_Registry ) { $registry->register( 'wpbp_always_on', array( 'name' => 'WPBP Always On', 'type' => 'wpbp_probe_type', 'authentication' => array( 'method' => 'none' ) ) ); }",
+        "setup": "$GLOBALS['wpbp_toggle_active'] = true; $registry = WP_Connector_Registry::get_instance(); if ( $registry instanceof WP_Connector_Registry ) { $registry->register( 'wpbp_toggle', array( 'name' => 'WPBP Toggle', 'type' => 'wpbp_probe_type', 'authentication' => array( 'method' => 'none' ), 'plugin' => array( 'file' => 'wpbp-toggle/wpbp-toggle.php', 'is_active' => static function () { return ! empty( $GLOBALS['wpbp_toggle_active'] ); } ) ) ); }",
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_connectors_api_009' ) ) { return false; } return false === wpbp_connectors_api_009( 'akismet' ) && true === wpbp_connectors_api_009( 'wpbp_always_on' ) && null === wpbp_connectors_api_009( 'wpbp_ghost_connector' );",
-            "description": "The callback reports real plugin activity per connector and unknown IDs return null silently",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_009' ) ) { return false; } $GLOBALS['wpbp_toggle_active'] = true; $on = wpbp_connectors_api_009( 'wpbp_toggle' ); $GLOBALS['wpbp_toggle_active'] = false; $off = wpbp_connectors_api_009( 'wpbp_toggle' ); unset( $GLOBALS['wpbp_toggle_active'] ); return true === $on && false === $off && false === wpbp_connectors_api_009( 'akismet' ) && null === wpbp_connectors_api_009( 'wpbp_ghost_connector' );",
+            "description": "The connector's own is_active callback is actually invoked: the same connector reports both states as the fixture toggles",
             "weight": 1
           }
         ]
@@ -424,7 +424,7 @@
       "category": "connectors-api",
       "difficulty": "advanced",
       "prompt": "Implement a function that registers a connector under the supplied ID with name 'WPBP Probe', type 'wpbp_probe', and no authentication, but only when the ID is valid for the Connectors API (lowercase alphanumerics, hyphens, and underscores). Return true when registered, false otherwise. Invalid IDs must not reach the registry.",
-      "expected_behavior": "`wpbp_connectors_api_011()` validates the ID against the registry's `^[a-z0-9_-]+$` contract before calling `register()`, because an invalid ID passed to the registry triggers `_doing_it_wrong`. The runtime probes a valid ID and two invalid ones; any registry notice fails the test.",
+      "expected_behavior": "`wpbp_connectors_api_011()` validates the ID against the registry's `^[a-z0-9_-]+$` contract before calling `register()`, because an invalid ID passed to the registry triggers `_doing_it_wrong`. The runtime probes a valid ID (and inspects the stored data) plus four invalid IDs covering uppercase, spaces, slashes, and periods; any registry notice fails the test.",
       "requirements": [
         "Validate the ID with the Connectors API pattern before registering",
         "Never call the registry with an invalid ID"
@@ -443,8 +443,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_connectors_api_011' ) ) { return false; } return true === wpbp_connectors_api_011( 'wpbp_valid-id' ) && wp_is_connector_registered( 'wpbp_valid-id' ) && false === wpbp_connectors_api_011( 'WPBP Invalid' ) && false === wpbp_connectors_api_011( 'wpbp/slash' ) && ! wp_is_connector_registered( 'WPBP Invalid' ) && ! wp_is_connector_registered( 'wpbp/slash' );",
-            "description": "Valid IDs register and invalid IDs are rejected before reaching the registry",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_011' ) ) { return false; } if ( true !== wpbp_connectors_api_011( 'wpbp_valid-id' ) || ! wp_is_connector_registered( 'wpbp_valid-id' ) ) { return false; } $stored = wp_get_connector( 'wpbp_valid-id' ); if ( 'WPBP Probe' !== $stored['name'] || 'wpbp_probe' !== $stored['type'] || array( 'method' => 'none' ) !== $stored['authentication'] ) { return false; } return false === wpbp_connectors_api_011( 'WPBP Invalid' ) && false === wpbp_connectors_api_011( 'WPBP_Invalid' ) && false === wpbp_connectors_api_011( 'wpbp/slash' ) && false === wpbp_connectors_api_011( 'wpbp.dot' ) && ! wp_is_connector_registered( 'WPBP Invalid' ) && ! wp_is_connector_registered( 'WPBP_Invalid' ) && ! wp_is_connector_registered( 'wpbp/slash' ) && ! wp_is_connector_registered( 'wpbp.dot' );",
+            "description": "Valid IDs register with the requested data; uppercase, slash, and dot IDs are all rejected before the registry",
             "weight": 1
           }
         ]
@@ -462,8 +462,8 @@
       "id": "e-connectors-api-013",
       "category": "connectors-api",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that registers connector data under the supplied ID only when it is safe to do so, returning 'exists' when the ID is already registered, 'invalid' when the args lack a valid authentication array (method 'api_key' or 'none'), and 'registered' on success. It must never trigger a registry notice.",
-      "expected_behavior": "`wpbp_connectors_api_013()` checks `wp_is_connector_registered()` first and validates the authentication shape before calling the registry, because the registry rejects bad args with `_doing_it_wrong`. The runtime probes all three paths.",
+      "prompt": "Implement a function that registers connector data under the supplied ID only when it is safe to do so, returning 'exists' when the ID is already registered, 'invalid' when the args lack a valid authentication array (method 'api_key' or 'none'), and 'registered' on success. Already-registered IDs and missing or invalid authentication must never reach the registry.",
+      "expected_behavior": "`wpbp_connectors_api_013()` checks `wp_is_connector_registered()` first and validates the authentication shape before calling the registry, because the registry rejects bad args with `_doing_it_wrong`. The runtime probes all three paths with otherwise-valid connector data.",
       "requirements": [
         "Return 'exists' for already-registered IDs without touching the registry",
         "Validate the authentication array before registering",
@@ -493,7 +493,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_connectors_api_013' ) ) { return false; } $valid_args = array( 'name' => 'WPBP Fresh', 'type' => 'wpbp_probe_type', 'authentication' => array( 'method' => 'none' ) ); $exists = wpbp_connectors_api_013( 'akismet', $valid_args ); $invalid = wpbp_connectors_api_013( 'wpbp_fresh', array( 'name' => 'WPBP Fresh', 'type' => 'wpbp_probe_type' ) ); $registered = wpbp_connectors_api_013( 'wpbp_fresh', $valid_args ); return 'exists' === $exists && 'invalid' === $invalid && 'registered' === $registered && wp_is_connector_registered( 'wpbp_fresh' );",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_013' ) ) { return false; } $valid_args = array( 'name' => 'WPBP Fresh', 'type' => 'wpbp_probe_type', 'authentication' => array( 'method' => 'none' ) ); $exists = wpbp_connectors_api_013( 'akismet', $valid_args ); $invalid = wpbp_connectors_api_013( 'wpbp_fresh', array( 'name' => 'WPBP Fresh', 'type' => 'wpbp_probe_type' ) ); $bad_method = wpbp_connectors_api_013( 'wpbp_fresh', array( 'name' => 'WPBP Fresh', 'type' => 'wpbp_probe_type', 'authentication' => array( 'method' => 'oauth' ) ) ); $registered = wpbp_connectors_api_013( 'wpbp_fresh', $valid_args ); return 'exists' === $exists && 'invalid' === $invalid && 'invalid' === $bad_method && 'registered' === $registered && wp_is_connector_registered( 'wpbp_fresh' );",
             "description": "All three outcomes are reported correctly and no registry notice fires",
             "weight": 1
           }

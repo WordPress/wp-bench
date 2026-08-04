@@ -390,7 +390,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/greet' ); if ( ! $ability instanceof WP_Ability ) { return false; } $schema = $ability->get_input_schema(); return 'wpbp-greetings' === $ability->get_category() && 'world' === ( $schema['default'] ?? null ) && 'hello world' === $ability->execute( null ) && 'hello wp' === $ability->execute( 'wp' );",
+            "code": "WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/greet' ); if ( ! $ability instanceof WP_Ability ) { return false; } $schema = $ability->get_input_schema(); return 'wpbp-greetings' === $ability->get_category() && 'string' === ( $schema['type'] ?? null ) && 'world' === ( $schema['default'] ?? null ) && 'hello world' === $ability->execute( null ) && 'hello wp' === $ability->execute( 'wp' );",
             "description": "The ability registers with a defaulted input schema and the default applies on null input",
             "weight": 1
           }

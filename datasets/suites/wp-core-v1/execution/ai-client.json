@@ -290,23 +290,18 @@
       "id": "e-ai-client-006",
       "category": "ai-client",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that sets the default AI client request timeout to the supplied number of seconds for subsequently created prompt builders, using the core filter, and then creates and returns a new prompt builder for the prompt 'Ping'.",
-      "expected_behavior": "`wpbp_ai_client_006()` filters `wp_ai_client_default_request_timeout` (which fires on every builder construction) and returns a fresh `wp_ai_client_prompt( 'Ping' )` builder. The runtime attaches a late spy to the filter and verifies the model's filtered value actually flowed through during construction.",
+      "prompt": "Implement a function that makes the default AI client request timeout the supplied number of seconds for all subsequently created prompt builders, using the core filter.",
+      "expected_behavior": "`wpbp_ai_client_006()` filters `wp_ai_client_default_request_timeout`, which fires on every builder construction. The runtime probes two different values by constructing its own builders after each call with a late spy on the filter, so hardcoding one value or removing the filter after construction fails.",
       "requirements": [
         "Filter wp_ai_client_default_request_timeout",
-        "Create the builder with wp_ai_client_prompt()"
+        "Make the value apply to builders created after the call"
       ],
-      "test_function": "wpbp_ai_client_006( float $seconds ): WP_AI_Client_Prompt_Builder",
+      "test_function": "wpbp_ai_client_006( float $seconds ): void",
       "static_checks": {
         "required_patterns": [
           {
             "pattern": "wp_ai_client_default_request_timeout",
             "description": "Uses the timeout filter",
-            "weight": 1
-          },
-          {
-            "pattern": "wp_ai_client_prompt",
-            "description": "Creates the builder",
             "weight": 1
           },
           {
@@ -327,13 +322,13 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_006' ) ) { return false; } $seen = null; $spy = function ( $timeout ) use ( &$seen ) { $seen = $timeout; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $builder = wpbp_ai_client_006( 12.5 ); remove_all_filters( 'wp_ai_client_default_request_timeout' ); return $builder instanceof WP_AI_Client_Prompt_Builder && 12.5 === (float) $seen;",
-            "description": "The filtered timeout is observed during builder construction and a builder is returned",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_006' ) ) { return false; } $probe = function ( float $expected ): bool { $seen = null; $spy = function ( $timeout ) use ( &$seen ) { $seen = $timeout; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $fresh = wp_ai_client_prompt( 'Spy probe' ); remove_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); return $fresh instanceof WP_AI_Client_Prompt_Builder && (float) $seen === $expected; }; wpbp_ai_client_006( 12.5 ); $first = $probe( 12.5 ); remove_all_filters( 'wp_ai_client_default_request_timeout' ); wpbp_ai_client_006( 7.25 ); $second = $probe( 7.25 ); remove_all_filters( 'wp_ai_client_default_request_timeout' ); return $first && $second;",
+            "description": "The filtered timeout applies to builders the runtime creates after each call, for two different values",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_ai_client_006( float $seconds ): WP_AI_Client_Prompt_Builder { add_filter( 'wp_ai_client_default_request_timeout', static fn(): float => $seconds ); return wp_ai_client_prompt( 'Ping' ); }",
+      "reference_solution": "function wpbp_ai_client_006( float $seconds ): void { add_filter( 'wp_ai_client_default_request_timeout', static fn(): float => $seconds ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
@@ -377,108 +372,13 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_007' ) ) { return false; } $calls = 0; $spy = function ( $supported ) use ( &$calls ) { $calls++; return $supported; }; add_filter( 'wp_supports_ai', $spy, 1 ); $message = wpbp_ai_client_007(); remove_filter( 'wp_supports_ai', $spy, 1 ); return 'AI features are not supported in this environment.' === $message && $calls > 0 && true === wp_supports_ai();",
-            "description": "The disabled-environment message is produced through a real attempt and support is restored",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_007' ) ) { return false; } $saw_disabled = false; $constructions = 0; $support_spy = function ( $supported ) use ( &$saw_disabled ) { if ( false === $supported ) { $saw_disabled = true; } return $supported; }; $construct_spy = function ( $timeout ) use ( &$constructions ) { $constructions++; return $timeout; }; add_filter( 'wp_supports_ai', $support_spy, PHP_INT_MAX ); add_filter( 'wp_ai_client_default_request_timeout', $construct_spy, PHP_INT_MAX ); $message = wpbp_ai_client_007(); remove_filter( 'wp_supports_ai', $support_spy, PHP_INT_MAX ); remove_filter( 'wp_ai_client_default_request_timeout', $construct_spy, PHP_INT_MAX ); return 'AI features are not supported in this environment.' === $message && $saw_disabled && $constructions > 0 && true === wp_supports_ai();",
+            "description": "Support is observed disabled during the call, a real builder is constructed for the attempt, and support is restored",
             "weight": 1
           }
         ]
       },
       "reference_solution": "function wpbp_ai_client_007(): string { add_filter( 'wp_supports_ai', '__return_false' ); $result = wp_ai_client_prompt( 'Probe' )->generate_text(); remove_filter( 'wp_supports_ai', '__return_false' ); return is_wp_error( $result ) ? $result->get_error_message() : ''; }",
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
-        ],
-        "release_focus": "7.0"
-      }
-    },
-    {
-      "id": "e-ai-client-008",
-      "category": "ai-client",
-      "difficulty": "advanced",
-      "prompt": "Implement a function that proves the AI prompt prevention filter receives a read-only copy of the builder: prevent execution via the core filter while capturing the builder instance the filter receives, attempt text generation on a new builder, clean up the filter, and return whether the captured instance is a WP_AI_Client_Prompt_Builder distinct from the original.",
-      "expected_behavior": "`wpbp_ai_client_008()` hooks `wp_ai_client_prevent_prompt` with two accepted arguments, captures the second, and compares identities. The runtime attaches its own counting spy to the prevention filter, so a hard-coded return fails: the filter chain must actually run.",
-      "requirements": [
-        "Hook wp_ai_client_prevent_prompt accepting the builder argument",
-        "Compare the captured instance against the original builder",
-        "Remove the filter before returning"
-      ],
-      "test_function": "wpbp_ai_client_008(): bool",
-      "static_checks": {
-        "required_patterns": [
-          {
-            "pattern": "wp_ai_client_prevent_prompt",
-            "description": "Uses the prevention filter",
-            "weight": 1
-          },
-          {
-            "pattern": "add_filter",
-            "description": "Registers the filter",
-            "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_008' ) ) { return false; } $calls = 0; $spy = function ( $prevent ) use ( &$calls ) { $calls++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $result = wpbp_ai_client_008(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); return true === $result && $calls > 0 && false === has_filter( 'wp_ai_client_prevent_prompt' );",
-            "description": "The prevention filter chain actually runs, receives a distinct builder clone, and is cleaned up",
-            "weight": 1
-          }
-        ]
-      },
-      "reference_solution": "function wpbp_ai_client_008(): bool { $captured = null; $filter = function ( $prevent, $builder ) use ( &$captured ) { $captured = $builder; return true; }; add_filter( 'wp_ai_client_prevent_prompt', $filter, 10, 2 ); $builder = wp_ai_client_prompt( 'Probe' ); $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', $filter, 10 ); return $captured instanceof WP_AI_Client_Prompt_Builder && $captured !== $builder; }",
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
-        ],
-        "release_focus": "7.0"
-      }
-    },
-    {
-      "id": "e-ai-client-009",
-      "category": "ai-client",
-      "difficulty": "advanced",
-      "prompt": "Implement a function that measures how many times the AI prompt prevention filter runs during a text-generation attempt in each of two states, returning array( 'disabled' => int, 'enabled' => int ): first with AI support forced off via the core support filter, then with support untouched. Clean up all filters you add.",
-      "expected_behavior": "When `wp_supports_ai()` is false the prevention filter is short-circuited and never applied; when support is on it runs once per generating call. The runtime keeps its own spy on the prevention filter during the call to independently confirm exactly one invocation happened.",
-      "requirements": [
-        "Count prevention-filter invocations with your own spy filter",
-        "Force support off only for the first attempt",
-        "Clean up every filter you add"
-      ],
-      "test_function": "wpbp_ai_client_009(): array",
-      "static_checks": {
-        "required_patterns": [
-          {
-            "pattern": "wp_ai_client_prevent_prompt",
-            "description": "Spies on the prevention filter",
-            "weight": 1
-          },
-          {
-            "pattern": "wp_supports_ai",
-            "description": "Toggles AI support",
-            "weight": 1
-          },
-          {
-            "pattern": "remove_filter",
-            "description": "Cleans up",
-            "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_009' ) ) { return false; } $outer = 0; $spy = function ( $prevent ) use ( &$outer ) { $outer++; return true; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $counts = wpbp_ai_client_009(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); return array( 'disabled' => 0, 'enabled' => 1 ) === $counts && 1 === $outer && true === wp_supports_ai();",
-            "description": "The prevention filter is skipped while AI is disabled and runs exactly once while enabled",
-            "weight": 1
-          }
-        ]
-      },
-      "reference_solution": "function wpbp_ai_client_009(): array { $count = 0; $spy = function ( $prevent ) use ( &$count ) { $count++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 20 ); add_filter( 'wp_supports_ai', '__return_false' ); wp_ai_client_prompt( 'Probe' )->generate_text(); $disabled = $count; remove_filter( 'wp_supports_ai', '__return_false' ); wp_ai_client_prompt( 'Probe' )->generate_text(); $enabled = $count - $disabled; remove_filter( 'wp_ai_client_prevent_prompt', $spy, 20 ); return array( 'disabled' => $disabled, 'enabled' => $enabled ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
@@ -536,29 +436,19 @@
       "id": "e-ai-client-011",
       "category": "ai-client",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that calls the supplied nonexistent method name on a fresh AI prompt builder and reports how the builder behaves afterwards, as array( 'error_code' => <code from a subsequent generate_text() call>, 'still_fluent' => <whether using_temperature() still returns the same builder> ).",
-      "expected_behavior": "Unknown builder methods put the builder into a sticky error state: later generating calls return the stored `prompt_builder_error` WP_Error while fluent configuration keeps returning the builder itself. `wpbp_ai_client_011()` exercises exactly that state machine.",
+      "prompt": "Implement a function that calls the supplied nonexistent method name on a fresh AI prompt builder and returns that same builder.",
+      "expected_behavior": "Unknown builder methods store a sticky `prompt_builder_error` on the builder while keeping it fluent. The runtime verifies the returned builder was really constructed (construction spy), then generates under an active prevention filter: a poisoned builder surfaces its stored `prompt_builder_error` (the sticky error is checked before the prevention gate), while a clean builder would surface `prompt_prevented`.",
       "requirements": [
         "Create the builder with wp_ai_client_prompt()",
-        "Invoke the supplied method name dynamically",
-        "Report the subsequent error code and fluency"
+        "Invoke the supplied method name dynamically on it",
+        "Return the same builder"
       ],
-      "test_function": "wpbp_ai_client_011( string $method_name ): array",
+      "test_function": "wpbp_ai_client_011( string $method_name ): WP_AI_Client_Prompt_Builder",
       "static_checks": {
         "required_patterns": [
           {
             "pattern": "wp_ai_client_prompt",
             "description": "Creates the builder",
-            "weight": 1
-          },
-          {
-            "pattern": "generate_text",
-            "description": "Probes the stored error",
-            "weight": 1
-          },
-          {
-            "pattern": "using_temperature",
-            "description": "Probes fluency after the failure",
             "weight": 1
           }
         ]
@@ -567,58 +457,13 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_011' ) ) { return false; } return array( 'error_code' => 'prompt_builder_error', 'still_fluent' => true ) === wpbp_ai_client_011( 'wpbp_made_up_method' );",
-            "description": "A bad method call leaves the builder errored for generation but still fluent",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_011' ) ) { return false; } $constructions = 0; $spy = function ( $timeout ) use ( &$constructions ) { $constructions++; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $builder = wpbp_ai_client_011( 'wpbp_made_up_method' ); remove_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); if ( ! $builder instanceof WP_AI_Client_Prompt_Builder || 0 === $constructions ) { return false; } add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $error = $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $error ) && 'prompt_builder_error' === $error->get_error_code() && $builder->using_temperature( 0.1 ) === $builder;",
+            "description": "The returned builder carries the sticky bad-method error (surfaced before the prevention gate) and stays fluent",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_ai_client_011( string $method_name ): array { $builder = wp_ai_client_prompt( 'Probe' ); $builder->{$method_name}(); $result = $builder->generate_text(); return array( 'error_code' => is_wp_error( $result ) ? $result->get_error_code() : '', 'still_fluent' => $builder->using_temperature( 0.1 ) === $builder ); }",
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
-        ],
-        "release_focus": "7.0"
-      }
-    },
-    {
-      "id": "e-ai-client-013",
-      "category": "ai-client",
-      "difficulty": "basic",
-      "prompt": "Implement a function that creates an AI prompt builder for the prompt 'Summarize the latest posts' and attaches the existing 'wpbp/summarize' ability to it as an AI function, returning the builder.",
-      "expected_behavior": "`wpbp_ai_client_013()` uses `using_abilities()`, which converts the registered ability into a function declaration on the builder. The runtime verifies the returned builder is usable (a prevention-forced generation reports `prompt_prevented`, proving the builder carries no error from the attach).",
-      "requirements": [
-        "Create the builder with wp_ai_client_prompt()",
-        "Attach the ability with using_abilities()"
-      ],
-      "test_function": "wpbp_ai_client_013(): WP_AI_Client_Prompt_Builder",
-      "static_checks": {
-        "required_patterns": [
-          {
-            "pattern": "wp_ai_client_prompt",
-            "description": "Creates the builder",
-            "weight": 1
-          },
-          {
-            "pattern": "using_abilities",
-            "description": "Attaches the ability",
-            "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-ai-fixtures', array( 'label' => 'WPBP AI Fixtures', 'description' => 'Fixtures for AI client tests.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/summarize', array( 'label' => 'Summarize', 'description' => 'Summarizes text.', 'category' => 'wpbp-ai-fixtures', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'execute_callback' => static fn( array $input ): string => substr( $input['text'], 0, 10 ), 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_013' ) ) { return false; } $builder = wpbp_ai_client_013(); if ( ! $builder instanceof WP_AI_Client_Prompt_Builder ) { return false; } add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $result = $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $result ) && 'prompt_prevented' === $result->get_error_code();",
-            "description": "The ability attaches without erroring the builder, proven through a prevention-forced generation",
-            "weight": 1
-          }
-        ]
-      },
-      "reference_solution": "function wpbp_ai_client_013(): WP_AI_Client_Prompt_Builder { return wp_ai_client_prompt( 'Summarize the latest posts' )->using_abilities( 'wpbp/summarize' ); }",
+      "reference_solution": "function wpbp_ai_client_011( string $method_name ): WP_AI_Client_Prompt_Builder { $builder = wp_ai_client_prompt( 'Probe' ); $builder->{$method_name}(); return $builder; }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
@@ -631,14 +476,14 @@
       "id": "e-ai-client-015",
       "category": "ai-client",
       "difficulty": "intermediate",
-      "prompt": "Implement a function that proves a prevented support check leaves the AI prompt builder reusable: run a text-generation support check while prevention is active via the core filter, then remove the filter and return whether the check reported unsupported and the same builder still chains fluent configuration (using_temperature() returns the builder itself).",
-      "expected_behavior": "Prevention makes support checks return false without storing an error on the builder, unlike generating calls. `wpbp_ai_client_015()` verifies both halves. The runtime spies on the prevention filter to confirm the check actually engaged it.",
+      "prompt": "Implement a function that runs a text-generation support check on a fresh AI prompt builder while prevention is active via the core prevention filter, removes the filter, and returns the builder only when the check reported unsupported (null otherwise).",
+      "expected_behavior": "Prevention makes support checks return false without storing an error on the builder, unlike generating calls. `wpbp_ai_client_015()` returns the builder that ran the prevented check; the runtime proves it is unpoisoned by generating under prevention and expecting `prompt_prevented` (a stored error would surface first as `prompt_builder_error`), and verifies the model's filter is gone.",
       "requirements": [
         "Prevent with the wp_ai_client_prevent_prompt filter",
         "Run is_supported_for_text_generation() under prevention",
-        "Verify fluency on the same builder after removing the filter"
+        "Return the builder that ran the check, or null when it reported supported"
       ],
-      "test_function": "wpbp_ai_client_015(): bool",
+      "test_function": "wpbp_ai_client_015(): ?WP_AI_Client_Prompt_Builder",
       "static_checks": {
         "required_patterns": [
           {
@@ -652,8 +497,8 @@
             "weight": 1
           },
           {
-            "pattern": "using_temperature",
-            "description": "Probes fluency afterwards",
+            "pattern": "remove_filter",
+            "description": "Cleans up the prevention filter",
             "weight": 1
           }
         ],
@@ -669,13 +514,13 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_015' ) ) { return false; } $calls = 0; $spy = function ( $prevent ) use ( &$calls ) { $calls++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $result = wpbp_ai_client_015(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); return true === $result && $calls > 0;",
-            "description": "The prevented support check reports false and the builder stays clean and fluent",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_015' ) ) { return false; } $calls = 0; $spy = function ( $prevent ) use ( &$calls ) { $calls++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $builder = wpbp_ai_client_015(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); if ( ! $builder instanceof WP_AI_Client_Prompt_Builder || 0 === $calls || false !== has_filter( 'wp_ai_client_prevent_prompt' ) ) { return false; } add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $error = $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $error ) && 'prompt_prevented' === $error->get_error_code();",
+            "description": "The returned builder ran a real prevented support check and carries no stored error: prevented generation reports prompt_prevented, not a sticky builder error",
             "weight": 1
           }
         ]
       },
-      "reference_solution": "function wpbp_ai_client_015(): bool { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $builder = wp_ai_client_prompt( 'Probe' ); $unsupported = false === $builder->is_supported_for_text_generation(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return $unsupported && $builder->using_temperature( 0.2 ) === $builder; }",
+      "reference_solution": "function wpbp_ai_client_015(): ?WP_AI_Client_Prompt_Builder { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $builder = wp_ai_client_prompt( 'Probe' ); $unsupported = false === $builder->is_supported_for_text_generation(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return $unsupported ? $builder : null; }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
