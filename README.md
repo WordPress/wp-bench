@@ -4,10 +4,7 @@ The official WordPress AI benchmark. Evaluate how well language models understan
 
 ## Overview
 
-WP-Bench measures AI model capabilities across two dimensions:
-
-- **Knowledge** — Multiple-choice and short-answer questions testing WordPress concepts, APIs, and best practices
-- **Execution** — Code generation tasks graded by static checks and runtime assertions in a real WordPress environment
+WP-Bench measures AI model capabilities on **execution**: code generation tasks graded by static checks and runtime assertions in a real WordPress environment.
 
 The benchmark uses WordPress itself as the grader, running generated code in a sandboxed environment with static analysis and runtime assertions.
 
@@ -91,7 +88,6 @@ run:
   seed: 1337                 # selection seed (same seed = same subset)
   test_ids: []               # optional explicit test IDs to run
   dry_run: false             # load/filter tests without calling models
-  concurrency: 4             # model-call concurrency (knowledge tests)
   execution_isolation: reset_per_test  # reset WordPress before each execution test
   execution_concurrency: 1   # must stay 1 under reset_per_test isolation
   continue_on_error: false   # record per-test errors and keep going (diagnostic
@@ -109,13 +105,11 @@ output:
 wp-bench run --config wp-bench.yaml          # run with config file
 wp-bench run --model-name gpt-4o --limit 5   # quick single-model test (stratified subset)
 wp-bench run --limit 5 --seed 42             # different deterministic subset
-wp-bench run --test-type knowledge           # run only knowledge tests (no WordPress env needed)
-wp-bench run --test-type execution           # run only execution tests
-wp-bench run --test-type execution --test-id e-abilities-api-001
+wp-bench run --test-id e-abilities-api-001
 wp-bench run --test-id e-abilities-api-001 --test-id e-rest-api-001
 wp-bench run --config wp-bench.yaml --dry-run # validate config without calling models
-wp-bench run --check-reference-solution --test-type execution  # verify reference solutions pass
-wp-bench run --check-exploits --test-type execution            # adversarial assertion audit (see below)
+wp-bench run --check-reference-solution      # verify reference solutions pass
+wp-bench run --check-exploits                # adversarial assertion audit (see below)
 ```
 
 ### Adversarial assertion audit
@@ -130,7 +124,7 @@ model could score on it without doing the work. Exits non-zero if any test is
 exploitable; results (with the passing cheat per test) are written to the output file.
 
 ```bash
-wp-bench run --check-exploits --test-type execution
+wp-bench run --check-exploits
 ```
 
 ## Repository Structure
@@ -146,10 +140,9 @@ wp-bench run --check-exploits --test-type execution
 
 ## Test Suites
 
-Test suites live in `datasets/suites/<suite-name>/` with two directories per suite:
+Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
-- `knowledge/` — Multiple-choice and short-answer knowledge questions (one JSON file per category)
 
 The default suite `wp-core-v1` covers WordPress core APIs, hooks, database operations, and security patterns.
 
@@ -172,7 +165,6 @@ jupyter notebook notebooks/results_report.ipynb
 
 The notebook generates:
 - Overall scores bar chart
-- Knowledge vs Correctness comparison
 - Radar chart for top models
 - Exportable HTML report
 

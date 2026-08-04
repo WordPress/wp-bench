@@ -16,7 +16,7 @@ from wp_bench.config import (
     RunConfig,
 )
 from wp_bench.core import BenchmarkRunner
-from wp_bench.datasets import ExecutionTest, KnowledgeTest
+from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
 
 
@@ -34,23 +34,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         static_checks={},
         runtime_checks={"assertions": [{"type": "custom_assertion", "code": "return true;", "weight": 1}]},
         reference_solution="function ref() { return true; }",
-        metadata={},
-    )
-
-
-def _knowledge_test(test_id: str) -> KnowledgeTest:
-    return KnowledgeTest(
-        id=test_id,
-        suite="wp-core-v1",
-        prompt="Which hook?",
-        test_type="knowledge",
-        category="hooks",
-        difficulty="basic",
-        choices=[
-            {"key": "A", "text": "init"},
-            {"key": "B", "text": "wp_loaded"},
-        ],
-        correct_answer="A",
         metadata={},
     )
 
@@ -103,12 +86,11 @@ def _runner_with_tests(
     tmp_path: Path,
     *,
     execution: list[ExecutionTest] | None = None,
-    knowledge: list[KnowledgeTest] | None = None,
     **run_overrides: Any,
 ) -> BenchmarkRunner:
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": execution or [], "knowledge": knowledge or []},
+        lambda dataset: execution or [],
     )
     runner = BenchmarkRunner(_config(tmp_path, **run_overrides))
     runner.environment = QuietEnvironment()  # type: ignore[assignment]
@@ -123,9 +105,7 @@ def test_default_off_error_still_aborts(
     tests = [_execution_test("e-one"), _execution_test("e-two")]
     # Distinct prompts so the stub can target one test.
     tests[1].prompt = "BAD Prompt"
-    runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests, test_type="execution"
-    )
+    runner = _runner_with_tests(monkeypatch, tmp_path, execution=tests)
     monkeypatch.setattr(
         runner.model, "generate_with_metadata", _model_failing_on("BAD")
     )
@@ -142,8 +122,7 @@ def test_execution_error_is_recorded_and_run_continues(
     tests = [_execution_test("e-one"), _execution_test("e-two"), _execution_test("e-three")]
     tests[1].prompt = "BAD Prompt"
     runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        monkeypatch, tmp_path, execution=tests, continue_on_error=True,
     )
     monkeypatch.setattr(
         runner.model, "generate_with_metadata", _model_failing_on("BAD")
@@ -169,8 +148,7 @@ def test_errored_tests_excluded_from_aggregates(
     tests = [_execution_test("e-one"), _execution_test("e-two"), _execution_test("e-three")]
     tests[1].prompt = "BAD Prompt"
     runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        monkeypatch, tmp_path, execution=tests, continue_on_error=True,
     )
     monkeypatch.setattr(
         runner.model, "generate_with_metadata", _model_failing_on("BAD")
@@ -191,8 +169,7 @@ def test_metadata_records_errored_test_ids(
     tests = [_execution_test("e-one"), _execution_test("e-two")]
     tests[0].prompt = "BAD Prompt"
     runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        monkeypatch, tmp_path, execution=tests, continue_on_error=True,
     )
     monkeypatch.setattr(
         runner.model, "generate_with_metadata", _model_failing_on("BAD")
@@ -204,31 +181,6 @@ def test_metadata_records_errored_test_ids(
     assert payload["metadata"]["errored_test_ids"] == ["e-one"]
 
 
-def test_knowledge_error_is_recorded_and_run_continues(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Knowledge tests get the same record-and-continue treatment."""
-    tests = [_knowledge_test("k-one"), _knowledge_test("k-two")]
-    tests[0].prompt = "BAD Which hook?"
-    runner = _runner_with_tests(
-        monkeypatch, tmp_path, knowledge=tests,
-        test_type="knowledge", continue_on_error=True,
-    )
-    monkeypatch.setattr(
-        runner.model, "generate_with_metadata", _model_failing_on("BAD", good_text="A")
-    )
-
-    payload = runner.run()
-
-    records = {record["test_id"]: record for record in payload["results"]}
-    assert records["k-one"]["error"]["type"] == "RuntimeError"
-    assert records["k-two"]["error"] is None
-    # The errored test does not drag the knowledge score down.
-    assert payload["metadata"]["scores"]["knowledge"] == 1.0
-    assert payload["metadata"]["errored_test_ids"] == ["k-one"]
-
-
 def test_concurrent_execution_path_continues_on_error(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -238,7 +190,7 @@ def test_concurrent_execution_path_continues_on_error(
     tests[2].prompt = "BAD Prompt"
     runner = _runner_with_tests(
         monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        continue_on_error=True,
         execution_isolation="none", execution_concurrency=2,
     )
     monkeypatch.setattr(
@@ -259,8 +211,7 @@ def test_systemic_failure_still_aborts(
     """continue_on_error must not burn the suite when every test errors."""
     tests = [_execution_test(f"e-{index}") for index in range(8)]
     runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        monkeypatch, tmp_path, execution=tests, continue_on_error=True,
     )
 
     def always_fail(prompt: str):
@@ -282,8 +233,7 @@ def test_all_error_run_aborts_even_below_threshold(
     """A small run whose every test errors must not write a null-score file."""
     tests = [_execution_test("e-one"), _execution_test("e-two")]
     runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        monkeypatch, tmp_path, execution=tests, continue_on_error=True,
     )
 
     def always_fail(prompt: str):
@@ -305,8 +255,7 @@ def test_success_after_errors_disarms_systemic_abort(
     for test in tests[1:]:
         test.prompt = "BAD Prompt"
     runner = _runner_with_tests(
-        monkeypatch, tmp_path, execution=tests,
-        test_type="execution", continue_on_error=True,
+        monkeypatch, tmp_path, execution=tests, continue_on_error=True,
     )
     monkeypatch.setattr(
         runner.model, "generate_with_metadata", _model_failing_on("BAD")

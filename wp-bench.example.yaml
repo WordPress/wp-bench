@@ -45,7 +45,6 @@ run:
   # seed: 1337           # selection seed (same seed = same subset)
   # test_ids: []         # optional explicit test IDs to run
   # dry_run: false       # load/filter tests without calling models
-  concurrency: 5         # model-call concurrency (knowledge tests)
   # Execution-test isolation. 'reset_per_test' (default) resets WordPress
   # to a clean baseline before every execution test and runs them serially.
   # 'none' opts out and allows execution_concurrency > 1, but tests then

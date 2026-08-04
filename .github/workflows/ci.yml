@@ -51,7 +51,7 @@ jobs:
         run: pip install -e ./python[dev]
 
       - name: Dataset shape and metadata tests
-        run: pytest python/tests/test_execution_dataset.py python/tests/test_knowledge.py python/tests/test_dataset_metadata.py -q
+        run: pytest python/tests/test_execution_dataset.py python/tests/test_dataset_metadata.py -q
 
       - name: Parquet export builds
         run: |

@@ -36,9 +36,12 @@ def test_model_config_accepts_valid_top_p() -> None:
     assert ModelConfig(top_p=None).top_p is None
 
 
-def test_run_config_rejects_zero_concurrency() -> None:
+def test_run_config_rejects_removed_fields() -> None:
+    """Removed fields (test_type, concurrency) fail loudly instead of no-oping."""
     with pytest.raises(ValidationError):
-        RunConfig(concurrency=0)
+        RunConfig(test_type="execution")  # type: ignore[call-arg]
+    with pytest.raises(ValidationError):
+        RunConfig(concurrency=5)  # type: ignore[call-arg]
 
 
 def test_run_config_rejects_zero_limit() -> None:

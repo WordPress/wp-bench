@@ -16,7 +16,8 @@ from wp_bench.config import (
     RunConfig,
 )
 from wp_bench.core import BenchmarkRunner
-from wp_bench.datasets import KnowledgeTest
+from wp_bench.datasets import ExecutionTest
+from wp_bench.environment import ExecutionResult
 from wp_bench.models import ModelInterface
 from wp_bench.scoring import UsageAggregator
 
@@ -132,30 +133,42 @@ def test_result_record_contains_usage_and_model_call(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    test = KnowledgeTest(
-        id="k-one",
+    test = ExecutionTest(
+        id="e-one",
         suite="wp-core-v1",
-        prompt="What hook runs on init?",
-        test_type="knowledge",
+        prompt="Prompt",
+        expected_behavior="expected",
+        test_type="execution",
         category="hooks",
         difficulty="basic",
-        correct_answer="init",
-        answer_type="short_answer",
+        requirements=[],
+        test_function=None,
+        static_checks={},
+        runtime_checks={"assertions": [{"type": "custom_assertion", "code": "return true;", "weight": 1}]},
+        reference_solution=None,
+        metadata={},
     )
     config = HarnessConfig(
         dataset=DatasetConfig(source="local", name="wp-core-v1"),
         model=ModelConfig(name="gpt-4o-mini"),
         grader=GraderConfig(kind="cli"),
-        run=RunConfig(test_type="knowledge"),
+        run=RunConfig(),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
-    monkeypatch.setattr(
-        "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [], "knowledge": [test]},
-    )
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
     monkeypatch.setattr(models_module, "completion", lambda **kwargs: _response())
     monkeypatch.setattr(models_module, "completion_cost", lambda response: 0.002)
     runner = BenchmarkRunner(config)
+    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.reset = lambda: None  # type: ignore[method-assign]
+    raw = {
+        "success": True,
+        "static": {"score": 1.0, "details": {"total_weight": 1}},
+        "runtime": {"score": 1.0, "details": {"total_weight": 1}},
+    }
+    runner.environment.execute_artifact = lambda artifact, verification_spec: ExecutionResult(  # type: ignore[method-assign]
+        success=True, raw=raw, stdout="", stderr=""
+    )
 
     payload = runner.run()
 
