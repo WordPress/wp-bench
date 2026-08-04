@@ -34,6 +34,10 @@ class ExecutionTest:
     artifact_kind: str = "php_snippet"
     #: Reference files for wp_plugin_files reference-solution runs.
     reference_files: dict[str, str] | None = None
+    #: Authored cheat snippets that must FAIL the assertions; the inverse of
+    #: reference_solution, run by --check-exploits alongside the generic
+    #: battery. Maintainer-side QA data — excluded from the parquet export.
+    exploit_solutions: list[str] | None = None
 
 
 @dataclass
@@ -231,6 +235,7 @@ def _parse_execution_suite(path: Path) -> list[ExecutionTest]:
                 metadata=_merge_metadata(test.get("metadata", {}), metadata),
                 artifact_kind=test.get("artifact_kind", "php_snippet"),
                 reference_files=test.get("reference_files"),
+                exploit_solutions=test.get("exploit_solutions"),
             )
         )
     return tests

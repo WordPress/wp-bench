@@ -50,6 +50,9 @@ def load_suite(suite_name: str) -> list[dict]:
                     "metadata": orjson.dumps(t.get("metadata", {})).decode(),
                     "artifact_kind": t.get("artifact_kind", "php_snippet"),
                     "reference_files": orjson.dumps(t.get("reference_files") or {}).decode(),
+                    # exploit_solutions is deliberately not exported: it is
+                    # maintainer-side assertion QA (--check-exploits), not
+                    # benchmark content for dataset consumers.
                 })
 
     # Load all knowledge tests from knowledge/ directory

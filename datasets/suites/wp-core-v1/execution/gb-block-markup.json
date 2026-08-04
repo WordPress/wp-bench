@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_markup",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Markup Authoring",
     "description": "Code generation tasks that require authoring serialized Gutenberg block markup as stored in post_content",
@@ -64,7 +64,11 @@
           "src/wp-includes/blocks/heading"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_001(): string { return '<!-- wp:paragraph --><p>Hello from WP-Bench</p><!-- /wp:paragraph --><!-- wp:heading {\"level\":3} --><h3>Getting Started</h3><!-- /wp:heading -->'; }",
+        "function wpbp_gb_markup_001(): string { return '<!-- wp:paragraph --><p>Hello from WP-Bench</p><!-- /wp:paragraph --><!-- wp:heading {\"level\":3} --><h3 class=\"wp-block-heading\">Getting Started</h3>'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-002",
@@ -121,7 +125,10 @@
           "src/wp-includes/blocks/image"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_002(): string { return '<!-- wp:image {\"id\":123,\"sizeSlug\":\"large\",\"src\":\"https://example.com/wp-content/uploads/2026/07/team.jpg\",\"alt\":\"Team photo\"} --><figure class=\"wp-block-image size-large\"><img src=\"https://example.com/wp-content/uploads/2026/07/team.jpg\" alt=\"Team photo\" class=\"wp-image-123\"/></figure><!-- /wp:image -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-003",
@@ -179,7 +186,10 @@
           "src/wp-includes/blocks/list-item"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_003(): string { return '<!-- wp:list --><ul><li>Alpha</li><li>Beta</li><li>Gamma</li></ul><!-- /wp:list -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-004",
@@ -237,7 +247,10 @@
           "src/wp-includes/blocks/paragraph"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_004(): string { return '<!-- wp:quote --><blockquote class=\"wp-block-quote\"><!-- wp:paragraph --><p>Code is poetry.<cite>WordPress</cite></p><!-- /wp:paragraph --></blockquote><!-- /wp:quote -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-005",
@@ -296,7 +309,10 @@
           "src/wp-includes/blocks/post-content"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_005(): string { return '<!-- wp:site-title /--><!-- wp:separator /--><!-- wp:post-content /-->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-006",
@@ -354,7 +370,10 @@
           "src/wp-includes/blocks/column"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_006(): string { return '<!-- wp:columns {\"columns\":2} --><div class=\"wp-block-columns has-2-columns\"><!-- wp:column --><div class=\"wp-block-column\"><!-- wp:paragraph --><p>Left</p><!-- /wp:paragraph --></div><!-- /wp:column --><!-- wp:column --><div class=\"wp-block-column\"><!-- wp:paragraph --><p>Right</p><!-- /wp:paragraph --></div><!-- /wp:column --></div><!-- /wp:columns -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-007",
@@ -412,7 +431,10 @@
           "src/wp-includes/blocks/button"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_007(): string { return '<!-- wp:buttons --><div class=\"wp-block-buttons\"><!-- wp:button {\"url\":\"https://example.com/download\"} --><div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://example.com/download\">Download</a></div><!-- /wp:button --><!-- wp:button {\"url\":\"https://example.com/learn-more\"} --><div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://example.com/learn-more\">Learn More</a></div><!-- /wp:button --></div><!-- /wp:buttons -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-008",
@@ -469,7 +491,10 @@
           "src/wp-includes/blocks/table"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_008(): string { return '<!-- wp:table --><table class=\"wp-block-table has-fixed-layout\"><thead><tr><th>Plan</th><th>Price</th></tr></thead><tbody><tr><td>Basic</td><td>$10</td></tr><tr><td>Pro</td><td>$20</td></tr></tbody></table><!-- /wp:table -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-009",
@@ -526,7 +551,10 @@
           "src/wp-includes/blocks/cover"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_009(): string { return '<!-- wp:cover {\"url\":\"https://example.com/wp-content/uploads/2026/07/hero.jpg\",\"dimRatio\":40} --><div class=\"wp-block-cover\"><img class=\"wp-block-cover__image-background\" alt=\"\" src=\"https://example.com/wp-content/uploads/2026/07/hero.jpg\"/><span aria-hidden=\"true\" class=\"wp-block-cover__background has-background-dim-40 has-background-dim\"></span><!-- wp:paragraph --><p>Stargazing</p><!-- /wp:paragraph --></div><!-- /wp:cover -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-010",
@@ -584,7 +612,10 @@
           "src/wp-includes/blocks/image"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_010(): string { return '<!-- wp:gallery {\"ids\":[201,202],\"linkTo\":\"none\"} --><figure class=\"wp-block-gallery columns-2 is-cropped\"><ul class=\"blocks-gallery-grid\"><li class=\"blocks-gallery-item\"><figure><img src=\"https://example.com/wp-content/uploads/2026/07/a.jpg\" alt=\"First\" class=\"wp-image-201\"/></figure></li><li class=\"blocks-gallery-item\"><figure><img src=\"https://example.com/wp-content/uploads/2026/07/b.jpg\" alt=\"Second\" class=\"wp-image-202\"/></figure></li></ul></figure><!-- /wp:gallery -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-011",
@@ -643,7 +674,10 @@
           "src/wp-includes/blocks/post-title"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_011(): string { return '<!-- wp:query {\"queryId\":1,\"query\":{\"postType\":\"post\",\"order\":\"asc\",\"orderBy\":\"title\",\"inherit\":true}} --><div class=\"wp-block-query\"><!-- wp:post-template --><!-- wp:post-title /--><!-- /wp:post-template --></div><!-- /wp:query -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-012",
@@ -702,7 +736,10 @@
           "src/wp-includes/blocks/navigation-submenu"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_012(): string { return '<!-- wp:navigation --><!-- wp:navigation-link {\"label\":\"Home\",\"url\":\"/\"} /--><!-- wp:navigation-link {\"label\":\"About\",\"url\":\"/about\"} /--><!-- wp:navigation-link {\"label\":\"Team\",\"url\":\"/team\"} /--><!-- wp:navigation-link {\"label\":\"History\",\"url\":\"/history\"} /--><!-- /wp:navigation -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-013",
@@ -759,7 +796,10 @@
           "src/wp-includes/blocks/paragraph"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_013(): string { return '<!-- wp:paragraph {\"metadata\":{\"name\":\"A --> B & \\u0022C\\u0022\"}} --><p>Escape check</p><!-- /wp:paragraph -->'; }"
+      ]
     },
     {
       "id": "e-gb-block-markup-014",
@@ -819,7 +859,10 @@
           "src/wp-includes/blocks/paragraph"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_markup_014(): string { return '<!-- wp:heading --><h2 class=\"wp-block-heading\">Features</h2><!-- /wp:heading --><!-- wp:list --><ul class=\"wp-block-list\"><li>Fast</li><li>Secure</li></ul><!-- /wp:list --><!-- wp:paragraph --><p>Get started today.</p><!-- /wp:paragraph -->'; }"
+      ]
     }
   ]
 }
