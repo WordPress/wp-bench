@@ -42,7 +42,6 @@ def _plugin_test(test_id: str = "e-plugin-001") -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Build a plugin.",
         expected_behavior="expected",
-        test_type="execution",
         category="plugins",
         difficulty="intermediate",
         requirements=[],

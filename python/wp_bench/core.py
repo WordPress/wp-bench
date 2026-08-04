@@ -68,13 +68,25 @@ def _timestamped_path(path: Path) -> Path:
 
 
 def _limit_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
-    """Select tests for this run (seeded stratified selection when limited)."""
-    return select_tests(
+    """Select tests for this run (seeded stratified selection when limited).
+
+    Zero selected tests is always a configuration or dataset problem (missing
+    suite, an HF export with no execution rows): every run mode would
+    otherwise "succeed" vacuously, so fail loudly here instead.
+    """
+    selected = select_tests(
         tests,
         limit=config.run.limit,
         test_ids=config.run.test_ids,
         seed=config.run.seed,
     )
+    if not selected:
+        raise ValueError(
+            f"No execution tests selected from dataset "
+            f"'{config.dataset.name}' (suite {config.run.suite!r}). "
+            "Check the dataset source and suite name."
+        )
+    return selected
 
 
 def _build_verification_spec(test: Any, config: HarnessConfig) -> dict[str, Any]:

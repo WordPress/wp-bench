@@ -138,7 +138,6 @@ def test_result_record_contains_usage_and_model_call(
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="hooks",
         difficulty="basic",
         requirements=[],

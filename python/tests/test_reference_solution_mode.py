@@ -38,7 +38,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="Reviewer contract: expected",
-        test_type="execution",
         category="general",
         difficulty="basic",
         requirements=["Requirement"],

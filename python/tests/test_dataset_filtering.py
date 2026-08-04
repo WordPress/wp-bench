@@ -12,7 +12,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="general",
         difficulty="basic",
         requirements=[],
@@ -51,3 +50,16 @@ def test_filter_tests_by_ids_rejects_unknown_ids() -> None:
 
     with pytest.raises(ValueError, match="Unknown test id"):
         filter_tests_by_ids(tests, ["missing"])
+
+
+def test_zero_selected_tests_fails_loudly() -> None:
+    """An empty selection (missing suite, execution-less dataset) must not
+    produce a vacuous successful run."""
+    import pytest
+
+    from wp_bench.config import HarnessConfig
+    from wp_bench.core import _limit_tests
+
+    config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core-v1"}})
+    with pytest.raises(ValueError, match="No execution tests selected"):
+        _limit_tests([], config)

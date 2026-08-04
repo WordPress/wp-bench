@@ -12,7 +12,6 @@ datasets/
 │       │   ├── hooks.json
 │       │   ├── rest-api.json
 │       │   └── ...
-│       └── knowledge/         # Multiple choice / short answer tests
 │           ├── hooks.json
 │           ├── rest-api.json
 │           └── ...
@@ -53,7 +52,7 @@ dataset:
 
 ## Adding New Suites
 
-1. Create `suites/<suite-name>/execution/` and `knowledge/` directories
+1. Create a `suites/<suite-name>/execution/` directory
 2. Add category JSON files (e.g., `hooks.json`, `rest-api.json`) to each directory
 3. Follow the schema in existing suites
 4. Run `python datasets/export_dataset.py` to include in Parquet export
@@ -93,7 +92,7 @@ traversal, limited file count and total size.
 
 ### Per-Test Metadata
 
-Every test (execution and knowledge) may carry a `metadata` object with
+Every test may carry a `metadata` object with
 provenance and coverage fields. Metadata is preserved end-to-end: local
 JSON → Parquet export (as a JSON-encoded `metadata` column) → Hugging Face
 loading → benchmark result records. In loaded tests and result records,

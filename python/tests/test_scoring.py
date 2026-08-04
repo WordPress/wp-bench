@@ -17,7 +17,6 @@ def _make_test(
         suite="wp-core-v1",
         prompt="Do something.",
         expected_behavior="Reviewer contract: does something observable.",
-        test_type="execution",
         category="hooks",
         difficulty="intermediate",
         requirements=[],

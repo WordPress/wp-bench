@@ -132,7 +132,6 @@ def test_result_record_includes_task_metadata(
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="general",
         difficulty="basic",
         requirements=[],

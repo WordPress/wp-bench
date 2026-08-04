@@ -28,7 +28,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="hooks",
         difficulty="basic",
         requirements=["Requirement"],

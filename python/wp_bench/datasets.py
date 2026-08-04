@@ -20,7 +20,6 @@ class ExecutionTest:
     suite: str
     prompt: str
     expected_behavior: str
-    test_type: str
     category: str
     difficulty: str
     requirements: list[str]
@@ -91,7 +90,6 @@ def _load_from_huggingface(config: DatasetConfig) -> list[ExecutionTest]:
                 suite=row.get("suite", config.name),
                 prompt=row["prompt"],
                 expected_behavior=row.get("expected_behavior", ""),
-                test_type="execution",
                 category=row.get("category", "general"),
                 difficulty=row.get("difficulty", "unknown"),
                 requirements=requirements if isinstance(requirements, list) else [],
@@ -170,7 +168,6 @@ def _parse_execution_suite(path: Path) -> list[ExecutionTest]:
                 suite=suite_id,
                 prompt=test["prompt"],
                 expected_behavior=test.get("expected_behavior", ""),
-                test_type="execution",
                 category=test.get("category", "general"),
                 difficulty=test.get("difficulty", "unknown"),
                 requirements=test.get("requirements", []),

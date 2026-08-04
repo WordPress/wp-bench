@@ -11,7 +11,6 @@ def _test(test_id: str, category: str, difficulty: str = "basic") -> ExecutionTe
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category=category,
         difficulty=difficulty,
         requirements=[],
