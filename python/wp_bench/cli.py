@@ -8,9 +8,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from .config import HarnessConfig, ModelConfig
-from .core import BenchmarkRunner, MultiModelRunner
+from .core import BenchmarkRunner, MultiModelRunner, _limit_tests
 from .datasets import ExecutionTest, filter_tests_by_ids, load_tests
-from .selection import select_tests
 
 # Load .env file for API keys
 load_dotenv()
@@ -54,13 +53,13 @@ def _select_for_config(
     tests: list[ExecutionTest],
     harness_config: HarnessConfig,
 ) -> list[ExecutionTest]:
-    """Run the seeded stratified selector with this config's settings."""
-    return select_tests(
-        tests,
-        limit=harness_config.run.limit,
-        test_ids=harness_config.run.test_ids,
-        seed=harness_config.run.seed,
-    )
+    """Run the guarded selector with this config's settings.
+
+    Uses the same chokepoint as every run mode, so a selection of zero
+    tests (missing suite, execution-less dataset) fails loudly in
+    dry-run too instead of printing a successful zero count.
+    """
+    return _limit_tests(tests, harness_config)
 
 
 def _print_dry_run_counts(

@@ -63,3 +63,16 @@ def test_zero_selected_tests_fails_loudly() -> None:
     config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core-v1"}})
     with pytest.raises(ValueError, match="No execution tests selected"):
         _limit_tests([], config)
+
+
+def test_dry_run_zero_selection_fails_loudly(tmp_path) -> None:
+    """dry-run must use the guarded selector: a suite with no execution
+    tests errors instead of printing a successful zero count."""
+    import pytest
+
+    from wp_bench.cli import _select_for_config
+    from wp_bench.config import HarnessConfig
+
+    config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core-v1"}})
+    with pytest.raises(ValueError, match="No execution tests selected"):
+        _select_for_config([], config)

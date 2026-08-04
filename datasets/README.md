@@ -8,10 +8,7 @@ This directory contains the benchmark test suites and tooling for publishing to 
 datasets/
 ├── suites/                    # Source of truth (human-editable JSON)
 │   └── wp-core-v1/
-│       ├── execution/         # Code generation tests (one file per category)
-│       │   ├── hooks.json
-│       │   ├── rest-api.json
-│       │   └── ...
+│       └── execution/         # Code generation tests (one file per category)
 │           ├── hooks.json
 │           ├── rest-api.json
 │           └── ...
@@ -80,15 +77,6 @@ the files as a plugin, loads it, runs the task's assertions, and removes
 it. Artifacts are validated before install: no absolute paths, no `..`
 traversal, limited file count and total size.
 
-### Knowledge Tests
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique test ID |
-| `prompt` | string | Question text |
-| `type` | string | Knowledge mode such as `multiple_choice` or `short_answer` |
-| `choices` | array | Optional multiple choice options `[{key, text}]` |
-| `correct_answer` | string | Correct choice key or canonical short answer |
-| `answer_type` | string | Optional short-answer scoring mode such as `exact` or `contains` |
 
 ### Per-Test Metadata
 
