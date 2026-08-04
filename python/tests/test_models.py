@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 from litellm.exceptions import BadRequestError
 
+import wp_bench.models as models_module
 from wp_bench.config import ModelConfig
 from wp_bench.models import ModelInterface
-import wp_bench.models as models_module
 
 
 def test_generate_retries_without_temperature_on_deprecated_error(monkeypatch) -> None:

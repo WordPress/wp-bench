@@ -28,12 +28,12 @@ def _timeout() -> Timeout:
 
 def _fast_config(**overrides: object) -> ModelConfig:
     """Retry config with sub-second backoff so tests stay fast."""
-    defaults: dict = dict(
-        name="gpt-4o-mini",
-        max_retries=3,
-        retry_min_seconds=0.01,
-        retry_max_seconds=0.02,
-    )
+    defaults: dict = {
+        "name": "gpt-4o-mini",
+        "max_retries": 3,
+        "retry_min_seconds": 0.01,
+        "retry_max_seconds": 0.02,
+    }
     defaults.update(overrides)
     return ModelConfig.model_validate(defaults)
 

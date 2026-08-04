@@ -30,10 +30,14 @@ dependencies = [
 
 [project.optional-dependencies]
 http = ["uvicorn>=0.30", "fastapi>=0.111"]
-dev = ["pytest>=8.3", "ruff>=0.6", "mypy>=1.10", "types-PyYAML>=6.0"]
+dev = ["pytest>=8.3", "ruff>=0.16,<0.17", "mypy>=1.10", "types-PyYAML>=6.0"]
 
 [project.scripts]
 wp-bench = "wp_bench.cli:app"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.ruff.lint.flake8-bugbear]
+# typer declares CLI options via function-call defaults by design.
+extend-immutable-calls = ["typer.Option"]

@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from wp_bench.config import GraderConfig
 from wp_bench.environment import WordPressEnvironment
 
 
 def test_execute_code_uses_internal_runtime_verifier_for_wp_env() -> None:
-    calls: list[tuple[list[str], Optional[str]]] = []
+    calls: list[tuple[list[str], str | None]] = []
     environment = WordPressEnvironment(GraderConfig(kind="docker", wp_env_dir=Path("runtime")))
 
-    def fake_exec(command: list[str], *, stdin: Optional[str] = None) -> tuple[str, str, int, bool]:
+    def fake_exec(command: list[str], *, stdin: str | None = None) -> tuple[str, str, int, bool]:
         calls.append((command, stdin))
         assert stdin is not None
         payload = json.loads(stdin)

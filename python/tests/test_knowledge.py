@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import wp_bench.datasets as datasets_module
 from wp_bench.config import DatasetConfig
 from wp_bench.datasets import KnowledgeTest, _parse_knowledge_suite
 from wp_bench.knowledge import render_knowledge_prompt, score_knowledge_answer
-import wp_bench.datasets as datasets_module
 
 
 def test_render_knowledge_prompt_uses_choice_instructions_for_multiple_choice() -> None:

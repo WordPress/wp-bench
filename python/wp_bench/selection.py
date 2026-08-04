@@ -12,16 +12,16 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any
 
 
 def select_tests(
-    tests: List[Any],
+    tests: list[Any],
     *,
     limit: int | None,
-    test_ids: List[str],
+    test_ids: list[str],
     seed: int,
-) -> List[Any]:
+) -> list[Any]:
     """Select tests for a run, deterministically.
 
     Rules:
@@ -40,7 +40,7 @@ def select_tests(
     if limit is None or limit >= len(tests):
         return tests
 
-    groups: Dict[Any, List[Any]] = defaultdict(list)
+    groups: dict[Any, list[Any]] = defaultdict(list)
     for test in tests:
         key = (getattr(test, "category", ""), getattr(test, "difficulty", ""))
         groups[key].append(test)
@@ -50,7 +50,7 @@ def select_tests(
     for key in ordered_keys:
         rng.shuffle(groups[key])
 
-    selected: List[Any] = []
+    selected: list[Any] = []
     while len(selected) < limit:
         progressed = False
         for key in ordered_keys:
@@ -65,6 +65,6 @@ def select_tests(
     return sorted(selected, key=lambda test: test.id)
 
 
-def selected_test_ids(tests: List[Any]) -> List[str]:
+def selected_test_ids(tests: list[Any]) -> list[str]:
     """IDs of a selection, for dry-run output and result metadata."""
     return [test.id for test in tests]

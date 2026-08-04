@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import orjson
 from datasets import load_dataset as hf_load_dataset  # type: ignore[attr-defined]
@@ -23,17 +23,17 @@ class ExecutionTest:
     test_type: str
     category: str
     difficulty: str
-    requirements: List[str]
-    test_function: Optional[str]
-    static_checks: Dict[str, Any]
-    runtime_checks: Dict[str, Any]
-    reference_solution: Optional[str]
-    metadata: Dict[str, Any]
+    requirements: list[str]
+    test_function: str | None
+    static_checks: dict[str, Any]
+    runtime_checks: dict[str, Any]
+    reference_solution: str | None
+    metadata: dict[str, Any]
     #: What the model must produce: 'php_snippet' (default) or
     #: 'wp_plugin_files' (JSON files map installed as a plugin).
     artifact_kind: str = "php_snippet"
     #: Reference files for wp_plugin_files reference-solution runs.
-    reference_files: Optional[Dict[str, str]] = None
+    reference_files: dict[str, str] | None = None
 
 
 @dataclass
@@ -44,14 +44,14 @@ class KnowledgeTest:
     test_type: str
     category: str
     difficulty: str
-    choices: Optional[List[Dict[str, Any]]] = None
-    correct_answer: Optional[str] = None
-    answer_type: Optional[str] = None
-    answer: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    choices: list[dict[str, Any]] | None = None
+    correct_answer: str | None = None
+    answer_type: str | None = None
+    answer: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
-def load_tests(config: DatasetConfig) -> Dict[str, List[Any]]:
+def load_tests(config: DatasetConfig) -> dict[str, list[Any]]:
     """Load both execution and knowledge tests for a suite."""
     if config.source == "huggingface":
         return _load_from_huggingface(config)
@@ -59,9 +59,9 @@ def load_tests(config: DatasetConfig) -> Dict[str, List[Any]]:
 
 
 def filter_tests_by_ids(
-    tests: Dict[str, List[Any]],
-    test_ids: List[str],
-) -> Dict[str, List[Any]]:
+    tests: dict[str, list[Any]],
+    test_ids: list[str],
+) -> dict[str, list[Any]]:
     """Filter loaded tests to the requested dataset test IDs."""
     if not test_ids:
         return tests
@@ -79,9 +79,9 @@ def filter_tests_by_ids(
 
 
 def ensure_test_ids_match_type(
-    tests: Dict[str, List[Any]],
+    tests: dict[str, list[Any]],
     test_type: str | None,
-    test_ids: List[str],
+    test_ids: list[str],
 ) -> None:
     """Fail clearly when requested IDs do not match an explicit test type."""
     if not test_ids or test_type is None:
@@ -92,7 +92,7 @@ def ensure_test_ids_match_type(
         )
 
 
-def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
+def _load_from_huggingface(config: DatasetConfig) -> dict[str, list[Any]]:
     """Load dataset from Hugging Face Hub (Parquet format)."""
     dataset = hf_load_dataset(
         config.name,
@@ -100,8 +100,8 @@ def _load_from_huggingface(config: DatasetConfig) -> Dict[str, List[Any]]:
         split=config.split,
         cache_dir=str(config.cache_dir) if config.cache_dir else None,
     )
-    execution: List[ExecutionTest] = []
-    knowledge: List[KnowledgeTest] = []
+    execution: list[ExecutionTest] = []
+    knowledge: list[KnowledgeTest] = []
 
     for row in dataset:
         # Parse JSON-encoded fields from Parquet format
@@ -159,7 +159,7 @@ def _parse_json_field(value: Any) -> Any:
     return value
 
 
-def _merge_metadata(task_metadata: Any, suite_metadata: Any) -> Dict[str, Any]:
+def _merge_metadata(task_metadata: Any, suite_metadata: Any) -> dict[str, Any]:
     """Combine per-task and suite-level metadata without losing either.
 
     Task fields (source_refs, release_focus, version targets, ...) sit at
@@ -167,29 +167,29 @@ def _merge_metadata(task_metadata: Any, suite_metadata: Any) -> Dict[str, Any]:
     ``suite_metadata``. A task field named ``suite_metadata`` would be
     shadowed, which is acceptable and documented in the dataset README.
     """
-    merged: Dict[str, Any] = dict(task_metadata) if isinstance(task_metadata, dict) else {}
+    merged: dict[str, Any] = dict(task_metadata) if isinstance(task_metadata, dict) else {}
     merged["suite_metadata"] = suite_metadata if isinstance(suite_metadata, dict) else {}
     return merged
 
 
-def _row_metadata(row: Dict[str, Any]) -> Dict[str, Any]:
+def _row_metadata(row: dict[str, Any]) -> dict[str, Any]:
     """Parse the metadata column from a Hugging Face row."""
     parsed = _parse_json_field(row.get("metadata", "{}"))
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _parse_optional_dict(value: Any) -> Optional[Dict[str, Any]]:
+def _parse_optional_dict(value: Any) -> dict[str, Any] | None:
     """Parse an optional JSON-encoded dict column; empty means None."""
     parsed = _parse_json_field(value) if value else None
     return parsed if isinstance(parsed, dict) and parsed else None
 
 
-def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
+def _load_from_local_files(config: DatasetConfig) -> dict[str, list[Any]]:
     suite = config.name.split("/")[-1]
     suite_dir = DATASET_SUITES_DIR / suite
 
-    execution: List[ExecutionTest] = []
-    knowledge: List[KnowledgeTest] = []
+    execution: list[ExecutionTest] = []
+    knowledge: list[KnowledgeTest] = []
 
     # Load all execution test files from execution/ directory
     execution_dir = suite_dir / "execution"
@@ -208,7 +208,7 @@ def _load_from_local_files(config: DatasetConfig) -> Dict[str, List[Any]]:
     return {"execution": execution, "knowledge": knowledge}
 
 
-def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
+def _parse_execution_suite(path: Path) -> list[ExecutionTest]:
     data = _read_json(path)
     suite_id = data.get("id", path.stem)
     metadata = data.get("metadata", {})
@@ -236,7 +236,7 @@ def _parse_execution_suite(path: Path) -> List[ExecutionTest]:
     return tests
 
 
-def _parse_knowledge_suite(path: Path) -> List[KnowledgeTest]:
+def _parse_knowledge_suite(path: Path) -> list[KnowledgeTest]:
     data = _read_json(path)
     suite_id = data.get("id", path.stem)
     metadata = data.get("metadata", {})
@@ -259,6 +259,6 @@ def _parse_knowledge_suite(path: Path) -> List[KnowledgeTest]:
     return tests
 
 
-def _read_json(path: Path) -> Dict[str, Any]:
+def _read_json(path: Path) -> dict[str, Any]:
     with path.open("rb") as handle:
         return orjson.loads(handle.read())

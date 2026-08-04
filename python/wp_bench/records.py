@@ -7,7 +7,7 @@ do not hand-roll record dicts in runner code.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .config import ModelConfig
 
@@ -15,7 +15,7 @@ from .config import ModelConfig
 RESULT_SCHEMA_VERSION = "1.0"
 
 
-def _model_info(model_config: Optional[ModelConfig]) -> Optional[Dict[str, Any]]:
+def _model_info(model_config: ModelConfig | None) -> dict[str, Any] | None:
     """Serialize the model configuration relevant to reproducibility."""
     if model_config is None:
         return None
@@ -28,7 +28,7 @@ def _model_info(model_config: Optional[ModelConfig]) -> Optional[Dict[str, Any]]
     }
 
 
-def _empty_usage() -> Dict[str, Any]:
+def _empty_usage() -> dict[str, Any]:
     """Usage placeholders; populated when usage capture is implemented."""
     return {
         "prompt_tokens": None,
@@ -39,7 +39,7 @@ def _empty_usage() -> Dict[str, Any]:
     }
 
 
-def _null_scores() -> Dict[str, Any]:
+def _null_scores() -> dict[str, Any]:
     """The full score key set, all null — a record that carries no score."""
     return {
         "knowledge": None,
@@ -56,8 +56,8 @@ def _base_record(
     test: Any,
     test_type: str,
     mode: str,
-    model_config: Optional[ModelConfig],
-) -> Dict[str, Any]:
+    model_config: ModelConfig | None,
+) -> dict[str, Any]:
     """The canonical per-test record skeleton shared by every builder.
 
     Every field defaults to its null/empty form; each builder overrides only
@@ -87,14 +87,14 @@ def build_knowledge_record(
     *,
     test: Any,
     mode: str,
-    model_config: Optional[ModelConfig],
+    model_config: ModelConfig | None,
     prompt_hash: str,
     raw_completion: str,
     answer: str,
     knowledge_score: float,
-    usage: Optional[Dict[str, Any]] = None,
-    model_call: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    usage: dict[str, Any] | None = None,
+    model_call: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the canonical record for a knowledge test result."""
     record = _base_record(test=test, test_type="knowledge", mode=mode, model_config=model_config)
     record["prompt_hash"] = prompt_hash
@@ -109,15 +109,15 @@ def build_execution_record(
     *,
     test: Any,
     mode: str,
-    model_config: Optional[ModelConfig],
-    prompt_hash: Optional[str],
-    raw_completion: Optional[str],
+    model_config: ModelConfig | None,
+    prompt_hash: str | None,
+    raw_completion: str | None,
     code: str,
     env_result: Any,
-    scores: Dict[str, Any],
-    usage: Optional[Dict[str, Any]] = None,
-    model_call: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    scores: dict[str, Any],
+    usage: dict[str, Any] | None = None,
+    model_call: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the canonical record for an execution test result.
 
     Args:
@@ -147,10 +147,10 @@ def build_error_record(
     test: Any,
     test_type: str,
     mode: str,
-    model_config: Optional[ModelConfig],
+    model_config: ModelConfig | None,
     error_type: str,
     error_message: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build the canonical record for a test that errored before grading.
 
     Used by ``run.continue_on_error``: the record fills the reserved
@@ -167,9 +167,9 @@ def build_exploit_audit_record(
     *,
     test: Any,
     candidates_tried: int,
-    passing_exploit: Optional[str],
-    exploit_code: Optional[str],
-) -> Dict[str, Any]:
+    passing_exploit: str | None,
+    exploit_code: str | None,
+) -> dict[str, Any]:
     """Build the record for one test in the adversarial assertion audit.
 
     Shares the canonical header (test_id/suite/type/category/difficulty)
@@ -192,7 +192,7 @@ def build_exploit_audit_record(
     }
 
 
-def execution_record_passed(record: Dict[str, Any]) -> bool:
+def execution_record_passed(record: dict[str, Any]) -> bool:
     """Whether an execution record represents a strict pass.
 
     Reads the primary execution_pass metric (SCORING_VERSION 2.0). Used by

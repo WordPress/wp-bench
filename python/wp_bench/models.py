@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from litellm import completion, completion_cost
 from litellm.exceptions import (
@@ -48,15 +48,15 @@ class ModelGeneration:
     """A completion plus the call metadata needed for audit and reporting."""
 
     text: str
-    raw_response: Optional[ModelResponse]
+    raw_response: ModelResponse | None
     retry_count: int
     latency_ms: float
-    provider_response_id: Optional[str]
+    provider_response_id: str | None
     temperature_fallback: bool = False
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    total_tokens: Optional[int] = None
-    cost_usd: Optional[float] = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+    cost_usd: float | None = None
 
     def usage_dict(self) -> dict[str, Any]:
         """Usage object in the canonical result-record shape."""
@@ -107,7 +107,7 @@ class ModelInterface:
             nonlocal attempt_count
             attempt_count = retry_state.attempt_number
 
-        response: Optional[ModelResponse] = None
+        response: ModelResponse | None = None
         for attempt in Retrying(
             stop=stop_after_attempt(self.config.max_retries + 1),
             wait=wait_random_exponential(
@@ -180,13 +180,13 @@ def _is_deprecated_temperature_error(error: BadRequestError) -> bool:
     return "`temperature` is deprecated" in str(error)
 
 
-def _extract_usage(response: Any) -> dict[str, Optional[int]]:
+def _extract_usage(response: Any) -> dict[str, int | None]:
     """Read token usage defensively; providers may omit any field."""
     usage = getattr(response, "usage", None)
     if usage is None and isinstance(response, dict):
         usage = response.get("usage")
 
-    def _read(field: str) -> Optional[int]:
+    def _read(field: str) -> int | None:
         if usage is None:
             return None
         value = getattr(usage, field, None)
@@ -201,7 +201,7 @@ def _extract_usage(response: Any) -> dict[str, Optional[int]]:
     }
 
 
-def _estimate_cost_safe(response: Any) -> Optional[float]:
+def _estimate_cost_safe(response: Any) -> float | None:
     """Best-effort cost estimate via LiteLLM; None when unpriceable.
 
     Cost is an estimate, not billing truth: unknown models, custom
@@ -210,6 +210,6 @@ def _estimate_cost_safe(response: Any) -> Optional[float]:
     """
     try:
         cost = completion_cost(response)
-    except Exception:
+    except Exception:  # noqa: BLE001 -- best-effort estimate over arbitrary providers
         return None
     return float(cost) if isinstance(cost, (int, float)) else None

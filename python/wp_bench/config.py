@@ -7,7 +7,7 @@ at load time instead of becoming silent no-ops: config means behavior.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -30,9 +30,9 @@ class StrictModel(BaseModel):
 class DatasetConfig(StrictModel):
     source: Literal["huggingface", "local"] = "huggingface"
     name: str = "WordPress/wp-bench-v1"
-    revision: Optional[str] = None
+    revision: str | None = None
     split: str = "test"
-    cache_dir: Optional[Path] = None
+    cache_dir: Path | None = None
 
 
 class ModelConfig(StrictModel):
@@ -41,8 +41,8 @@ class ModelConfig(StrictModel):
     kind: Literal["openai", "anthropic", "ollama", "openai-compatible"] = "openai"
     name: str = "gpt-4o-mini"
     temperature: float = 0.0
-    max_tokens: Optional[int] = None
-    top_p: Optional[float] = None
+    max_tokens: int | None = None
+    top_p: float | None = None
     request_timeout: float = Field(default=300.0, gt=0)
     #: Additional attempts after the first call fails with a transient
     #: provider error (rate limit, timeout, connection, 5xx).
@@ -61,13 +61,13 @@ class ModelConfig(StrictModel):
 
     @field_validator("top_p")
     @classmethod
-    def _validate_top_p(cls, value: Optional[float]) -> Optional[float]:
+    def _validate_top_p(cls, value: float | None) -> float | None:
         if value is not None and not 0 <= value <= 1:
             raise ValueError("top_p must be between 0 and 1")
         return value
 
     @model_validator(mode="after")
-    def _validate_retry_policy(self) -> "ModelConfig":
+    def _validate_retry_policy(self) -> ModelConfig:
         if self.max_retries < 0:
             raise ValueError("model.max_retries must be >= 0")
         if self.retry_min_seconds <= 0 or self.retry_max_seconds <= 0:
@@ -86,7 +86,7 @@ class GraderConfig(StrictModel):
     base_url: str = "http://localhost:8888"
     timeout_seconds: int = Field(default=90, gt=0)
     setup_timeout_seconds: int = Field(default=600, gt=0)
-    wp_env_dir: Optional[Path] = None
+    wp_env_dir: Path | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -109,9 +109,9 @@ ExecutionIsolation = Literal["reset_per_test", "none"]
 
 class RunConfig(StrictModel):
     suite: str = "wp-core-v1"
-    test_type: Optional[Literal["knowledge", "execution"]] = None
-    limit: Optional[int] = Field(default=None, gt=0)
-    test_ids: List[str] = Field(default_factory=list)
+    test_type: Literal["knowledge", "execution"] | None = None
+    limit: int | None = Field(default=None, gt=0)
+    test_ids: list[str] = Field(default_factory=list)
     #: Reserved for deterministic subset selection; wired by seeded
     #: stratified test limiting. Not yet consumed elsewhere.
     seed: int = 1337
@@ -139,7 +139,7 @@ class RunConfig(StrictModel):
     skip_static: bool = False
 
     @model_validator(mode="after")
-    def _validate_execution_concurrency(self) -> "RunConfig":
+    def _validate_execution_concurrency(self) -> RunConfig:
         """Reject concurrency the isolation strategy cannot support.
 
         ``reset_per_test`` isolation resets one shared WordPress runtime
@@ -160,7 +160,7 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_skips(self) -> "RunConfig":
+    def _validate_skips(self) -> RunConfig:
         if self.skip_runtime and self.skip_static:
             raise ValueError(
                 "run.skip_runtime and run.skip_static cannot both be true: "
@@ -169,7 +169,7 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_exclusive_modes(self) -> "RunConfig":
+    def _validate_exclusive_modes(self) -> RunConfig:
         if self.check_exploits and self.check_reference_solution:
             raise ValueError(
                 "run.check_exploits and run.check_reference_solution are "
@@ -182,18 +182,18 @@ class RunConfig(StrictModel):
 
 class OutputConfig(StrictModel):
     path: Path = Path("results.json")
-    jsonl_path: Optional[Path] = Field(default=Path("results.jsonl"))
+    jsonl_path: Path | None = Field(default=Path("results.jsonl"))
 
 
 class HarnessConfig(StrictModel):
     dataset: DatasetConfig = DatasetConfig()
-    model: Optional[ModelConfig] = None  # Single model (legacy)
-    models: Optional[List[ModelConfig]] = None  # Multiple models
+    model: ModelConfig | None = None  # Single model (legacy)
+    models: list[ModelConfig] | None = None  # Multiple models
     grader: GraderConfig = GraderConfig()
     run: RunConfig = RunConfig()
     output: OutputConfig = OutputConfig()
 
-    def get_models(self) -> List[ModelConfig]:
+    def get_models(self) -> list[ModelConfig]:
         """Return list of models to evaluate."""
         if self.models:
             return self.models
@@ -202,14 +202,14 @@ class HarnessConfig(StrictModel):
         return [ModelConfig()]  # Default
 
     @classmethod
-    def from_file(cls, path: Path) -> "HarnessConfig":
+    def from_file(cls, path: Path) -> HarnessConfig:
         import yaml
 
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
         base_dir = path.parent
 
-        def resolve_path(value: Optional[str | Path]) -> Optional[str]:
+        def resolve_path(value: str | Path | None) -> str | None:
             if value is None:
                 return None
             candidate = Path(value)

@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 
 import pytest
-
 from conftest import fake_generation
+
 from wp_bench.artifacts import (
     MAX_ARTIFACT_FILES,
     Artifact,

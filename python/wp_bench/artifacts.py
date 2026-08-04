@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .utils import strip_code_fences
 
@@ -40,11 +40,11 @@ class Artifact:
 
     kind: str
     code: str = ""
-    files: Dict[str, str] = field(default_factory=dict)
+    files: dict[str, str] = field(default_factory=dict)
 
-    def payload_fields(self) -> Dict[str, Any]:
+    def payload_fields(self) -> dict[str, Any]:
         """Fields merged into the runtime verification payload."""
-        fields: Dict[str, Any] = {"artifact_kind": self.kind, "code": self.code}
+        fields: dict[str, Any] = {"artifact_kind": self.kind, "code": self.code}
         if self.files:
             fields["files"] = self.files
         return fields
@@ -77,7 +77,7 @@ def _parse_plugin_files(completion: str) -> Artifact:
     if not isinstance(data, dict) or not isinstance(data.get("files"), dict):
         raise ArtifactError("Plugin artifact JSON must contain a 'files' object.")
 
-    files: Dict[str, str] = {}
+    files: dict[str, str] = {}
     total_bytes = 0
     for raw_path, content in data["files"].items():
         if not isinstance(raw_path, str) or not isinstance(content, str):
@@ -121,7 +121,7 @@ def _validate_relative_path(raw_path: str) -> str:
     return path
 
 
-def _find_main_plugin_file(files: Dict[str, str]) -> Optional[str]:
+def _find_main_plugin_file(files: dict[str, str]) -> str | None:
     """Locate the top-level PHP file carrying the plugin header."""
     for path, content in files.items():
         if "/" in path or not path.endswith(".php"):
