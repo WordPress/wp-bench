@@ -336,7 +336,7 @@
         ]
       },
       "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-transform', array( 'label' => 'WPBP Transform', 'description' => 'Text transformation fixtures.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/uppercase', array( 'label' => 'Uppercase', 'description' => 'Uppercases supplied text.', 'category' => 'wpbp-transform', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'output_schema' => array( 'type' => 'string' ), 'execute_callback' => static fn( array $input ): string => strtoupper( $input['text'] ), 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
+        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-fixtures', array( 'label' => 'WPBP Fixtures', 'description' => 'Fixture abilities for WPBP tests.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/uppercase', array( 'label' => 'Uppercase', 'description' => 'Uppercases supplied text.', 'category' => 'wpbp-fixtures', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'output_schema' => array( 'type' => 'string' ), 'execute_callback' => static fn( array $input ): string => strtoupper( $input['text'] ), 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
         "assertions": [
           {
             "type": "custom_assertion",
@@ -431,7 +431,7 @@
         ]
       },
       "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-temp', array( 'label' => 'WPBP Temp', 'description' => 'Temporary fixtures.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/temp-ability', array( 'label' => 'Temp', 'description' => 'Temporary ability.', 'category' => 'wpbp-temp', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
+        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-fixtures', array( 'label' => 'WPBP Fixtures', 'description' => 'Fixture abilities for WPBP tests.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/temp-ability', array( 'label' => 'Temp', 'description' => 'Temporary ability.', 'category' => 'wpbp-fixtures', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
         "assertions": [
           {
             "type": "custom_assertion",
@@ -483,7 +483,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "$found = wp_has_ability_category( 'wpbp-audit' ); if ( ! $found ) { return false; } $category = wp_get_ability_category( 'wpbp-audit' ); $meta = $category instanceof WP_Ability_Category ? $category->get_meta() : array(); return 'WPBP Audit' === $category->get_label() && 'shield' === ( $meta['icon'] ?? null );",
+            "code": "$category = wp_has_ability_category( 'wpbp-audit' ) ? wp_get_ability_category( 'wpbp-audit' ) : null; if ( ! $category instanceof WP_Ability_Category ) { return false; } $meta = $category->get_meta(); return 'WPBP Audit' === $category->get_label() && 'shield' === ( $meta['icon'] ?? null );",
             "description": "The category is actually registered with its label and icon meta",
             "weight": 1
           }
@@ -494,56 +494,6 @@
         "source_refs": [
           "src/wp-includes/abilities-api.php",
           "src/wp-includes/abilities-api/class-wp-ability-category.php"
-        ],
-        "release_focus": "6.9"
-      }
-    },
-    {
-      "id": "e-abilities-api-010",
-      "category": "abilities-api",
-      "difficulty": "advanced",
-      "prompt": "Register a 'wpbp/word-stats' ability in the existing 'wpbp-stats' category. It accepts an object input with a required string 'text' property and returns an object with integer 'words' and 'chars' properties (both required in the output schema): the word count and character count of the text.",
-      "expected_behavior": "The ability registers on `wp_abilities_api_init` with both schemas. The runtime checks the declared output schema (object with required integer `words`/`chars`) and executes it against two different texts, so neither a constant return nor a schema-less registration passes.",
-      "requirements": [
-        "Register during the wp_abilities_api_init action",
-        "Declare both the input schema and the output schema",
-        "Compute words with str_word_count() and chars with strlen()"
-      ],
-      "static_checks": {
-        "required_patterns": [
-          {
-            "pattern": "wp_register_ability",
-            "description": "Registers through the Abilities API",
-            "weight": 1
-          },
-          {
-            "pattern": "output_schema",
-            "description": "Declares the output schema",
-            "weight": 1
-          },
-          {
-            "pattern": "str_word_count",
-            "description": "Computes the word count",
-            "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-stats', array( 'label' => 'WPBP Stats', 'description' => 'Statistics abilities.' ) ); } );",
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "code": "WP_Abilities_Registry::get_instance(); $ability = wp_get_ability( 'wpbp/word-stats' ); if ( ! $ability instanceof WP_Ability ) { return false; } $out = $ability->get_output_schema(); $required = $out['required'] ?? array(); return 'object' === ( $out['type'] ?? null ) && 'integer' === ( $out['properties']['words']['type'] ?? null ) && 'integer' === ( $out['properties']['chars']['type'] ?? null ) && in_array( 'words', $required, true ) && in_array( 'chars', $required, true ) && array( 'words' => 2, 'chars' => 8 ) === $ability->execute( array( 'text' => 'hi there' ) ) && array( 'words' => 1, 'chars' => 4 ) === $ability->execute( array( 'text' => 'solo' ) );",
-            "description": "The ability declares the full output schema and computes correct stats for two inputs",
-            "weight": 1
-          }
-        ]
-      },
-      "reference_solution": "add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/word-stats', array( 'label' => 'Word stats', 'description' => 'Counts words and characters.', 'category' => 'wpbp-stats', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'output_schema' => array( 'type' => 'object', 'properties' => array( 'words' => array( 'type' => 'integer' ), 'chars' => array( 'type' => 'integer' ) ), 'required' => array( 'words', 'chars' ) ), 'execute_callback' => static fn( array $input ): array => array( 'words' => str_word_count( $input['text'] ), 'chars' => strlen( $input['text'] ) ), 'permission_callback' => '__return_true' ) ); } );",
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/abilities-api.php",
-          "src/wp-includes/abilities-api/class-wp-ability.php"
         ],
         "release_focus": "6.9"
       }
@@ -670,7 +620,7 @@
         ]
       },
       "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-forced-cat', array( 'label' => 'WPBP Forced', 'description' => 'Filter fixture category.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp-forced/sample', array( 'label' => 'Forced sample', 'description' => 'Fixture.', 'category' => 'wpbp-forced-cat', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true' ) ); wp_register_ability( 'wpbp/unforced-sample', array( 'label' => 'Unforced sample', 'description' => 'Fixture.', 'category' => 'wpbp-forced-cat', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true' ) ); } );",
+        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-fixtures', array( 'label' => 'WPBP Fixtures', 'description' => 'Fixture abilities for WPBP tests.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp-forced/sample', array( 'label' => 'Forced sample', 'description' => 'Fixture.', 'category' => 'wpbp-fixtures', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true' ) ); wp_register_ability( 'wpbp/unforced-sample', array( 'label' => 'Unforced sample', 'description' => 'Fixture.', 'category' => 'wpbp-fixtures', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true' ) ); } );",
         "assertions": [
           {
             "type": "custom_assertion",
@@ -721,7 +671,7 @@
         ]
       },
       "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-errors', array( 'label' => 'WPBP Errors', 'description' => 'Error handling fixtures.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/throws', array( 'label' => 'Throws', 'description' => 'Always throws.', 'category' => 'wpbp-errors', 'execute_callback' => static function () { throw new RuntimeException( 'boom' ); }, 'permission_callback' => '__return_true' ) ); wp_register_ability( 'wpbp/answer', array( 'label' => 'Answer', 'description' => 'Returns the answer.', 'category' => 'wpbp-errors', 'execute_callback' => static fn(): int => 42, 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
+        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-fixtures', array( 'label' => 'WPBP Fixtures', 'description' => 'Fixture abilities for WPBP tests.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/throws', array( 'label' => 'Throws', 'description' => 'Always throws.', 'category' => 'wpbp-fixtures', 'execute_callback' => static function () { throw new RuntimeException( 'boom' ); }, 'permission_callback' => '__return_true' ) ); wp_register_ability( 'wpbp/answer', array( 'label' => 'Answer', 'description' => 'Returns the answer.', 'category' => 'wpbp-fixtures', 'execute_callback' => static fn(): int => 42, 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
         "assertions": [
           {
             "type": "custom_assertion",

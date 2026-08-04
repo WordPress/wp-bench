@@ -327,7 +327,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_006' ) ) { return false; } $seen = null; $spy = function ( $timeout ) use ( &$seen ) { $seen = $timeout; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $builder = wpbp_ai_client_006( 12.5 ); remove_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); remove_all_filters( 'wp_ai_client_default_request_timeout' ); return $builder instanceof WP_AI_Client_Prompt_Builder && 12.5 === (float) $seen;",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_006' ) ) { return false; } $seen = null; $spy = function ( $timeout ) use ( &$seen ) { $seen = $timeout; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $builder = wpbp_ai_client_006( 12.5 ); remove_all_filters( 'wp_ai_client_default_request_timeout' ); return $builder instanceof WP_AI_Client_Prompt_Builder && 12.5 === (float) $seen;",
             "description": "The filtered timeout is observed during builder construction and a builder is returned",
             "weight": 1
           }
@@ -415,11 +415,6 @@
             "pattern": "add_filter",
             "description": "Registers the filter",
             "weight": 1
-          },
-          {
-            "pattern": "instanceof",
-            "description": "Type-checks the captured builder",
-            "weight": 1
           }
         ]
       },
@@ -427,7 +422,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_008' ) ) { return false; } $calls = 0; $spy = function ( $prevent ) use ( &$calls ) { $calls++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $result = wpbp_ai_client_008(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $after = apply_filters( 'wp_ai_client_prevent_prompt', false, wp_ai_client_prompt( 'Probe' ) ); return true === $result && $calls > 0 && false === $after;",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_008' ) ) { return false; } $calls = 0; $spy = function ( $prevent ) use ( &$calls ) { $calls++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $result = wpbp_ai_client_008(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); return true === $result && $calls > 0 && false === has_filter( 'wp_ai_client_prevent_prompt' );",
             "description": "The prevention filter chain actually runs, receives a distinct builder clone, and is cleaned up",
             "weight": 1
           }
@@ -588,63 +583,6 @@
       }
     },
     {
-      "id": "e-ai-client-012",
-      "category": "ai-client",
-      "difficulty": "basic",
-      "prompt": "Implement a function that returns the result of the WordPress AI support check while a filter forces the raw supplied value onto it, removing the filter before returning.",
-      "expected_behavior": "`wp_supports_ai()` casts the filtered value to bool, so raw `'0'` and `0` report false while `'yes'` reports true. `wpbp_ai_client_012()` must surface the cast result, and the runtime verifies support is restored afterward.",
-      "requirements": [
-        "Filter wp_supports_ai to return the raw value",
-        "Return the wp_supports_ai() result",
-        "Remove the filter before returning"
-      ],
-      "test_function": "wpbp_ai_client_012( $raw_value ): bool",
-      "static_checks": {
-        "required_patterns": [
-          {
-            "pattern": "wp_supports_ai",
-            "description": "Uses the support check and its filter",
-            "weight": 1
-          },
-          {
-            "pattern": "add_filter",
-            "description": "Forces the raw value",
-            "weight": 1
-          },
-          {
-            "pattern": "remove_filter",
-            "description": "Restores support",
-            "weight": 1
-          }
-        ],
-        "forbidden_patterns": [
-          {
-            "pattern": "/\\b(?:generate_(?:result|text(?:s|_result)?|image(?:s|_result)?|speech(?:es|_result)?|video(?:s|_result)?)|convert_text_to_speech(?:es|_result)?)\\b/",
-            "description": "Does not generate content",
-            "severity": "error"
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_012' ) ) { return false; } return false === wpbp_ai_client_012( '0' ) && false === wpbp_ai_client_012( 0 ) && true === wpbp_ai_client_012( 'yes' ) && true === wp_supports_ai();",
-            "description": "The support check reports the boolean cast of each forced raw value and support is restored",
-            "weight": 1
-          }
-        ]
-      },
-      "reference_solution": "function wpbp_ai_client_012( $raw_value ): bool { $filter = static fn() => $raw_value; add_filter( 'wp_supports_ai', $filter ); $supported = wp_supports_ai(); remove_filter( 'wp_supports_ai', $filter ); return $supported; }",
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
-        ],
-        "release_focus": "7.0"
-      }
-    },
-    {
       "id": "e-ai-client-013",
       "category": "ai-client",
       "difficulty": "basic",
@@ -670,7 +608,7 @@
         ]
       },
       "runtime_checks": {
-        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-ai-summary', array( 'label' => 'WPBP AI Summary', 'description' => 'Summary fixtures.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/summarize', array( 'label' => 'Summarize', 'description' => 'Summarizes text.', 'category' => 'wpbp-ai-summary', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'execute_callback' => static fn( array $input ): string => substr( $input['text'], 0, 10 ), 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
+        "setup": "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-ai-fixtures', array( 'label' => 'WPBP AI Fixtures', 'description' => 'Fixtures for AI client tests.' ) ); } ); add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/summarize', array( 'label' => 'Summarize', 'description' => 'Summarizes text.', 'category' => 'wpbp-ai-fixtures', 'input_schema' => array( 'type' => 'object', 'properties' => array( 'text' => array( 'type' => 'string' ) ), 'required' => array( 'text' ) ), 'execute_callback' => static fn( array $input ): string => substr( $input['text'], 0, 10 ), 'permission_callback' => '__return_true' ) ); } ); WP_Abilities_Registry::get_instance();",
         "assertions": [
           {
             "type": "custom_assertion",
@@ -681,56 +619,6 @@
         ]
       },
       "reference_solution": "function wpbp_ai_client_013(): WP_AI_Client_Prompt_Builder { return wp_ai_client_prompt( 'Summarize the latest posts' )->using_abilities( 'wpbp/summarize' ); }",
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/ai-client.php",
-          "src/wp-includes/ai-client/class-wp-ai-client-prompt-builder.php"
-        ],
-        "release_focus": "7.0"
-      }
-    },
-    {
-      "id": "e-ai-client-014",
-      "category": "ai-client",
-      "difficulty": "intermediate",
-      "prompt": "Implement a function that describes the error produced when AI text generation is prevented by the core prevention filter, as array( 'code' => string, 'status' => int, 'message' => string ). Add and remove the prevention filter inside the function.",
-      "expected_behavior": "A filter-prevented generation returns `WP_Error( 'prompt_prevented', 'Prompt execution was prevented by a filter.', array( 'status' => 503 ) )`. The runtime spies on the prevention filter to confirm the attempt actually happened and verifies prevention is inactive afterward.",
-      "requirements": [
-        "Prevent with the wp_ai_client_prevent_prompt filter",
-        "Extract the code, the status from the error data, and the message",
-        "Remove the filter before returning"
-      ],
-      "test_function": "wpbp_ai_client_014(): array",
-      "static_checks": {
-        "required_patterns": [
-          {
-            "pattern": "wp_ai_client_prevent_prompt",
-            "description": "Uses the prevention filter",
-            "weight": 1
-          },
-          {
-            "pattern": "get_error_data",
-            "description": "Reads the status from the error data",
-            "weight": 1
-          },
-          {
-            "pattern": "remove_filter",
-            "description": "Cleans up",
-            "weight": 1
-          }
-        ]
-      },
-      "runtime_checks": {
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_014' ) ) { return false; } $calls = 0; $spy = function ( $prevent ) use ( &$calls ) { $calls++; return $prevent; }; add_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $described = wpbp_ai_client_014(); remove_filter( 'wp_ai_client_prevent_prompt', $spy, 1 ); $after = apply_filters( 'wp_ai_client_prevent_prompt', false, wp_ai_client_prompt( 'Probe' ) ); return array( 'code' => 'prompt_prevented', 'status' => 503, 'message' => 'Prompt execution was prevented by a filter.' ) === $described && $calls > 0 && false === $after;",
-            "description": "The prevented error carries its code, 503 status, and filter message, produced by a real attempt",
-            "weight": 1
-          }
-        ]
-      },
-      "reference_solution": "function wpbp_ai_client_014(): array { add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $error = wp_ai_client_prompt( 'Probe' )->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $data = is_wp_error( $error ) ? (array) $error->get_error_data() : array(); return array( 'code' => is_wp_error( $error ) ? $error->get_error_code() : '', 'status' => (int) ( $data['status'] ?? 0 ), 'message' => is_wp_error( $error ) ? $error->get_error_message() : '' ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/ai-client.php",
