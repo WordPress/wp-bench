@@ -342,7 +342,7 @@
       "category": "ai-client",
       "difficulty": "intermediate",
       "prompt": "Implement a function that returns the error message produced when text generation is attempted while WordPress AI support is disabled through the core support filter. Disable support only around the attempt and re-enable it before returning.",
-      "expected_behavior": "`wpbp_ai_client_007()` forces `wp_supports_ai` off, attempts `generate_text()` (which short-circuits into the disabled-environment `prompt_prevented` error before any provider call), removes the filter, and returns the error message. The runtime spies on the support filter to prove it was actually engaged, and verifies support is restored.",
+      "expected_behavior": "`wpbp_ai_client_007()` forces `wp_supports_ai` off, attempts `generate_text()` (which short-circuits into the disabled-environment `prompt_prevented` error before any provider call), removes the filter, and returns the error message. The runtime spies on the support filter to prove support was observed disabled during the call, verifies a real builder was constructed for the attempt, and checks support is restored.",
       "requirements": [
         "Force support off with the wp_supports_ai filter",
         "Attempt generation and capture the WP_Error message",
@@ -457,8 +457,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_ai_client_011' ) ) { return false; } $constructions = 0; $spy = function ( $timeout ) use ( &$constructions ) { $constructions++; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $builder = wpbp_ai_client_011( 'wpbp_made_up_method' ); remove_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); if ( ! $builder instanceof WP_AI_Client_Prompt_Builder || 0 === $constructions ) { return false; } add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $error = $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $error ) && 'prompt_builder_error' === $error->get_error_code() && $builder->using_temperature( 0.1 ) === $builder;",
-            "description": "The returned builder carries the sticky bad-method error (surfaced before the prevention gate) and stays fluent",
+            "code": "if ( ! function_exists( 'wpbp_ai_client_011' ) ) { return false; } $constructions = 0; $spy = function ( $timeout ) use ( &$constructions ) { $constructions++; return $timeout; }; add_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); $builder = wpbp_ai_client_011( 'wpbp_made_up_method' ); remove_filter( 'wp_ai_client_default_request_timeout', $spy, PHP_INT_MAX ); if ( ! $builder instanceof WP_AI_Client_Prompt_Builder || 0 === $constructions ) { return false; } add_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); $error = $builder->generate_text(); remove_filter( 'wp_ai_client_prevent_prompt', '__return_true' ); return is_wp_error( $error ) && 'prompt_builder_error' === $error->get_error_code();",
+            "description": "The returned builder carries the sticky bad-method error, surfaced before the prevention gate",
             "weight": 1
           }
         ]

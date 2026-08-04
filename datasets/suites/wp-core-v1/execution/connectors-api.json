@@ -428,7 +428,7 @@
       "category": "connectors-api",
       "difficulty": "advanced",
       "prompt": "Implement a function that registers a connector under the supplied ID with name 'WPBP Probe', type 'wpbp_probe', and no authentication, but only when the ID is valid for the Connectors API (lowercase alphanumerics, hyphens, and underscores). Return true when registered, false otherwise. Invalid IDs must not reach the registry.",
-      "expected_behavior": "`wpbp_connectors_api_011()` validates the ID against the registry's `^[a-z0-9_-]+$` contract before calling `register()`, because an invalid ID passed to the registry triggers `_doing_it_wrong`. The runtime probes a valid ID (and inspects the stored data) plus four invalid IDs covering uppercase, spaces, slashes, and periods; any registry notice fails the test.",
+      "expected_behavior": "`wpbp_connectors_api_011()` validates the ID against the registry's `^[a-z0-9_-]+$` contract before calling `register()`, because an invalid ID passed to the registry triggers `_doing_it_wrong` (which fails the test outright). The runtime probes a valid ID (and inspects the stored data) plus four invalid IDs isolating spaces, uppercase, slashes, and periods.",
       "requirements": [
         "Validate the ID with the Connectors API pattern before registering",
         "Never call the registry with an invalid ID"
@@ -447,8 +447,8 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_connectors_api_011' ) ) { return false; } if ( true !== wpbp_connectors_api_011( 'wpbp_valid-id' ) || ! wp_is_connector_registered( 'wpbp_valid-id' ) ) { return false; } $stored = wp_get_connector( 'wpbp_valid-id' ); if ( 'WPBP Probe' !== $stored['name'] || 'wpbp_probe' !== $stored['type'] || array( 'method' => 'none' ) !== $stored['authentication'] ) { return false; } return false === wpbp_connectors_api_011( 'WPBP Invalid' ) && false === wpbp_connectors_api_011( 'WPBP_Invalid' ) && false === wpbp_connectors_api_011( 'wpbp/slash' ) && false === wpbp_connectors_api_011( 'wpbp.dot' ) && ! wp_is_connector_registered( 'WPBP Invalid' ) && ! wp_is_connector_registered( 'WPBP_Invalid' ) && ! wp_is_connector_registered( 'wpbp/slash' ) && ! wp_is_connector_registered( 'wpbp.dot' );",
-            "description": "Valid IDs register with the requested data; uppercase, slash, and dot IDs are all rejected before the registry",
+            "code": "if ( ! function_exists( 'wpbp_connectors_api_011' ) ) { return false; } if ( true !== wpbp_connectors_api_011( 'wpbp_valid-id' ) || ! wp_is_connector_registered( 'wpbp_valid-id' ) ) { return false; } $stored = wp_get_connector( 'wpbp_valid-id' ); if ( 'WPBP Probe' !== $stored['name'] || 'wpbp_probe' !== $stored['type'] || array( 'method' => 'none' ) !== $stored['authentication'] ) { return false; } return false === wpbp_connectors_api_011( 'wpbp invalid' ) && false === wpbp_connectors_api_011( 'WPBP_Invalid' ) && false === wpbp_connectors_api_011( 'wpbp/slash' ) && false === wpbp_connectors_api_011( 'wpbp.dot' );",
+            "description": "Valid IDs register with the requested data; space, uppercase, slash, and period IDs are all rejected before the registry",
             "weight": 1
           }
         ]
@@ -467,7 +467,7 @@
       "category": "connectors-api",
       "difficulty": "intermediate",
       "prompt": "Implement a function that registers connector data under the supplied ID only when it is safe to do so, returning 'exists' when the ID is already registered, 'invalid' when the args lack a valid authentication array (method 'api_key' or 'none'), and 'registered' on success. Already-registered IDs and missing or invalid authentication must never reach the registry.",
-      "expected_behavior": "`wpbp_connectors_api_013()` checks `wp_is_connector_registered()` first and validates the authentication shape before calling the registry, because the registry rejects bad args with `_doing_it_wrong`. The runtime probes all three paths with otherwise-valid connector data.",
+      "expected_behavior": "`wpbp_connectors_api_013()` checks `wp_is_connector_registered()` first and validates the authentication shape before calling the registry, because the registry rejects bad args with `_doing_it_wrong`. The runtime probes all three outcomes, including two invalid authentication shapes, with otherwise-valid connector data.",
       "requirements": [
         "Return 'exists' for already-registered IDs without touching the registry",
         "Validate the authentication array before registering",
