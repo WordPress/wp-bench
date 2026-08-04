@@ -6,7 +6,6 @@ from typing import Any
 
 import orjson
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXECUTION_DIR = PROJECT_ROOT / "datasets" / "suites" / "wp-core-v1" / "execution"
 

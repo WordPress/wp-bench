@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import fake_generation
 
 from wp_bench.config import (
     DatasetConfig,
@@ -17,8 +18,6 @@ from wp_bench.config import (
 from wp_bench.core import BenchmarkRunner, MultiModelRunner
 from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
-
-from conftest import fake_generation
 
 
 def _execution_test(test_id: str) -> ExecutionTest:

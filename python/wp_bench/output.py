@@ -1,7 +1,7 @@
 """Rich console output formatting for WP-Bench."""
 from __future__ import annotations
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich import box
 from rich.console import Console
@@ -12,6 +12,7 @@ from rich.text import Text
 
 if TYPE_CHECKING:
     from pathlib import Path
+
     from .core import TestError
 
 console = Console()
@@ -90,7 +91,7 @@ def print_results_path(path: Path) -> None:
     console.print(f"Results written to: {path}")
 
 
-def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
+def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     """Print a formatted table comparing scores across all models.
 
     Args:
@@ -130,7 +131,7 @@ def print_comparison_table(results: Dict[str, Dict[str, Any]]) -> None:
     console.print(table)
 
 
-def print_reference_solution_failures(records: list[Dict[str, Any]]) -> None:
+def print_reference_solution_failures(records: list[dict[str, Any]]) -> None:
     """Print reference solution failures in a compact table."""
     table = Table(title="Reference Solution Failures")
     table.add_column("Test ID", style="cyan")
@@ -155,7 +156,7 @@ def print_reference_solution_failures(records: list[Dict[str, Any]]) -> None:
     console.print(table)
 
 
-def print_exploit_findings(audit: Dict[str, Any], exploitable: list[Dict[str, Any]]) -> None:
+def print_exploit_findings(audit: dict[str, Any], exploitable: list[dict[str, Any]]) -> None:
     """Render the adversarial assertion audit summary and exploitable tests.
 
     ``audit`` is the summary dict assembled by the runner (counts +

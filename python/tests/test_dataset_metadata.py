@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import fake_generation
 
 from wp_bench.config import (
     DatasetConfig,
@@ -23,8 +24,6 @@ from wp_bench.datasets import (
     load_tests,
 )
 from wp_bench.environment import ExecutionResult
-
-from conftest import fake_generation
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

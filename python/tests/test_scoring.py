@@ -1,7 +1,7 @@
 """Tests for runtime-primary execution scoring (SCORING_VERSION 2.0)."""
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from wp_bench.core import BenchmarkRunner
 from wp_bench.datasets import ExecutionTest
@@ -9,8 +9,8 @@ from wp_bench.scoring import ScoreAggregator
 
 
 def _make_test(
-    static_checks: Dict[str, Any] | None = None,
-    runtime_checks: Dict[str, Any] | None = None,
+    static_checks: dict[str, Any] | None = None,
+    runtime_checks: dict[str, Any] | None = None,
 ) -> ExecutionTest:
     return ExecutionTest(
         id="e-test-001",

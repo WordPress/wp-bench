@@ -4,12 +4,18 @@ from __future__ import annotations
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import orjson
 
+from .artifacts import (
+    Artifact,
+    ArtifactError,
+    parse_artifact,
+    render_artifact_instructions,
+)
 from .config import HarnessConfig, ModelConfig
 from .datasets import (
     ExecutionTest,
@@ -19,6 +25,7 @@ from .datasets import (
     load_tests,
 )
 from .environment import WordPressEnvironment
+from .exploits import exploit_candidates, gateway_name
 from .knowledge import render_knowledge_prompt, score_knowledge_answer
 from .models import ModelInterface
 from .output import (
@@ -33,8 +40,6 @@ from .output import (
     print_test_error,
     print_test_warning,
 )
-from .artifacts import Artifact, ArtifactError, parse_artifact, render_artifact_instructions
-from .exploits import exploit_candidates, gateway_name
 from .records import (
     RESULT_SCHEMA_VERSION,
     build_error_record,
@@ -63,11 +68,11 @@ class TestError(Exception):
 
 def _timestamped_path(path: Path) -> Path:
     """Add timestamp to filename: results.json -> results_20231216_143052.json"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return path.parent / f"{path.stem}_{timestamp}{path.suffix}"
 
 
-def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
+def _limit_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
     """Select tests for this run (seeded stratified selection when limited)."""
     return select_tests(
         tests,
@@ -77,7 +82,7 @@ def _limit_tests(tests: List[Any], config: HarnessConfig) -> List[Any]:
     )
 
 
-def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]:
+def _build_verification_spec(test: Any, config: HarnessConfig) -> dict[str, Any]:
     """Build the verifier payload honoring run.skip_runtime/skip_static.
 
     A skipped dimension is sent as empty checks so the runtime does not
@@ -91,7 +96,7 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]
     """
     static_checks = {} if config.run.skip_static else test.static_checks
     if config.run.skip_runtime:
-        runtime_checks: Dict[str, Any] = {}
+        runtime_checks: dict[str, Any] = {}
     else:
         runtime_checks = dict(test.runtime_checks)
         if test.test_function:
@@ -115,7 +120,7 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> Dict[str, Any]
     }
 
 
-def _artifact_failure_scores() -> Dict[str, Any]:
+def _artifact_failure_scores() -> dict[str, Any]:
     """Scores for a completion that failed artifact parsing/validation."""
     return {
         "knowledge": None,
@@ -143,7 +148,7 @@ class _ArtifactFailureResult:
         }
 
 
-def _model_call_info(generation: Any) -> Dict[str, Any]:
+def _model_call_info(generation: Any) -> dict[str, Any]:
     """Call-reliability metadata recorded alongside each test result."""
     return {
         "retry_count": generation.retry_count,
@@ -157,8 +162,8 @@ def _error_record(
     error: TestError,
     *,
     mode: str,
-    model_config: Optional[ModelConfig],
-) -> Dict[str, Any]:
+    model_config: ModelConfig | None,
+) -> dict[str, Any]:
     """Canonical record for a test the runner caught erroring.
 
     Unwraps the TestError (type/message/test-type) so each ``on_error``
@@ -229,7 +234,7 @@ class _ContinueOnErrorPolicy:
 
 def _run_isolated_execution_loop(
     *,
-    tests_to_run: List[Any],
+    tests_to_run: list[Any],
     config: HarnessConfig,
     environment: WordPressEnvironment,
     process_test: Any,
@@ -293,13 +298,13 @@ def _run_isolated_execution_loop(
 
 def _run_concurrent_loop(
     *,
-    tests_to_run: List[Any],
+    tests_to_run: list[Any],
     max_workers: int,
     progress_label: str,
     process_test: Any,
     on_result: Any,
     on_error: Any,
-    policy: "_ContinueOnErrorPolicy",
+    policy: _ContinueOnErrorPolicy,
 ) -> None:
     """Run tests concurrently, honoring the continue-on-error policy.
 
@@ -331,7 +336,7 @@ def _run_concurrent_loop(
 
 def _run_knowledge_loop(
     *,
-    tests_to_run: List[Any],
+    tests_to_run: list[Any],
     config: HarnessConfig,
     process_test: Any,
     on_result: Any,
@@ -371,10 +376,10 @@ class BenchmarkRunner:
         self.environment = WordPressEnvironment(config.grader)
         self.aggregator = ScoreAggregator()
         self.usage_aggregator = UsageAggregator()
-        self.records: List[Dict[str, Any]] = []
+        self.records: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """Execute the full benchmark pipeline.
 
         Loads tests, sets up the WordPress environment, runs knowledge and execution
@@ -457,7 +462,7 @@ class BenchmarkRunner:
                 raise SystemExit(1)
         return payload
 
-    def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
+    def _run_knowledge_tests(self, tests: list[KnowledgeTest]) -> None:
         """Run knowledge tests in parallel.
 
         Prompts the model with WordPress knowledge questions and scores responses
@@ -471,7 +476,7 @@ class BenchmarkRunner:
         """
         tests_to_run = _limit_tests(tests, self.config)
 
-        def process_test(test: KnowledgeTest) -> Dict[str, Any]:
+        def process_test(test: KnowledgeTest) -> dict[str, Any]:
             try:
                 prompt = self._render_knowledge_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
@@ -491,14 +496,14 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
 
-        def on_result(result: Dict[str, Any]) -> None:
+        def on_result(result: dict[str, Any]) -> None:
             with self._lock:
                 if result.get("error") is None:
                     self.aggregator.add_knowledge(result["scores"]["knowledge"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
-        def on_error(test: KnowledgeTest, error: TestError) -> Dict[str, Any]:
+        def on_error(test: KnowledgeTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.config.model)
 
         _run_knowledge_loop(
@@ -509,7 +514,7 @@ class BenchmarkRunner:
             on_error=on_error,
         )
 
-    def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
+    def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run code generation execution tests in parallel.
 
         Prompts the model to generate PHP code, executes it in the WordPress
@@ -523,7 +528,7 @@ class BenchmarkRunner:
         """
         tests_to_run = _limit_tests(tests, self.config)
 
-        def process_test(test: ExecutionTest) -> Dict[str, Any]:
+        def process_test(test: ExecutionTest) -> dict[str, Any]:
             """Process a single execution test."""
             try:
                 prompt = self._render_execution_prompt(test)
@@ -567,14 +572,14 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        def on_result(result: Dict[str, Any]) -> None:
+        def on_result(result: dict[str, Any]) -> None:
             with self._lock:
                 if result.get("error") is None:
                     self.aggregator.add_execution(result["scores"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
-        def on_error(test: ExecutionTest, error: TestError) -> Dict[str, Any]:
+        def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.config.model)
 
         _run_isolated_execution_loop(
@@ -587,11 +592,11 @@ class BenchmarkRunner:
             progress_label="Execution",
         )
 
-    def _run_reference_solution_tests(self, tests: List[ExecutionTest]) -> None:
+    def _run_reference_solution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests using their reference_solution as candidate code."""
         tests_to_run = _limit_tests(tests, self.config)
 
-        def process_test(test: ExecutionTest) -> Dict[str, Any]:
+        def process_test(test: ExecutionTest) -> dict[str, Any]:
             try:
                 artifact_kind = getattr(test, "artifact_kind", "php_snippet")
                 if artifact_kind == "wp_plugin_files":
@@ -623,14 +628,14 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        def on_result(result: Dict[str, Any]) -> None:
+        def on_result(result: dict[str, Any]) -> None:
             with self._lock:
                 if result.get("error") is None:
                     self.aggregator.add_execution(result["scores"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
-        def on_error(test: ExecutionTest, error: TestError) -> Dict[str, Any]:
+        def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="reference_solution", model_config=None)
 
         _run_isolated_execution_loop(
@@ -643,7 +648,7 @@ class BenchmarkRunner:
             progress_label="Reference solutions",
         )
 
-    def _run_exploit_audit(self, tests: Dict[str, List[Any]]) -> Dict[str, Any]:
+    def _run_exploit_audit(self, tests: dict[str, list[Any]]) -> dict[str, Any]:
         """Adversarial assertion audit: prove zero-effort cheats fail.
 
         For every execution test, run each exploit candidate (generic
@@ -694,7 +699,7 @@ class BenchmarkRunner:
             raise SystemExit(1)
         return payload
 
-    def _run_exploit_audit_tests(self, tests: List[ExecutionTest]) -> None:
+    def _run_exploit_audit_tests(self, tests: list[ExecutionTest]) -> None:
         """Run every exploit candidate for each test; record exploitable ones.
 
         Serial and reset-before-each-candidate: candidates share a gateway
@@ -723,8 +728,8 @@ class BenchmarkRunner:
     def _first_passing_exploit(
         self,
         test: ExecutionTest,
-        candidates: List[Tuple[str, str]],
-    ) -> Optional[Tuple[str, str]]:
+        candidates: list[tuple[str, str]],
+    ) -> tuple[str, str] | None:
         """Return the first (label, code) cheat that satisfies the assertions.
 
         The verification spec is identical across a test's candidates, so it
@@ -748,7 +753,7 @@ class BenchmarkRunner:
                 return (label, code)
         return None
 
-    def _ensure_execution_only_ids(self, mode_flag: str, tests: Dict[str, List[Any]]) -> None:
+    def _ensure_execution_only_ids(self, mode_flag: str, tests: dict[str, list[Any]]) -> None:
         """Ensure explicitly selected test ids are execution tests for audit modes."""
         selected_ids = self.config.run.test_ids
         if not selected_ids:
@@ -796,12 +801,12 @@ class BenchmarkRunner:
 
     @staticmethod
     def _score_execution(
-        raw: Dict[str, Any],
+        raw: dict[str, Any],
         test: ExecutionTest,
         *,
         skip_runtime: bool = False,
         skip_static: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Score an execution test with runtime behavior as the primary signal.
 
         Scoring model (SCORING_VERSION 2.0):
@@ -896,7 +901,7 @@ class BenchmarkRunner:
         )
 
     @staticmethod
-    def _runtime_crashed(raw: Dict[str, Any]) -> bool:
+    def _runtime_crashed(raw: dict[str, Any]) -> bool:
         """Detect a hard execution failure in the runtime result.
 
         Only call this when the test defines runtime assertions. A crash shows
@@ -924,7 +929,7 @@ class BenchmarkRunner:
             for assertion in assertions
         )
 
-    def _write_outputs(self, payload: Dict[str, Any]) -> None:
+    def _write_outputs(self, payload: dict[str, Any]) -> None:
         """Write benchmark results to JSON and JSONL files.
 
         Args:
@@ -958,9 +963,9 @@ class MultiModelRunner:
         """
         self.config = config
         self.environment = WordPressEnvironment(config.grader)
-        self.results: Dict[str, Dict[str, Any]] = {}
+        self.results: dict[str, dict[str, Any]] = {}
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """Execute benchmarks for all configured models.
 
         Sets up the WordPress environment once, then runs each model sequentially.
@@ -1045,7 +1050,7 @@ class SingleModelRunner:
         config: HarnessConfig,
         model_config: ModelConfig,
         environment: WordPressEnvironment,
-        tests: Dict[str, List[Any]],
+        tests: dict[str, list[Any]],
     ):
         """Initialize runner for a specific model.
 
@@ -1062,10 +1067,10 @@ class SingleModelRunner:
         self.tests = tests
         self.aggregator = ScoreAggregator()
         self.usage_aggregator = UsageAggregator()
-        self.records: List[Dict[str, Any]] = []
+        self.records: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         """Run all tests and return scores for this model.
 
         Returns:
@@ -1093,11 +1098,11 @@ class SingleModelRunner:
             "results": sort_records(self.records),
         }
 
-    def _run_knowledge_tests(self, tests: List[KnowledgeTest]) -> None:
+    def _run_knowledge_tests(self, tests: list[KnowledgeTest]) -> None:
         """Run knowledge tests in parallel. See BenchmarkRunner._run_knowledge_tests."""
         tests_to_run = _limit_tests(tests, self.config)
 
-        def process_test(test: KnowledgeTest) -> Dict[str, Any]:
+        def process_test(test: KnowledgeTest) -> dict[str, Any]:
             try:
                 prompt = BenchmarkRunner._render_knowledge_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
@@ -1117,14 +1122,14 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, "knowledge", e) from e
 
-        def on_result(result: Dict[str, Any]) -> None:
+        def on_result(result: dict[str, Any]) -> None:
             with self._lock:
                 if result.get("error") is None:
                     self.aggregator.add_knowledge(result["scores"]["knowledge"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
-        def on_error(test: KnowledgeTest, error: TestError) -> Dict[str, Any]:
+        def on_error(test: KnowledgeTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.model_config)
 
         _run_knowledge_loop(
@@ -1135,11 +1140,11 @@ class SingleModelRunner:
             on_error=on_error,
         )
 
-    def _run_execution_tests(self, tests: List[ExecutionTest]) -> None:
+    def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests with isolation. See BenchmarkRunner._run_execution_tests."""
         tests_to_run = _limit_tests(tests, self.config)
 
-        def process_test(test: ExecutionTest) -> Dict[str, Any]:
+        def process_test(test: ExecutionTest) -> dict[str, Any]:
             try:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
@@ -1182,14 +1187,14 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, "execution", e) from e
 
-        def on_result(result: Dict[str, Any]) -> None:
+        def on_result(result: dict[str, Any]) -> None:
             with self._lock:
                 if result.get("error") is None:
                     self.aggregator.add_execution(result["scores"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
 
-        def on_error(test: ExecutionTest, error: TestError) -> Dict[str, Any]:
+        def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.model_config)
 
         _run_isolated_execution_loop(

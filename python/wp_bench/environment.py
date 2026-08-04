@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .config import GraderConfig
 
@@ -24,7 +24,7 @@ class EnvironmentSetupTimeout(RuntimeError):
 @dataclass
 class ExecutionResult:
     success: bool
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
     stdout: str
     stderr: str
     timed_out: bool = False
@@ -83,7 +83,7 @@ class WordPressEnvironment:
             self._exec(["wp", "db", "reset", "--yes"])
             self._exec(install_cmd)
 
-    def execute_code(self, code: str, verification_spec: Dict[str, Any]) -> ExecutionResult:
+    def execute_code(self, code: str, verification_spec: dict[str, Any]) -> ExecutionResult:
         """Run a candidate PHP snippet through the runtime verifier.
 
         Compatibility wrapper over execute_artifact() for snippet payloads.
@@ -95,7 +95,7 @@ class WordPressEnvironment:
         }
         return self._run_verifier(payload)
 
-    def execute_artifact(self, artifact: Any, verification_spec: Dict[str, Any]) -> ExecutionResult:
+    def execute_artifact(self, artifact: Any, verification_spec: dict[str, Any]) -> ExecutionResult:
         """Run a candidate artifact (snippet or plugin files) through the verifier.
 
         Args:
@@ -109,7 +109,7 @@ class WordPressEnvironment:
         }
         return self._run_verifier(payload)
 
-    def _run_verifier(self, payload: Dict[str, Any]) -> ExecutionResult:
+    def _run_verifier(self, payload: dict[str, Any]) -> ExecutionResult:
         """Send a payload to the runtime verifier and parse the result.
 
         A runtime timeout is a per-test failure, not a harness crash: it
@@ -132,7 +132,7 @@ class WordPressEnvironment:
                 stderr=stderr,
                 timed_out=True,
             )
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         if stdout.strip():
             try:
                 data = json.loads(stdout)
@@ -142,7 +142,7 @@ class WordPressEnvironment:
         return ExecutionResult(success=success, raw=data, stdout=stdout, stderr=stderr)
 
     # Internal helpers --------------------------------------------------
-    def _timeout_raw_result(self) -> Dict[str, Any]:
+    def _timeout_raw_result(self) -> dict[str, Any]:
         """Build the stable raw payload recorded for a runtime timeout."""
         return {
             "success": False,
@@ -174,10 +174,10 @@ class WordPressEnvironment:
         self,
         command: list[str],
         *,
-        cwd: Optional[str] = None,
-        timeout: Optional[float] = None,
+        cwd: str | None = None,
+        timeout: float | None = None,
         capture_output: bool = True,
-        stdin: Optional[str] = None,
+        stdin: str | None = None,
     ) -> ProcessResult:
         """Run a subprocess with a hard timeout.
 
@@ -263,7 +263,7 @@ class WordPressEnvironment:
         self,
         command: list[str],
         *,
-        stdin: Optional[str] = None,
+        stdin: str | None = None,
     ) -> tuple[str, str, int, bool]:
         """Execute a command in the WordPress runtime.
 

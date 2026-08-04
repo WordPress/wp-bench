@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from wp_bench.cli import _normalize_test_ids
-from wp_bench.datasets import KnowledgeTest, ensure_test_ids_match_type, filter_tests_by_ids
+from wp_bench.datasets import (
+    KnowledgeTest,
+    ensure_test_ids_match_type,
+    filter_tests_by_ids,
+)
 
 
 def _knowledge_test(test_id: str) -> KnowledgeTest:

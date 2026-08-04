@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 #: Bump when the meaning of any aggregate or per-test score changes.
 SCORING_VERSION = "2.0"
@@ -19,18 +19,18 @@ SCORING_VERSION = "2.0"
 
 @dataclass
 class ScoreBreakdown:
-    knowledge: Optional[float] = None
+    knowledge: float | None = None
     #: Legacy compatibility score (see records: 1.0 on strict pass, else
     #: partial runtime credit). Kept one release for consumers of the old key.
-    correctness: Optional[float] = None
+    correctness: float | None = None
     #: Strict pass rate: fraction of execution tests with execution_pass=True.
     #: This is the primary execution ranking metric.
-    execution_pass_rate: Optional[float] = None
+    execution_pass_rate: float | None = None
     #: Mean partial runtime assertion score (0.0-1.0).
-    runtime: Optional[float] = None
+    runtime: float | None = None
     #: Fraction of execution tests without a hard static policy failure.
-    static_policy_pass_rate: Optional[float] = None
-    weights: Dict[str, float] = field(
+    static_policy_pass_rate: float | None = None
+    weights: dict[str, float] = field(
         default_factory=lambda: {"knowledge": 0.3, "execution_pass_rate": 0.7}
     )
 
@@ -49,7 +49,7 @@ class ScoreBreakdown:
         return round(total / total_weight, 4)
 
 
-def _percentile(values: List[float], fraction: float) -> float:
+def _percentile(values: list[float], fraction: float) -> float:
     """Nearest-rank percentile; values need not be pre-sorted."""
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, round(fraction * (len(ordered) - 1))))
@@ -65,9 +65,9 @@ class UsageAggregator:
         self.total_tokens = 0
         self.cost_usd = 0.0
         self.has_cost = False
-        self.latencies_ms: List[float] = []
+        self.latencies_ms: list[float] = []
 
-    def add(self, usage: Optional[Dict[str, Any]]) -> None:
+    def add(self, usage: dict[str, Any] | None) -> None:
         if not isinstance(usage, dict):
             return
         for token_field in ("prompt_tokens", "completion_tokens", "total_tokens"):
@@ -82,7 +82,7 @@ class UsageAggregator:
         if isinstance(latency, (int, float)):
             self.latencies_ms.append(float(latency))
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Run-level usage summary; cost is an estimate, not billing truth."""
         return {
             "prompt_tokens": self.prompt_tokens,
@@ -100,13 +100,13 @@ class UsageAggregator:
 
 class ScoreAggregator:
     def __init__(self) -> None:
-        self.knowledge_scores: List[float] = []
-        self.correctness_scores: List[float] = []
-        self.execution_passes: List[bool] = []
-        self.runtime_scores: List[float] = []
-        self.static_policy_passes: List[bool] = []
+        self.knowledge_scores: list[float] = []
+        self.correctness_scores: list[float] = []
+        self.execution_passes: list[bool] = []
+        self.runtime_scores: list[float] = []
+        self.static_policy_passes: list[bool] = []
 
-    def add_execution(self, scores: Dict[str, Any]) -> None:
+    def add_execution(self, scores: dict[str, Any]) -> None:
         """Record an execution test's scores object (canonical record shape)."""
         correctness = scores.get("correctness")
         if isinstance(correctness, (int, float)):

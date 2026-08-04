@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
 
 import typer
 from dotenv import load_dotenv
@@ -25,12 +24,12 @@ def main() -> None:
     """WP-Bench command line interface."""
 
 
-def _normalize_test_ids(values: Optional[List[str]]) -> List[str]:
+def _normalize_test_ids(values: list[str] | None) -> list[str]:
     """Normalize repeated and comma-separated --test-id values."""
     if not values:
         return []
 
-    normalized: List[str] = []
+    normalized: list[str] = []
     seen: set[str] = set()
     for value in values:
         for test_id in value.split(","):
@@ -96,12 +95,12 @@ def _print_dry_run_counts(
 
 @app.command()
 def run(
-    config: Optional[Path] = typer.Option(None, help="Path to wp-bench YAML config"),
-    suite: Optional[str] = typer.Option(None, help="Override suite name"),
-    model_name: Optional[str] = typer.Option(None, help="Override model name (single model mode)"),
-    limit: Optional[int] = typer.Option(None, help="Limit number of tests (seeded stratified selection)"),
-    seed: Optional[int] = typer.Option(None, help="Seed for deterministic limited-test selection"),
-    test_type: Optional[str] = typer.Option(None, help="Run only 'knowledge' or 'execution' tests"),
+    config: Path | None = typer.Option(None, help="Path to wp-bench YAML config"),
+    suite: str | None = typer.Option(None, help="Override suite name"),
+    model_name: str | None = typer.Option(None, help="Override model name (single model mode)"),
+    limit: int | None = typer.Option(None, help="Limit number of tests (seeded stratified selection)"),
+    seed: int | None = typer.Option(None, help="Seed for deterministic limited-test selection"),
+    test_type: str | None = typer.Option(None, help="Run only 'knowledge' or 'execution' tests"),
     dry_run: bool = typer.Option(False, help="Load and filter tests without calling models"),
     check_reference_solution: bool = typer.Option(
         False,
@@ -111,7 +110,7 @@ def run(
         False,
         help="Adversarial assertion audit: flag execution tests a zero-effort cheat can pass",
     ),
-    test_id: Optional[List[str]] = typer.Option(
+    test_id: list[str] | None = typer.Option(
         None,
         "--test-id",
         help="Run only the given dataset test ID. May be repeated or comma-separated.",
@@ -121,7 +120,7 @@ def run(
     harness_config = HarnessConfig.from_file(config) if config else HarnessConfig()
     if suite:
         harness_config.run.suite = suite
-        harness_config.dataset.name = suite if "/" not in suite else suite
+        harness_config.dataset.name = suite
     if limit is not None:
         harness_config.run.limit = limit
     if seed is not None:

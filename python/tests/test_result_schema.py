@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Set
+from typing import Any
 
 import pytest
+from conftest import fake_generation
 
 from wp_bench.config import (
     DatasetConfig,
@@ -19,8 +20,6 @@ from wp_bench.core import BenchmarkRunner, SingleModelRunner
 from wp_bench.datasets import ExecutionTest, KnowledgeTest
 from wp_bench.environment import ExecutionResult
 from wp_bench.records import RESULT_SCHEMA_VERSION
-
-from conftest import fake_generation
 
 
 def _execution_test(test_id: str = "e-one") -> ExecutionTest:
@@ -63,9 +62,9 @@ def _passing_result() -> ExecutionResult:
     return ExecutionResult(success=True, raw=raw, stdout="out", stderr="")
 
 
-def _key_paths(record: Dict[str, Any], prefix: str = "") -> Set[str]:
+def _key_paths(record: dict[str, Any], prefix: str = "") -> set[str]:
     """Flatten a record into dotted key paths for structural comparison."""
-    paths: Set[str] = set()
+    paths: set[str] = set()
     for key, value in record.items():
         path = f"{prefix}{key}"
         paths.add(path)
