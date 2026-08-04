@@ -66,13 +66,17 @@ def test_zero_selected_tests_fails_loudly() -> None:
 
 
 def test_dry_run_zero_selection_fails_loudly(tmp_path) -> None:
-    """dry-run must use the guarded selector: a suite with no execution
-    tests errors instead of printing a successful zero count."""
-    import pytest
+    """dry-run on a suite with no execution tests exits with the CLI's
+    clear validation error, not a traceback or a successful zero count."""
+    from typer.testing import CliRunner
 
-    from wp_bench.cli import _select_for_config
-    from wp_bench.config import HarnessConfig
+    from wp_bench.cli import app
 
-    config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core-v1"}})
-    with pytest.raises(ValueError, match="No execution tests selected"):
-        _select_for_config([], config)
+    config_path = tmp_path / "wp-bench.yaml"
+    config_path.write_text(
+        "dataset:\n  source: local\n  name: wpbp-no-such-suite\n"
+        "run:\n  suite: wpbp-no-such-suite\n  dry_run: true\n"
+    )
+    result = CliRunner().invoke(app, ["run", "--config", str(config_path), "--dry-run"])
+    assert result.exit_code == 1
+    assert "No execution tests selected" in result.output

@@ -124,10 +124,10 @@ def run(
     if harness_config.run.dry_run:
         try:
             tests = _load_filtered_tests(harness_config)
+            _print_dry_run_counts(tests, harness_config)
         except ValueError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(1) from exc
-        _print_dry_run_counts(tests, harness_config)
         return
 
     if harness_config.run.check_reference_solution:
