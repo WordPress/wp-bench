@@ -38,8 +38,8 @@ def _execution_tests() -> list[dict[str, Any]]:
     return tests
 
 
-def test_execution_suite_has_exactly_150_tests() -> None:
-    assert len(_execution_tests()) == 150
+def test_execution_suite_has_exactly_164_tests() -> None:
+    assert len(_execution_tests()) == 164
 
 
 def test_execution_test_ids_are_unique() -> None:
@@ -68,6 +68,25 @@ def test_execution_tests_have_required_fields() -> None:
         assert test["expected_behavior"] != test["prompt"], test["id"]
         assert test["requirements"], test["id"]
         assert test["metadata"].get("source_refs"), test["id"]
+
+
+def test_execution_exploit_solutions_are_wellformed() -> None:
+    """exploit_solutions, where present, is a non-empty list of PHP snippets
+    that each define the test's gateway function (so the assertions can
+    invoke them the same way they invoke a real submission)."""
+    for test in _execution_tests():
+        exploits = test.get("exploit_solutions")
+        if exploits is None:
+            continue
+        assert isinstance(exploits, list) and exploits, test["id"]
+        signature = test.get("test_function") or ""
+        name = signature.split("(", 1)[0].strip()
+        for code in exploits:
+            assert isinstance(code, str) and code.strip(), test["id"]
+            if name:
+                assert name in code, (
+                    f"{test['id']}: exploit does not define gateway {name}"
+                )
 
 
 def test_execution_assertion_types_are_supported() -> None:
