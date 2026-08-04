@@ -228,7 +228,11 @@
           "src/wp-includes/class-wp-connector-registry.php"
         ],
         "release_focus": "7.0"
-      }
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_connectors_init', function ( WP_Connector_Registry $registry ) { $registry->register( 'wpbp_crm', array( 'name' => 'WPBP CRM', 'type' => 'crm', 'authentication' => array( 'method' => 'api_key', 'setting_name' => 'wpbp_crm_key' ) ) ); } );",
+        "add_action( 'wp_connectors_init', function ( WP_Connector_Registry $registry ) { $registry->register( 'wpbp_crm', array( 'name' => 'WPBP CRM', 'type' => 'crm', 'authentication' => array( 'method' => 'none' ) ) ); } );"
+      ]
     },
     {
       "id": "e-connectors-api-006",

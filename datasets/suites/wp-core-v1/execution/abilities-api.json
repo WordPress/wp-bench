@@ -403,7 +403,11 @@
           "src/wp-includes/abilities-api/class-wp-ability.php"
         ],
         "release_focus": "6.9"
-      }
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/greet', array( 'label' => 'Greet', 'description' => 'Greets.', 'category' => 'wpbp-greetings', 'input_schema' => array( 'type' => 'string', 'default' => 'world' ), 'execute_callback' => static fn( string $input ): string => 'hello world', 'permission_callback' => '__return_true' ) ); } );",
+        "add_action( 'wp_abilities_api_init', function () { wp_register_ability( 'wpbp/greet', array( 'label' => 'Greet', 'description' => 'Greets.', 'category' => 'wpbp-greetings', 'input_schema' => array( 'type' => 'string' ), 'execute_callback' => static fn( ?string $input = null ): string => 'hello ' . ( $input ?? 'world' ), 'permission_callback' => '__return_true' ) ); } );"
+      ]
     },
     {
       "id": "e-abilities-api-008",
@@ -496,7 +500,11 @@
           "src/wp-includes/abilities-api/class-wp-ability-category.php"
         ],
         "release_focus": "6.9"
-      }
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-audit', array( 'label' => 'WPBP Audit', 'description' => 'Audit abilities.' ) ); } );",
+        "add_action( 'wp_abilities_api_categories_init', function () { wp_register_ability_category( 'wpbp-audit', array( 'label' => 'Audit', 'description' => 'Audit abilities.', 'meta' => array( 'icon' => 'shield' ) ) ); } );"
+      ]
     },
     {
       "id": "e-abilities-api-011",
