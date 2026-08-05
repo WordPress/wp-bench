@@ -5,7 +5,6 @@ import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import orjson
@@ -47,6 +46,7 @@ from .records import (
     execution_record_passed,
     sort_records,
 )
+from .results_io import RecordStream, open_stream, timestamped_path
 from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
 from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
@@ -61,12 +61,6 @@ class TestError(Exception):
         self.original_error = original_error
         self.traceback_str = traceback.format_exc()
         super().__init__(str(original_error))
-
-
-def _timestamped_path(path: Path) -> Path:
-    """Add timestamp to filename: results.json -> results_20231216_143052.json"""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return path.parent / f"{path.stem}_{timestamp}{path.suffix}"
 
 
 def select_run_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
@@ -358,6 +352,8 @@ class BenchmarkRunner:
         self.usage_aggregator = UsageAggregator()
         self.records: list[dict[str, Any]] = []
         self._lock = threading.Lock()
+        self._started_at = datetime.now(timezone.utc)
+        self._stream = open_stream(config.output.jsonl_path, self._started_at)
 
     def run(self) -> dict[str, Any]:
         """Execute the full benchmark pipeline.
@@ -392,6 +388,8 @@ class BenchmarkRunner:
         except KeyboardInterrupt:
             print_abort_message()
             raise SystemExit(130) from None
+        finally:
+            self._stream.close()
         summary = self.aggregator.finalize()
         model_config = self.config.model.model_dump(mode="json") if self.config.model else None
         payload = {
@@ -490,6 +488,7 @@ class BenchmarkRunner:
                     self.aggregator.add_execution(result["scores"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
+                self._stream.write(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.config.model)
@@ -546,6 +545,7 @@ class BenchmarkRunner:
                     self.aggregator.add_execution(result["scores"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
+                self._stream.write(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="reference_solution", model_config=None)
@@ -579,6 +579,8 @@ class BenchmarkRunner:
         except KeyboardInterrupt:
             print_abort_message()
             raise SystemExit(130) from None
+        finally:
+            self._stream.close()
 
         exploitable = [record for record in self.records if record["exploitable"]]
         auditable = sum(1 for record in self.records if record["candidates_tried"] > 0)
@@ -632,6 +634,7 @@ class BenchmarkRunner:
                 )
                 with self._lock:
                     self.records.append(record)
+                    self._stream.write(record)
                 progress.update(task, advance=1)
 
     def _first_passing_exploit(
@@ -818,17 +821,11 @@ class BenchmarkRunner:
         Args:
             payload: Complete results dict with metadata and test records.
         """
-        output_path = _timestamped_path(self.config.output.path)
+        output_path = timestamped_path(self.config.output.path, self._started_at)
         ensure_dir(output_path.parent)
         output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
         print_results_path(output_path)
-        if self.config.output.jsonl_path:
-            jsonl_path = _timestamped_path(self.config.output.jsonl_path)
-            ensure_dir(jsonl_path.parent)
-            with jsonl_path.open("w", encoding="utf-8") as handle:
-                for record in payload["results"]:
-                    handle.write(orjson.dumps(record).decode("utf-8"))
-                    handle.write("\n")
+        self._stream.finalize(payload["results"])
 
 
 class MultiModelRunner:
@@ -853,6 +850,8 @@ class MultiModelRunner:
         self.skills = skills or []
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
+        self._started_at = datetime.now(timezone.utc)
+        self._stream = open_stream(config.output.jsonl_path, self._started_at)
 
     def run(self) -> dict[str, Any]:
         """Execute benchmarks for all configured (model x variant) passes.
@@ -889,6 +888,7 @@ class MultiModelRunner:
                         environment=self.environment,
                         tests=tests,
                         variant=variant,
+                        stream=self._stream,
                     )
                     result = runner.run()
                     result["base_model"] = model_config.name
@@ -900,6 +900,8 @@ class MultiModelRunner:
         except KeyboardInterrupt:
             print_abort_message()
             raise SystemExit(130) from None
+        finally:
+            self._stream.close()
 
         print_comparison_table(self.results)
         print_skill_impact(self.results)
@@ -966,10 +968,12 @@ class MultiModelRunner:
                 for name, result in self.results.items()
             },
         }
-        output_path = _timestamped_path(self.config.output.path)
+        output_path = timestamped_path(self.config.output.path, self._started_at)
         ensure_dir(output_path.parent)
         output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
         print_results_path(output_path)
+        records = [record for result in self.results.values() for record in result["results"]]
+        self._stream.finalize(sort_records(records))
 
 
 class SingleModelRunner:
@@ -986,6 +990,7 @@ class SingleModelRunner:
         environment: WordPressEnvironment,
         tests: list[ExecutionTest],
         variant: Variant = BASELINE_VARIANT,
+        stream: RecordStream | None = None,
     ):
         """Initialize runner for a specific model.
 
@@ -996,6 +1001,9 @@ class SingleModelRunner:
             tests: Pre-loaded execution tests.
             variant: Which pass of the run matrix this is (baseline or
                 skills); carries the system prompt to inject, if any.
+            stream: Shared record stream; every pass's records land in the
+                one JSONL, tagged by the model and variant on each record.
+                Omitted (tests, ad-hoc use) means no streaming.
         """
         self.config = config
         self.model_config = model_config
@@ -1003,10 +1011,7 @@ class SingleModelRunner:
         self.model = ModelInterface(model_config, system_prompt=variant.system_prompt)
         self.environment = environment
         self.tests = tests
-        self.aggregator = ScoreAggregator()
-        self.usage_aggregator = UsageAggregator()
-        self.records: list[dict[str, Any]] = []
-        self._lock = threading.Lock()
+        self._init_bookkeeping(stream or RecordStream(None))
 
     def run(self) -> dict[str, Any]:
         """Run all tests and return scores for this model.
@@ -1081,6 +1086,7 @@ class SingleModelRunner:
                     self.aggregator.add_execution(result["scores"])
                 self.usage_aggregator.add(result.get("usage"))
                 self.records.append(result)
+                self._stream.write(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(
