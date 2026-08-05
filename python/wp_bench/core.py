@@ -67,7 +67,7 @@ def _timestamped_path(path: Path) -> Path:
     return path.parent / f"{path.stem}_{timestamp}{path.suffix}"
 
 
-def _limit_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
+def select_run_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
     """Select tests for this run (seeded stratified selection when limited).
 
     Zero selected tests is always a configuration or dataset problem (missing
@@ -368,6 +368,11 @@ class BenchmarkRunner:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
         tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
+        if not tests:
+            raise ValueError(
+                f"Dataset '{self.config.dataset.name}' contains no execution "
+                "tests. Check the dataset source and suite name."
+            )
         if self.config.run.check_exploits:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
@@ -403,13 +408,7 @@ class BenchmarkRunner:
                 "continue_on_error": self.config.run.continue_on_error,
                 "errored_test_ids": errored_test_ids(self.records),
                 "usage": self.usage_aggregator.summary(),
-                "scores": {
-                    "execution_pass_rate": summary.execution_pass_rate,
-                    "runtime": summary.runtime,
-                    "static_policy_pass_rate": summary.static_policy_pass_rate,
-                    "correctness": summary.correctness,
-                    "overall": summary.overall(),
-                },
+                "scores": summary.as_scores_dict(),
             },
             "results": sort_records(self.records),
         }
@@ -435,7 +434,7 @@ class BenchmarkRunner:
         Raises:
             TestError: If any test fails, stops execution and raises with details.
         """
-        tests_to_run = _limit_tests(tests, self.config)
+        tests_to_run = select_run_tests(tests, self.config)
 
         def process_test(test: ExecutionTest) -> dict[str, Any]:
             """Process a single execution test."""
@@ -503,7 +502,7 @@ class BenchmarkRunner:
 
     def _run_reference_solution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests using their reference_solution as candidate code."""
-        tests_to_run = _limit_tests(tests, self.config)
+        tests_to_run = select_run_tests(tests, self.config)
 
         def process_test(test: ExecutionTest) -> dict[str, Any]:
             try:
@@ -612,7 +611,7 @@ class BenchmarkRunner:
         function name and rely on per-test fixtures, so state must not leak
         between attempts. Short-circuits a test as soon as one cheat passes.
         """
-        tests_to_run = _limit_tests(tests, self.config)
+        tests_to_run = select_run_tests(tests, self.config)
         with create_progress() as progress:
             task = progress.add_task("Exploit audit", total=len(tests_to_run))
             for test in tests_to_run:
@@ -859,6 +858,11 @@ class MultiModelRunner:
         """
         models = self.config.get_models()
         tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
+        if not tests:
+            raise ValueError(
+                f"Dataset '{self.config.dataset.name}' contains no execution "
+                "tests. Check the dataset source and suite name."
+            )
         self.environment.setup()
 
         try:
@@ -957,19 +961,13 @@ class SingleModelRunner:
             "scoring_version": SCORING_VERSION,
             "usage": self.usage_aggregator.summary(),
             "errored_test_ids": errored_test_ids(self.records),
-            "scores": {
-                "execution_pass_rate": summary.execution_pass_rate,
-                "runtime": summary.runtime,
-                "static_policy_pass_rate": summary.static_policy_pass_rate,
-                "correctness": summary.correctness,
-                "overall": summary.overall(),
-            },
+            "scores": summary.as_scores_dict(),
             "results": sort_records(self.records),
         }
 
     def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests with isolation. See BenchmarkRunner._run_execution_tests."""
-        tests_to_run = _limit_tests(tests, self.config)
+        tests_to_run = select_run_tests(tests, self.config)
 
         def process_test(test: ExecutionTest) -> dict[str, Any]:
             try:

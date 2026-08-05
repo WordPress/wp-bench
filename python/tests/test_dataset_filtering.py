@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from wp_bench.cli import _normalize_test_ids
+from wp_bench.config import HarnessConfig
+from wp_bench.core import select_run_tests
 from wp_bench.datasets import ExecutionTest, filter_tests_by_ids
 
 
@@ -55,14 +57,9 @@ def test_filter_tests_by_ids_rejects_unknown_ids() -> None:
 def test_zero_selected_tests_fails_loudly() -> None:
     """An empty selection (missing suite, execution-less dataset) must not
     produce a vacuous successful run."""
-    import pytest
-
-    from wp_bench.config import HarnessConfig
-    from wp_bench.core import _limit_tests
-
     config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core-v1"}})
     with pytest.raises(ValueError, match="No execution tests selected"):
-        _limit_tests([], config)
+        select_run_tests([], config)
 
 
 def test_dry_run_zero_selection_fails_loudly(tmp_path) -> None:

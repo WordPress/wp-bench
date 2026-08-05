@@ -33,6 +33,20 @@ class ScoreBreakdown:
     #: Fraction of execution tests without a hard static policy failure.
     static_policy_pass_rate: float | None = None
 
+    def as_scores_dict(self) -> dict[str, Any]:
+        """The summary scores object recorded in payload metadata.
+
+        Versioned alongside SCORING_VERSION so the key set lives next to
+        the formula it summarizes.
+        """
+        return {
+            "correctness": self.correctness,
+            "execution_pass_rate": self.execution_pass_rate,
+            "runtime": self.runtime,
+            "static_policy_pass_rate": self.static_policy_pass_rate,
+            "overall": self.overall(),
+        }
+
     def overall(self) -> float:
         """Overall score (formula versioned by SCORING_VERSION).
 

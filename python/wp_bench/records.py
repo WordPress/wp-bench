@@ -12,7 +12,8 @@ from typing import Any
 from .config import ModelConfig
 
 #: Bump when the per-test record shape changes. Recorded in payload metadata.
-#: 2.0: the "knowledge" score key was removed (knowledge track removed).
+#: 2.0: the "knowledge" score key and the knowledge-only "output.answer"
+#: field were removed (knowledge track removed).
 RESULT_SCHEMA_VERSION = "2.0"
 
 
@@ -73,7 +74,7 @@ def _base_record(
         "mode": mode,
         "prompt_hash": None,
         "model": _model_info(model_config),
-        "output": {"raw_completion": None, "code": None, "answer": None},
+        "output": {"raw_completion": None, "code": None},
         "scores": _null_scores(),
         "grader": None,
         "usage": _empty_usage(),
@@ -105,7 +106,7 @@ def build_execution_record(
     raw = env_result.raw or {}
     record = _base_record(test=test, mode=mode, model_config=model_config)
     record["prompt_hash"] = prompt_hash
-    record["output"] = {"raw_completion": raw_completion, "code": code, "answer": None}
+    record["output"] = {"raw_completion": raw_completion, "code": code}
     record["scores"] = scores
     record["grader"] = {
         "success": env_result.success,
@@ -179,7 +180,7 @@ def execution_record_passed(record: dict[str, Any]) -> bool:
 
 def sort_records(records: list) -> list:
     """Order records deterministically for stable output diffs."""
-    return sorted(records, key=lambda record: (record.get("type", ""), record.get("test_id", "")))
+    return sorted(records, key=lambda record: record.get("test_id", ""))
 
 
 def errored_test_ids(records: list) -> list:
