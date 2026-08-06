@@ -109,13 +109,11 @@ ExecutionIsolation = Literal["reset_per_test", "none"]
 
 class RunConfig(StrictModel):
     suite: str = "wp-core-v1"
-    test_type: Literal["knowledge", "execution"] | None = None
     limit: int | None = Field(default=None, gt=0)
     test_ids: list[str] = Field(default_factory=list)
     #: Reserved for deterministic subset selection; wired by seeded
     #: stratified test limiting. Not yet consumed elsewhere.
     seed: int = 1337
-    concurrency: int = Field(default=5, gt=0)
     execution_isolation: ExecutionIsolation = "reset_per_test"
     execution_concurrency: int = 1
     dry_run: bool = False

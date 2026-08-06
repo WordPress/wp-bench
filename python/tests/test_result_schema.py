@@ -17,7 +17,7 @@ from wp_bench.config import (
     RunConfig,
 )
 from wp_bench.core import BenchmarkRunner, SingleModelRunner
-from wp_bench.datasets import ExecutionTest, KnowledgeTest
+from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
 from wp_bench.records import RESULT_SCHEMA_VERSION
 
@@ -28,7 +28,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="hooks",
         difficulty="basic",
         requirements=["Requirement"],
@@ -37,19 +36,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         runtime_checks={"assertions": [{"type": "custom_assertion", "code": "return true;", "weight": 1}]},
         reference_solution="function ref() { return true; }",
         metadata={},
-    )
-
-
-def _knowledge_test(test_id: str = "k-one") -> KnowledgeTest:
-    return KnowledgeTest(
-        id=test_id,
-        suite="wp-core-v1",
-        prompt="What hook runs on init?",
-        test_type="knowledge",
-        category="hooks",
-        difficulty="basic",
-        correct_answer="init",
-        answer_type="short_answer",
     )
 
 
@@ -83,7 +69,7 @@ def _single_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> li
     )
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [_execution_test()], "knowledge": [_knowledge_test()]},
+        lambda dataset: [_execution_test()],
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
@@ -114,7 +100,7 @@ def _multi_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> lis
         config=config,
         model_config=config.get_models()[0],
         environment=FakeEnvironment(),  # type: ignore[arg-type]
-        tests={"execution": [_execution_test()], "knowledge": [_knowledge_test()]},
+        tests=[_execution_test()],
     )
     monkeypatch.setattr(runner.model, "generate_with_metadata", lambda prompt: fake_generation("init"))
     runner.run()
@@ -128,13 +114,9 @@ def test_single_and_multi_model_records_have_same_keys(
     single = _single_model_records(monkeypatch, tmp_path)
     multi = _multi_model_records(monkeypatch, tmp_path)
 
-    single_by_type = {record["type"]: record for record in single}
-    multi_by_type = {record["type"]: record for record in multi}
-
-    for test_type in ("knowledge", "execution"):
-        assert _key_paths(single_by_type[test_type]) == _key_paths(multi_by_type[test_type]), (
-            f"{test_type} record shape differs between single- and multi-model modes"
-        )
+    assert _key_paths(single[0]) == _key_paths(multi[0]), (
+        "record shape differs between single- and multi-model modes"
+    )
 
 
 def test_multi_model_execution_records_include_audit_fields(
@@ -166,7 +148,7 @@ def test_reference_solution_record_uses_canonical_schema(
     )
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [_execution_test()], "knowledge": []},
+        lambda dataset: [_execution_test()],
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
@@ -203,7 +185,7 @@ def test_jsonl_records_match_json_results(
     )
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [_execution_test()], "knowledge": [_knowledge_test()]},
+        lambda dataset: [_execution_test()],
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
@@ -233,14 +215,14 @@ def test_records_are_sorted_for_stable_output(
         dataset=DatasetConfig(source="local", name="wp-core-v1"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
-        run=RunConfig(test_type="execution"),
+        run=RunConfig(),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
     # Deliberately out-of-order test IDs.
     tests = [_execution_test("e-zebra"), _execution_test("e-alpha"), _execution_test("e-mid")]
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": tests, "knowledge": []},
+        lambda dataset: tests,
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]

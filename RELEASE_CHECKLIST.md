@@ -33,7 +33,7 @@ results.
 ## Dataset artifacts
 
 - [ ] Regenerate the export: `python datasets/export_dataset.py`.
-- [ ] Verify row counts match the local suites (execution + knowledge).
+- [ ] Verify row counts match the local suites (execution).
 - [ ] Publish the Parquet/dataset update alongside the release when tasks
       changed.
 

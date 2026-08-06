@@ -14,7 +14,7 @@ from wp_bench.config import (
     RunConfig,
 )
 from wp_bench.core import BenchmarkRunner
-from wp_bench.datasets import ExecutionTest, KnowledgeTest
+from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
 from wp_bench.records import execution_record_passed
 
@@ -26,7 +26,6 @@ def _config(tmp_path: Path, test_ids: list[str] | None = None) -> HarnessConfig:
         grader=GraderConfig(kind="cli"),
         run=RunConfig(
             check_reference_solution=True,
-            concurrency=1,
             test_ids=test_ids or [],
         ),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
@@ -39,7 +38,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="Reviewer contract: expected",
-        test_type="execution",
         category="general",
         difficulty="basic",
         requirements=["Requirement"],
@@ -76,10 +74,7 @@ def test_reference_solution_mode_executes_reference_solution(
     test = _execution_test()
     config = _config(tmp_path)
     calls: list[tuple[str, dict]] = []
-    monkeypatch.setattr(
-        "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [test], "knowledge": []},
-    )
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
 
@@ -114,10 +109,7 @@ def test_reference_solution_mode_exits_nonzero_on_failed_reference(
 ) -> None:
     test = _execution_test()
     config = _config(tmp_path)
-    monkeypatch.setattr(
-        "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [test], "knowledge": []},
-    )
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
 
@@ -137,23 +129,15 @@ def test_reference_solution_mode_exits_nonzero_on_failed_reference(
     assert runner.records[0]["scores"]["static"] == 1.0
 
 
-def test_reference_solution_mode_rejects_non_execution_test_ids(
+def test_reference_solution_mode_rejects_unknown_test_ids(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    knowledge_test = KnowledgeTest(
-        id="k-one",
-        suite="wp-core-v1",
-        prompt="Prompt",
-        test_type="knowledge",
-        category="general",
-        difficulty="basic",
-    )
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [], "knowledge": [knowledge_test]},
+        lambda dataset: [_execution_test()],
     )
-    runner = BenchmarkRunner(_config(tmp_path, test_ids=["k-one"]))
+    runner = BenchmarkRunner(_config(tmp_path, test_ids=["e-missing"]))
 
-    with pytest.raises(ValueError, match="only supports execution"):
+    with pytest.raises(ValueError, match="Unknown test id"):
         runner.run()

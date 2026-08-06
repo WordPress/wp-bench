@@ -26,7 +26,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="general",
         difficulty="basic",
         requirements=["Requirement"],
@@ -52,7 +51,7 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
         dataset=DatasetConfig(source="local", name="wp-core-v1"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
-        run=RunConfig(test_type="execution", **run_overrides),
+        run=RunConfig(**run_overrides),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
 
@@ -82,7 +81,7 @@ def test_execution_runner_resets_between_tests(
     tests = [_execution_test("e-one"), _execution_test("e-two"), _execution_test("e-three")]
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": tests, "knowledge": []},
+        lambda dataset: tests,
     )
     config = _config(tmp_path)
     runner = BenchmarkRunner(config)
@@ -110,7 +109,7 @@ def test_reference_solution_mode_resets_between_tests(
     tests = [_execution_test("e-one"), _execution_test("e-two")]
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": tests, "knowledge": []},
+        lambda dataset: tests,
     )
     config = _config(tmp_path, check_reference_solution=True)
     runner = BenchmarkRunner(config)
@@ -130,13 +129,13 @@ def test_multi_model_runner_resets_between_models(
     tests = [_execution_test("e-one")]
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": tests, "knowledge": []},
+        lambda dataset: tests,
     )
     config = HarnessConfig(
         dataset=DatasetConfig(source="local", name="wp-core-v1"),
         models=[ModelConfig(name="model-a"), ModelConfig(name="model-b")],
         grader=GraderConfig(kind="cli"),
-        run=RunConfig(test_type="execution"),
+        run=RunConfig(),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
     runner = MultiModelRunner(config)
@@ -181,7 +180,7 @@ def test_result_metadata_records_isolation_mode(
     """Isolation strategy is auditable from result metadata."""
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [_execution_test("e-one")], "knowledge": []},
+        lambda dataset: [_execution_test("e-one")],
     )
     config = _config(tmp_path)
     runner = BenchmarkRunner(config)
@@ -204,7 +203,7 @@ def test_isolation_none_still_runs_all_tests(
     tests = [_execution_test("e-one"), _execution_test("e-two")]
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": tests, "knowledge": []},
+        lambda dataset: tests,
     )
     config = _config(tmp_path, execution_isolation="none", execution_concurrency=2)
     runner = BenchmarkRunner(config)

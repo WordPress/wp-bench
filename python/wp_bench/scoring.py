@@ -1,25 +1,27 @@
 """Score aggregation utilities.
 
-Scoring model (SCORING_VERSION 2.0): runtime behavior is the primary
-execution signal. A task passes strictly (``execution_pass``) when the
-code runs without crash/timeout, passes its runtime assertions, and
-triggers no forbidden static pattern with severity ``error``. Static
-required-pattern scores are diagnostics; they no longer grant or deny
-correctness credit on their own.
+Scoring model (SCORING_VERSION 3.0): the knowledge track was removed, so
+the benchmark is execution-only and ``overall`` equals the strict
+execution pass rate. Runtime behavior is the primary execution signal. A
+task passes strictly (``execution_pass``) when the code runs without
+crash/timeout, passes its runtime assertions, and triggers no forbidden
+static pattern with severity ``error``. Static required-pattern scores
+are diagnostics; they no longer grant or deny correctness credit on
+their own.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from statistics import mean
 from typing import Any
 
 #: Bump when the meaning of any aggregate or per-test score changes.
-SCORING_VERSION = "2.0"
+#: 3.0: knowledge track removed; overall is execution-only.
+SCORING_VERSION = "3.0"
 
 
 @dataclass
 class ScoreBreakdown:
-    knowledge: float | None = None
     #: Legacy compatibility score (see records: 1.0 on strict pass, else
     #: partial runtime credit). Kept one release for consumers of the old key.
     correctness: float | None = None
@@ -30,23 +32,31 @@ class ScoreBreakdown:
     runtime: float | None = None
     #: Fraction of execution tests without a hard static policy failure.
     static_policy_pass_rate: float | None = None
-    weights: dict[str, float] = field(
-        default_factory=lambda: {"knowledge": 0.3, "execution_pass_rate": 0.7}
-    )
+
+    def as_scores_dict(self) -> dict[str, Any]:
+        """The summary scores object recorded in payload metadata.
+
+        Versioned alongside SCORING_VERSION so the key set lives next to
+        the formula it summarizes.
+        """
+        return {
+            "correctness": self.correctness,
+            "execution_pass_rate": self.execution_pass_rate,
+            "runtime": self.runtime,
+            "static_policy_pass_rate": self.static_policy_pass_rate,
+            "overall": self.overall(),
+        }
 
     def overall(self) -> float:
-        """Weighted overall score (formula versioned by SCORING_VERSION).
+        """Overall score (formula versioned by SCORING_VERSION).
 
-        v2.0: 0.3 * knowledge + 0.7 * strict execution pass rate, over the
-        dimensions actually present. Prefer the separate metrics for any
-        official comparison; overall is a convenience summary only.
+        v3.0: the strict execution pass rate (the knowledge track was
+        removed). Prefer the separate metrics for any official comparison;
+        overall is a convenience summary only.
         """
-        active = {k: w for k, w in self.weights.items() if getattr(self, k) is not None}
-        if not active:
+        if self.execution_pass_rate is None:
             return 0.0
-        total_weight = sum(active.values())
-        total = sum(getattr(self, k) * w for k, w in active.items())
-        return round(total / total_weight, 4)
+        return round(self.execution_pass_rate, 4)
 
 
 def _percentile(values: list[float], fraction: float) -> float:
@@ -100,7 +110,6 @@ class UsageAggregator:
 
 class ScoreAggregator:
     def __init__(self) -> None:
-        self.knowledge_scores: list[float] = []
         self.correctness_scores: list[float] = []
         self.execution_passes: list[bool] = []
         self.runtime_scores: list[float] = []
@@ -119,13 +128,8 @@ class ScoreAggregator:
         if policy is not None:
             self.static_policy_passes.append(bool(policy))
 
-    def add_knowledge(self, score: float) -> None:
-        self.knowledge_scores.append(score)
-
     def finalize(self) -> ScoreBreakdown:
         breakdown = ScoreBreakdown()
-        if self.knowledge_scores:
-            breakdown.knowledge = mean(self.knowledge_scores)
         if self.correctness_scores:
             breakdown.correctness = mean(self.correctness_scores)
         if self.execution_passes:

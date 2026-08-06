@@ -12,7 +12,9 @@ from typing import Any
 from .config import ModelConfig
 
 #: Bump when the per-test record shape changes. Recorded in payload metadata.
-RESULT_SCHEMA_VERSION = "1.0"
+#: 2.0: the "knowledge" score key and the knowledge-only "output.answer"
+#: field were removed (knowledge track removed).
+RESULT_SCHEMA_VERSION = "2.0"
 
 
 def _model_info(model_config: ModelConfig | None) -> dict[str, Any] | None:
@@ -42,7 +44,6 @@ def _empty_usage() -> dict[str, Any]:
 def _null_scores() -> dict[str, Any]:
     """The full score key set, all null — a record that carries no score."""
     return {
-        "knowledge": None,
         "correctness": None,
         "execution_pass": None,
         "runtime": None,
@@ -54,7 +55,6 @@ def _null_scores() -> dict[str, Any]:
 def _base_record(
     *,
     test: Any,
-    test_type: str,
     mode: str,
     model_config: ModelConfig | None,
 ) -> dict[str, Any]:
@@ -67,42 +67,20 @@ def _base_record(
     return {
         "test_id": test.id,
         "suite": test.suite,
-        "type": test_type,
+        "type": "execution",
         "category": test.category,
         "difficulty": test.difficulty,
         "metadata": getattr(test, "metadata", None) or {},
         "mode": mode,
         "prompt_hash": None,
         "model": _model_info(model_config),
-        "output": {"raw_completion": None, "code": None, "answer": None},
+        "output": {"raw_completion": None, "code": None},
         "scores": _null_scores(),
         "grader": None,
         "usage": _empty_usage(),
         "model_call": None,
         "error": None,
     }
-
-
-def build_knowledge_record(
-    *,
-    test: Any,
-    mode: str,
-    model_config: ModelConfig | None,
-    prompt_hash: str,
-    raw_completion: str,
-    answer: str,
-    knowledge_score: float,
-    usage: dict[str, Any] | None = None,
-    model_call: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build the canonical record for a knowledge test result."""
-    record = _base_record(test=test, test_type="knowledge", mode=mode, model_config=model_config)
-    record["prompt_hash"] = prompt_hash
-    record["output"] = {"raw_completion": raw_completion, "code": None, "answer": answer}
-    record["scores"]["knowledge"] = knowledge_score
-    record["usage"] = usage if usage is not None else _empty_usage()
-    record["model_call"] = model_call
-    return record
 
 
 def build_execution_record(
@@ -126,9 +104,9 @@ def build_execution_record(
             and static_policy_pass.
     """
     raw = env_result.raw or {}
-    record = _base_record(test=test, test_type="execution", mode=mode, model_config=model_config)
+    record = _base_record(test=test, mode=mode, model_config=model_config)
     record["prompt_hash"] = prompt_hash
-    record["output"] = {"raw_completion": raw_completion, "code": code, "answer": None}
+    record["output"] = {"raw_completion": raw_completion, "code": code}
     record["scores"] = scores
     record["grader"] = {
         "success": env_result.success,
@@ -145,7 +123,6 @@ def build_execution_record(
 def build_error_record(
     *,
     test: Any,
-    test_type: str,
     mode: str,
     model_config: ModelConfig | None,
     error_type: str,
@@ -158,7 +135,7 @@ def build_error_record(
     pass or fail), and keeps the exact canonical key structure so consumers
     never need a separate parser for errored tests.
     """
-    record = _base_record(test=test, test_type=test_type, mode=mode, model_config=model_config)
+    record = _base_record(test=test, mode=mode, model_config=model_config)
     record["error"] = {"type": error_type, "message": error_message}
     return record
 
@@ -195,15 +172,15 @@ def build_exploit_audit_record(
 def execution_record_passed(record: dict[str, Any]) -> bool:
     """Whether an execution record represents a strict pass.
 
-    Reads the primary execution_pass metric (SCORING_VERSION 2.0). Used by
-    reference-solution mode to decide failures.
+    Reads the primary execution_pass metric. Used by reference-solution
+    mode to decide failures.
     """
     return bool((record.get("scores") or {}).get("execution_pass"))
 
 
 def sort_records(records: list) -> list:
     """Order records deterministically for stable output diffs."""
-    return sorted(records, key=lambda record: (record.get("type", ""), record.get("test_id", "")))
+    return sorted(records, key=lambda record: record.get("test_id", ""))
 
 
 def errored_test_ids(records: list) -> list:

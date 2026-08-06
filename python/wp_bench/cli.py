@@ -1,19 +1,22 @@
 """Typer-based CLI for wp-bench."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
 
 from .config import HarnessConfig, ModelConfig
-from .core import BenchmarkRunner, MultiModelRunner
-from .datasets import ensure_test_ids_match_type, filter_tests_by_ids, load_tests
-from .selection import select_tests
+from .core import BenchmarkRunner, MultiModelRunner, select_run_tests
+from .datasets import ExecutionTest, filter_tests_by_ids, load_tests
 
 # Load .env file for API keys
 load_dotenv()
+
+T = TypeVar("T")
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -40,57 +43,36 @@ def _normalize_test_ids(values: list[str] | None) -> list[str]:
     return normalized
 
 
-def _load_filtered_tests(harness_config: HarnessConfig) -> dict[str, list[object]]:
+def _load_filtered_tests(harness_config: HarnessConfig) -> list[ExecutionTest]:
     """Load tests and apply explicit test ID filtering."""
-    tests = filter_tests_by_ids(load_tests(harness_config.dataset), harness_config.run.test_ids)
-    ensure_test_ids_match_type(
-        tests,
-        harness_config.run.test_type,
-        harness_config.run.test_ids,
-    )
-    return tests
+    return filter_tests_by_ids(load_tests(harness_config.dataset), harness_config.run.test_ids)
 
 
-def _count_selected_tests(tests: list[object], harness_config: HarnessConfig) -> int:
-    """Count tests selected by current run settings (uses the real selector)."""
-    return len(_select_for_config(tests, harness_config))
-
-
-def _select_for_config(tests: list[object], harness_config: HarnessConfig) -> list[object]:
-    """Run the seeded stratified selector with this config's settings."""
-    return select_tests(
-        tests,
-        limit=harness_config.run.limit,
-        test_ids=harness_config.run.test_ids,
-        seed=harness_config.run.seed,
-    )
+def _run_or_fail(action: Callable[[], T]) -> T:
+    """Run a CLI action, surfacing ValueError as the red message + exit 1."""
+    try:
+        return action()
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
 
 
 def _print_dry_run_counts(
-    tests: dict[str, list[object]],
+    tests: list[ExecutionTest],
     harness_config: HarnessConfig,
 ) -> None:
-    """Print test counts (and selected IDs when limited) for a dry run."""
-    test_type = harness_config.run.test_type
-    if test_type == "knowledge":
-        console.print(f"Knowledge tests: {_count_selected_tests(tests['knowledge'], harness_config)}")
-    elif test_type == "execution":
-        console.print(f"Execution tests: {_count_selected_tests(tests['execution'], harness_config)}")
-    else:
-        console.print(
-            "Execution tests: "
-            f"{_count_selected_tests(tests['execution'], harness_config)}, "
-            f"Knowledge tests: {_count_selected_tests(tests['knowledge'], harness_config)}"
-        )
+    """Print selected test counts (and IDs when limited) for a dry run.
+
+    Selection goes through the same guarded chokepoint as every run mode,
+    so zero selected tests (missing suite, execution-less dataset) fails
+    loudly here too instead of printing a successful zero count.
+    """
+    selected = select_run_tests(tests, harness_config)
+    console.print(f"Execution tests: {len(selected)}")
     if harness_config.run.limit is not None and not harness_config.run.test_ids:
         console.print(f"Selection seed: {harness_config.run.seed}")
-        for kind in ("execution", "knowledge"):
-            if test_type not in (None, kind):
-                continue
-            selected = _select_for_config(tests[kind], harness_config)
-            if selected:
-                ids = ", ".join(test.id for test in selected)  # type: ignore[attr-defined]
-                console.print(f"Selected {kind} ids: {ids}")
+        ids = ", ".join(test.id for test in selected)
+        console.print(f"Selected test ids: {ids}")
 
 
 @app.command()
@@ -100,7 +82,6 @@ def run(
     model_name: str | None = typer.Option(None, help="Override model name (single model mode)"),
     limit: int | None = typer.Option(None, help="Limit number of tests (seeded stratified selection)"),
     seed: int | None = typer.Option(None, help="Seed for deterministic limited-test selection"),
-    test_type: str | None = typer.Option(None, help="Run only 'knowledge' or 'execution' tests"),
     dry_run: bool = typer.Option(False, help="Load and filter tests without calling models"),
     check_reference_solution: bool = typer.Option(
         False,
@@ -134,78 +115,39 @@ def run(
     normalized_test_ids = _normalize_test_ids(test_id)
     if normalized_test_ids:
         harness_config.run.test_ids = normalized_test_ids
-    if test_type is not None:
-        if test_type not in ("knowledge", "execution"):
-            console.print(f"[red]Invalid --test-type: {test_type}. Must be 'knowledge' or 'execution'.[/red]")
-            raise typer.Exit(1)
-        harness_config.run.test_type = test_type  # type: ignore[assignment]
 
     if harness_config.run.dry_run and harness_config.run.check_reference_solution:
         console.print("[red]--dry-run and --check-reference-solution cannot be used together.[/red]")
         raise typer.Exit(1)
 
     if harness_config.run.dry_run:
-        try:
-            tests = _load_filtered_tests(harness_config)
-        except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
-        _print_dry_run_counts(tests, harness_config)
+        _run_or_fail(
+            lambda: _print_dry_run_counts(_load_filtered_tests(harness_config), harness_config)
+        )
         return
 
     if harness_config.run.check_reference_solution:
-        reference_runner = BenchmarkRunner(harness_config)
-        try:
-            result = reference_runner.run()
-        except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
+        result = _run_or_fail(BenchmarkRunner(harness_config).run)
         console.print("[bold green]Reference solution check completed[/bold green]", result["metadata"]["scores"])
         return
 
     if harness_config.run.check_exploits:
-        exploit_runner = BenchmarkRunner(harness_config)
-        try:
-            result = exploit_runner.run()
-        except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
+        result = _run_or_fail(BenchmarkRunner(harness_config).run)
         console.print("[bold green]Exploit audit completed[/bold green]", result["metadata"]["audit"])
         return
 
-    # Check if multi-model mode
     models = harness_config.get_models()
     if model_name:
-        # Override to single model
         harness_config.model = ModelConfig(name=model_name)
         harness_config.models = None
-        single_runner = BenchmarkRunner(harness_config)
-        try:
-            result = single_runner.run()
-        except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
-        console.print("[bold green]WP-Bench completed[/bold green]", result["metadata"]["scores"])
     elif len(models) > 1:
-        # Multi-model mode
-        multi_runner = MultiModelRunner(harness_config)
-        try:
-            multi_runner.run()
-        except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
+        _run_or_fail(MultiModelRunner(harness_config).run)
         console.print("\n[bold green]WP-Bench completed[/bold green]")
-    else:
-        # Single model mode (legacy)
-        if not harness_config.model:
-            harness_config.model = models[0]
-        single_runner = BenchmarkRunner(harness_config)
-        try:
-            result = single_runner.run()
-        except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
-        console.print("[bold green]WP-Bench completed[/bold green]", result["metadata"]["scores"])
+        return
+    elif not harness_config.model:
+        harness_config.model = models[0]
+    result = _run_or_fail(BenchmarkRunner(harness_config).run)
+    console.print("[bold green]WP-Bench completed[/bold green]", result["metadata"]["scores"])
 
 
 if __name__ == "__main__":  # pragma: no cover

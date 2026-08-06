@@ -9,7 +9,7 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 
 ## Workflow
 
-1. Inspect nearby execution and knowledge tests before editing. Match the suite's organization, naming style, and category balance.
+1. Inspect nearby execution tests before editing. Match the suite's organization, naming style, and category balance.
 2. Treat the WordPress source/runtime as the authority. For modern APIs, verify behavior against WordPress 7.0 source or official field-guide docs before writing assertions.
 3. Define the observable WordPress behavior first. Prompts should be specific enough to identify the intended API area and outcome, but should not give away exact implementation details that the test is meant to measure, such as a particular argument key, metadata field, or helper call. Ask for a behavior or artifact, not an arbitrary wrapper function, unless the function itself is the contract.
 4. Keep `requirements` concise and model-facing. They are appended to the prompt.
@@ -121,8 +121,8 @@ For each changed test, run:
 
 ```bash
 .venv/bin/python -m pytest python/tests/test_execution_dataset.py
-.venv/bin/wp-bench run --config wp-bench.yaml --dry-run --test-type execution --test-id <test-id>
-.venv/bin/wp-bench run --config wp-bench.yaml --check-reference-solution --test-type execution --test-id <test-id>
+.venv/bin/wp-bench run --config wp-bench.yaml --dry-run --test-id <test-id>
+.venv/bin/wp-bench run --config wp-bench.yaml --check-reference-solution --test-id <test-id>
 ```
 
 Require the dry run to select only the requested test ID or IDs. Require the reference-solution run to execute the selected tests through the real WordPress verifier, without model calls, and pass every selected test.
@@ -130,8 +130,8 @@ Require the dry run to select only the requested test ID or IDs. Require the ref
 For broad suite changes, also run:
 
 ```bash
-.venv/bin/wp-bench run --config wp-bench.yaml --dry-run --test-type execution
-.venv/bin/wp-bench run --config wp-bench.yaml --check-reference-solution --test-type execution
+.venv/bin/wp-bench run --config wp-bench.yaml --dry-run
+.venv/bin/wp-bench run --config wp-bench.yaml --check-reference-solution
 .venv/bin/python datasets/export_dataset.py
 git diff --check
 ```

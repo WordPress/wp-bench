@@ -42,7 +42,6 @@ def _plugin_test(test_id: str = "e-plugin-001") -> ExecutionTest:
         suite="wp-core-v1",
         prompt="Build a plugin.",
         expected_behavior="expected",
-        test_type="execution",
         category="plugins",
         difficulty="intermediate",
         requirements=[],
@@ -148,7 +147,7 @@ def _config(tmp_path: Path, **run_overrides: object) -> HarnessConfig:
         dataset=DatasetConfig(source="local", name="wp-core-v1"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
-        run=RunConfig.model_validate({"test_type": "execution", **run_overrides}),
+        run=RunConfig.model_validate(dict(run_overrides)),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
 
@@ -170,7 +169,7 @@ def test_plugin_artifact_payload_reaches_environment(
     test = _plugin_test()
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [test], "knowledge": []},
+        lambda dataset: [test],
     )
     runner = BenchmarkRunner(_config(tmp_path))
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
@@ -203,7 +202,7 @@ def test_artifact_parse_failure_is_scored_failure_not_crash(
     tests = [_plugin_test("e-plugin-001"), _plugin_test("e-plugin-002")]
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": tests, "knowledge": []},
+        lambda dataset: tests,
     )
     runner = BenchmarkRunner(_config(tmp_path))
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
@@ -234,7 +233,7 @@ def test_reference_solution_uses_reference_files_for_plugin_artifacts(
     test = _plugin_test()
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [test], "knowledge": []},
+        lambda dataset: [test],
     )
     runner = BenchmarkRunner(_config(tmp_path, check_reference_solution=True))
     runner.environment.setup = lambda: None  # type: ignore[method-assign]

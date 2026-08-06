@@ -39,9 +39,6 @@ def load_suite(suite_name: str) -> list[dict]:
                     "expected_behavior": t.get("expected_behavior", ""),
                     "category": t.get("category", "general"),
                     "difficulty": t.get("difficulty", "unknown"),
-                    "choices": orjson.dumps(t.get("choices", [])).decode(),
-                    "correct_answer": "",
-                    "answer_type": "",
                     "requirements": orjson.dumps(t.get("requirements", [])).decode(),
                     "test_function": t.get("test_function", ""),
                     "static_checks": orjson.dumps(t.get("static_checks", {})).decode(),
@@ -53,34 +50,6 @@ def load_suite(suite_name: str) -> list[dict]:
                     # exploit_solutions is deliberately not exported: it is
                     # maintainer-side assertion QA (--check-exploits), not
                     # benchmark content for dataset consumers.
-                })
-
-    # Load all knowledge tests from knowledge/ directory
-    knowledge_dir = suite_dir / "knowledge"
-    if knowledge_dir.is_dir():
-        for path in sorted(knowledge_dir.glob("*.json")):
-            data = orjson.loads(path.read_bytes())
-            for t in data.get("tests", []):
-                rows.append({
-                    "id": t["id"],
-                    "suite": suite_name,
-                    "test_kind": "knowledge",
-                    "type": t.get("type", "knowledge"),
-                    "prompt": t["prompt"],
-                    "expected_behavior": "",
-                    "category": t.get("category", "general"),
-                    "difficulty": t.get("difficulty", "unknown"),
-                    "choices": orjson.dumps(t.get("choices", [])).decode(),
-                    "correct_answer": t.get("correct_answer", ""),
-                    "answer_type": t.get("answer_type", ""),
-                    "requirements": "[]",
-                    "test_function": "",
-                    "static_checks": "{}",
-                    "runtime_checks": "{}",
-                    "reference_solution": "",
-                    "metadata": orjson.dumps(t.get("metadata", {})).decode(),
-                    "artifact_kind": "",
-                    "reference_files": "{}",
                 })
 
     return rows

@@ -1,4 +1,4 @@
-"""Tests for runtime-primary execution scoring (SCORING_VERSION 2.0)."""
+"""Tests for runtime-primary execution scoring (SCORING_VERSION 3.0)."""
 from __future__ import annotations
 
 from typing import Any
@@ -17,7 +17,6 @@ def _make_test(
         suite="wp-core-v1",
         prompt="Do something.",
         expected_behavior="Reviewer contract: does something observable.",
-        test_type="execution",
         category="hooks",
         difficulty="intermediate",
         requirements=[],
@@ -255,7 +254,6 @@ def test_aggregator_reports_strict_pass_rate() -> None:
 
 def test_overall_uses_strict_pass_rate() -> None:
     aggregator = ScoreAggregator()
-    aggregator.add_knowledge(1.0)
     aggregator.add_execution(
         {"correctness": 1.0, "execution_pass": True, "runtime": 1.0, "static_policy_pass": True}
     )
@@ -265,5 +263,9 @@ def test_overall_uses_strict_pass_rate() -> None:
 
     summary = aggregator.finalize()
 
-    # overall = 0.3 * 1.0 + 0.7 * 0.5 = 0.65
-    assert summary.overall() == 0.65
+    # v3.0: overall is the strict execution pass rate.
+    assert summary.overall() == 0.5
+
+
+def test_overall_is_zero_when_nothing_graded() -> None:
+    assert ScoreAggregator().finalize().overall() == 0.0

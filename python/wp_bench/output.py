@@ -24,9 +24,6 @@ def print_test_error(error: TestError) -> None:
     content.append("Test ID\n", style="bold")
     content.append(f"  {error.test_id}\n\n", style="cyan")
 
-    content.append("Test Type\n", style="bold")
-    content.append(f"  {error.test_type}\n\n", style="magenta")
-
     content.append("Error Type\n", style="bold")
     content.append(f"  {type(error.original_error).__name__}\n\n", style="red")
 
@@ -53,8 +50,7 @@ def print_test_error(error: TestError) -> None:
 def print_test_warning(error: TestError) -> None:
     """Display a one-line warning for a test recorded as errored, not aborting."""
     console.print(
-        f"[yellow]⚠ Test errored[/yellow] [cyan]{error.test_id}[/cyan] "
-        f"([magenta]{error.test_type}[/magenta]): "
+        f"[yellow]⚠ Test errored[/yellow] [cyan]{error.test_id}[/cyan]: "
         f"[red]{type(error.original_error).__name__}[/red] {error.original_error}"
     )
 
@@ -99,7 +95,6 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     """
     table = Table(title="WP-Bench Results")
     table.add_column("Model", style="cyan")
-    table.add_column("Knowledge", justify="right")
     table.add_column("Execution Pass", justify="right")
     table.add_column("Runtime Partial", justify="right")
     table.add_column("Overall", justify="right", style="bold")
@@ -120,7 +115,6 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
         usage = result.get("usage") or {}
         table.add_row(
             model_name,
-            _fmt_score(scores.get("knowledge")),
             _fmt_score(scores.get("execution_pass_rate")),
             _fmt_score(scores.get("runtime")),
             f"{scores['overall']*100:.1f}%",

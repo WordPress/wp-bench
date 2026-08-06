@@ -32,21 +32,12 @@ def test_local_parser_preserves_execution_task_metadata() -> None:
     """Per-task provenance fields survive local loading at the top level."""
     tests = load_tests(DatasetConfig(source="local", name="wp-core-v1"))
 
-    with_refs = [t for t in tests["execution"] if t.metadata.get("source_refs")]
+    with_refs = [t for t in tests if t.metadata.get("source_refs")]
     assert with_refs, "expected execution tasks with source_refs metadata"
     sample = with_refs[0]
     assert isinstance(sample.metadata["source_refs"], list)
     assert "release_focus" in sample.metadata
     # Suite metadata is preserved alongside, not instead of, task metadata.
-    assert isinstance(sample.metadata.get("suite_metadata"), dict)
-
-
-def test_local_parser_preserves_knowledge_task_metadata() -> None:
-    tests = load_tests(DatasetConfig(source="local", name="wp-core-v1"))
-
-    assert tests["knowledge"], "expected knowledge tests in wp-core-v1"
-    sample = tests["knowledge"][0]
-    assert isinstance(sample.metadata, dict)
     assert isinstance(sample.metadata.get("suite_metadata"), dict)
 
 
@@ -109,10 +100,10 @@ def test_huggingface_loader_preserves_metadata(monkeypatch: pytest.MonkeyPatch) 
 
     tests = load_tests(DatasetConfig(source="huggingface", name="WordPress/wp-bench-v1"))
 
-    assert tests["execution"][0].metadata["source_refs"] == ["plugin.php"]
-    assert tests["execution"][0].metadata["release_focus"] == "6.9"
-    assert tests["knowledge"][0].metadata is not None
-    assert tests["knowledge"][0].metadata["review_status"] == "reviewed"
+    # Legacy knowledge rows in older parquet exports are skipped.
+    assert [test.id for test in tests] == ["e-one"]
+    assert tests[0].metadata["source_refs"] == ["plugin.php"]
+    assert tests[0].metadata["release_focus"] == "6.9"
 
 
 def test_export_dataset_writes_metadata_column() -> None:
@@ -141,7 +132,6 @@ def test_result_record_includes_task_metadata(
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        test_type="execution",
         category="general",
         difficulty="basic",
         requirements=[],
@@ -155,12 +145,12 @@ def test_result_record_includes_task_metadata(
         dataset=DatasetConfig(source="local", name="wp-core-v1"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
-        run=RunConfig(test_type="execution"),
+        run=RunConfig(),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
     monkeypatch.setattr(
         "wp_bench.core.load_tests",
-        lambda dataset: {"execution": [test], "knowledge": []},
+        lambda dataset: [test],
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda: None  # type: ignore[method-assign]
