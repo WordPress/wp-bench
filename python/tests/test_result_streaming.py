@@ -13,13 +13,15 @@ def _ids(path: Path) -> list[str]:
 
 
 def test_records_are_readable_before_the_run_finishes(tmp_path: Path) -> None:
-    """The whole point: a run that dies mid-way leaves graded tests on disk."""
+    """The whole point: a run that dies mid-way leaves graded tests on disk,
+    under a name that says the run never finished."""
     stream = RecordStream(tmp_path / "results.jsonl")
     stream.write({"test_id": "e-two"})
     stream.write({"test_id": "e-one"})
 
     # No close() and no finalize() — the run was killed in flight.
-    assert _ids(tmp_path / "results.jsonl") == ["e-two", "e-one"]
+    assert _ids(tmp_path / "results.jsonl.partial") == ["e-two", "e-one"]
+    assert not (tmp_path / "results.jsonl").exists()
 
 
 def test_no_file_when_nothing_was_graded(tmp_path: Path) -> None:
@@ -49,7 +51,8 @@ def test_finalize_replaces_the_live_file_with_the_given_order(tmp_path: Path) ->
     stream.finalize([{"test_id": "e-one"}, {"test_id": "e-two"}])
 
     assert _ids(tmp_path / "results.jsonl") == ["e-one", "e-two"]
-    assert list(tmp_path.iterdir()) == [tmp_path / "results.jsonl"]  # no .tmp left behind
+    # The live file is retired and no staging file is left behind.
+    assert list(tmp_path.iterdir()) == [tmp_path / "results.jsonl"]
 
 
 def test_finalize_never_destroys_streamed_records_it_cannot_replace(tmp_path: Path) -> None:
@@ -68,7 +71,9 @@ def test_finalize_never_destroys_streamed_records_it_cannot_replace(tmp_path: Pa
     except TypeError:
         pass
 
-    assert _ids(path) == ["e-one", "e-two"]
+    assert _ids(tmp_path / "results.jsonl.partial") == ["e-one", "e-two"]
+    assert not path.exists()
+    assert not (tmp_path / "results.jsonl.tmp").exists()
 
 
 def test_run_artifacts_share_one_timestamp() -> None:
@@ -86,12 +91,7 @@ def test_open_stream_disables_itself_without_a_configured_path() -> None:
     )
 
 
-def test_every_model_streams_into_one_run_artifact(tmp_path: Path) -> None:
-    """MultiModelRunner shares one stream across its per-model runners, so a
-    multi-model run that dies keeps the models already graded — its combined
-    JSON payload is only assembled after every model finishes."""
-    from conftest import fake_generation
-
+def _multi_model_config(tmp_path: Path, names: list[str]):
     from wp_bench.config import (
         DatasetConfig,
         GraderConfig,
@@ -100,27 +100,42 @@ def test_every_model_streams_into_one_run_artifact(tmp_path: Path) -> None:
         OutputConfig,
         RunConfig,
     )
-    from wp_bench.core import SingleModelRunner
+
+    return HarnessConfig(
+        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        models=[ModelConfig(name=name) for name in names],
+        grader=GraderConfig(kind="cli"),
+        run=RunConfig(),
+        output=OutputConfig(path=tmp_path / "multi.json", jsonl_path=tmp_path / "multi.jsonl"),
+    )
+
+
+def _run_multi_model(monkeypatch, tmp_path: Path, names: list[str]):
+    """Drive the real MultiModelRunner over one test per model."""
+    from conftest import fake_generation
+
+    from wp_bench.core import MultiModelRunner
     from wp_bench.datasets import ExecutionTest
     from wp_bench.environment import ExecutionResult
+    from wp_bench.models import ModelInterface
 
-    def execution_test() -> ExecutionTest:
-        return ExecutionTest(
-            id="e-one",
-            suite="wp-core-v1",
-            prompt="Prompt",
-            expected_behavior="expected",
-            category="hooks",
-            difficulty="basic",
-            requirements=["Requirement"],
-            test_function=None,
-            static_checks={},
-            runtime_checks={"assertions": [{"type": "custom_assertion", "code": "return true;", "weight": 1}]},
-            reference_solution="function ref() { return true; }",
-            metadata={},
-        )
+    test = ExecutionTest(
+        id="e-one",
+        suite="wp-core-v1",
+        prompt="Prompt",
+        expected_behavior="expected",
+        category="hooks",
+        difficulty="basic",
+        requirements=["Requirement"],
+        test_function=None,
+        static_checks={},
+        runtime_checks={"assertions": [{"type": "custom_assertion", "code": "return true;", "weight": 1}]},
+        reference_solution="function ref() { return true; }",
+        metadata={},
+    )
 
     class FakeEnvironment:
+        def __init__(self, *args: object, **kwargs: object) -> None: ...
         def setup(self) -> None: ...
         def reset(self) -> None: ...
 
@@ -136,27 +151,37 @@ def test_every_model_streams_into_one_run_artifact(tmp_path: Path) -> None:
                 },
             )
 
-    config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
-        models=[ModelConfig(name="model-a"), ModelConfig(name="model-b")],
-        grader=GraderConfig(kind="cli"),
-        run=RunConfig(),
-        output=OutputConfig(path=tmp_path / "multi.json", jsonl_path=tmp_path / "multi.jsonl"),
+    monkeypatch.setattr("wp_bench.core.WordPressEnvironment", FakeEnvironment)
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
+    monkeypatch.setattr(
+        ModelInterface, "generate_with_metadata", lambda self, prompt: fake_generation("init")
     )
-    stream = RecordStream(tmp_path / "multi.jsonl")
-    environment = FakeEnvironment()
+    runner = MultiModelRunner(_multi_model_config(tmp_path, names))
+    runner.run()
+    return runner
 
-    for model_config in config.get_models():
-        runner = SingleModelRunner(
-            config=config,
-            model_config=model_config,
-            environment=environment,  # type: ignore[arg-type]
-            tests=[execution_test()],
-            stream=stream,
-        )
-        runner.model.generate_with_metadata = lambda prompt: fake_generation("init")  # type: ignore[method-assign]
-        runner.run()
 
-    streamed = [json.loads(line) for line in (tmp_path / "multi.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert [record["model"]["name"] for record in streamed] == ["model-a", "model-b"]
-    assert all(record["test_id"] == "e-one" for record in streamed)
+def test_every_model_streams_into_one_run_artifact(monkeypatch, tmp_path: Path) -> None:
+    """MultiModelRunner shares one stream across its per-model runners, so a
+    multi-model run that dies keeps the models already graded — its combined
+    JSON payload is only assembled after the last model finishes."""
+    _run_multi_model(monkeypatch, tmp_path, ["model-a", "model-b"])
+
+    artifact = next(tmp_path.glob("multi_*.jsonl"))
+    streamed = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines()]
+    assert sorted(record["model"]["name"] for record in streamed) == ["model-a", "model-b"]
+    assert not list(tmp_path.glob("*.partial"))
+
+
+def test_a_collapsed_model_result_never_deletes_its_streamed_records(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Results are keyed by model name, so two entries sharing a name collapse
+    and the finished artifact covers fewer records than were streamed. The
+    live file must survive that, or streaming would destroy graded work the
+    old end-of-run write merely never saved."""
+    _run_multi_model(monkeypatch, tmp_path, ["same-name", "same-name"])
+
+    partial = next(tmp_path.glob("multi_*.jsonl.partial"))
+    streamed = [json.loads(line) for line in partial.read_text(encoding="utf-8").splitlines()]
+    assert len(streamed) == 2, "both passes were graded and must remain on disk"

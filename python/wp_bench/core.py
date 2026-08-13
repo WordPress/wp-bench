@@ -4,7 +4,6 @@ from __future__ import annotations
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 from typing import Any
 
 import orjson
@@ -46,7 +45,7 @@ from .records import (
     execution_record_passed,
     sort_records,
 )
-from .results_io import RecordStream, open_stream, timestamped_path
+from .results_io import RecordStream, open_run_artifacts
 from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
 from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
@@ -352,8 +351,7 @@ class BenchmarkRunner:
         self.usage_aggregator = UsageAggregator()
         self.records: list[dict[str, Any]] = []
         self._lock = threading.Lock()
-        self._started_at = datetime.now(timezone.utc)
-        self._stream = open_stream(config.output.jsonl_path, self._started_at)
+        self._results_path, self._stream = open_run_artifacts(config.output)
 
     def run(self) -> dict[str, Any]:
         """Execute the full benchmark pipeline.
@@ -424,6 +422,15 @@ class BenchmarkRunner:
                 raise SystemExit(1)
         return payload
 
+    def _on_result(self, result: dict[str, Any]) -> None:
+        """Aggregate a finished record, keep it, and stream it to disk."""
+        with self._lock:
+            if result.get("error") is None:
+                self.aggregator.add_execution(result["scores"])
+            self.usage_aggregator.add(result.get("usage"))
+            self.records.append(result)
+            self._stream.write(result)
+
     def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run code generation execution tests in parallel.
 
@@ -482,14 +489,6 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, e) from e
 
-        def on_result(result: dict[str, Any]) -> None:
-            with self._lock:
-                if result.get("error") is None:
-                    self.aggregator.add_execution(result["scores"])
-                self.usage_aggregator.add(result.get("usage"))
-                self.records.append(result)
-                self._stream.write(result)
-
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.config.model)
 
@@ -498,7 +497,7 @@ class BenchmarkRunner:
             config=self.config,
             environment=self.environment,
             process_test=process_test,
-            on_result=on_result,
+            on_result=self._on_result,
             on_error=on_error,
             progress_label="Execution",
         )
@@ -539,14 +538,6 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, e) from e
 
-        def on_result(result: dict[str, Any]) -> None:
-            with self._lock:
-                if result.get("error") is None:
-                    self.aggregator.add_execution(result["scores"])
-                self.usage_aggregator.add(result.get("usage"))
-                self.records.append(result)
-                self._stream.write(result)
-
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="reference_solution", model_config=None)
 
@@ -555,7 +546,7 @@ class BenchmarkRunner:
             config=self.config,
             environment=self.environment,
             process_test=process_test,
-            on_result=on_result,
+            on_result=self._on_result,
             on_error=on_error,
             progress_label="Reference solutions",
         )
@@ -821,10 +812,9 @@ class BenchmarkRunner:
         Args:
             payload: Complete results dict with metadata and test records.
         """
-        output_path = timestamped_path(self.config.output.path, self._started_at)
-        ensure_dir(output_path.parent)
-        output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        print_results_path(output_path)
+        ensure_dir(self._results_path.parent)
+        self._results_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+        print_results_path(self._results_path)
         self._stream.finalize(payload["results"])
 
 
@@ -850,8 +840,7 @@ class MultiModelRunner:
         self.skills = skills or []
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
-        self._started_at = datetime.now(timezone.utc)
-        self._stream = open_stream(config.output.jsonl_path, self._started_at)
+        self._results_path, self._stream = open_run_artifacts(config.output)
 
     def run(self) -> dict[str, Any]:
         """Execute benchmarks for all configured (model x variant) passes.
@@ -968,10 +957,9 @@ class MultiModelRunner:
                 for name, result in self.results.items()
             },
         }
-        output_path = timestamped_path(self.config.output.path, self._started_at)
-        ensure_dir(output_path.parent)
-        output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        print_results_path(output_path)
+        ensure_dir(self._results_path.parent)
+        self._results_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+        print_results_path(self._results_path)
         records = [record for result in self.results.values() for record in result["results"]]
         self._stream.finalize(sort_records(records))
 
@@ -1030,6 +1018,15 @@ class SingleModelRunner:
             "results": sort_records(self.records),
         }
 
+    def _on_result(self, result: dict[str, Any]) -> None:
+        """Aggregate a finished record, keep it, and stream it to disk."""
+        with self._lock:
+            if result.get("error") is None:
+                self.aggregator.add_execution(result["scores"])
+            self.usage_aggregator.add(result.get("usage"))
+            self.records.append(result)
+            self._stream.write(result)
+
     def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests with isolation. See BenchmarkRunner._run_execution_tests."""
         tests_to_run = select_run_tests(tests, self.config)
@@ -1080,14 +1077,6 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, e) from e
 
-        def on_result(result: dict[str, Any]) -> None:
-            with self._lock:
-                if result.get("error") is None:
-                    self.aggregator.add_execution(result["scores"])
-                self.usage_aggregator.add(result.get("usage"))
-                self.records.append(result)
-                self._stream.write(result)
-
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(
                 test, error, mode="model", model_config=self.model_config, variant=variant_info
@@ -1098,7 +1087,7 @@ class SingleModelRunner:
             config=self.config,
             environment=self.environment,
             process_test=process_test,
-            on_result=on_result,
+            on_result=self._on_result,
             on_error=on_error,
             progress_label="Execution",
         )
