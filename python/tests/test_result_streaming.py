@@ -173,15 +173,27 @@ def test_every_model_streams_into_one_run_artifact(monkeypatch, tmp_path: Path) 
     assert not list(tmp_path.glob("*.partial"))
 
 
-def test_a_collapsed_model_result_never_deletes_its_streamed_records(
-    monkeypatch, tmp_path: Path
-) -> None:
-    """Results are keyed by model name, so two entries sharing a name collapse
-    and the finished artifact covers fewer records than were streamed. The
-    live file must survive that, or streaming would destroy graded work the
-    old end-of-run write merely never saved."""
-    _run_multi_model(monkeypatch, tmp_path, ["same-name", "same-name"])
+def test_finalize_keeps_the_live_file_when_it_would_shrink(tmp_path: Path) -> None:
+    """A caller that finalizes with fewer records than were streamed has lost
+    track of some; the live file keeps them recoverable instead of deleting
+    them. Config rejects the duplicate-model case that used to reach here, so
+    this pins the invariant itself."""
+    stream = RecordStream(tmp_path / "results.jsonl")
+    stream.write({"test_id": "e-one"})
+    stream.write({"test_id": "e-two"})
 
-    partial = next(tmp_path.glob("multi_*.jsonl.partial"))
-    streamed = [json.loads(line) for line in partial.read_text(encoding="utf-8").splitlines()]
-    assert len(streamed) == 2, "both passes were graded and must remain on disk"
+    stream.finalize([{"test_id": "e-one"}])
+
+    assert _ids(tmp_path / "results.jsonl") == ["e-one"]
+    assert _ids(tmp_path / "results.jsonl.partial") == ["e-one", "e-two"]
+
+
+def test_duplicate_model_names_are_rejected_before_a_run(tmp_path: Path) -> None:
+    """Results are keyed by model name end to end, so two entries sharing one
+    would silently drop a graded pass. Rejecting it in config is the root fix."""
+    import pytest
+
+    from wp_bench.config import HarnessConfig, ModelConfig
+
+    with pytest.raises(Exception, match="Duplicate model names"):
+        HarnessConfig(models=[ModelConfig(name="same"), ModelConfig(name="same")])

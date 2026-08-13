@@ -6,8 +6,6 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-import orjson
-
 from .artifacts import (
     Artifact,
     ArtifactError,
@@ -45,11 +43,36 @@ from .records import (
     execution_record_passed,
     sort_records,
 )
-from .results_io import RecordStream, open_run_artifacts
+from .results_io import RecordStream, open_run_artifacts, write_results_json
 from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
 from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
-from .utils import ensure_dir, sha256
+from .utils import sha256
+
+
+class _ResultBookkeeping:
+    """Aggregation, retention, and streaming for one run's records.
+
+    Single- and multi-model runners keep identical bookkeeping; sharing one
+    implementation keeps them from drifting apart the next time a metric or
+    an error predicate changes.
+    """
+
+    def _init_bookkeeping(self, stream: RecordStream) -> None:
+        self.aggregator = ScoreAggregator()
+        self.usage_aggregator = UsageAggregator()
+        self.records: list[dict[str, Any]] = []
+        self._stream = stream
+        self._lock = threading.Lock()
+
+    def _on_result(self, result: dict[str, Any]) -> None:
+        """Aggregate a finished record, keep it, and stream it to disk."""
+        with self._lock:
+            if result.get("error") is None:
+                self.aggregator.add_execution(result["scores"])
+            self.usage_aggregator.add(result.get("usage"))
+            self.records.append(result)
+            self._stream.write(result)
 
 
 class TestError(Exception):
@@ -331,7 +354,7 @@ def _run_concurrent_loop(
     policy.finish()
 
 
-class BenchmarkRunner:
+class BenchmarkRunner(_ResultBookkeeping):
     """Primary benchmark orchestrator for single-model evaluation.
 
     Loads tests from the configured dataset, runs them against a single LLM,
@@ -347,11 +370,8 @@ class BenchmarkRunner:
         self.config = config
         self.model = ModelInterface(config.model or config.get_models()[0])
         self.environment = WordPressEnvironment(config.grader)
-        self.aggregator = ScoreAggregator()
-        self.usage_aggregator = UsageAggregator()
-        self.records: list[dict[str, Any]] = []
-        self._lock = threading.Lock()
-        self._results_path, self._stream = open_run_artifacts(config.output)
+        self._results_path, stream = open_run_artifacts(config.output)
+        self._init_bookkeeping(stream or RecordStream(None))
 
     def run(self) -> dict[str, Any]:
         """Execute the full benchmark pipeline.
@@ -421,15 +441,6 @@ class BenchmarkRunner:
                 print_reference_solution_failures(failures)
                 raise SystemExit(1)
         return payload
-
-    def _on_result(self, result: dict[str, Any]) -> None:
-        """Aggregate a finished record, keep it, and stream it to disk."""
-        with self._lock:
-            if result.get("error") is None:
-                self.aggregator.add_execution(result["scores"])
-            self.usage_aggregator.add(result.get("usage"))
-            self.records.append(result)
-            self._stream.write(result)
 
     def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run code generation execution tests in parallel.
@@ -812,8 +823,7 @@ class BenchmarkRunner:
         Args:
             payload: Complete results dict with metadata and test records.
         """
-        ensure_dir(self._results_path.parent)
-        self._results_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+        write_results_json(self._results_path, payload)
         print_results_path(self._results_path)
         self._stream.finalize(payload["results"])
 
@@ -957,14 +967,13 @@ class MultiModelRunner:
                 for name, result in self.results.items()
             },
         }
-        ensure_dir(self._results_path.parent)
-        self._results_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+        write_results_json(self._results_path, payload)
         print_results_path(self._results_path)
         records = [record for result in self.results.values() for record in result["results"]]
         self._stream.finalize(sort_records(records))
 
 
-class SingleModelRunner:
+class SingleModelRunner(_ResultBookkeeping):
     """Run benchmark for a single model with pre-loaded tests.
 
     Used by MultiModelRunner to evaluate one model at a time while sharing
@@ -1017,15 +1026,6 @@ class SingleModelRunner:
             "scores": summary.as_scores_dict(),
             "results": sort_records(self.records),
         }
-
-    def _on_result(self, result: dict[str, Any]) -> None:
-        """Aggregate a finished record, keep it, and stream it to disk."""
-        with self._lock:
-            if result.get("error") is None:
-                self.aggregator.add_execution(result["scores"])
-            self.usage_aggregator.add(result.get("usage"))
-            self.records.append(result)
-            self._stream.write(result)
 
     def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests with isolation. See BenchmarkRunner._run_execution_tests."""

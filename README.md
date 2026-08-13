@@ -46,7 +46,17 @@ cd ..
 wp-bench run --config wp-bench.example.yaml
 ```
 
-Results are written to `output/results.json` with per-test logs in `output/results.jsonl`.
+Results are written to `output/results.json` with per-test logs in
+`output/results.jsonl`. Multi-model runs write one combined JSONL covering every
+model, each record carrying the model it came from.
+
+While a run is in flight its records stream to `output/results_<timestamp>.jsonl.partial`,
+so you can `tail -f` progress and, if the run dies (dead runtime, exhausted
+provider quota, Ctrl-C), keep everything already graded. **A `.partial` file is by
+definition an incomplete run: read it for the individual records, never compute a
+suite score from it.** The canonical `.jsonl` appears only when a run finishes, and
+the timestamp in every filename is when the run *started*, so a run's JSON and JSONL
+share one name.
 
 ## Multi-Model Benchmarking
 

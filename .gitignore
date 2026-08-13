@@ -56,4 +56,9 @@ debug.log
 # Local configuration
 .claude/
 .wp-env.override.json
-CLAUDE.mdpython/uv.lock
+CLAUDE.md
+python/uv.lock
+# Local run configs (wp-bench.example.yaml is the tracked template)
+wp-bench.yaml
+wp-bench.*.yaml
+!wp-bench.example.yaml

@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO, Any
+from typing import Any, Self
 
 import orjson
 
@@ -59,31 +59,47 @@ class RecordStream:
     def __init__(self, path: Path | None):
         self.path = path
         self.partial_path = path.with_suffix(path.suffix + ".partial") if path else None
-        self._handle: IO[bytes] | None = None
+        self._fd: int | None = None
         self._written = 0
 
-    def write(self, record: dict[str, Any]) -> None:
-        """Append one record and flush, so ``tail -f`` shows live progress.
+    def __enter__(self) -> Self:
+        return self
 
-        Flush, not fsync: the threat model is process death (crash, quota,
-        Ctrl-C, OOM kill), where handing bytes to the OS is enough. Opened
-        for append so reopening after a close can never discard what an
-        earlier handle already wrote.
+    def __exit__(self, *exc_info: object) -> None:
+        """Release the descriptor however the run ends.
+
+        Owning the lifecycle here is what keeps every run mode from having
+        to re-thread its own close on each crash path.
+        """
+        self.close()
+
+    def write(self, record: dict[str, Any]) -> None:
+        """Append one record, so ``tail -f`` shows live progress.
+
+        Each record goes out as one unbuffered ``os.write`` to an O_APPEND
+        descriptor. Records embed whole completions and generated code, so
+        they routinely exceed a stream buffer; a buffered write plus flush
+        would let a kill land between the underlying syscalls and truncate
+        a line mid-record. Readers of a live file should still tolerate a
+        short final line: only the process that dies mid-write can leave
+        one, and the records before it stay valid.
+
+        No fsync: the threat model is process death (crash, quota, Ctrl-C,
+        OOM kill), where handing the bytes to the OS is enough.
         """
         if self.partial_path is None:
             return
-        if self._handle is None:
+        if self._fd is None:
             ensure_dir(self.partial_path.parent)
-            self._handle = self.partial_path.open("ab")
-        self._handle.write(_line(record))
-        self._handle.flush()
+            self._fd = os.open(self.partial_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        os.write(self._fd, _line(record))
         self._written += 1
 
     def close(self) -> None:
-        """Release the handle; safe to call on crash paths and twice."""
-        if self._handle is not None:
-            self._handle.close()
-            self._handle = None
+        """Release the descriptor; safe to call on crash paths and twice."""
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
 
     def finalize(self, records: list[dict[str, Any]]) -> None:
         """Write the canonical artifact and retire the live file.
@@ -110,9 +126,28 @@ class RecordStream:
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
-        os.replace(tmp, self.path)
         if len(records) >= self._written:
+            # Retire the live file first: a crash between these two steps
+            # can then only lose the duplicate, never leave a ".partial"
+            # sitting next to a finished artifact and lying about it.
             self.partial_path.unlink(missing_ok=True)
+        os.replace(tmp, self.path)
+
+
+def write_results_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write a run's results JSON atomically.
+
+    Staged and moved into place like the JSONL, so a kill mid-write cannot
+    leave a truncated results file that parses as valid JSON to nobody.
+    """
+    ensure_dir(path.parent)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    os.replace(tmp, path)
 
 
 def open_stream(jsonl_path: Path | None, moment: datetime) -> RecordStream:
@@ -128,4 +163,31 @@ def open_run_artifacts(output: OutputConfig) -> tuple[Path, RecordStream]:
     call sites.
     """
     moment = datetime.now(timezone.utc)
-    return timestamped_path(output.path, moment), open_stream(output.jsonl_path, moment)
+    json_path = timestamped_path(output.path, moment)
+    stream = open_stream(output.jsonl_path, moment)
+    suffix = 2
+    while _artifacts_taken(json_path, stream):
+        # Second granularity, so a sweep script or a supervisor restart can
+        # launch two runs into the same names; they would then append into
+        # one .partial and clobber each other at finalize.
+        json_path = _suffixed(timestamped_path(output.path, moment), suffix)
+        stream = RecordStream(
+            _suffixed(timestamped_path(output.jsonl_path, moment), suffix)
+            if output.jsonl_path
+            else None
+        )
+        suffix += 1
+    return json_path, stream
+
+
+def _suffixed(path: Path, suffix: int) -> Path:
+    return path.parent / f"{path.stem}-{suffix}{path.suffix}"
+
+
+def _artifacts_taken(json_path: Path, stream: RecordStream) -> bool:
+    """Whether another run already owns either of this run's filenames."""
+    if json_path.exists():
+        return True
+    return bool(
+        stream.path and (stream.path.exists() or (stream.partial_path and stream.partial_path.exists()))
+    )
