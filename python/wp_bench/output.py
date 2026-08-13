@@ -126,8 +126,14 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
             _fmt_latency(usage.get("median_latency_ms")),
         )
 
-    for delta_row in _skill_delta_rows(results):
+    delta_rows = _skill_delta_rows(results)
+    for delta_row in delta_rows:
         table.add_row(*delta_row)
+    if delta_rows:
+        # One run per variant is a single sample; a small aggregate delta can
+        # be run-to-run noise. The per-test Skill Impact table names what
+        # actually moved.
+        table.caption = "Δ compares a single run per variant; see the per-test Skill Impact table."
 
     console.print(table)
 

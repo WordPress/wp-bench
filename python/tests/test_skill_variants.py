@@ -216,6 +216,7 @@ def test_comparison_table_renders_delta_row(monkeypatch: pytest.MonkeyPatch) -> 
     assert "model-a+skills" in output
     assert "Δ skills" in output
     assert "+25.0pp" in output
+    assert "single run per variant" in output
 
 
 def test_comparison_table_without_variants_unchanged(
