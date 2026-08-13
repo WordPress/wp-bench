@@ -139,7 +139,7 @@ def test_matrix_payload_contains_skills_metadata(
 ) -> None:
     _run_matrix(monkeypatch, tmp_path)
 
-    payload_path = sorted(tmp_path.glob("results_*.json"))[-1]
+    payload_path = max(tmp_path.glob("results_*.json"))
     payload = json.loads(payload_path.read_text())
 
     metadata = payload["metadata"]
@@ -291,9 +291,11 @@ def test_skill_impact_lists_flipped_and_still_failing_tests(
     assert "e-broken" in output and "broken by skill" in output
     # Runtime movement on a still-failing test is surfaced too.
     assert "e-partial" in output and "runtime 25% → 75%" in output
-    # Unchanged tests are summarized, naming the still-failing ones.
+    # Tests failing in both variants are rows, marked as still failing.
     assert "e-stuck" in output
-    assert "1 passing" in output
+    assert "still failing" in output
+    # Tests passing in both variants are only counted, never listed.
+    assert "Passing in both variants (not shown): 1" in output
     assert "e-fine" not in output
 
 

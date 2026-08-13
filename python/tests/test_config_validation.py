@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from wp_bench.config import GraderConfig, HarnessConfig, ModelConfig, RunConfig, SkillsConfig
+from wp_bench.config import (
+    GraderConfig,
+    HarnessConfig,
+    ModelConfig,
+    RunConfig,
+    SkillsConfig,
+)
 
 
 def test_model_config_rejects_temperature_below_zero() -> None:

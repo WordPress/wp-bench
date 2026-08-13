@@ -164,18 +164,24 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
         color = "green" if delta > 0 else "red" if delta < 0 else "dim"
         return f"[{color}]{delta*100:+.1f}pp[/{color}]"
 
+    def _usage_delta(
+        base_usage: dict[str, Any],
+        skill_usage: dict[str, Any],
+        field: str,
+        prefix: str = "",
+        suffix: str = "",
+    ) -> str:
+        base_value, skill_value = base_usage.get(field), skill_usage.get(field)
+        if base_value is None or skill_value is None:
+            return "N/A"
+        delta = skill_value - base_value
+        precision = 4 if field == "estimated_cost_usd" else 0
+        return f"{prefix}{delta:+.{precision}f}{suffix}"
+
     rows: list[list[str]] = []
     for base_model, (baseline, skilled) in _variant_pairs(results).items():
         base_scores, skill_scores = baseline["scores"], skilled["scores"]
         base_usage, skill_usage = baseline.get("usage") or {}, skilled.get("usage") or {}
-
-        def _usage_delta(field: str, prefix: str = "", suffix: str = "") -> str:
-            base_value, skill_value = base_usage.get(field), skill_usage.get(field)
-            if base_value is None or skill_value is None:
-                return "N/A"
-            delta = skill_value - base_value
-            precision = 4 if field == "estimated_cost_usd" else 0
-            return f"{prefix}{delta:+.{precision}f}{suffix}"
 
         rows.append(
             [
@@ -186,8 +192,8 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
                 ),
                 _fmt_delta(base_scores.get("runtime"), skill_scores.get("runtime")),
                 _fmt_delta(base_scores.get("overall"), skill_scores.get("overall")),
-                _usage_delta("estimated_cost_usd", prefix="$"),
-                _usage_delta("median_latency_ms", suffix="ms"),
+                _usage_delta(base_usage, skill_usage, "estimated_cost_usd", prefix="$"),
+                _usage_delta(base_usage, skill_usage, "median_latency_ms", suffix="ms"),
             ]
         )
     return rows
@@ -198,53 +204,44 @@ def print_skill_impact(results: dict[str, dict[str, Any]]) -> None:
 
     Skill authors iterate on one skill at a time; the aggregate delta hides
     which tests actually moved. For every base model that ran both variants
-    this prints one row per test whose outcome changed (execution pass flip,
-    or a runtime-score shift on a still-failing test), then summarizes the
-    unchanged tests — naming the still-failing ones, since those are the
-    skill's next targets. No-op for runs without a baseline/skills pair.
+    this prints one row per test that changed (execution pass flip, or a
+    runtime-score shift) or is still failing in both variants — the latter
+    are the skill's next targets. Tests passing in both variants are only
+    counted. No-op for runs without a baseline/skills pair.
     """
     for base_model, (baseline, skilled) in _variant_pairs(results).items():
         base_records = {r["test_id"]: r for r in baseline.get("results", [])}
         skill_records = {r["test_id"]: r for r in skilled.get("results", [])}
 
-        changed: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
-        unchanged_pass: list[str] = []
-        unchanged_fail: list[str] = []
+        rows: list[tuple[str, dict[str, Any] | None, dict[str, Any] | None, str | None]] = []
+        unchanged_pass = 0
         for test_id in sorted(base_records.keys() | skill_records.keys()):
             base, skill = base_records.get(test_id), skill_records.get(test_id)
             if base is None or skill is None or _test_outcome(base) != _test_outcome(skill):
-                changed.append((test_id, base or {}, skill or {}))
+                rows.append((test_id, base, skill, None))
             elif _test_outcome(base)[0] == "pass":
-                unchanged_pass.append(test_id)
+                unchanged_pass += 1
             else:
-                unchanged_fail.append(test_id)
+                rows.append((test_id, base, skill, "[dim]— still failing[/dim]"))
 
         table = Table(title=f"Skill Impact per Test ({base_model})")
         table.add_column("Test ID", style="cyan")
         table.add_column("Baseline", justify="right")
         table.add_column("+Skills", justify="right")
         table.add_column("Change", justify="left")
-        for test_id, base, skill in changed:
+        for test_id, base, skill, change in rows:
+            base_outcome = _test_outcome(base) if base else None
+            skill_outcome = _test_outcome(skill) if skill else None
             table.add_row(
                 test_id,
-                _fmt_outcome(_test_outcome(base) if base else None),
-                _fmt_outcome(_test_outcome(skill) if skill else None),
-                _fmt_outcome_change(
-                    _test_outcome(base) if base else None,
-                    _test_outcome(skill) if skill else None,
-                ),
+                _fmt_outcome(base_outcome),
+                _fmt_outcome(skill_outcome),
+                change if change is not None else _fmt_outcome_change(base_outcome, skill_outcome),
             )
-        if not changed:
-            table.add_row("[dim]—[/dim]", "", "", "[dim]no per-test changes[/dim]")
+        if not rows:
+            table.add_row("[dim]—[/dim]", "", "", "[dim]all tests passing in both variants[/dim]")
         console.print(table)
-
-        summary = f"Unchanged: {len(unchanged_pass)} passing"
-        if unchanged_fail:
-            summary += (
-                f", {len(unchanged_fail)} failing in both variants: "
-                f"{', '.join(unchanged_fail)}"
-            )
-        console.print(f"[dim]{summary}[/dim]")
+        console.print(f"[dim]Passing in both variants (not shown): {unchanged_pass}[/dim]")
 
 
 def _test_outcome(record: dict[str, Any]) -> tuple[str, float | None]:
