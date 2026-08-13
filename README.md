@@ -122,6 +122,9 @@ Every model then runs **both** a baseline pass and a with-skills pass over the
 identical seeded test subset; the skill content is injected as a system
 message, the user prompt stays byte-identical, and the comparison table gains
 a `Δ skills` row per model showing the score, cost, and latency deltas.
+A per-test "Skill Impact" table follows, listing every test the skill fixed,
+broke, or moved (runtime-score shifts on still-failing tests), plus the tests
+still failing in both variants — the skill's next targets.
 
 ```bash
 wp-bench run --config wp-bench.yaml --limit 10 \

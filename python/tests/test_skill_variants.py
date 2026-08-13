@@ -22,7 +22,7 @@ from wp_bench.config import (
 from wp_bench.core import MultiModelRunner
 from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
-from wp_bench.output import print_comparison_table
+from wp_bench.output import print_comparison_table, print_skill_impact
 from wp_bench.skills import build_variants, load_skill
 
 
@@ -232,6 +232,100 @@ def test_comparison_table_without_variants_unchanged(
     output = capsys.readouterr().out
     assert "model-a" in output
     assert "Δ" not in output
+
+
+def _impact_record(
+    test_id: str, *, execution_pass: bool, runtime: float | None = None, error: bool = False
+) -> dict[str, Any]:
+    return {
+        "test_id": test_id,
+        "scores": {"execution_pass": execution_pass, "runtime": runtime},
+        "error": {"type": "Timeout", "message": "boom"} if error else None,
+    }
+
+
+def _render_skill_impact(
+    monkeypatch: pytest.MonkeyPatch, results: dict[str, dict[str, Any]]
+) -> str:
+    from rich.console import Console
+
+    recording_console = Console(record=True, width=200)
+    monkeypatch.setattr("wp_bench.output.console", recording_console)
+    print_skill_impact(results)
+    return recording_console.export_text()
+
+
+def test_skill_impact_lists_flipped_and_still_failing_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    results = {
+        "model-a": {
+            "base_model": "model-a",
+            "variant": {"key": "baseline"},
+            "scores": {},
+            "results": [
+                _impact_record("e-fixed", execution_pass=False, runtime=0.5),
+                _impact_record("e-broken", execution_pass=True, runtime=1.0),
+                _impact_record("e-stuck", execution_pass=False, runtime=0.0),
+                _impact_record("e-fine", execution_pass=True, runtime=1.0),
+                _impact_record("e-partial", execution_pass=False, runtime=0.25),
+            ],
+        },
+        "model-a+skills": {
+            "base_model": "model-a",
+            "variant": {"key": "skills"},
+            "scores": {},
+            "results": [
+                _impact_record("e-fixed", execution_pass=True, runtime=1.0),
+                _impact_record("e-broken", execution_pass=False, runtime=0.5),
+                _impact_record("e-stuck", execution_pass=False, runtime=0.0),
+                _impact_record("e-fine", execution_pass=True, runtime=1.0),
+                _impact_record("e-partial", execution_pass=False, runtime=0.75),
+            ],
+        },
+    }
+    output = _render_skill_impact(monkeypatch, results)
+
+    assert "Skill Impact per Test (model-a)" in output
+    assert "e-fixed" in output and "fixed by skill" in output
+    assert "e-broken" in output and "broken by skill" in output
+    # Runtime movement on a still-failing test is surfaced too.
+    assert "e-partial" in output and "runtime 25% → 75%" in output
+    # Unchanged tests are summarized, naming the still-failing ones.
+    assert "e-stuck" in output
+    assert "1 passing" in output
+    assert "e-fine" not in output
+
+
+def test_skill_impact_silent_without_variant_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = _render_skill_impact(
+        monkeypatch,
+        {"model-a": {"scores": {}, "results": [_impact_record("e-1", execution_pass=True)]}},
+    )
+    assert output.strip() == ""
+
+
+def test_skill_impact_handles_errored_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    results = {
+        "model-a": {
+            "base_model": "model-a",
+            "variant": {"key": "baseline"},
+            "scores": {},
+            "results": [_impact_record("e-err", execution_pass=False, error=True)],
+        },
+        "model-a+skills": {
+            "base_model": "model-a",
+            "variant": {"key": "skills"},
+            "scores": {},
+            "results": [_impact_record("e-err", execution_pass=True, runtime=1.0)],
+        },
+    }
+    output = _render_skill_impact(monkeypatch, results)
+    assert "e-err" in output
+    assert "error" in output
+    assert "fixed by skill" in output
 
 
 def test_build_variants_shares_selection_config(tmp_path: Path) -> None:

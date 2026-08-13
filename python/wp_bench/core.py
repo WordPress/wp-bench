@@ -33,6 +33,7 @@ from .output import (
     print_model_header,
     print_reference_solution_failures,
     print_results_path,
+    print_skill_impact,
     print_systemic_abort,
     print_test_error,
     print_test_warning,
@@ -901,6 +902,7 @@ class MultiModelRunner:
             raise SystemExit(130) from None
 
         print_comparison_table(self.results)
+        print_skill_impact(self.results)
         self._write_outputs()
         return self.results
 

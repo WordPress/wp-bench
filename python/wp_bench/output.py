@@ -132,8 +132,10 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     console.print(table)
 
 
-def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
-    """Build a "Δ skills" row per base model that ran both variants."""
+def _variant_pairs(
+    results: dict[str, dict[str, Any]],
+) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
+    """Map each base model to its (baseline, skills) result pair, when both ran."""
 
     def _variant_key(result: dict[str, Any]) -> str | None:
         variant = result.get("variant")
@@ -145,6 +147,16 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
         if key:
             by_base.setdefault(result.get("base_model", ""), {})[key] = result
 
+    return {
+        base_model: (variants["baseline"], variants["skills"])
+        for base_model, variants in by_base.items()
+        if "baseline" in variants and "skills" in variants
+    }
+
+
+def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
+    """Build a "Δ skills" row per base model that ran both variants."""
+
     def _fmt_delta(base: float | None, with_skills: float | None) -> str:
         if base is None or with_skills is None:
             return "N/A"
@@ -153,10 +165,7 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
         return f"[{color}]{delta*100:+.1f}pp[/{color}]"
 
     rows: list[list[str]] = []
-    for base_model, variants in by_base.items():
-        baseline, skilled = variants.get("baseline"), variants.get("skills")
-        if not baseline or not skilled:
-            continue
+    for base_model, (baseline, skilled) in _variant_pairs(results).items():
         base_scores, skill_scores = baseline["scores"], skilled["scores"]
         base_usage, skill_usage = baseline.get("usage") or {}, skilled.get("usage") or {}
 
@@ -182,6 +191,101 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
             ]
         )
     return rows
+
+
+def print_skill_impact(results: dict[str, dict[str, Any]]) -> None:
+    """Per-test breakdown of what the skills variant changed, per base model.
+
+    Skill authors iterate on one skill at a time; the aggregate delta hides
+    which tests actually moved. For every base model that ran both variants
+    this prints one row per test whose outcome changed (execution pass flip,
+    or a runtime-score shift on a still-failing test), then summarizes the
+    unchanged tests — naming the still-failing ones, since those are the
+    skill's next targets. No-op for runs without a baseline/skills pair.
+    """
+    for base_model, (baseline, skilled) in _variant_pairs(results).items():
+        base_records = {r["test_id"]: r for r in baseline.get("results", [])}
+        skill_records = {r["test_id"]: r for r in skilled.get("results", [])}
+
+        changed: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+        unchanged_pass: list[str] = []
+        unchanged_fail: list[str] = []
+        for test_id in sorted(base_records.keys() | skill_records.keys()):
+            base, skill = base_records.get(test_id), skill_records.get(test_id)
+            if base is None or skill is None or _test_outcome(base) != _test_outcome(skill):
+                changed.append((test_id, base or {}, skill or {}))
+            elif _test_outcome(base)[0] == "pass":
+                unchanged_pass.append(test_id)
+            else:
+                unchanged_fail.append(test_id)
+
+        table = Table(title=f"Skill Impact per Test ({base_model})")
+        table.add_column("Test ID", style="cyan")
+        table.add_column("Baseline", justify="right")
+        table.add_column("+Skills", justify="right")
+        table.add_column("Change", justify="left")
+        for test_id, base, skill in changed:
+            table.add_row(
+                test_id,
+                _fmt_outcome(_test_outcome(base) if base else None),
+                _fmt_outcome(_test_outcome(skill) if skill else None),
+                _fmt_outcome_change(
+                    _test_outcome(base) if base else None,
+                    _test_outcome(skill) if skill else None,
+                ),
+            )
+        if not changed:
+            table.add_row("[dim]—[/dim]", "", "", "[dim]no per-test changes[/dim]")
+        console.print(table)
+
+        summary = f"Unchanged: {len(unchanged_pass)} passing"
+        if unchanged_fail:
+            summary += (
+                f", {len(unchanged_fail)} failing in both variants: "
+                f"{', '.join(unchanged_fail)}"
+            )
+        console.print(f"[dim]{summary}[/dim]")
+
+
+def _test_outcome(record: dict[str, Any]) -> tuple[str, float | None]:
+    """Reduce a record to a comparable (status, runtime score) outcome."""
+    if record.get("error") is not None:
+        return ("error", None)
+    scores = record.get("scores") or {}
+    status = "pass" if scores.get("execution_pass") else "fail"
+    return (status, scores.get("runtime"))
+
+
+def _fmt_outcome(outcome: tuple[str, float | None] | None) -> str:
+    if outcome is None:
+        return "[dim]missing[/dim]"
+    status, runtime = outcome
+    if status == "pass":
+        return "[green]pass[/green]"
+    if status == "error":
+        return "[yellow]error[/yellow]"
+    if runtime is not None and runtime > 0:
+        return f"[red]fail[/red] [dim]({runtime*100:.0f}% runtime)[/dim]"
+    return "[red]fail[/red]"
+
+
+def _fmt_outcome_change(
+    base: tuple[str, float | None] | None,
+    skill: tuple[str, float | None] | None,
+) -> str:
+    if base is None or skill is None:
+        return "[yellow]present in one variant only[/yellow]"
+    base_status, base_runtime = base
+    skill_status, skill_runtime = skill
+    if base_status != "pass" and skill_status == "pass":
+        return "[green]▲ fixed by skill[/green]"
+    if base_status == "pass" and skill_status != "pass":
+        return "[red]▼ broken by skill[/red]"
+    if base_runtime is not None and skill_runtime is not None:
+        direction = "▲" if skill_runtime > base_runtime else "▼"
+        color = "green" if skill_runtime > base_runtime else "red"
+        return f"[{color}]{direction} runtime {base_runtime*100:.0f}% → {skill_runtime*100:.0f}%[/{color}]"
+    return "[yellow]changed[/yellow]"
 
 
 def print_reference_solution_failures(records: list[dict[str, Any]]) -> None:
