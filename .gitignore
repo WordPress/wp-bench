@@ -56,4 +56,4 @@ debug.log
 # Local configuration
 .claude/
 .wp-env.override.json
-CLAUDE.md
+CLAUDE.mdpython/uv.lock
