@@ -2,11 +2,18 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from wp_bench.config import GraderConfig, HarnessConfig, ModelConfig, RunConfig
+from wp_bench.config import (
+    GraderConfig,
+    HarnessConfig,
+    ModelConfig,
+    RunConfig,
+    SkillsConfig,
+)
 
 
 def test_model_config_rejects_temperature_below_zero() -> None:
@@ -54,6 +61,36 @@ def test_grader_config_rejects_nonpositive_timeouts() -> None:
         GraderConfig(timeout_seconds=0)
     with pytest.raises(ValidationError):
         GraderConfig(setup_timeout_seconds=-1)
+
+
+def test_skills_config_defaults() -> None:
+    skills = HarnessConfig().skills
+    assert skills.paths == []
+    assert skills.include_references is True
+    assert skills.only is False
+
+
+def test_skills_config_rejects_only_without_paths() -> None:
+    with pytest.raises(ValidationError, match="skills.only requires skills.paths"):
+        SkillsConfig(only=True)
+
+
+def test_skills_config_rejects_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        SkillsConfig(mode="agentic")  # type: ignore[call-arg]
+
+
+def test_from_file_resolves_relative_skill_paths(tmp_path: Path) -> None:
+    config_path = tmp_path / "wp-bench.yaml"
+    config_path.write_text(
+        "skills:\n  paths:\n    - skills/example\n    - /abs/skill\n",
+        encoding="utf-8",
+    )
+    config = HarnessConfig.from_file(config_path)
+    assert config.skills.paths == [
+        (tmp_path / "skills/example").resolve(),
+        Path("/abs/skill"),
+    ]
 
 
 def test_config_construction_emits_no_deprecation_warnings() -> None:

@@ -119,6 +119,19 @@ def test_single_and_multi_model_records_have_same_keys(
     )
 
 
+def test_all_records_carry_baseline_variant_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Non-skills runs stamp the baseline variant; variant.* paths never vary."""
+    for record in _single_model_records(monkeypatch, tmp_path):
+        assert record["variant"] == {
+            "key": "baseline",
+            "kind": "none",
+            "system_prompt_hash": None,
+        }
+
+
 def test_multi_model_execution_records_include_audit_fields(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

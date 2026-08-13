@@ -14,7 +14,17 @@ from .config import ModelConfig
 #: Bump when the per-test record shape changes. Recorded in payload metadata.
 #: 2.0: the "knowledge" score key and the knowledge-only "output.answer"
 #: field were removed (knowledge track removed).
-RESULT_SCHEMA_VERSION = "2.0"
+#: 2.1: added the "variant" block for skill-injection A/B runs.
+RESULT_SCHEMA_VERSION = "2.1"
+
+
+def _baseline_variant_info() -> dict[str, Any]:
+    """The no-skills variant identity every record carries by default.
+
+    Kept structurally identical to skills.Variant.record_info() so the
+    variant key paths never diverge between baseline and skills records.
+    """
+    return {"key": "baseline", "kind": "none", "system_prompt_hash": None}
 
 
 def _model_info(model_config: ModelConfig | None) -> dict[str, Any] | None:
@@ -57,6 +67,7 @@ def _base_record(
     test: Any,
     mode: str,
     model_config: ModelConfig | None,
+    variant: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The canonical per-test record skeleton shared by every builder.
 
@@ -74,6 +85,7 @@ def _base_record(
         "mode": mode,
         "prompt_hash": None,
         "model": _model_info(model_config),
+        "variant": variant if variant is not None else _baseline_variant_info(),
         "output": {"raw_completion": None, "code": None},
         "scores": _null_scores(),
         "grader": None,
@@ -95,6 +107,7 @@ def build_execution_record(
     scores: dict[str, Any],
     usage: dict[str, Any] | None = None,
     model_call: dict[str, Any] | None = None,
+    variant: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the canonical record for an execution test result.
 
@@ -102,9 +115,11 @@ def build_execution_record(
         scores: Scores object from BenchmarkRunner._score_execution, carrying
             correctness (legacy), execution_pass (primary), runtime, static,
             and static_policy_pass.
+        variant: Variant identity from skills.Variant.record_info();
+            defaults to the baseline (no-skills) variant.
     """
     raw = env_result.raw or {}
-    record = _base_record(test=test, mode=mode, model_config=model_config)
+    record = _base_record(test=test, mode=mode, model_config=model_config, variant=variant)
     record["prompt_hash"] = prompt_hash
     record["output"] = {"raw_completion": raw_completion, "code": code}
     record["scores"] = scores
@@ -127,6 +142,7 @@ def build_error_record(
     model_config: ModelConfig | None,
     error_type: str,
     error_message: str,
+    variant: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the canonical record for a test that errored before grading.
 
@@ -135,7 +151,7 @@ def build_error_record(
     pass or fail), and keeps the exact canonical key structure so consumers
     never need a separate parser for errored tests.
     """
-    record = _base_record(test=test, mode=mode, model_config=model_config)
+    record = _base_record(test=test, mode=mode, model_config=model_config, variant=variant)
     record["error"] = {"type": error_type, "message": error_message}
     return record
 

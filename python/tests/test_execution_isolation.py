@@ -143,7 +143,7 @@ def test_multi_model_runner_resets_between_models(
     runner.environment = spy  # type: ignore[assignment]
     monkeypatch.setattr(
         "wp_bench.core.ModelInterface",
-        lambda model_config: type(
+        lambda model_config, system_prompt=None: type(
             "FakeModel",
             (),
             {"generate_with_metadata": staticmethod(lambda prompt: fake_generation("```php\ncode\n```"))},

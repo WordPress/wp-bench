@@ -72,8 +72,11 @@ class ModelGeneration:
 class ModelInterface:
     """Thin wrapper over LiteLLM to keep prompts consistent."""
 
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig, system_prompt: str | None = None):
         self.config = config
+        #: Variant state (e.g. injected skill content), deliberately not part
+        #: of ModelConfig so it never lands in serialized model config blocks.
+        self.system_prompt = system_prompt
 
     def generate(self, prompt: str) -> str:
         """Generate a completion for the given prompt (text only).
@@ -165,9 +168,13 @@ class ModelInterface:
         return completion_cost(response)
 
     def _completion_kwargs(self, prompt: str) -> dict[str, Any]:
+        messages: list[dict[str, str]] = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": prompt})
         kwargs: dict[str, Any] = {
             "model": self.config.name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "max_tokens": self.config.max_tokens,
             "top_p": self.config.top_p,
             "timeout": self.config.request_timeout,

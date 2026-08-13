@@ -13,6 +13,7 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 - Create a venv and install the harness: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ./python`.
 - Install dev tooling: `pip install -e ./python[dev]` (adds `pytest`, `ruff`, `mypy`).
 - Run the benchmark locally: `wp-bench run --config python/wp-bench.example.yaml`.
+- Skills A/B run (baseline vs with-skills, see README): `wp-bench run --skill <path-to-skill>`.
 - Lint: `ruff python`.
 - Type check: `mypy python`.
 - Unit tests: `pytest python` (use `-k <pattern>` to scope).
