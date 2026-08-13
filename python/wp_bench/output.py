@@ -117,8 +117,11 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     for model_name, result in results.items():
         scores = result["scores"]
         usage = result.get("usage") or {}
+        label = model_name
+        if result.get("reused_from"):
+            label = f"{model_name} [dim](reused)[/dim]"
         table.add_row(
-            model_name,
+            label,
             _fmt_score(scores.get("execution_pass_rate")),
             _fmt_score(scores.get("runtime")),
             f"{scores['overall']*100:.1f}%",
@@ -191,7 +194,7 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
 
         rows.append(
             [
-                f"[dim]Δ skills ({base_model})[/dim]",
+                f"[dim]Δ skills ({base_model}, single run)[/dim]",
                 _fmt_delta(
                     base_scores.get("execution_pass_rate"),
                     skill_scores.get("execution_pass_rate"),

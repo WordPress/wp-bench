@@ -353,7 +353,7 @@ def test_cli_routes_single_model_with_skill_to_multi_runner(
     captured: dict[str, Any] = {}
 
     class FakeMultiRunner:
-        def __init__(self, config: HarnessConfig, skills: list[Any] | None = None):
+        def __init__(self, config: HarnessConfig, skills: list[Any] | None = None, baseline: Any = None):
             captured["config"] = config
             captured["skills"] = skills
 

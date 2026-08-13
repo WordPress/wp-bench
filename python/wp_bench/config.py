@@ -200,11 +200,30 @@ class SkillsConfig(StrictModel):
     #: Skip the baseline (no-skills) variant. Diagnostic escape hatch: the
     #: default in-run A/B is what makes results comparable.
     only: bool = False
+    #: Reuse the baseline pass from a previous run's results JSON instead of
+    #: grading it again. The baseline cannot change while a skill is edited,
+    #: so re-running it every iteration buys nothing. Validated at run start
+    #: (same models, same tests, same scoring/schema versions) so a stale or
+    #: mismatched file fails loudly rather than skewing the delta.
+    baseline_from: Path | None = None
 
     @model_validator(mode="after")
     def _validate_only_requires_paths(self) -> SkillsConfig:
         if self.only and not self.paths:
             raise ValueError("skills.only requires skills.paths to be set")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_baseline_reuse(self) -> SkillsConfig:
+        if self.baseline_from is None:
+            return self
+        if not self.paths:
+            raise ValueError("skills.baseline_from requires skills.paths to be set")
+        if self.only:
+            raise ValueError(
+                "skills.baseline_from and skills.only conflict: one supplies a "
+                "baseline to compare against, the other drops the comparison."
+            )
         return self
 
 
