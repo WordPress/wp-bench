@@ -183,6 +183,31 @@ class OutputConfig(StrictModel):
     jsonl_path: Path | None = Field(default=Path("results.jsonl"))
 
 
+class SkillsConfig(StrictModel):
+    """Skill-injection A/B runs. When ``paths`` is set, every model runs a
+    baseline pass and a with-skills pass over the identical seeded test
+    subset, and the comparison table shows deltas.
+    """
+
+    #: Skill sources: a directory containing SKILL.md, or a bare .md file.
+    #: Path existence and content are validated at run start (load_skills),
+    #: not here — config construction stays IO-free.
+    paths: list[Path] = Field(default_factory=list)
+    #: Inline each skill's references/*.md into the injected content. The
+    #: harness is single-shot, so the model cannot follow SKILL.md's file
+    #: pointers on its own; disabling this is a diagnostic mode.
+    include_references: bool = True
+    #: Skip the baseline (no-skills) variant. Diagnostic escape hatch: the
+    #: default in-run A/B is what makes results comparable.
+    only: bool = False
+
+    @model_validator(mode="after")
+    def _validate_only_requires_paths(self) -> SkillsConfig:
+        if self.only and not self.paths:
+            raise ValueError("skills.only requires skills.paths to be set")
+        return self
+
+
 class HarnessConfig(StrictModel):
     dataset: DatasetConfig = DatasetConfig()
     model: ModelConfig | None = None  # Single model (legacy)
@@ -190,6 +215,7 @@ class HarnessConfig(StrictModel):
     grader: GraderConfig = GraderConfig()
     run: RunConfig = RunConfig()
     output: OutputConfig = OutputConfig()
+    skills: SkillsConfig = SkillsConfig()
 
     def get_models(self) -> list[ModelConfig]:
         """Return list of models to evaluate."""
@@ -229,5 +255,10 @@ class HarnessConfig(StrictModel):
             for key in ("path", "jsonl_path"):
                 if key in data["output"] and data["output"][key]:
                     data["output"][key] = resolve_path(data["output"][key])
+
+        if "skills" in data and isinstance(data["skills"], dict):
+            paths = data["skills"].get("paths")
+            if isinstance(paths, list):
+                data["skills"]["paths"] = [resolve_path(item) for item in paths if item]
 
         return cls(**data)

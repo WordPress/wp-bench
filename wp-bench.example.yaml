@@ -63,6 +63,18 @@ run:
   # leaderboard runs must grade every selected test.
   # continue_on_error: false
 
+# Agent skills (A/B comparison). When paths are set, every model runs BOTH
+# a baseline pass and a with-skills pass over the identical seeded test
+# subset, and the comparison table shows deltas. A skill is a directory
+# containing SKILL.md (optionally with references/*.md), or a bare .md file;
+# skills typically live outside this repo. CLI: --skill <path> (repeatable),
+# --skills-include-references / --no-skills-include-references, --skills-only.
+# skills:
+#   paths:
+#     - /path/to/agent-skills/skills/wp-plugin-development
+#   include_references: true  # inline references/*.md into the injection
+#   only: false               # true = skip the baseline pass (diagnostic)
+
 # Output paths
 output:
   path: output/results.json

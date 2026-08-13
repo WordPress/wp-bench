@@ -110,7 +110,31 @@ wp-bench run --test-id e-abilities-api-001 --test-id e-rest-api-001
 wp-bench run --config wp-bench.yaml --dry-run # validate config without calling models
 wp-bench run --check-reference-solution      # verify reference solutions pass
 wp-bench run --check-exploits                # adversarial assertion audit (see below)
+wp-bench run --skill /path/to/skill          # skills A/B run (see below)
 ```
+
+### Skills A/B comparison
+
+To measure how much an agent skill improves model scores, pass one or more
+skills with `--skill` (a directory containing `SKILL.md`, or a bare `.md`
+file — e.g. from [WordPress/agent-skills](https://github.com/WordPress/agent-skills)).
+Every model then runs **both** a baseline pass and a with-skills pass over the
+identical seeded test subset; the skill content is injected as a system
+message, the user prompt stays byte-identical, and the comparison table gains
+a `Δ skills` row per model showing the score, cost, and latency deltas.
+
+```bash
+wp-bench run --config wp-bench.yaml --limit 10 \
+  --skill ../agent-skills/skills/wp-plugin-development
+```
+
+By default each skill's `references/*.md` files are inlined into the injected
+content (the run is single-shot, so the model cannot follow SKILL.md's file
+pointers on its own); disable with `--no-skills-include-references`.
+`--skills-only` skips the baseline pass. The equivalent config block is
+`skills:` (see `wp-bench.example.yaml`). Run metadata records each skill's
+name, source path, and content hash so results stay attributable to the exact
+skill version measured.
 
 ### Adversarial assertion audit
 

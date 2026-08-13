@@ -48,6 +48,7 @@ from .records import (
 )
 from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
+from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
 from .utils import ensure_dir, sha256
 
 
@@ -169,6 +170,7 @@ def _error_record(
     *,
     mode: str,
     model_config: ModelConfig | None,
+    variant: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Canonical record for a test the runner caught erroring.
 
@@ -181,6 +183,7 @@ def _error_record(
         model_config=model_config,
         error_type=type(error.original_error).__name__,
         error_message=str(error.original_error),
+        variant=variant,
     )
 
 
@@ -834,29 +837,37 @@ class MultiModelRunner:
     SingleModelRunner, and outputs a side-by-side comparison of scores.
     """
 
-    def __init__(self, config: HarnessConfig):
+    def __init__(self, config: HarnessConfig, skills: list[LoadedSkill] | None = None):
         """Initialize the multi-model runner.
 
         Args:
             config: Harness configuration with multiple models defined.
+            skills: Pre-loaded skills for A/B variant runs (loaded in the
+                CLI so path errors surface before environment setup). When
+                set, every model runs both a baseline and a with-skills pass
+                unless ``config.skills.only`` skips the baseline.
         """
         self.config = config
         self.environment = WordPressEnvironment(config.grader)
+        self.skills = skills or []
+        self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
 
     def run(self) -> dict[str, Any]:
-        """Execute benchmarks for all configured models.
+        """Execute benchmarks for all configured (model x variant) passes.
 
-        Sets up the WordPress environment once, then runs each model sequentially.
-        Prints a comparison table and writes combined results.
+        Sets up the WordPress environment once, then runs each pass
+        sequentially. Prints a comparison table and writes combined results.
 
         Returns:
-            Dict mapping model names to their individual results.
+            Dict mapping display names (model name plus variant suffix,
+            e.g. "gpt-4o" / "gpt-4o+skills") to their individual results.
 
         Raises:
             SystemExit: If a test fails, prints error details and exits with code 1.
         """
         models = self.config.get_models()
+        self._ensure_unique_display_names(models)
         tests = filter_tests_by_ids(load_tests(self.config.dataset), self.config.run.test_ids)
         if not tests:
             raise ValueError(
@@ -867,17 +878,21 @@ class MultiModelRunner:
 
         try:
             for model_config in models:
-                model_name = model_config.name
-                print_model_header(model_name)
+                for variant in self.variants:
+                    display_name = f"{model_config.name}{variant.label_suffix}"
+                    print_model_header(display_name)
 
-                runner = SingleModelRunner(
-                    config=self.config,
-                    model_config=model_config,
-                    environment=self.environment,
-                    tests=tests,
-                )
-                result = runner.run()
-                self.results[model_name] = result
+                    runner = SingleModelRunner(
+                        config=self.config,
+                        model_config=model_config,
+                        environment=self.environment,
+                        tests=tests,
+                        variant=variant,
+                    )
+                    result = runner.run()
+                    result["base_model"] = model_config.name
+                    result["variant"] = variant.payload_info()
+                    self.results[display_name] = result
         except TestError as e:
             print_test_error(e)
             raise SystemExit(1) from e
@@ -888,6 +903,41 @@ class MultiModelRunner:
         print_comparison_table(self.results)
         self._write_outputs()
         return self.results
+
+    def _ensure_unique_display_names(self, models: list[ModelConfig]) -> None:
+        """Reject display-name collisions before any model call is spent.
+
+        A duplicated model entry, or a model literally named "x+skills"
+        alongside model "x" in a skills run, would silently overwrite a
+        results key.
+        """
+        display_names = [
+            f"{model.name}{variant.label_suffix}"
+            for model in models
+            for variant in self.variants
+        ]
+        duplicates = {name for name in display_names if display_names.count(name) > 1}
+        if duplicates:
+            raise ValueError(
+                f"Duplicate result keys {sorted(duplicates)}: model names plus "
+                "variant suffixes must be unique."
+            )
+
+    def _skills_metadata(self) -> dict[str, Any]:
+        """The skills provenance block recorded in payload metadata."""
+        skills_variant = next(
+            (variant for variant in self.variants if variant.kind != "none"), None
+        )
+        return {
+            "enabled": bool(self.skills),
+            "include_references": self.config.skills.include_references,
+            "system_prompt_sha256": (
+                sha256(skills_variant.system_prompt)
+                if skills_variant and skills_variant.system_prompt
+                else None
+            ),
+            "skills": [skill.provenance() for skill in self.skills],
+        }
 
     def _write_outputs(self) -> None:
         """Write combined results to output files."""
@@ -900,10 +950,14 @@ class MultiModelRunner:
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
                 "continue_on_error": self.config.run.continue_on_error,
+                "skills": self._skills_metadata(),
+                "variants": [variant.key for variant in self.variants],
             },
             "models": {
                 name: {
                     "config": result["model_config"],
+                    "base_model": result["base_model"],
+                    "variant": result["variant"],
                     "scores": result["scores"],
                     "results": result["results"],
                 }
@@ -929,6 +983,7 @@ class SingleModelRunner:
         model_config: ModelConfig,
         environment: WordPressEnvironment,
         tests: list[ExecutionTest],
+        variant: Variant = BASELINE_VARIANT,
     ):
         """Initialize runner for a specific model.
 
@@ -937,10 +992,13 @@ class SingleModelRunner:
             model_config: Configuration for the specific model to evaluate.
             environment: Shared WordPress environment instance.
             tests: Pre-loaded execution tests.
+            variant: Which pass of the run matrix this is (baseline or
+                skills); carries the system prompt to inject, if any.
         """
         self.config = config
         self.model_config = model_config
-        self.model = ModelInterface(model_config)
+        self.variant = variant
+        self.model = ModelInterface(model_config, system_prompt=variant.system_prompt)
         self.environment = environment
         self.tests = tests
         self.aggregator = ScoreAggregator()
@@ -968,6 +1026,7 @@ class SingleModelRunner:
     def _run_execution_tests(self, tests: list[ExecutionTest]) -> None:
         """Run execution tests with isolation. See BenchmarkRunner._run_execution_tests."""
         tests_to_run = select_run_tests(tests, self.config)
+        variant_info = self.variant.record_info()
 
         def process_test(test: ExecutionTest) -> dict[str, Any]:
             try:
@@ -988,6 +1047,7 @@ class SingleModelRunner:
                         scores=_artifact_failure_scores(),
                         usage=generation.usage_dict(),
                         model_call=_model_call_info(generation),
+                        variant=variant_info,
                     )
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_artifact(artifact, verification_spec)
@@ -1008,6 +1068,7 @@ class SingleModelRunner:
                     scores=scores,
                     usage=generation.usage_dict(),
                     model_call=_model_call_info(generation),
+                    variant=variant_info,
                 )
             except Exception as e:
                 raise TestError(test.id, e) from e
@@ -1020,7 +1081,9 @@ class SingleModelRunner:
                 self.records.append(result)
 
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
-            return _error_record(test, error, mode="model", model_config=self.model_config)
+            return _error_record(
+                test, error, mode="model", model_config=self.model_config, variant=variant_info
+            )
 
         _run_isolated_execution_loop(
             tests_to_run=tests_to_run,

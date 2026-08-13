@@ -45,6 +45,21 @@ def test_generate_normalizes_none_content_to_empty_string(monkeypatch) -> None:
     assert result.text == ""
 
 
+def test_completion_kwargs_omit_system_message_by_default() -> None:
+    model = ModelInterface(ModelConfig(name="gpt-4o-mini"))
+    messages = model._completion_kwargs("hello")["messages"]
+    assert messages == [{"role": "user", "content": "hello"}]
+
+
+def test_completion_kwargs_prepend_system_prompt_when_set() -> None:
+    model = ModelInterface(ModelConfig(name="gpt-4o-mini"), system_prompt="Skill content.")
+    messages = model._completion_kwargs("hello")["messages"]
+    assert messages == [
+        {"role": "system", "content": "Skill content."},
+        {"role": "user", "content": "hello"},
+    ]
+
+
 def test_generate_does_not_retry_other_bad_request_errors(monkeypatch) -> None:
     def fake_completion(**kwargs):
         raise BadRequestError(

@@ -90,8 +90,12 @@ def print_results_path(path: Path) -> None:
 def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     """Print a formatted table comparing scores across all models.
 
+    In a skills A/B run each base model has a baseline row and a "+skills"
+    row; a delta row follows each such pair. Results without variant keys
+    (plain multi-model runs) render exactly as before.
+
     Args:
-        results: Dict mapping model names to their result dicts containing scores.
+        results: Dict mapping display names to their result dicts containing scores.
     """
     table = Table(title="WP-Bench Results")
     table.add_column("Model", style="cyan")
@@ -122,7 +126,62 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
             _fmt_latency(usage.get("median_latency_ms")),
         )
 
+    for delta_row in _skill_delta_rows(results):
+        table.add_row(*delta_row)
+
     console.print(table)
+
+
+def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
+    """Build a "Δ skills" row per base model that ran both variants."""
+
+    def _variant_key(result: dict[str, Any]) -> str | None:
+        variant = result.get("variant")
+        return variant.get("key") if isinstance(variant, dict) else None
+
+    by_base: dict[str, dict[str, dict[str, Any]]] = {}
+    for result in results.values():
+        key = _variant_key(result)
+        if key:
+            by_base.setdefault(result.get("base_model", ""), {})[key] = result
+
+    def _fmt_delta(base: float | None, with_skills: float | None) -> str:
+        if base is None or with_skills is None:
+            return "N/A"
+        delta = with_skills - base
+        color = "green" if delta > 0 else "red" if delta < 0 else "dim"
+        return f"[{color}]{delta*100:+.1f}pp[/{color}]"
+
+    rows: list[list[str]] = []
+    for base_model, variants in by_base.items():
+        baseline, skilled = variants.get("baseline"), variants.get("skills")
+        if not baseline or not skilled:
+            continue
+        base_scores, skill_scores = baseline["scores"], skilled["scores"]
+        base_usage, skill_usage = baseline.get("usage") or {}, skilled.get("usage") or {}
+
+        def _usage_delta(field: str, prefix: str = "", suffix: str = "") -> str:
+            base_value, skill_value = base_usage.get(field), skill_usage.get(field)
+            if base_value is None or skill_value is None:
+                return "N/A"
+            delta = skill_value - base_value
+            precision = 4 if field == "estimated_cost_usd" else 0
+            return f"{prefix}{delta:+.{precision}f}{suffix}"
+
+        rows.append(
+            [
+                f"[dim]Δ skills ({base_model})[/dim]",
+                _fmt_delta(
+                    base_scores.get("execution_pass_rate"),
+                    skill_scores.get("execution_pass_rate"),
+                ),
+                _fmt_delta(base_scores.get("runtime"), skill_scores.get("runtime")),
+                _fmt_delta(base_scores.get("overall"), skill_scores.get("overall")),
+                _usage_delta("estimated_cost_usd", prefix="$"),
+                _usage_delta("median_latency_ms", suffix="ms"),
+            ]
+        )
+    return rows
 
 
 def print_reference_solution_failures(records: list[dict[str, Any]]) -> None:
