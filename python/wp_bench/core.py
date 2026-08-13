@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import threading
 import traceback
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from typing import Any
 
 from .artifacts import (
@@ -48,6 +50,27 @@ from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
 from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
 from .utils import sha256
+
+
+@contextmanager
+def _graded_run(stream: RecordStream) -> Iterator[None]:
+    """Own a run's record stream and report a failed pass, once.
+
+    Every run mode needs the same three things: the stream released
+    however the run ends, a TestError rendered and exited on, and Ctrl-C
+    reported as an abort. Keeping them in one place is what stops a new
+    run mode from silently getting one of the three wrong -- the exploit
+    audit already had to re-add its own copy.
+    """
+    try:
+        with stream:
+            yield
+    except TestError as error:
+        print_test_error(error)
+        raise SystemExit(1) from error
+    except KeyboardInterrupt:
+        print_abort_message()
+        raise SystemExit(130) from None
 
 
 class _ResultBookkeeping:
@@ -395,19 +418,11 @@ class BenchmarkRunner(_ResultBookkeeping):
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
         self.environment.setup()
-        try:
+        with _graded_run(self._stream):
             if reference_mode:
                 self._run_reference_solution_tests(tests)
             else:
                 self._run_execution_tests(tests)
-        except TestError as e:
-            print_test_error(e)
-            raise SystemExit(1) from e
-        except KeyboardInterrupt:
-            print_abort_message()
-            raise SystemExit(130) from None
-        finally:
-            self._stream.close()
         summary = self.aggregator.finalize()
         model_config = self.config.model.model_dump(mode="json") if self.config.model else None
         payload = {
@@ -573,16 +588,8 @@ class BenchmarkRunner(_ResultBookkeeping):
         when any test is exploitable, mirroring reference-solution mode.
         """
         self.environment.setup()
-        try:
+        with _graded_run(self._stream):
             self._run_exploit_audit_tests(tests)
-        except TestError as e:
-            print_test_error(e)
-            raise SystemExit(1) from e
-        except KeyboardInterrupt:
-            print_abort_message()
-            raise SystemExit(130) from None
-        finally:
-            self._stream.close()
 
         exploitable = [record for record in self.records if record["exploitable"]]
         auditable = sum(1 for record in self.records if record["candidates_tried"] > 0)
@@ -875,7 +882,7 @@ class MultiModelRunner:
             )
         self.environment.setup()
 
-        try:
+        with _graded_run(self._stream):
             for model_config in models:
                 for variant in self.variants:
                     display_name = f"{model_config.name}{variant.label_suffix}"
@@ -893,14 +900,6 @@ class MultiModelRunner:
                     result["base_model"] = model_config.name
                     result["variant"] = variant.payload_info()
                     self.results[display_name] = result
-        except TestError as e:
-            print_test_error(e)
-            raise SystemExit(1) from e
-        except KeyboardInterrupt:
-            print_abort_message()
-            raise SystemExit(130) from None
-        finally:
-            self._stream.close()
 
         print_comparison_table(self.results)
         print_skill_impact(self.results)
