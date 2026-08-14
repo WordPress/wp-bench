@@ -80,8 +80,35 @@ class WordPressEnvironment:
             self._run_wp_env(["npx", "wp-env", "run", "cli", "wp", "db", "reset", "--yes"])
             self._run_wp_env(["npx", "wp-env", "run", "cli", *install_cmd])
         elif self.config.kind == "docker":
-            self._exec(["wp", "db", "reset", "--yes"])
-            self._exec(install_cmd)
+            self._reset_step(["wp", "db", "reset", "--yes"])
+            self._reset_step(install_cmd)
+        else:
+            # Config validation rejects this pairing, so reaching here means a
+            # new grader kind was added without a reset. Refuse rather than
+            # let the run stamp an isolation guarantee it never delivered.
+            raise RuntimeError(
+                f"grader.kind {self.config.kind!r} has no reset implementation, so "
+                "run.execution_isolation 'reset_per_test' cannot be honored."
+            )
+
+    def _reset_step(self, command: list[str]) -> None:
+        """Run one reset command, failing loudly like the wp-env path does.
+
+        A reset that times out or exits nonzero leaves the next test running
+        against dirty or uninstalled WordPress, and its assertion failures
+        get attributed to the model instead of the harness.
+        """
+        _, stderr, returncode, timed_out = self._exec(command)
+        if timed_out:
+            raise EnvironmentSetupTimeout(
+                f"Timed out resetting WordPress with {' '.join(command)} after "
+                f"{self.config.timeout_seconds}s (grader.timeout_seconds)."
+            )
+        if returncode != 0:
+            raise RuntimeError(
+                f"Reset command failed with exit code {returncode}: "
+                f"{' '.join(command)}{': ' + stderr.strip() if stderr.strip() else ''}"
+            )
 
     def execute_code(self, code: str, verification_spec: dict[str, Any]) -> ExecutionResult:
         """Run a candidate PHP snippet through the runtime verifier.
