@@ -27,6 +27,9 @@ def _config(tmp_path: Path, test_ids: list[str] | None = None) -> HarnessConfig:
         run=RunConfig(
             check_reference_solution=True,
             test_ids=test_ids or [],
+            # A cli grader cannot reset WordPress, so per-test isolation is
+            # not available here; the runner path under test does not need it.
+            execution_isolation="none",
         ),
         output=OutputConfig(path=tmp_path / "results.json", jsonl_path=None),
     )
