@@ -217,6 +217,24 @@ class HarnessConfig(StrictModel):
     output: OutputConfig = OutputConfig()
     skills: SkillsConfig = SkillsConfig()
 
+    @model_validator(mode="after")
+    def _validate_unique_model_names(self) -> HarnessConfig:
+        """Reject duplicate model names.
+
+        Results are keyed by model name end to end (the results dict, the
+        payload's ``models`` map, the comparison table), so two entries
+        sharing a name silently collapse into one and a graded pass is
+        dropped without warning.
+        """
+        names = [model.name for model in self.models or []]
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        if duplicates:
+            raise ValueError(
+                f"Duplicate model names {duplicates}: results are keyed by name, "
+                "so entries sharing one would overwrite each other."
+            )
+        return self
+
     def get_models(self) -> list[ModelConfig]:
         """Return list of models to evaluate."""
         if self.models:

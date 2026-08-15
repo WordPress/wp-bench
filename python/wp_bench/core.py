@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import threading
 import traceback
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
-from pathlib import Path
+from contextlib import contextmanager
 from typing import Any
-
-import orjson
 
 from .artifacts import (
     Artifact,
@@ -47,10 +45,57 @@ from .records import (
     execution_record_passed,
     sort_records,
 )
+from .results_io import RecordStream, open_run_artifacts, write_results_json
 from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
 from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
-from .utils import ensure_dir, sha256
+from .utils import sha256
+
+
+@contextmanager
+def _graded_run(stream: RecordStream) -> Iterator[None]:
+    """Own a run's record stream and report a failed pass, once.
+
+    Every run mode needs the same three things: the stream released
+    however the run ends, a TestError rendered and exited on, and Ctrl-C
+    reported as an abort. Keeping them in one place is what stops a new
+    run mode from silently getting one of the three wrong -- the exploit
+    audit already had to re-add its own copy.
+    """
+    try:
+        with stream:
+            yield
+    except TestError as error:
+        print_test_error(error)
+        raise SystemExit(1) from error
+    except KeyboardInterrupt:
+        print_abort_message()
+        raise SystemExit(130) from None
+
+
+class _ResultBookkeeping:
+    """Aggregation, retention, and streaming for one run's records.
+
+    Single- and multi-model runners keep identical bookkeeping; sharing one
+    implementation keeps them from drifting apart the next time a metric or
+    an error predicate changes.
+    """
+
+    def _init_bookkeeping(self, stream: RecordStream) -> None:
+        self.aggregator = ScoreAggregator()
+        self.usage_aggregator = UsageAggregator()
+        self.records: list[dict[str, Any]] = []
+        self._stream = stream
+        self._lock = threading.Lock()
+
+    def _on_result(self, result: dict[str, Any]) -> None:
+        """Aggregate a finished record, keep it, and stream it to disk."""
+        with self._lock:
+            if result.get("error") is None:
+                self.aggregator.add_execution(result["scores"])
+            self.usage_aggregator.add(result.get("usage"))
+            self.records.append(result)
+            self._stream.write(result)
 
 
 class TestError(Exception):
@@ -61,12 +106,6 @@ class TestError(Exception):
         self.original_error = original_error
         self.traceback_str = traceback.format_exc()
         super().__init__(str(original_error))
-
-
-def _timestamped_path(path: Path) -> Path:
-    """Add timestamp to filename: results.json -> results_20231216_143052.json"""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return path.parent / f"{path.stem}_{timestamp}{path.suffix}"
 
 
 def select_run_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
@@ -338,7 +377,7 @@ def _run_concurrent_loop(
     policy.finish()
 
 
-class BenchmarkRunner:
+class BenchmarkRunner(_ResultBookkeeping):
     """Primary benchmark orchestrator for single-model evaluation.
 
     Loads tests from the configured dataset, runs them against a single LLM,
@@ -354,10 +393,8 @@ class BenchmarkRunner:
         self.config = config
         self.model = ModelInterface(config.model or config.get_models()[0])
         self.environment = WordPressEnvironment(config.grader)
-        self.aggregator = ScoreAggregator()
-        self.usage_aggregator = UsageAggregator()
-        self.records: list[dict[str, Any]] = []
-        self._lock = threading.Lock()
+        self._results_path, stream = open_run_artifacts(config.output)
+        self._init_bookkeeping(stream or RecordStream(None))
 
     def run(self) -> dict[str, Any]:
         """Execute the full benchmark pipeline.
@@ -381,17 +418,11 @@ class BenchmarkRunner:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
         self.environment.setup()
-        try:
+        with _graded_run(self._stream):
             if reference_mode:
                 self._run_reference_solution_tests(tests)
             else:
                 self._run_execution_tests(tests)
-        except TestError as e:
-            print_test_error(e)
-            raise SystemExit(1) from e
-        except KeyboardInterrupt:
-            print_abort_message()
-            raise SystemExit(130) from None
         summary = self.aggregator.finalize()
         model_config = self.config.model.model_dump(mode="json") if self.config.model else None
         payload = {
@@ -484,13 +515,6 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, e) from e
 
-        def on_result(result: dict[str, Any]) -> None:
-            with self._lock:
-                if result.get("error") is None:
-                    self.aggregator.add_execution(result["scores"])
-                self.usage_aggregator.add(result.get("usage"))
-                self.records.append(result)
-
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="model", model_config=self.config.model)
 
@@ -499,7 +523,7 @@ class BenchmarkRunner:
             config=self.config,
             environment=self.environment,
             process_test=process_test,
-            on_result=on_result,
+            on_result=self._on_result,
             on_error=on_error,
             progress_label="Execution",
         )
@@ -540,13 +564,6 @@ class BenchmarkRunner:
             except Exception as e:
                 raise TestError(test.id, e) from e
 
-        def on_result(result: dict[str, Any]) -> None:
-            with self._lock:
-                if result.get("error") is None:
-                    self.aggregator.add_execution(result["scores"])
-                self.usage_aggregator.add(result.get("usage"))
-                self.records.append(result)
-
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(test, error, mode="reference_solution", model_config=None)
 
@@ -555,7 +572,7 @@ class BenchmarkRunner:
             config=self.config,
             environment=self.environment,
             process_test=process_test,
-            on_result=on_result,
+            on_result=self._on_result,
             on_error=on_error,
             progress_label="Reference solutions",
         )
@@ -571,14 +588,8 @@ class BenchmarkRunner:
         when any test is exploitable, mirroring reference-solution mode.
         """
         self.environment.setup()
-        try:
+        with _graded_run(self._stream):
             self._run_exploit_audit_tests(tests)
-        except TestError as e:
-            print_test_error(e)
-            raise SystemExit(1) from e
-        except KeyboardInterrupt:
-            print_abort_message()
-            raise SystemExit(130) from None
 
         exploitable = [record for record in self.records if record["exploitable"]]
         auditable = sum(1 for record in self.records if record["candidates_tried"] > 0)
@@ -632,6 +643,7 @@ class BenchmarkRunner:
                 )
                 with self._lock:
                     self.records.append(record)
+                    self._stream.write(record)
                 progress.update(task, advance=1)
 
     def _first_passing_exploit(
@@ -818,17 +830,9 @@ class BenchmarkRunner:
         Args:
             payload: Complete results dict with metadata and test records.
         """
-        output_path = _timestamped_path(self.config.output.path)
-        ensure_dir(output_path.parent)
-        output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        print_results_path(output_path)
-        if self.config.output.jsonl_path:
-            jsonl_path = _timestamped_path(self.config.output.jsonl_path)
-            ensure_dir(jsonl_path.parent)
-            with jsonl_path.open("w", encoding="utf-8") as handle:
-                for record in payload["results"]:
-                    handle.write(orjson.dumps(record).decode("utf-8"))
-                    handle.write("\n")
+        write_results_json(self._results_path, payload)
+        print_results_path(self._results_path)
+        self._stream.finalize(payload["results"])
 
 
 class MultiModelRunner:
@@ -853,6 +857,7 @@ class MultiModelRunner:
         self.skills = skills or []
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
+        self._results_path, self._stream = open_run_artifacts(config.output)
 
     def run(self) -> dict[str, Any]:
         """Execute benchmarks for all configured (model x variant) passes.
@@ -877,7 +882,7 @@ class MultiModelRunner:
             )
         self.environment.setup()
 
-        try:
+        with _graded_run(self._stream):
             for model_config in models:
                 for variant in self.variants:
                     display_name = f"{model_config.name}{variant.label_suffix}"
@@ -889,17 +894,12 @@ class MultiModelRunner:
                         environment=self.environment,
                         tests=tests,
                         variant=variant,
+                        stream=self._stream,
                     )
                     result = runner.run()
                     result["base_model"] = model_config.name
                     result["variant"] = variant.payload_info()
                     self.results[display_name] = result
-        except TestError as e:
-            print_test_error(e)
-            raise SystemExit(1) from e
-        except KeyboardInterrupt:
-            print_abort_message()
-            raise SystemExit(130) from None
 
         print_comparison_table(self.results)
         print_skill_impact(self.results)
@@ -966,13 +966,13 @@ class MultiModelRunner:
                 for name, result in self.results.items()
             },
         }
-        output_path = _timestamped_path(self.config.output.path)
-        ensure_dir(output_path.parent)
-        output_path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2))
-        print_results_path(output_path)
+        write_results_json(self._results_path, payload)
+        print_results_path(self._results_path)
+        records = [record for result in self.results.values() for record in result["results"]]
+        self._stream.finalize(sort_records(records))
 
 
-class SingleModelRunner:
+class SingleModelRunner(_ResultBookkeeping):
     """Run benchmark for a single model with pre-loaded tests.
 
     Used by MultiModelRunner to evaluate one model at a time while sharing
@@ -986,6 +986,7 @@ class SingleModelRunner:
         environment: WordPressEnvironment,
         tests: list[ExecutionTest],
         variant: Variant = BASELINE_VARIANT,
+        stream: RecordStream | None = None,
     ):
         """Initialize runner for a specific model.
 
@@ -996,6 +997,9 @@ class SingleModelRunner:
             tests: Pre-loaded execution tests.
             variant: Which pass of the run matrix this is (baseline or
                 skills); carries the system prompt to inject, if any.
+            stream: Shared record stream; every pass's records land in the
+                one JSONL, tagged by the model and variant on each record.
+                Omitted (tests, ad-hoc use) means no streaming.
         """
         self.config = config
         self.model_config = model_config
@@ -1003,10 +1007,7 @@ class SingleModelRunner:
         self.model = ModelInterface(model_config, system_prompt=variant.system_prompt)
         self.environment = environment
         self.tests = tests
-        self.aggregator = ScoreAggregator()
-        self.usage_aggregator = UsageAggregator()
-        self.records: list[dict[str, Any]] = []
-        self._lock = threading.Lock()
+        self._init_bookkeeping(stream or RecordStream(None))
 
     def run(self) -> dict[str, Any]:
         """Run all tests and return scores for this model.
@@ -1075,13 +1076,6 @@ class SingleModelRunner:
             except Exception as e:
                 raise TestError(test.id, e) from e
 
-        def on_result(result: dict[str, Any]) -> None:
-            with self._lock:
-                if result.get("error") is None:
-                    self.aggregator.add_execution(result["scores"])
-                self.usage_aggregator.add(result.get("usage"))
-                self.records.append(result)
-
         def on_error(test: ExecutionTest, error: TestError) -> dict[str, Any]:
             return _error_record(
                 test, error, mode="model", model_config=self.model_config, variant=variant_info
@@ -1092,7 +1086,7 @@ class SingleModelRunner:
             config=self.config,
             environment=self.environment,
             process_test=process_test,
-            on_result=on_result,
+            on_result=self._on_result,
             on_error=on_error,
             progress_label="Execution",
         )
