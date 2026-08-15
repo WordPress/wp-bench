@@ -26,6 +26,7 @@ from .models import ModelInterface
 from .output import (
     create_progress,
     print_abort_message,
+    print_baseline_reuse,
     print_comparison_table,
     print_exploit_findings,
     print_model_header,
@@ -48,7 +49,14 @@ from .records import (
 from .results_io import RecordStream, open_run_artifacts, write_results_json
 from .scoring import SCORING_VERSION, ScoreAggregator, UsageAggregator
 from .selection import select_tests
-from .skills import BASELINE_VARIANT, LoadedSkill, Variant, build_variants
+from .skills import (
+    BASELINE_VARIANT,
+    LoadedSkill,
+    ReusedBaseline,
+    Variant,
+    build_variants,
+    load_baseline,
+)
 from .utils import sha256
 
 
@@ -842,7 +850,11 @@ class MultiModelRunner:
     SingleModelRunner, and outputs a side-by-side comparison of scores.
     """
 
-    def __init__(self, config: HarnessConfig, skills: list[LoadedSkill] | None = None):
+    def __init__(
+        self,
+        config: HarnessConfig,
+        skills: list[LoadedSkill] | None = None,
+    ):
         """Initialize the multi-model runner.
 
         Args:
@@ -855,6 +867,7 @@ class MultiModelRunner:
         self.config = config
         self.environment = WordPressEnvironment(config.grader)
         self.skills = skills or []
+        self.baseline: ReusedBaseline | None = None
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
         self._results_path, self._stream = open_run_artifacts(config.output)
@@ -880,12 +893,17 @@ class MultiModelRunner:
                 f"Dataset '{self.config.dataset.name}' contains no execution "
                 "tests. Check the dataset source and suite name."
             )
+        self._load_baseline(models, tests)
         self.environment.setup()
 
         with _graded_run(self._stream):
             for model_config in models:
                 for variant in self.variants:
                     display_name = f"{model_config.name}{variant.label_suffix}"
+                    reused = self._reused_entry(model_config, variant)
+                    if reused is not None:
+                        self.results[display_name] = reused
+                        continue
                     print_model_header(display_name)
 
                     runner = SingleModelRunner(
@@ -905,6 +923,40 @@ class MultiModelRunner:
         print_skill_impact(self.results)
         self._write_outputs()
         return self.results
+
+    def _load_baseline(self, models: list[ModelConfig], tests: list[ExecutionTest]) -> None:
+        """Validate the stored baseline against the run it will stand in for.
+
+        Here rather than in the CLI because this is where the models and the
+        test selection are both already resolved -- validating earlier
+        checked the configured models rather than the ones a --model
+        override actually runs. Still ahead of environment setup, so a
+        mismatch costs nothing.
+        """
+        if self.config.skills.baseline_from is None:
+            return
+        self.baseline = load_baseline(
+            self.config.skills.baseline_from,
+            models=models,
+            test_ids={test.id for test in select_run_tests(tests, self.config)},
+            dataset_name=self.config.dataset.name,
+            scoring_version=SCORING_VERSION,
+            schema_version=RESULT_SCHEMA_VERSION,
+        )
+        print_baseline_reuse(self.baseline.source_path)
+
+    def _reused_entry(
+        self, model_config: ModelConfig, variant: Variant
+    ) -> dict[str, Any] | None:
+        """The stored baseline pass for this model, when reuse is active.
+
+        Shaped like a fresh pass so the comparison table, the impact table,
+        and the payload treat it identically -- except for ``reused_from``,
+        which keeps the recycling visible on the entry and on every record.
+        """
+        if self.baseline is None or variant.kind != "none":
+            return None
+        return self.baseline.as_result(model_config.name)
 
     def _ensure_unique_display_names(self, models: list[ModelConfig]) -> None:
         """Reject display-name collisions before any model call is spent.
@@ -954,6 +1006,7 @@ class MultiModelRunner:
                 "continue_on_error": self.config.run.continue_on_error,
                 "skills": self._skills_metadata(),
                 "variants": [variant.key for variant in self.variants],
+                "reused_baseline": self.baseline.provenance() if self.baseline else None,
             },
             "models": {
                 name: {
@@ -961,7 +1014,9 @@ class MultiModelRunner:
                     "base_model": result["base_model"],
                     "variant": result["variant"],
                     "scores": result["scores"],
+                    "usage": result.get("usage"),
                     "results": result["results"],
+                    "reused_from": result.get("reused_from"),
                 }
                 for name, result in self.results.items()
             },

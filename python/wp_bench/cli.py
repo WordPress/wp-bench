@@ -123,6 +123,15 @@ def run(
         "--skills-include-references/--no-skills-include-references",
         help="Inline each skill's references/*.md into the injected content (default: on).",
     ),
+    baseline_from: Path | None = typer.Option(
+        None,
+        "--baseline-from",
+        help=(
+            "Reuse the baseline pass from a previous results JSON instead of "
+            "grading it again. Validated against this run (same models, tests, "
+            "and versions) before any model call."
+        ),
+    ),
     skills_only: bool = typer.Option(
         False,
         help="Skip the baseline (no-skills) pass; run only the with-skills variant.",
@@ -152,10 +161,25 @@ def run(
         harness_config.skills.include_references = skills_include_references
     if skills_only:
         harness_config.skills.only = True
+    if baseline_from is not None:
+        harness_config.skills.baseline_from = baseline_from
 
     if harness_config.run.dry_run and harness_config.run.check_reference_solution:
         console.print("[red]--dry-run and --check-reference-solution cannot be used together.[/red]")
         raise typer.Exit(1)
+
+    if harness_config.skills.baseline_from is not None:
+        # SkillsConfig validates these too, but CLI flags mutate the model
+        # after construction, so its validators never re-run.
+        if not harness_config.skills.paths:
+            console.print("[red]--baseline-from requires at least one --skill (or skills.paths).[/red]")
+            raise typer.Exit(1)
+        if harness_config.skills.only:
+            console.print(
+                "[red]--baseline-from and --skills-only conflict: one supplies a "
+                "baseline to compare against, the other drops the comparison.[/red]"
+            )
+            raise typer.Exit(1)
 
     if harness_config.skills.only and not harness_config.skills.paths:
         console.print("[red]--skills-only requires at least one --skill (or skills.paths).[/red]")

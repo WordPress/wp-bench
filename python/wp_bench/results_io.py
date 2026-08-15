@@ -134,6 +134,26 @@ class RecordStream:
         os.replace(tmp, self.path)
 
 
+class ResultsReadError(ValueError):
+    """A path could not be read as a results payload."""
+
+
+def read_results_payload(path: Path) -> dict[str, Any]:
+    """Read a results JSON this module wrote.
+
+    The read side lives here so payload-shape knowledge stays in the one
+    module that writes it, rather than being asserted again by whoever
+    consumes an earlier run.
+    """
+    try:
+        payload = orjson.loads(path.expanduser().read_bytes())
+    except (OSError, orjson.JSONDecodeError) as exc:
+        raise ResultsReadError(f"Cannot read results file {path}: {exc}") from exc
+    if not isinstance(payload, dict) or "models" not in payload:
+        raise ResultsReadError(f"Not a results payload: {path}")
+    return payload
+
+
 def write_results_json(path: Path, payload: dict[str, Any]) -> None:
     """Write a run's results JSON atomically.
 

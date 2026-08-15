@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 import yaml
 
+from .results_io import ResultsReadError, read_results_payload
 from .utils import sha256
 
 SYSTEM_PROMPT_PREAMBLE = (
@@ -240,3 +241,173 @@ def build_variants(skills: list[LoadedSkill], *, skills_only: bool = False) -> l
     if skills_only:
         return [skills_variant]
     return [BASELINE_VARIANT, skills_variant]
+
+
+class BaselineReuseError(ValueError):
+    """A stored baseline cannot stand in for the one this run would grade."""
+
+
+@dataclass(frozen=True)
+class ReusedBaseline:
+    """Baseline passes taken from a previous run instead of graded again.
+
+    The baseline arm of a skills A/B cannot change while a skill author
+    iterates, so re-grading it every round costs money and wall clock for
+    a result already known. Reuse is only sound when the stored pass
+    measured the same thing, which ``load_baseline`` enforces before any
+    model call.
+    """
+
+    source_path: str
+    #: base model name -> the stored payload entry for its baseline pass.
+    entries: dict[str, dict[str, Any]]
+
+    def provenance(self) -> dict[str, Any]:
+        """Recorded in run metadata so results never hide the recycling."""
+        return {
+            "source_path": self.source_path,
+            "models": sorted(self.entries),
+        }
+
+    def as_result(self, model_name: str) -> dict[str, Any]:
+        """The stored pass in the shape a freshly graded one has.
+
+        Built field by field rather than copied, so the stored payload's
+        key names stay this module's business and nothing unknown (such as
+        an earlier run's own ``reused_from``) rides along.
+        """
+        entry = self.entries[model_name]
+        return {
+            "model_config": entry["config"],
+            "base_model": entry["base_model"],
+            "variant": entry["variant"],
+            "scores": entry["scores"],
+            "usage": entry["usage"],
+            "results": [
+                # Stamped per record: the JSONL travels without the payload
+                # metadata, so a consumer reading it alone would otherwise
+                # count an ungraded arm as this run's fresh data.
+                {**record, "reused_from": self.source_path}
+                for record in entry["results"]
+            ],
+            "reused_from": self.source_path,
+        }
+
+
+def _baseline_entries(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Index a previous payload's baseline passes by base model name."""
+    entries: dict[str, dict[str, Any]] = {}
+    for name, entry in (payload.get("models") or {}).items():
+        variant = entry.get("variant") or {}
+        if variant.get("key") == BASELINE_VARIANT.key:
+            entries[str(entry.get("base_model") or name)] = entry
+    return entries
+
+
+#: Model settings that change what a pass measures, so a baseline recorded
+#: under different ones is not the baseline for this run.
+_COMPARED_MODEL_FIELDS = ("name", "temperature", "top_p", "max_tokens")
+
+
+def _check_entry_shape(name: str, entry: dict[str, Any]) -> None:
+    """Reject a stored pass missing anything reuse consumes wholesale."""
+    for key in ("config", "base_model", "variant", "scores", "results"):
+        if key not in entry:
+            raise BaselineReuseError(
+                f"Baseline entry for {name!r} has no {key!r}; it predates the "
+                "current results format. Re-run the baseline."
+            )
+    if entry.get("usage") is None:
+        raise BaselineReuseError(
+            f"Baseline entry for {name!r} recorded no usage, so the delta "
+            "would report no cost or latency. It predates usage being "
+            "persisted for multi-model runs. Re-run the baseline."
+        )
+
+
+def load_baseline(
+    path: Path,
+    *,
+    models: list[Any],
+    test_ids: set[str],
+    dataset_name: str,
+    scoring_version: str,
+    schema_version: str,
+) -> ReusedBaseline:
+    """Load baseline passes from a previous results file for reuse.
+
+    Every check here exists because a mismatched baseline produces a
+    plausible-looking delta that measures something other than the skill.
+
+    Raises:
+        BaselineReuseError: when the file is unreadable, was produced by a
+            different scoring or schema version, graded a different dataset
+            or test set, lacks a baseline pass for a model in this run, or
+            recorded that model under different generation settings.
+    """
+    try:
+        payload = read_results_payload(path)
+    except ResultsReadError as exc:
+        raise BaselineReuseError(str(exc)) from exc
+
+    metadata = payload.get("metadata") or {}
+    for label, current, key in (
+        ("scoring", scoring_version, "scoring_version"),
+        ("result schema", schema_version, "result_schema_version"),
+    ):
+        stored = metadata.get(key)
+        if stored != current:
+            raise BaselineReuseError(
+                f"Baseline results use {label} version {stored!r}, this run uses "
+                f"{current!r}; the scores are not comparable. Re-run the baseline."
+            )
+
+    stored_dataset = (metadata.get("dataset") or {}).get("name")
+    if stored_dataset != dataset_name:
+        raise BaselineReuseError(
+            f"Baseline graded dataset {stored_dataset!r}, this run grades "
+            f"{dataset_name!r}. Re-run the baseline."
+        )
+
+    entries = _baseline_entries(payload)
+    missing = [model.name for model in models if model.name not in entries]
+    if missing:
+        raise BaselineReuseError(
+            f"Baseline results have no baseline pass for {missing}. "
+            f"Available: {sorted(entries) or 'none'}."
+        )
+
+    for model in models:
+        entry = entries[model.name]
+        _check_entry_shape(model.name, entry)
+
+        stored_ids = {record.get("test_id") for record in entry["results"]}
+        if stored_ids != test_ids:
+            only_stored = sorted(stored_ids - test_ids)[:3]
+            only_now = sorted(test_ids - stored_ids)[:3]
+            raise BaselineReuseError(
+                f"Baseline for {model.name!r} graded a different test set "
+                f"({len(stored_ids)} tests vs {len(test_ids)} now). "
+                f"Only in baseline: {only_stored or 'none'}; only now: {only_now or 'none'}."
+            )
+
+        stored_config = entry["config"] or {}
+        differing = [
+            field
+            for field in _COMPARED_MODEL_FIELDS
+            if stored_config.get(field) != getattr(model, field, None)
+        ]
+        if differing:
+            details = ", ".join(
+                f"{field}: {stored_config.get(field)!r} vs {getattr(model, field, None)!r}"
+                for field in differing
+            )
+            raise BaselineReuseError(
+                f"Baseline for {model.name!r} was graded under different model "
+                f"settings ({details}); the delta would not isolate the skill."
+            )
+
+    return ReusedBaseline(
+        source_path=str(path.expanduser().resolve()),
+        entries={model.name: entries[model.name] for model in models},
+    )
