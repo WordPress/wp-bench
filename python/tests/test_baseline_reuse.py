@@ -12,10 +12,12 @@ from typing import Any
 import orjson
 import pytest
 
-from wp_bench.skills import BaselineReuseError, load_baseline
+from wp_bench.config import ModelConfig
+from wp_bench.skills import BaselineReuseError, ReusedBaseline, load_baseline
 
 SCORING = "3.0"
 SCHEMA = "2.1"
+DATASET = "wp-core-v1"
 
 
 def _payload(
@@ -27,10 +29,19 @@ def _payload(
 ) -> dict[str, Any]:
     """A previous run's payload with one baseline entry per model."""
     return {
-        "metadata": {"scoring_version": scoring, "result_schema_version": schema},
+        "metadata": {
+            "scoring_version": scoring,
+            "result_schema_version": schema,
+            "dataset": {"name": DATASET},
+        },
         "models": {
             name: {
-                "config": {"name": name},
+                "config": {
+                    "name": name,
+                    "temperature": 0.0,
+                    "top_p": None,
+                    "max_tokens": None,
+                },
                 "base_model": name,
                 "variant": {"key": variant_key, "kind": "none"},
                 "scores": {"overall": 0.5},
@@ -48,15 +59,15 @@ def _write(tmp_path: Path, payload: dict[str, Any]) -> Path:
     return path
 
 
-def _load(path: Path, **overrides: Any):
-    kwargs: dict[str, Any] = {
-        "model_names": ["model-a"],
-        "test_ids": {"e-one", "e-two"},
-        "scoring_version": SCORING,
-        "schema_version": SCHEMA,
-    }
-    kwargs.update(overrides)
-    return load_baseline(path, **kwargs)
+def _load(path: Path, models: list[ModelConfig] | None = None) -> ReusedBaseline:
+    return load_baseline(
+        path,
+        models=models or [ModelConfig(name="model-a")],
+        test_ids={"e-one", "e-two"},
+        dataset_name=DATASET,
+        scoring_version=SCORING,
+        schema_version=SCHEMA,
+    )
 
 
 def test_reuses_a_matching_baseline(tmp_path: Path) -> None:
@@ -83,7 +94,7 @@ def test_rejects_a_baseline_missing_a_model_in_this_run(tmp_path: Path) -> None:
     path = _write(tmp_path, _payload(models={"model-a": ["e-one", "e-two"]}))
 
     with pytest.raises(BaselineReuseError, match="no baseline pass"):
-        _load(path, model_names=["model-a", "model-b"])
+        _load(path, [ModelConfig(name="model-a"), ModelConfig(name="model-b")])
 
 
 def test_rejects_a_baseline_from_another_scoring_version(tmp_path: Path) -> None:
@@ -113,10 +124,53 @@ def test_rejects_an_unreadable_file(tmp_path: Path) -> None:
     path = tmp_path / "previous.json"
     path.write_text("not json", encoding="utf-8")
 
-    with pytest.raises(BaselineReuseError, match="Cannot read baseline results"):
+    with pytest.raises(BaselineReuseError, match="Cannot read results file"):
         _load(path)
 
 
 def test_rejects_a_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(BaselineReuseError, match="Cannot read baseline results"):
+    with pytest.raises(BaselineReuseError, match="Cannot read results file"):
         _load(tmp_path / "nope.json")
+
+
+def test_rejects_a_baseline_graded_under_other_model_settings(tmp_path: Path) -> None:
+    """A baseline recorded at a different temperature measures something else,
+    so the delta would not isolate the skill."""
+    payload = _payload(models={"model-a": ["e-one", "e-two"]})
+    payload["models"]["model-a"]["config"]["temperature"] = 1.0
+    path = _write(tmp_path, payload)
+
+    with pytest.raises(BaselineReuseError, match="different model settings"):
+        _load(path)
+
+
+def test_rejects_a_baseline_from_another_dataset(tmp_path: Path) -> None:
+    payload = _payload(models={"model-a": ["e-one", "e-two"]})
+    payload["metadata"]["dataset"] = {"name": "some-other-suite"}
+    path = _write(tmp_path, payload)
+
+    with pytest.raises(BaselineReuseError, match="graded dataset"):
+        _load(path)
+
+
+def test_rejects_a_baseline_that_recorded_no_usage(tmp_path: Path) -> None:
+    """Files written before usage was persisted would silently blank the cost
+    delta, which is the number the flag exists to inform."""
+    payload = _payload(models={"model-a": ["e-one", "e-two"]})
+    del payload["models"]["model-a"]["usage"]
+    path = _write(tmp_path, payload)
+
+    with pytest.raises(BaselineReuseError, match="recorded no usage"):
+        _load(path)
+
+
+def test_reused_records_carry_their_source(tmp_path: Path) -> None:
+    """The JSONL travels without the payload metadata, so each record has to
+    say it was not graded in this run."""
+    path = _write(tmp_path, _payload(models={"model-a": ["e-one", "e-two"]}))
+
+    result = _load(path).as_result("model-a")
+
+    assert result["reused_from"] == str(path.resolve())
+    assert all(record["reused_from"] == str(path.resolve()) for record in result["results"])
+    assert result["model_config"]["name"] == "model-a"

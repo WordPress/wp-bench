@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-import orjson
 import yaml
 
+from .results_io import ResultsReadError, read_results_payload
 from .utils import sha256
 
 SYSTEM_PROMPT_PREAMBLE = (
@@ -269,22 +269,68 @@ class ReusedBaseline:
             "models": sorted(self.entries),
         }
 
+    def as_result(self, model_name: str) -> dict[str, Any]:
+        """The stored pass in the shape a freshly graded one has.
+
+        Built field by field rather than copied, so the stored payload's
+        key names stay this module's business and nothing unknown (such as
+        an earlier run's own ``reused_from``) rides along.
+        """
+        entry = self.entries[model_name]
+        return {
+            "model_config": entry["config"],
+            "base_model": entry["base_model"],
+            "variant": entry["variant"],
+            "scores": entry["scores"],
+            "usage": entry["usage"],
+            "results": [
+                # Stamped per record: the JSONL travels without the payload
+                # metadata, so a consumer reading it alone would otherwise
+                # count an ungraded arm as this run's fresh data.
+                {**record, "reused_from": self.source_path}
+                for record in entry["results"]
+            ],
+            "reused_from": self.source_path,
+        }
+
 
 def _baseline_entries(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Index a previous payload's baseline passes by base model name."""
     entries: dict[str, dict[str, Any]] = {}
     for name, entry in (payload.get("models") or {}).items():
         variant = entry.get("variant") or {}
-        if variant.get("key") == "baseline":
+        if variant.get("key") == BASELINE_VARIANT.key:
             entries[str(entry.get("base_model") or name)] = entry
     return entries
+
+
+#: Model settings that change what a pass measures, so a baseline recorded
+#: under different ones is not the baseline for this run.
+_COMPARED_MODEL_FIELDS = ("name", "temperature", "top_p", "max_tokens")
+
+
+def _check_entry_shape(name: str, entry: dict[str, Any]) -> None:
+    """Reject a stored pass missing anything reuse consumes wholesale."""
+    for key in ("config", "base_model", "variant", "scores", "results"):
+        if key not in entry:
+            raise BaselineReuseError(
+                f"Baseline entry for {name!r} has no {key!r}; it predates the "
+                "current results format. Re-run the baseline."
+            )
+    if entry.get("usage") is None:
+        raise BaselineReuseError(
+            f"Baseline entry for {name!r} recorded no usage, so the delta "
+            "would report no cost or latency. It predates usage being "
+            "persisted for multi-model runs. Re-run the baseline."
+        )
 
 
 def load_baseline(
     path: Path,
     *,
-    model_names: list[str],
+    models: list[Any],
     test_ids: set[str],
+    dataset_name: str,
     scoring_version: str,
     schema_version: str,
 ) -> ReusedBaseline:
@@ -295,16 +341,14 @@ def load_baseline(
 
     Raises:
         BaselineReuseError: when the file is unreadable, was produced by a
-            different scoring or schema version, lacks a baseline pass for
-            a model in this run, or graded a different set of tests.
+            different scoring or schema version, graded a different dataset
+            or test set, lacks a baseline pass for a model in this run, or
+            recorded that model under different generation settings.
     """
-    path = path.expanduser()
     try:
-        payload = orjson.loads(path.read_bytes())
-    except (OSError, orjson.JSONDecodeError) as exc:
-        raise BaselineReuseError(f"Cannot read baseline results {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise BaselineReuseError(f"Baseline results are not a results payload: {path}")
+        payload = read_results_payload(path)
+    except ResultsReadError as exc:
+        raise BaselineReuseError(str(exc)) from exc
 
     metadata = payload.get("metadata") or {}
     for label, current, key in (
@@ -318,26 +362,52 @@ def load_baseline(
                 f"{current!r}; the scores are not comparable. Re-run the baseline."
             )
 
+    stored_dataset = (metadata.get("dataset") or {}).get("name")
+    if stored_dataset != dataset_name:
+        raise BaselineReuseError(
+            f"Baseline graded dataset {stored_dataset!r}, this run grades "
+            f"{dataset_name!r}. Re-run the baseline."
+        )
+
     entries = _baseline_entries(payload)
-    missing = [name for name in model_names if name not in entries]
+    missing = [model.name for model in models if model.name not in entries]
     if missing:
         raise BaselineReuseError(
             f"Baseline results have no baseline pass for {missing}. "
             f"Available: {sorted(entries) or 'none'}."
         )
 
-    for name in model_names:
-        stored_ids = {record.get("test_id") for record in entries[name].get("results") or []}
+    for model in models:
+        entry = entries[model.name]
+        _check_entry_shape(model.name, entry)
+
+        stored_ids = {record.get("test_id") for record in entry["results"]}
         if stored_ids != test_ids:
             only_stored = sorted(stored_ids - test_ids)[:3]
             only_now = sorted(test_ids - stored_ids)[:3]
             raise BaselineReuseError(
-                f"Baseline for {name!r} graded a different test set "
+                f"Baseline for {model.name!r} graded a different test set "
                 f"({len(stored_ids)} tests vs {len(test_ids)} now). "
                 f"Only in baseline: {only_stored or 'none'}; only now: {only_now or 'none'}."
             )
 
+        stored_config = entry["config"] or {}
+        differing = [
+            field
+            for field in _COMPARED_MODEL_FIELDS
+            if stored_config.get(field) != getattr(model, field, None)
+        ]
+        if differing:
+            details = ", ".join(
+                f"{field}: {stored_config.get(field)!r} vs {getattr(model, field, None)!r}"
+                for field in differing
+            )
+            raise BaselineReuseError(
+                f"Baseline for {model.name!r} was graded under different model "
+                f"settings ({details}); the delta would not isolate the skill."
+            )
+
     return ReusedBaseline(
-        source_path=str(path.resolve()),
-        entries={name: entries[name] for name in model_names},
+        source_path=str(path.expanduser().resolve()),
+        entries={model.name: entries[model.name] for model in models},
     )

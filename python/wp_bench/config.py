@@ -208,13 +208,9 @@ class SkillsConfig(StrictModel):
     baseline_from: Path | None = None
 
     @model_validator(mode="after")
-    def _validate_only_requires_paths(self) -> SkillsConfig:
+    def _validate_skill_flags(self) -> SkillsConfig:
         if self.only and not self.paths:
             raise ValueError("skills.only requires skills.paths to be set")
-        return self
-
-    @model_validator(mode="after")
-    def _validate_baseline_reuse(self) -> SkillsConfig:
         if self.baseline_from is None:
             return self
         if not self.paths:

@@ -117,9 +117,7 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     for model_name, result in results.items():
         scores = result["scores"]
         usage = result.get("usage") or {}
-        label = model_name
-        if result.get("reused_from"):
-            label = f"{model_name} [dim](reused)[/dim]"
+        label = f"{model_name} [dim](reused)[/dim]" if result.get("reused_from") else model_name
         table.add_row(
             label,
             _fmt_score(scores.get("execution_pass_rate")),
@@ -135,8 +133,15 @@ def print_comparison_table(results: dict[str, dict[str, Any]]) -> None:
     if delta_rows:
         # One run per variant is a single sample; a small aggregate delta can
         # be run-to-run noise. The per-test Skill Impact table names what
-        # actually moved.
-        table.caption = "Δ compares a single run per variant; see the per-test Skill Impact table."
+        # actually moved. With a reused baseline the arms are not even the
+        # same run, which the caption has to say rather than imply.
+        reused = any(result.get("reused_from") for result in results.values())
+        table.caption = (
+            "Δ compares this run's skills pass against a baseline reused from an "
+            "earlier run; see the per-test Skill Impact table."
+            if reused
+            else "Δ compares a single run per variant; see the per-test Skill Impact table."
+        )
 
     console.print(table)
 
@@ -194,7 +199,7 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
 
         rows.append(
             [
-                f"[dim]Δ skills ({base_model}, single run)[/dim]",
+                f"[dim]Δ skills ({base_model})[/dim]",
                 _fmt_delta(
                     base_scores.get("execution_pass_rate"),
                     skill_scores.get("execution_pass_rate"),
@@ -206,6 +211,11 @@ def _skill_delta_rows(results: dict[str, dict[str, Any]]) -> list[list[str]]:
             ]
         )
     return rows
+
+
+def print_baseline_reuse(source_path: str) -> None:
+    """Say which run the baseline arm came from, before any grading starts."""
+    console.print(f"[dim]Reusing baseline from {source_path}[/dim]")
 
 
 def print_skill_impact(results: dict[str, dict[str, Any]]) -> None:

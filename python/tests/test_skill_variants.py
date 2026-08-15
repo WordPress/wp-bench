@@ -62,7 +62,7 @@ class FakeEnvironment:
 
 def _skill_dir(tmp_path: Path) -> Path:
     skill = tmp_path / "wp-test-skill"
-    skill.mkdir()
+    skill.mkdir(exist_ok=True)
     (skill / "SKILL.md").write_text(
         "---\nname: wp-test-skill\ndescription: Test skill.\n---\n\nGuidance body.",
         encoding="utf-8",
@@ -384,3 +384,77 @@ def test_cli_fails_fast_on_bad_skill_path() -> None:
     result = CliRunner().invoke(app, ["run", "--skill", "/nonexistent/skill"])
     assert result.exit_code == 1
     assert "does not exist" in result.output
+
+
+def _write_baseline_results(tmp_path: Path, runner: MultiModelRunner) -> Path:
+    """The results file a previous A/B run would have left on disk."""
+    return next(tmp_path.glob("results_*.json"))
+
+
+def test_reused_baseline_skips_grading_that_arm(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The whole point: with --baseline-from the baseline model is never
+    called, and its pass still lands in the payload marked as recycled."""
+    first_runner, _ = _run_matrix(monkeypatch, tmp_path)
+    previous = _write_baseline_results(tmp_path, first_runner)
+
+    skill = load_skill(_skill_dir(tmp_path))
+    config = _config(tmp_path, Path(skill.source_path))
+    config.skills.baseline_from = previous
+
+    graded_variants: list[str | None] = []
+
+    class FakeModel:
+        def __init__(self, model_config: ModelConfig, system_prompt: str | None = None):
+            graded_variants.append(system_prompt)
+
+        def generate_with_metadata(self, prompt: str) -> Any:
+            return fake_generation("```php\ncode\n```")
+
+    monkeypatch.setattr("wp_bench.core.ModelInterface", FakeModel)
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [_execution_test()])
+
+    runner = MultiModelRunner(config, skills=[skill])
+    runner.environment = FakeEnvironment()  # type: ignore[assignment]
+    runner.run()
+
+    # Only the skills arm was graded; the baseline model was never built.
+    assert len(graded_variants) == 1
+    assert graded_variants[0] is not None
+
+    baseline = runner.results["model-a"]
+    assert baseline["reused_from"] == str(previous.resolve())
+    assert baseline["variant"]["key"] == "baseline"
+    # Every record says so too, since the JSONL travels without the metadata.
+    assert all(record["reused_from"] == str(previous.resolve()) for record in baseline["results"])
+    assert runner.results["model-a+skills"].get("reused_from") is None
+
+
+def test_reused_baseline_is_validated_before_the_environment_is_set_up(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A mismatched baseline must cost nothing: no wp-env boot, no model call."""
+    first_runner, _ = _run_matrix(monkeypatch, tmp_path)
+    previous = _write_baseline_results(tmp_path, first_runner)
+
+    skill = load_skill(_skill_dir(tmp_path))
+    config = _config(tmp_path, Path(skill.source_path))
+    config.skills.baseline_from = previous
+    # A different test set than the stored pass graded.
+    monkeypatch.setattr(
+        "wp_bench.core.load_tests", lambda dataset: [_execution_test(), _execution_test("e-two")]
+    )
+
+    setup_calls: list[str] = []
+
+    class TrackingEnvironment(FakeEnvironment):  # type: ignore[misc]
+        def setup(self) -> None:
+            setup_calls.append("setup")
+
+    runner = MultiModelRunner(config, skills=[skill])
+    runner.environment = TrackingEnvironment()  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="different test set"):
+        runner.run()
+    assert setup_calls == []

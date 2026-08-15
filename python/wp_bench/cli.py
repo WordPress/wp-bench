@@ -12,9 +12,7 @@ from rich.console import Console
 from .config import HarnessConfig, ModelConfig
 from .core import BenchmarkRunner, MultiModelRunner, select_run_tests
 from .datasets import ExecutionTest, filter_tests_by_ids, load_tests
-from .records import RESULT_SCHEMA_VERSION
-from .scoring import SCORING_VERSION
-from .skills import LoadedSkill, ReusedBaseline, load_baseline, load_skills
+from .skills import LoadedSkill, load_skills
 
 # Load .env file for API keys
 load_dotenv()
@@ -170,9 +168,18 @@ def run(
         console.print("[red]--dry-run and --check-reference-solution cannot be used together.[/red]")
         raise typer.Exit(1)
 
-    if harness_config.skills.baseline_from is not None and not harness_config.skills.paths:
-        console.print("[red]--baseline-from requires at least one --skill (or skills.paths).[/red]")
-        raise typer.Exit(1)
+    if harness_config.skills.baseline_from is not None:
+        # SkillsConfig validates these too, but CLI flags mutate the model
+        # after construction, so its validators never re-run.
+        if not harness_config.skills.paths:
+            console.print("[red]--baseline-from requires at least one --skill (or skills.paths).[/red]")
+            raise typer.Exit(1)
+        if harness_config.skills.only:
+            console.print(
+                "[red]--baseline-from and --skills-only conflict: one supplies a "
+                "baseline to compare against, the other drops the comparison.[/red]"
+            )
+            raise typer.Exit(1)
 
     if harness_config.skills.only and not harness_config.skills.paths:
         console.print("[red]--skills-only requires at least one --skill (or skills.paths).[/red]")
@@ -203,26 +210,6 @@ def run(
         _print_skill_summary(loaded_skills)
         return
 
-    # Validate the stored baseline before setup or spend: a mismatched one
-    # would produce a delta that measures something other than the skill.
-    reused_baseline: ReusedBaseline | None = None
-    if harness_config.skills.baseline_from is not None:
-        selected = _run_or_fail(
-            lambda: select_run_tests(_load_filtered_tests(harness_config), harness_config)
-        )
-        reused_baseline = _run_or_fail(
-            lambda: load_baseline(
-                harness_config.skills.baseline_from,  # type: ignore[arg-type]
-                model_names=[model.name for model in harness_config.get_models()],
-                test_ids={test.id for test in selected},
-                scoring_version=SCORING_VERSION,
-                schema_version=RESULT_SCHEMA_VERSION,
-            )
-        )
-        console.print(
-            f"[dim]Reusing baseline from {reused_baseline.source_path}[/dim]"
-        )
-
     if harness_config.run.check_reference_solution:
         result = _run_or_fail(BenchmarkRunner(harness_config).run)
         console.print("[bold green]Reference solution check completed[/bold green]", result["metadata"]["scores"])
@@ -244,11 +231,7 @@ def run(
         # runner only.
         harness_config.models = models
         harness_config.model = None
-        _run_or_fail(
-            MultiModelRunner(
-                harness_config, skills=loaded_skills, baseline=reused_baseline
-            ).run
-        )
+        _run_or_fail(MultiModelRunner(harness_config, skills=loaded_skills).run)
         console.print("\n[bold green]WP-Bench completed[/bold green]")
         return
     if not model_name and len(models) > 1:
