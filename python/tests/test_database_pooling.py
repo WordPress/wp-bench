@@ -14,6 +14,7 @@ that worker 0 keeps sending exactly the commands a pre-pooling run sent.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -37,11 +38,9 @@ def _worker_db(worker: int) -> str:
     return f"wp_bench_{RUN_ID}_w{worker}"
 
 
-def _dropped_in(script: str) -> str:
-    """The database a DROP statement names, or '' if it drops nothing."""
-    if "DROP DATABASE IF EXISTS" not in script:
-        return ""
-    return script.split("DROP DATABASE IF EXISTS", 1)[1].strip().strip("`'\"")
+def _dropped_names(script: str) -> list[str]:
+    """Every database a DROP statement names, in order."""
+    return re.findall(r"DROP DATABASE IF EXISTS `([^`]+)`", script)
 
 
 def _database_in(script: str) -> str:
@@ -72,6 +71,7 @@ def _env(config: GraderConfig, result: tuple[str, str, int, bool] = ("ok", "", 0
     environment._exec = fake_exec  # type: ignore[method-assign]
     environment._baseline = BASELINE_SQL
     environment._provisioned_workers = 8
+    environment._created_workers = 7
     environment.stdins = stdins  # type: ignore[attr-defined]
     return environment, calls
 
@@ -524,11 +524,14 @@ def test_worker_databases_are_dropped_when_the_run_ends() -> None:
     """Names are per-run, so leaving them would accumulate a fresh set every
     invocation instead of reusing one."""
     environment, calls = _env(_docker())
-    environment._provisioned_workers = 4
+    environment._created_workers = 3
 
     environment.drop_worker_databases()
 
-    assert [_dropped_in(_script(call)) for call in calls] == [
+    # One round trip, not one per worker: this runs from a finally after
+    # grading, so N sequential trips would add minutes to a finished run.
+    assert len(calls) == 1
+    assert _dropped_names(_script(calls[0])) == [
         _worker_db(1),
         _worker_db(2),
         _worker_db(3),
@@ -542,17 +545,17 @@ def test_worker_databases_are_dropped_when_the_run_ends() -> None:
 def test_teardown_leaves_the_runtimes_own_database_alone() -> None:
     """Worker 0 is the runtime's database, not the pool's to drop."""
     environment, calls = _env(_docker())
-    environment._provisioned_workers = 2
+    environment._created_workers = 1
 
     environment.drop_worker_databases()
 
     assert len(calls) == 1
-    assert _dropped_in(_script(calls[0])) == _worker_db(1)
+    assert _dropped_names(_script(calls[0])) == [_worker_db(1)]
 
 
 def test_serial_teardown_drops_nothing() -> None:
     environment, calls = _env(_docker())
-    environment._provisioned_workers = 1
+    environment._created_workers = 0
 
     environment.drop_worker_databases()
 
@@ -563,7 +566,7 @@ def test_teardown_never_raises() -> None:
     """It runs after grading, so a cleanup failure must not invalidate
     results that are already correct."""
     environment, _ = _env(_docker(), ("", "connection refused", 1, False))
-    environment._provisioned_workers = 3
+    environment._created_workers = 2
 
     environment.drop_worker_databases()
 
@@ -575,7 +578,7 @@ def test_failed_teardown_names_what_it_left_behind(
     nothing later reuses an undropped database -- swallowing the failure
     silently is what turns one bad cleanup into unbounded growth."""
     environment, _ = _env(_docker(), ("", "connection refused", 1, False))
-    environment._provisioned_workers = 3
+    environment._created_workers = 2
     warned: list[list[str]] = []
     monkeypatch.setattr(
         "wp_bench.environment.print_orphaned_databases", lambda names: warned.append(names)
@@ -590,7 +593,7 @@ def test_successful_teardown_warns_about_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     environment, _ = _env(_docker())
-    environment._provisioned_workers = 3
+    environment._created_workers = 2
     warned: list[list[str]] = []
     monkeypatch.setattr(
         "wp_bench.environment.print_orphaned_databases", lambda names: warned.append(names)
@@ -632,21 +635,22 @@ def test_partial_provisioning_records_what_it_built(
     with pytest.raises(RuntimeError, match="disk full"):
         environment.setup(worker_count=4)
 
+    # Worker 3's restore failed, but `wp db reset` had already created its
+    # database, so teardown must still know about it. Counting only verified
+    # workers would leak precisely the one that failed.
     assert environment._provisioned_workers == 3
+    assert environment._created_workers == 3
 
 
 def test_partial_provisioning_still_drops_what_it_built(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     environment, calls = _env(_docker())
-    environment._provisioned_workers = 3
+    environment._created_workers = 2
 
     environment.drop_worker_databases()
 
-    assert [_dropped_in(_script(call)) for call in calls] == [
-        _worker_db(1),
-        _worker_db(2),
-    ]
+    assert _dropped_names(_script(calls[0])) == [_worker_db(1), _worker_db(2)]
 
 
 def test_verification_rejects_output_with_anything_after_the_name() -> None:
@@ -663,18 +667,33 @@ def test_verification_rejects_output_with_anything_after_the_name() -> None:
         environment._verify_worker_database(1)
 
 
-def test_verification_rejects_output_with_anything_before_the_name() -> None:
-    """And a PHP notice ahead of the result must not be read as the answer."""
+def test_verification_tolerates_a_php_notice_before_the_name() -> None:
+    """A runtime with display_errors on, or any PHP 8 deprecation, puts a
+    line on stdout that says nothing about which database answered. Failing
+    setup on that would diagnose a healthy runtime as broken."""
     environment, _ = _env(_docker())
 
     def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
-        return (f"Deprecated: something\n{_worker_db(1)}\n", "", 0, False)
+        return (f"Deprecated: strlen(): Passing null is deprecated\n{_worker_db(1)}\n", "", 0, False)
+
+    environment._exec = fake_exec  # type: ignore[method-assign]
+
+    environment._verify_worker_database(1)
+
+
+def test_verification_rejects_a_non_diagnostic_line_before_the_name() -> None:
+    """Anything that is not a PHP diagnostic is data, and data the probe did
+    not ask for means the output cannot be trusted to identify the
+    database."""
+    environment, _ = _env(_docker())
+
+    def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
+        return (f"wordpress\n{_worker_db(1)}\n", "", 0, False)
 
     environment._exec = fake_exec  # type: ignore[method-assign]
 
     with pytest.raises(RuntimeError, match="does not honor"):
         environment._verify_worker_database(1)
-
 
 def test_verifier_refuses_a_slot_setup_never_provisioned() -> None:
     """Grading against a database that does not exist scores the resulting
@@ -690,7 +709,7 @@ def test_teardown_survives_a_missing_docker_binary() -> None:
     """It runs from a finally, so an exception here would replace whatever
     actually ended the run."""
     environment, _ = _env(_docker())
-    environment._provisioned_workers = 3
+    environment._created_workers = 2
 
     def exploding_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
         raise FileNotFoundError("No such file or directory: 'docker'")
@@ -700,24 +719,36 @@ def test_teardown_survives_a_missing_docker_binary() -> None:
     environment.drop_worker_databases()
 
 
-def test_teardown_is_idempotent_and_does_not_brick_the_environment() -> None:
-    """Calling it twice must not make every later reset() claim a harness
-    bug -- one shared environment spans every model/variant pass."""
+def test_teardown_is_idempotent() -> None:
+    """A second call must not re-issue drops for names this run no longer
+    owns."""
+    environment, calls = _env(_docker())
+    environment._created_workers = 3
+
+    environment.drop_worker_databases()
+    environment.drop_worker_databases()
+
+    assert len(calls) == 1
+
+
+def test_reset_refuses_after_teardown() -> None:
+    """``wp db reset`` is DROP IF EXISTS plus CREATE, so a reset after
+    teardown would silently re-create the database that was just dropped --
+    and the flag means it could never be dropped again. Refusing is the safe
+    direction."""
     environment, _ = _env(_docker())
-    environment._provisioned_workers = 4
+    environment._created_workers = 3
 
     environment.drop_worker_databases()
-    environment.drop_worker_databases()
 
-    assert environment._provisioned_workers == 4
-    environment.reset(3)
-
+    with pytest.raises(RuntimeError, match="never provisioned"):
+        environment.reset(3)
 
 def test_teardown_uses_a_short_timeout() -> None:
     """The per-test bound times a pool of 16 would add minutes to a run that
     is already finished."""
     environment, _ = _env(_docker())
-    environment._provisioned_workers = 3
+    environment._created_workers = 2
     timeouts: list[Any] = []
 
     def recording_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
@@ -728,8 +759,7 @@ def test_teardown_uses_a_short_timeout() -> None:
 
     environment.drop_worker_databases()
 
-    assert timeouts == [WORKER_TEARDOWN_TIMEOUT_SECONDS] * 2
-    assert WORKER_TEARDOWN_TIMEOUT_SECONDS < environment.config.timeout_seconds
+    assert timeouts == [WORKER_TEARDOWN_TIMEOUT_SECONDS]
 
 
 def test_rewrite_preserves_the_runtimes_configured_database_name(
@@ -751,3 +781,22 @@ def test_rewrite_escapes_the_fallback() -> None:
     quoted = WordPressEnvironment._php_quote("my'db")
 
     assert quoted == "'my\\'db'"
+
+
+def test_provisioning_rearms_teardown() -> None:
+    """One environment can serve a second run. The idempotence flag must mean
+    "dropped since the last provision", or the second run leaks everything it
+    built because the first run already spent the flag."""
+    environment, calls = _env(_docker())
+    environment._created_workers = 3
+
+    environment.drop_worker_databases()
+    assert environment._dropped is True
+
+    environment._provision_worker_databases(3)
+    assert environment._dropped is False
+
+    calls.clear()
+    environment.drop_worker_databases()
+
+    assert _dropped_names(_script(calls[0])) == [_worker_db(1), _worker_db(2)]
