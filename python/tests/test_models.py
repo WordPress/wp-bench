@@ -24,7 +24,8 @@ def test_generate_retries_without_temperature_on_deprecated_error(monkeypatch) -
 
     monkeypatch.setattr(models_module, "completion", fake_completion)
 
-    model = ModelInterface(ModelConfig(name="anthropic/claude-opus-4-7"))
+    # temperature is opt-in now; this fallback only applies when it is set.
+    model = ModelInterface(ModelConfig(name="anthropic/claude-opus-4-7", temperature=0.0))
     result = model.generate("hello")
 
     assert result == "ok"

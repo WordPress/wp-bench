@@ -9,8 +9,9 @@ problems are not hidden behind retries.
 """
 from __future__ import annotations
 
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from litellm import completion, completion_cost
@@ -33,6 +34,12 @@ from tenacity import (
 
 from .config import ModelConfig
 
+#: Sampling parameters a provider may retire on a per-model basis. Dropping
+#: one costs us determinism we never actually had (no provider guarantees
+#: reproducibility at a fixed temperature) and is always preferable to
+#: aborting the run, so these are recoverable rather than fatal.
+_DROPPABLE_SAMPLING_PARAMS: tuple[str, ...] = ("temperature", "top_p", "top_k")
+
 #: Exception types that indicate a transient provider problem.
 _TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
     RateLimitError,
@@ -52,7 +59,13 @@ class ModelGeneration:
     retry_count: int
     latency_ms: float
     provider_response_id: str | None
+    #: True when ``temperature`` was omitted because the model rejects it.
+    #: Kept as its own field because existing result records carry it;
+    #: ``dropped_params`` is the general form.
     temperature_fallback: bool = False
+    #: Every sampling parameter omitted from the successful call, whether
+    #: dropped in response to this call's rejection or already known bad.
+    dropped_params: tuple[str, ...] = field(default_factory=tuple)
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
@@ -74,6 +87,10 @@ class ModelInterface:
 
     def __init__(self, config: ModelConfig, system_prompt: str | None = None):
         self.config = config
+        #: Sampling parameters this model has rejected. Learned on the first
+        #: rejection and reused for the rest of the run, so a suite pays the
+        #: failed call once per model rather than once per test.
+        self._unsupported_params: set[str] = set()
         #: Variant state (e.g. injected skill content), deliberately not part
         #: of ModelConfig so it never lands in serialized model config blocks.
         self.system_prompt = system_prompt
@@ -96,10 +113,12 @@ class ModelInterface:
         Latency covers all attempts, including backoff waits, because that
         is the wall-clock cost of obtaining the completion.
         """
-        kwargs = self._completion_kwargs(prompt)
+        requested = self._requested_kwargs(prompt)
+        kwargs = {k: v for k, v in requested.items() if k not in self._unsupported_params}
+        already_dropped = [k for k in requested if k not in kwargs]
         started = time.perf_counter()
         attempt_count = 0
-        temperature_fallback = False
+        newly_dropped: list[str] = []
 
         def _should_retry(error: BaseException) -> bool:
             if not self._retry_enabled_for(error):
@@ -122,20 +141,14 @@ class ModelInterface:
             reraise=True,
         ):
             with attempt:
-                try:
-                    response = completion(**kwargs)
-                except BadRequestError as error:
-                    # Deterministic error, except the known deprecated-
-                    # temperature case which is fixable by dropping the
-                    # parameter. That fallback is intentional behavior,
-                    # not a retry, and is flagged separately.
-                    if not _is_deprecated_temperature_error(error) or "temperature" not in kwargs:
-                        raise
-                    kwargs.pop("temperature")
-                    temperature_fallback = True
-                    response = completion(**kwargs)
+                # Bad requests are deterministic and fail fast, except for a
+                # rejected sampling parameter, which we drop and re-send.
+                # That fallback is intentional behavior, not a transient
+                # retry, so it is flagged separately and not counted.
+                response = self._complete_dropping_unsupported(kwargs, newly_dropped)
 
         assert response is not None  # Retrying(reraise=True) raises otherwise
+        dropped_params = tuple(sorted(set(already_dropped) | set(newly_dropped)))
         latency_ms = (time.perf_counter() - started) * 1000
         choice = response.choices[0]
         usage = _extract_usage(response)
@@ -148,12 +161,34 @@ class ModelInterface:
             retry_count=attempt_count - 1,
             latency_ms=latency_ms,
             provider_response_id=getattr(response, "id", None),
-            temperature_fallback=temperature_fallback,
+            temperature_fallback="temperature" in dropped_params,
+            dropped_params=dropped_params,
             prompt_tokens=usage["prompt_tokens"],
             completion_tokens=usage["completion_tokens"],
             total_tokens=usage["total_tokens"],
             cost_usd=_estimate_cost_safe(response),
         )
+
+    def _complete_dropping_unsupported(
+        self, kwargs: dict[str, Any], dropped: list[str]
+    ) -> ModelResponse:
+        """Call the provider, shedding sampling parameters it rejects.
+
+        Terminates because each iteration removes a key from ``kwargs`` and
+        only parameters still present can be identified as the culprit — so
+        a provider that keeps blaming a parameter we no longer send raises
+        rather than looping.
+        """
+        while True:
+            try:
+                return completion(**kwargs)
+            except BadRequestError as error:
+                param = _rejected_sampling_param(error, kwargs)
+                if param is None:
+                    raise
+                kwargs.pop(param)
+                self._unsupported_params.add(param)
+                dropped.append(param)
 
     def _retry_enabled_for(self, error: BaseException) -> bool:
         """Apply per-category retry switches from config."""
@@ -168,6 +203,12 @@ class ModelInterface:
         return completion_cost(response)
 
     def _completion_kwargs(self, prompt: str) -> dict[str, Any]:
+        """Kwargs as they will actually be sent, minus known-bad parameters."""
+        requested = self._requested_kwargs(prompt)
+        return {k: v for k, v in requested.items() if k not in self._unsupported_params}
+
+    def _requested_kwargs(self, prompt: str) -> dict[str, Any]:
+        """Kwargs as configured, before any learned parameter is stripped."""
         messages: list[dict[str, str]] = []
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
@@ -176,15 +217,35 @@ class ModelInterface:
             "model": self.config.name,
             "messages": messages,
             "max_tokens": self.config.max_tokens,
-            "top_p": self.config.top_p,
             "timeout": self.config.request_timeout,
         }
-        kwargs["temperature"] = self.config.temperature
+        # Sampling parameters are opt-in: sending them by default breaks
+        # every current frontier model and never bought reproducibility.
+        # See ModelConfig.temperature.
+        if self.config.temperature is not None:
+            kwargs["temperature"] = self.config.temperature
+        if self.config.top_p is not None:
+            kwargs["top_p"] = self.config.top_p
         return kwargs
 
 
-def _is_deprecated_temperature_error(error: BadRequestError) -> bool:
-    return "`temperature` is deprecated" in str(error)
+def _rejected_sampling_param(error: BadRequestError, kwargs: dict[str, Any]) -> str | None:
+    """Name the sampling parameter a bad request is complaining about.
+
+    Providers word this differently and change the wording between model
+    generations -- "is deprecated", "Extra inputs are not permitted",
+    "Unsupported value", "is not supported with this model". Matching any
+    one phrase is what made the previous implementation brittle, so we key
+    on the parameter name instead: if a rejection names a droppable
+    parameter we actually sent, that parameter is the thing to drop.
+
+    Returns None for every other bad request, which then fails fast.
+    """
+    message = str(error)
+    for param in _DROPPABLE_SAMPLING_PARAMS:
+        if param in kwargs and re.search(rf"\b{re.escape(param)}\b", message):
+            return param
+    return None
 
 
 def _extract_usage(response: Any) -> dict[str, int | None]:

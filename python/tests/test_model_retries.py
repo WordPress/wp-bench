@@ -148,7 +148,8 @@ def test_deprecated_temperature_fallback_is_flagged_not_counted(monkeypatch) -> 
         return _ok_response()
 
     monkeypatch.setattr(models_module, "completion", fake_completion)
-    model = ModelInterface(_fast_config())
+    # temperature is opt-in now; this fallback only applies when it is set.
+    model = ModelInterface(_fast_config(temperature=0.0))
 
     generation = model.generate_with_metadata("hello")
 

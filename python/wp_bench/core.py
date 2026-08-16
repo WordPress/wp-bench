@@ -201,6 +201,7 @@ def _model_call_info(generation: Any) -> dict[str, Any]:
         "retry_count": generation.retry_count,
         "provider_response_id": generation.provider_response_id,
         "temperature_fallback": generation.temperature_fallback,
+        "dropped_params": list(getattr(generation, "dropped_params", ())),
     }
 
 
