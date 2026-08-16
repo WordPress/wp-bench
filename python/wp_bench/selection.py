@@ -22,27 +22,25 @@ def select_tests(
     limit: int | None = None,
     seed: int | None = None,
 ) -> list[ExecutionTest]:
-    """Select tests for a run based on IDs or category filters.
+    """Filter tests by explicit test IDs and/or category membership."""
+    selected_tests: list[ExecutionTest] = list(tests)
 
-    Rules:
-    - Explicit ``test_ids`` win: returns only the matching test IDs.
-    - Category filtering: if ``categories`` is provided, filters to matching categories.
-    - Full run: returns all tests in canonical dataset order.
-    """
-    if test_ids:
-        target_ids = set(test_ids)
-        return [t for t in tests if getattr(t, "id", "") in target_ids]
-    
-    if categories:
-        target_categories = set(categories)
-        filtered = []
-        for t in tests:
-            test_category = (getattr(t, "category", ""))
-            if test_category in target_categories:
-                filtered.append(t)
-        return filtered
-    
-    return tests
+    if test_ids is not None:
+        id_set = set(test_ids)
+        selected_tests = [t for t in selected_tests if t.id in id_set]
+
+    if categories is not None:
+        cat_set = set(categories)
+        selected_tests = [
+            t for t in selected_tests
+            if getattr(t, "category", None) in cat_set
+            or (hasattr(t, "categories") and t.categories and any(c in cat_set for c in t.categories))
+        ]
+
+    if limit is not None and limit > 0:
+        selected_tests = selected_tests[:limit]
+
+    return selected_tests
 
 def selected_test_ids(tests: list[Any]) -> list[str]:
     """IDs of a selection, for dry-run output and result metadata."""
