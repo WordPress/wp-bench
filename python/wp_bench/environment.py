@@ -52,7 +52,18 @@ class WordPressEnvironment:
     def __init__(self, config: GraderConfig):
         self.config = config
 
-    def setup(self) -> None:
+    def setup(self, *, capture_baseline: bool = True) -> None:
+        """Bring the runtime up, and record the baseline reset() restores.
+
+        Args:
+            capture_baseline: Whether to capture the clean baseline. Capturing
+                runs ``wp db reset``, which destroys whatever is in the
+                database, so a run that never calls :meth:`reset` (isolation
+                ``none``) must pass False: it would pay for an install it
+                cannot use and wipe state the caller deliberately kept.
+                Defaults to True so any caller that does reset is safe by
+                omission.
+        """
         if self.config.wp_env_dir:
             self._run_wp_env(["npx", "wp-env", "start"])
         elif self.config.kind == "docker":
@@ -63,7 +74,8 @@ class WordPressEnvironment:
             # is nothing to install and nothing to capture. reset() refuses
             # rather than pretending it isolated anything.
             return
-        self._capture_baseline()
+        if capture_baseline:
+            self._capture_baseline()
 
     def _install_command(self) -> list[str]:
         """The canonical clean install every reset restores the site to."""
@@ -124,10 +136,11 @@ class WordPressEnvironment:
         observe database state (options, posts, roles, transients, cron
         events, etc.) left behind by an earlier test or model run.
 
-        Both steps travel in one invocation: at roughly a quarter-second of
-        round-trip latency each, a second trip into the runtime costs more
-        than the restore itself. ``&&`` chains them so a failed drop can never
-        import the baseline over surviving state.
+        Both steps travel in one invocation: a round trip into the runtime
+        costs ~0.9s through ``npx wp-env run cli`` (~0.24s through ``docker
+        exec``), so a second trip costs more than the restore itself. ``&&``
+        chains them so a failed drop can never import the baseline over
+        surviving state.
         """
         if not self.config.wp_env_dir and self.config.kind != "docker":
             # Config validation rejects this pairing, so reaching here means a

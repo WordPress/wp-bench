@@ -216,3 +216,42 @@ def test_cli_grader_captures_no_baseline() -> None:
     environment.setup()
 
     assert calls == []
+
+
+# Capture only when the run will actually restore ------------------------
+
+
+def test_setup_skips_capture_when_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Capturing runs `wp db reset`, which destroys whatever is in the
+    database. A run that never calls reset() (execution_isolation 'none')
+    must not pay that cost, and must not wipe state the caller kept."""
+    environment, calls = _env(GraderConfig(kind="docker"), ("ok", "", 0, False))
+    monkeypatch.setattr(environment, "_container_exists", lambda: True)
+
+    environment.setup(capture_baseline=False)
+
+    assert calls == []
+
+
+def test_setup_captures_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Defaulting to True keeps any caller that resets safe by omission."""
+    environment, calls = _env(GraderConfig(kind="docker"), ("ok", "", 0, False))
+    monkeypatch.setattr(environment, "_container_exists", lambda: True)
+
+    environment.setup()
+
+    assert len(calls) == 1
+
+
+def test_setup_still_starts_the_runtime_without_capturing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Skipping the capture must not skip bringing the runtime up."""
+    environment, _ = _env(GraderConfig(kind="docker"), ("ok", "", 0, False))
+    started: list[bool] = []
+    monkeypatch.setattr(environment, "_container_exists", lambda: False)
+    monkeypatch.setattr(environment, "_start_container", lambda: started.append(True))
+
+    environment.setup(capture_baseline=False)
+
+    assert started == [True]

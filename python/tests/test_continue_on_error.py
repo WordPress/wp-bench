@@ -59,7 +59,7 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
 class QuietEnvironment:
     """Environment stub that always passes."""
 
-    def setup(self) -> None:
+    def setup(self, *, capture_baseline: bool = True) -> None:
         pass
 
     def reset(self) -> None:

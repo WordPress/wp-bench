@@ -158,7 +158,7 @@ def test_result_record_contains_usage_and_model_call(
     monkeypatch.setattr(models_module, "completion", lambda **kwargs: _response())
     monkeypatch.setattr(models_module, "completion_cost", lambda response: 0.002)
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     raw = {
         "success": True,
