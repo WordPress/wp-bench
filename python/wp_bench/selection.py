@@ -8,7 +8,9 @@ are returned in their original order.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Iterable, Sequence
+
+from .datasets import ExecutionTest
 
 
 def select_tests(
