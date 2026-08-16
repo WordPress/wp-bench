@@ -12,6 +12,13 @@ from .config import GraderConfig
 #: Short timeout for cheap local Docker queries (e.g. ``docker ps``).
 CONTAINER_QUERY_TIMEOUT_SECONDS = 30
 
+#: Name prefix for the databases a pooled run provisions, one per worker
+#: slot above 0. Worker 0 keeps the runtime's own default database, so a
+#: serial run creates none of these and issues the same commands it always
+#: did.
+WORKER_DATABASE_PREFIX = "wp_bench_w"
+
+
 
 class EnvironmentSetupTimeout(RuntimeError):
     """Raised when environment setup (wp-env/Docker) exceeds its timeout.
@@ -52,7 +59,7 @@ class WordPressEnvironment:
         #: graded code could truncate or seed to defeat isolation.
         self._baseline: str | None = None
 
-    def setup(self, *, capture_baseline: bool = True) -> None:
+    def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         """Bring the runtime up, and record the baseline reset() restores.
 
         Args:
@@ -63,6 +70,13 @@ class WordPressEnvironment:
                 cannot use and wipe state the caller deliberately kept.
                 Defaults to True so any caller that does reset is safe by
                 omission.
+            worker_count: How many isolated databases the run needs. The
+                default (1) is the serial case: nothing beyond the runtime's
+                own database is provisioned. Anything higher gives each
+                concurrent worker its own copy of the baseline. Only
+                meaningful when a baseline is captured, since provisioning
+                replays it.
+
         """
         if self.config.wp_env_dir:
             self._run_wp_env(["npx", "wp-env", "start"])
@@ -76,6 +90,8 @@ class WordPressEnvironment:
             return
         if capture_baseline:
             self._capture_baseline()
+            self._provision_worker_databases(worker_count)
+
 
     def _install_command(self) -> list[str]:
         """The canonical clean install every reset restores the site to."""
@@ -145,8 +161,97 @@ class WordPressEnvironment:
             )
         self._baseline = stdout
 
-    def reset(self) -> None:
-        """Restore the WordPress runtime to the captured clean baseline.
+    def database_name(self, worker: int) -> str | None:
+        """The database that worker slot ``worker`` grades against.
+
+        ``None`` means the runtime's own default database — whatever
+        ``wp-config.php`` resolves ``DB_NAME`` to. Worker 0 always gets it,
+        which is what keeps a serial run byte-identical to a pre-pooling one:
+        no database is created and no command grows an override.
+        """
+        if worker < 0:
+            raise ValueError(f"worker slot must be >= 0, got {worker}")
+        if worker == 0:
+            return None
+        return f"{WORKER_DATABASE_PREFIX}{worker}"
+
+    def _database_env(self, worker: int) -> str:
+        """Shell prefix pinning WP-CLI to this worker's database.
+
+        ``wp-config.php`` resolves ``DB_NAME`` from the ``WORDPRESS_DB_NAME``
+        environment variable at runtime in both the wp-env image and the
+        Docker grader image, so an inline assignment is enough to retarget a
+        whole command. It has to travel inside the script rather than as a
+        process environment because ``npx wp-env run cli`` has no ``-e``
+        flag; the inline form is the one that works on both grader paths.
+
+        Empty for worker 0 by design — its commands must stay exactly what a
+        serial run sends.
+        """
+        name = self.database_name(worker)
+        if name is None:
+            return ""
+        return f"export WORDPRESS_DB_NAME={shlex.quote(name)}; "
+
+    def _restore_script(self) -> str:
+        """Drop everything, then replay the baseline from stdin.
+
+        ``&&`` so a failed drop can never import the baseline over surviving
+        state. ``wp db import`` exits 0 on an empty or truncated dump, which
+        would drop every table, import nothing, and report success -- every
+        later test would then fail against an empty database and be blamed on
+        the model, so ``wp core is-installed`` confirms the restore landed.
+        """
+        return "wp db reset --yes && wp db import - && wp core is-installed"
+
+    def _provision_worker_databases(self, worker_count: int) -> None:
+        """Give every worker slot above 0 its own copy of the baseline.
+
+        Pooling is what lets ``reset_per_test`` run concurrently. Serial
+        isolation time-slices a single mutable runtime; pooled isolation
+        means no two concurrent tests touch the same runtime at all, so the
+        guarantee gets stronger under concurrency rather than weaker.
+
+        ``wp db create`` is deliberately best-effort and not ``&&``-chained:
+        a worker database left behind by an interrupted run is an expected
+        state, and re-creating it fails harmlessly. The restore that follows
+        is what makes a leftover database indistinguishable from a fresh one,
+        and it is not optional — the script's exit status is the restore's,
+        so a create that failed for a real reason still surfaces here.
+
+        Worker databases are never dropped. Nothing in a run is keyed to
+        their contents beyond the baseline this re-imports, so leaving them
+        costs a few idle megabytes and saves a teardown path that would have
+        to run after an interrupt to be worth anything.
+
+        Filesystem state outside the candidate plugin directory stays shared
+        across pooled workers: ``wp-content/uploads`` is one directory and
+        ``debug.log`` is one file, however many databases the pool has. The
+        isolation boundary is the database, not the container. Candidate
+        plugins are already safe — class-artifact-installer.php installs each
+        one under a random directory suffix.
+        """
+        for worker in range(1, worker_count):
+            script = f"{self._database_env(worker)}wp db create; {self._restore_script()}"
+            _, stderr, returncode, timed_out = self._exec(
+                ["sh", "-c", script],
+                stdin=self._baseline,
+                timeout=self.config.setup_timeout_seconds,
+            )
+            name = self.database_name(worker)
+            if timed_out:
+                raise EnvironmentSetupTimeout(
+                    f"Timed out provisioning worker database {name!r} after "
+                    f"{self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
+                )
+            if returncode != 0:
+                raise RuntimeError(
+                    f"Failed to provision worker database {name!r} (exit code "
+                    f"{returncode}){': ' + stderr.strip() if stderr.strip() else ''}"
+                )
+
+    def reset(self, worker: int = 0) -> None:
+        """Restore one worker's database to the captured clean baseline.
 
         ``wp db reset`` drops every table, then the baseline dump recorded by
         :meth:`setup` is imported to return to a deterministic just-installed
@@ -160,6 +265,12 @@ class WordPressEnvironment:
         exec``), so a second trip costs more than the restore itself. ``&&``
         chains them so a failed drop can never import the baseline over
         surviving state.
+
+        Args:
+            worker: Which pooled database to restore. 0 (the default) is the
+                runtime's own database and produces the exact command a
+                serial run has always sent.
+
         """
         if not self.config.wp_env_dir and self.config.kind != "docker":
             # Nothing rejects this pairing at config load, so it reaches here
@@ -174,12 +285,10 @@ class WordPressEnvironment:
                 "No clean baseline was captured, so reset() cannot restore one. "
                 "Call setup(capture_baseline=True) before grading."
             )
-        # `wp db import` exits 0 on an empty or truncated dump, which would
-        # drop every table, import nothing, and report success. Every later
-        # test would then fail against an empty database and be blamed on the
-        # model, so `wp core is-installed` confirms the restore landed.
-        script = "wp db reset --yes && wp db import - && wp core is-installed"
-        self._reset_step(["sh", "-c", script], stdin=self._baseline)
+        self._reset_step(
+            ["sh", "-c", self._database_env(worker) + self._restore_script()],
+            stdin=self._baseline,
+        )
 
     def _reset_step(self, command: list[str], *, stdin: str | None = None) -> None:
         """Run one reset command, failing loudly.
@@ -204,7 +313,12 @@ class WordPressEnvironment:
                 f"{rendered}{': ' + stderr.strip() if stderr.strip() else ''}"
             )
 
-    def execute_code(self, code: str, verification_spec: dict[str, Any]) -> ExecutionResult:
+    def execute_code(
+        self,
+        code: str,
+        verification_spec: dict[str, Any],
+        worker: int = 0,
+    ) -> ExecutionResult:
         """Run a candidate PHP snippet through the runtime verifier.
 
         Compatibility wrapper over execute_artifact() for snippet payloads.
@@ -214,23 +328,48 @@ class WordPressEnvironment:
             "code": code,
             **verification_spec,
         }
-        return self._run_verifier(payload)
+        return self._run_verifier(payload, worker)
 
-    def execute_artifact(self, artifact: Any, verification_spec: dict[str, Any]) -> ExecutionResult:
+    def execute_artifact(
+        self,
+        artifact: Any,
+        verification_spec: dict[str, Any],
+        worker: int = 0,
+    ) -> ExecutionResult:
         """Run a candidate artifact (snippet or plugin files) through the verifier.
 
         Args:
             artifact: An Artifact with kind, code, and optional files map.
             verification_spec: static_checks/runtime_checks for the test.
+            worker: Which pooled database to grade against. Must be the slot
+                whose :meth:`reset` cleaned the state this candidate is meant
+                to see — grading on another worker's database would score the
+                candidate against a runtime some other test is mutating.
         """
         payload = {
             "payload_version": "1.0",
             **artifact.payload_fields(),
             **verification_spec,
         }
-        return self._run_verifier(payload)
+        return self._run_verifier(payload, worker)
 
-    def _run_verifier(self, payload: dict[str, Any]) -> ExecutionResult:
+    def _verifier_command(self, worker: int) -> list[str]:
+        """The runtime command that grades a candidate on a worker's database.
+
+        Worker 0 gets the bare WP-CLI call a serial run has always used.
+        Pooled workers wrap it so the database override applies, and ``exec``
+        replaces the shell rather than forking under it, keeping stdin
+        attached to WP-CLI itself — the payload travels on stdin and must
+        never become an argument (argv size limits, visible in process
+        listings).
+        """
+        verifier_path = self._runtime_verifier_path()
+        database_env = self._database_env(worker)
+        if not database_env:
+            return ["wp", "eval-file", verifier_path]
+        return ["sh", "-c", f"{database_env}exec wp eval-file {shlex.quote(verifier_path)}"]
+
+    def _run_verifier(self, payload: dict[str, Any], worker: int = 0) -> ExecutionResult:
         """Send a payload to the runtime verifier and parse the result.
 
         A runtime timeout is a per-test failure, not a harness crash: it
@@ -238,12 +377,7 @@ class WordPressEnvironment:
         a synthetic zero-score runtime payload, so the benchmark records the
         timeout and continues with the next test.
         """
-        verifier_path = self._runtime_verifier_path()
-        cmd = [
-            "wp",
-            "eval-file",
-            verifier_path,
-        ]
+        cmd = self._verifier_command(worker)
         stdout, stderr, rc, timed_out = self._exec(cmd, stdin=json.dumps(payload))
         if timed_out:
             return ExecutionResult(

@@ -53,10 +53,10 @@ def _passing_result() -> ExecutionResult:
 
 
 class FakeEnvironment:
-    def setup(self, *, capture_baseline: bool = True) -> None: ...
-    def reset(self) -> None: ...
+    def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None: ...
+    def reset(self, worker: int = 0) -> None: ...
 
-    def execute_artifact(self, artifact: object, spec: dict) -> ExecutionResult:
+    def execute_artifact(self, artifact: object, spec: dict, worker: int = 0) -> ExecutionResult:
         return _passing_result()
 
 

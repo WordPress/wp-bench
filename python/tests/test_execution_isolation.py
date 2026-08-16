@@ -61,16 +61,29 @@ class SpyEnvironment:
 
     def __init__(self) -> None:
         self.calls: list[str] = []
+        #: (call, worker slot) for every reset/execute, so a serial run can
+        #: be shown to stay on the runtime's own database.
+        self.slots: list[tuple[str, int]] = []
+        self.worker_count: int | None = None
+        self.capture_baseline: bool | None = None
 
-    def setup(self, *, capture_baseline: bool = True) -> None:
+    def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         self.calls.append("setup")
+        self.worker_count = worker_count
         self.capture_baseline = capture_baseline
 
-    def reset(self) -> None:
+    def reset(self, worker: int = 0) -> None:
         self.calls.append("reset")
+        self.slots.append(("reset", worker))
 
-    def execute_artifact(self, artifact: object, verification_spec: dict) -> ExecutionResult:
+    def execute_artifact(
+        self,
+        artifact: object,
+        verification_spec: dict,
+        worker: int = 0,
+    ) -> ExecutionResult:
         self.calls.append("execute")
+        self.slots.append(("execute", worker))
         return _passing_result()
 
 
@@ -157,10 +170,17 @@ def test_multi_model_runner_resets_between_models(
     assert spy.calls == ["setup", "reset", "execute", "reset", "execute"]
 
 
-def test_concurrency_above_one_rejected_for_reset_per_test() -> None:
-    """reset_per_test isolation cannot support concurrent execution tests."""
-    with pytest.raises(ValueError, match="execution_concurrency must be 1"):
-        RunConfig(execution_isolation="reset_per_test", execution_concurrency=4)
+def test_concurrency_above_one_allowed_for_reset_per_test() -> None:
+    """Pooling gives each worker its own database, so concurrency is legal.
+
+    The old validator refused this pairing because concurrent tests would
+    have shared one mutable runtime. They no longer share one at all — see
+    test_database_pooling.py for the mechanism.
+    """
+    config = RunConfig(execution_isolation="reset_per_test", execution_concurrency=4)
+
+    assert config.execution_concurrency == 4
+    assert config.database_pool_size == 4
 
 
 def test_isolation_none_allows_concurrency() -> None:
@@ -169,9 +189,30 @@ def test_isolation_none_allows_concurrency() -> None:
     assert config.execution_concurrency == 4
 
 
+def test_isolation_none_does_not_pool_databases() -> None:
+    """``none`` opts out of isolation; there is nothing to keep apart."""
+    config = RunConfig(execution_isolation="none", execution_concurrency=4)
+
+    assert config.pools_databases is False
+    assert config.database_pool_size == 1
+
+
+def test_serial_reset_per_test_needs_no_extra_databases() -> None:
+    config = RunConfig(execution_isolation="reset_per_test", execution_concurrency=1)
+
+    assert config.pools_databases is False
+    assert config.database_pool_size == 1
+
+
 def test_execution_concurrency_must_be_positive() -> None:
     with pytest.raises(ValueError, match="must be >= 1"):
         RunConfig(execution_isolation="none", execution_concurrency=0)
+
+
+def test_execution_concurrency_is_capped() -> None:
+    """A typo must not try to provision hundreds of databases."""
+    with pytest.raises(ValueError, match="must be <= 16"):
+        RunConfig(execution_isolation="reset_per_test", execution_concurrency=500)
 
 
 def test_result_metadata_records_isolation_mode(

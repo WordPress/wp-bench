@@ -99,7 +99,7 @@ run:
   test_ids: []               # optional explicit test IDs to run
   dry_run: false             # load/filter tests without calling models
   execution_isolation: reset_per_test  # reset WordPress before each execution test
-  execution_concurrency: 1   # must stay 1 under reset_per_test isolation
+  execution_concurrency: 1   # tests run at once (1-16); each gets its own database
   continue_on_error: false   # record per-test errors and keep going (diagnostic
                              # only; errored tests are excluded from aggregates)
 

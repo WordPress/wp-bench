@@ -45,11 +45,16 @@ run:
   # seed: 1337           # selection seed (same seed = same subset)
   # test_ids: []         # optional explicit test IDs to run
   # dry_run: false       # load/filter tests without calling models
-  # Execution-test isolation. 'reset_per_test' (default) resets WordPress
-  # to a clean baseline before every execution test and runs them serially.
-  # 'none' opts out and allows execution_concurrency > 1, but tests then
-  # share mutable WordPress state (not valid for official benchmark runs).
+  # Execution-test isolation. 'reset_per_test' (default) restores WordPress
+  # to a clean baseline before every execution test. 'none' opts out and
+  # tests then share mutable WordPress state (not valid for official runs).
   # execution_isolation: reset_per_test
+  # How many execution tests run at once (1-16). Under 'reset_per_test' each
+  # worker is provisioned its own WordPress database (wp_bench_w1..) and
+  # resets only that one, so concurrent tests never share a runtime. Most of
+  # a run's wall clock is spent waiting on the model, so raising this is the
+  # cheapest speedup available. Note that everything outside the database --
+  # wp-content/uploads, debug.log -- stays shared across workers.
   # execution_concurrency: 1
   # Diagnostic-only switches. Official leaderboard runs must grade every
   # dimension; skipping either invalidates a run for comparison purposes.

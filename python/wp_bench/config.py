@@ -106,6 +106,13 @@ class GraderConfig(StrictModel):
 
 ExecutionIsolation = Literal["reset_per_test", "none"]
 
+#: Ceiling on ``run.execution_concurrency``. Every worker above the first
+#: gets its own WordPress database provisioned before the run starts, so a
+#: mistyped 500 would spend the run building databases. Sixteen is far below
+#: anything MySQL's connection limits care about and well past the point
+#: where more workers stop buying wall clock.
+MAX_EXECUTION_CONCURRENCY = 16
+
 
 class RunConfig(StrictModel):
     suite: str = "wp-core-v1"
@@ -136,24 +143,40 @@ class RunConfig(StrictModel):
     #: runs must not skip grading dimensions.
     skip_static: bool = False
 
+    @property
+    def pools_databases(self) -> bool:
+        """Whether the run gives each concurrent worker its own database.
+
+        Only ``reset_per_test`` pools: ``none`` is an explicit opt-out of
+        isolation, so its concurrent tests keep sharing the one runtime they
+        always shared.
+        """
+        return self.execution_isolation == "reset_per_test" and self.execution_concurrency > 1
+
+    @property
+    def database_pool_size(self) -> int:
+        """How many independent WordPress databases the run needs."""
+        return self.execution_concurrency if self.pools_databases else 1
+
     @model_validator(mode="after")
     def _validate_execution_concurrency(self) -> RunConfig:
-        """Reject concurrency the isolation strategy cannot support.
+        """Bound concurrency to what the harness can actually provision.
 
-        ``reset_per_test`` isolation resets one shared WordPress runtime
-        before every execution test, which is only sound when execution
-        tests run serially. Fail loudly instead of silently sharing mutable
-        WordPress state across concurrent tests.
+        ``reset_per_test`` used to force serial execution, because every
+        test reset the one shared WordPress runtime. Concurrent runs now
+        provision a database per worker, so no two concurrent tests share a
+        runtime at all — pooled isolation is stronger than the serial kind
+        it replaces, not weaker, and the old constraint is gone. What is
+        left is a ceiling, because each worker costs a real database.
         """
         if self.execution_concurrency < 1:
             raise ValueError("run.execution_concurrency must be >= 1")
-        if self.execution_isolation == "reset_per_test" and self.execution_concurrency > 1:
+        if self.execution_concurrency > MAX_EXECUTION_CONCURRENCY:
             raise ValueError(
-                "run.execution_concurrency must be 1 when "
-                "run.execution_isolation is 'reset_per_test': concurrent tests "
-                "would share one mutable WordPress runtime. Set "
-                "run.execution_isolation to 'none' to opt out of isolation "
-                "(not valid for official benchmark runs)."
+                "run.execution_concurrency must be <= "
+                f"{MAX_EXECUTION_CONCURRENCY}, got {self.execution_concurrency}: "
+                "every worker above the first is provisioned its own WordPress "
+                "database before the run starts."
             )
         return self
 

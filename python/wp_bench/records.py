@@ -18,6 +18,30 @@ from .config import ModelConfig
 RESULT_SCHEMA_VERSION = "2.1"
 
 
+def isolation_metadata(isolation: str, concurrency: int) -> dict[str, Any]:
+    """How a run actually isolated its execution tests.
+
+    ``runtime_isolation`` alone cannot tell a serial ``reset_per_test`` run
+    from a pooled one, and the two reach isolation by different means: a
+    serial run time-slices one database, a pooled run hands every concurrent
+    test a database no other test touches. Both are honestly
+    ``reset_per_test`` and both must say so, but a reader comparing two
+    result files is entitled to know which one they are holding.
+
+    Args:
+        isolation: The configured ``run.execution_isolation``.
+        concurrency: How many tests the run actually executed at once. Run
+            modes with their own serial loop pass 1 regardless of what the
+            config asked for, because that is what they did.
+    """
+    pooled = isolation == "reset_per_test" and concurrency > 1
+    return {
+        "runtime_isolation": isolation,
+        "execution_concurrency": concurrency,
+        "isolation_pooling": "database_per_worker" if pooled else "single_database",
+    }
+
+
 def _baseline_variant_info() -> dict[str, Any]:
     """The no-skills variant identity every record carries by default.
 
