@@ -20,11 +20,11 @@ CONTAINER_QUERY_TIMEOUT_SECONDS = 30
 #: runtime never claim the same database.
 WORKER_DATABASE_PREFIX = "wp_bench_"
 
-#: Makes the runtime resolve ``DB_NAME`` from the environment. The wp-env
-#: image already does; the grader image bakes a literal, because its
-#: entrypoint runs ``wp config create`` and ``docker exec`` never re-runs
-#: that entrypoint. Without this the per-worker override is silently inert
-#: and every worker grades against one shared database.
+#: Makes a runtime resolve ``DB_NAME`` from the environment, which is what
+#: lets a pooled worker retarget its whole command. Kept in step with the
+#: expression runtime/docker-entrypoint.sh writes; the fallback differs only
+#: in that the entrypoint knows the name its container was started with,
+#: while the harness can only assume the WordPress default.
 DATABASE_FROM_ENV = "getenv('WORDPRESS_DB_NAME') ?: 'wordpress'"
 
 
@@ -295,12 +295,14 @@ class WordPressEnvironment:
     def _make_runtime_resolve_database(self) -> None:
         """Make wp-config.php read ``DB_NAME`` from the environment.
 
-        The wp-env image already ships this; the grader image does not. Its
-        entrypoint writes a literal via ``wp config create``, and ``docker
-        exec`` bypasses the entrypoint, so the file is never regenerated and
-        the per-worker override cannot take effect. Rewriting the constant in
-        the running container fixes that without rebuilding or republishing
-        an image, and reaches containers already started from the old one.
+        Both images the harness ships now do this on their own: wp-env's
+        always has, and runtime/docker-entrypoint.sh rewrites the constant
+        after ``wp config create`` bakes a literal. This stays because a
+        container is not always one the harness built -- an image pulled
+        before that entrypoint fix, a wp-config.php left in a volume by an
+        older image, or a runtime an operator manages themselves. Rewriting
+        the constant in the running container covers all three without a
+        rebuild.
 
         Idempotent, and the ``?: 'wordpress'`` fallback means an unset
         variable resolves exactly as before — so worker 0 and every serial
