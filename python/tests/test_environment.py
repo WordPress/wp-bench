@@ -11,7 +11,12 @@ def test_execute_code_uses_internal_runtime_verifier_for_wp_env() -> None:
     calls: list[tuple[list[str], str | None]] = []
     environment = WordPressEnvironment(GraderConfig(kind="docker", wp_env_dir=Path("runtime")))
 
-    def fake_exec(command: list[str], *, stdin: str | None = None) -> tuple[str, str, int, bool]:
+    def fake_exec(
+        command: list[str],
+        *,
+        stdin: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[str, str, int, bool]:
         calls.append((command, stdin))
         assert stdin is not None
         payload = json.loads(stdin)
