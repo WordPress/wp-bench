@@ -1,12 +1,10 @@
-"""Deterministic, stratified test selection for limited runs.
+"""Test selection and filtering utilities.
 
-When a run is limited (``run.limit``), tests are selected with a seeded,
-category/difficulty-stratified strategy instead of "first N by file
-order". First-N overrepresents whichever files sort first, which makes
-quick provider comparisons biased and misleading. Seeded selection keeps
-limited runs deterministic (same seed = same subset), tunable (different
-seed = different subset), and representative (round-robin across
-category/difficulty groups).
+Filters tests from an execution suite based on explicit test IDs and/or
+matching category tags. When specific test IDs are provided, they take
+precedence. When category filters are provided, tests matching any of the
+specified categories are retained. If no filters are supplied, all tests
+are returned in their original order.
 """
 from __future__ import annotations
 
@@ -14,11 +12,13 @@ from typing import Any
 
 
 def select_tests(
-    tests: list[Any],
+    tests: Iterable[ExecutionTest],
     *,
-    test_ids: list[str],
-    categories: list[str] | None,
-) -> list[Any]:
+    test_ids: Sequence[str] | None = None,
+    categories: Sequence[str] | None = None,
+    limit: int | None = None,
+    seed: int | None = None,
+) -> list[ExecutionTest]:
     """Select tests for a run based on IDs or category filters.
 
     Rules:

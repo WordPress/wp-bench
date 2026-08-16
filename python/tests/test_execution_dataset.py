@@ -50,7 +50,6 @@ def test_execution_test_ids_are_unique() -> None:
 def test_execution_tests_have_required_fields() -> None:
     required = {
         "category",
-        "difficulty",
         "expected_behavior",
         "id",
         "metadata",
