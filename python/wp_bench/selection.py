@@ -10,60 +10,36 @@ category/difficulty groups).
 """
 from __future__ import annotations
 
-import random
-from collections import defaultdict
 from typing import Any
 
 
 def select_tests(
     tests: list[Any],
     *,
-    limit: int | None,
     test_ids: list[str],
-    seed: int,
+    categories: list[str] | None,
 ) -> list[Any]:
-    """Select tests for a run, deterministically.
+    """Select tests for a run based on IDs or category filters.
 
     Rules:
-    - Explicit ``test_ids`` win: the tests are returned in dataset order,
-      unaffected by limit or seed (filtering by ID happens upstream).
-    - No limit: all tests in dataset order (canonical full-run behavior).
-    - Limit: seeded stratified sampling. Tests are grouped by
-      (category, difficulty); each group is shuffled with the seed and
-      groups are drained round-robin (in deterministic group order) until
-      the limit is reached, so small subsets still touch as many groups
-      as possible. The final selection is sorted by test id for stable
-      output.
+    - Explicit ``test_ids`` win: returns only the matching test IDs.
+    - Category filtering: if ``categories`` is provided, filters to matching categories.
+    - Full run: returns all tests in canonical dataset order.
     """
     if test_ids:
-        return tests
-    if limit is None or limit >= len(tests):
-        return tests
-
-    groups: dict[Any, list[Any]] = defaultdict(list)
-    for test in tests:
-        key = (getattr(test, "category", ""), getattr(test, "difficulty", ""))
-        groups[key].append(test)
-
-    rng = random.Random(seed)
-    ordered_keys = sorted(groups.keys())
-    for key in ordered_keys:
-        rng.shuffle(groups[key])
-
-    selected: list[Any] = []
-    while len(selected) < limit:
-        progressed = False
-        for key in ordered_keys:
-            if len(selected) >= limit:
-                break
-            if groups[key]:
-                selected.append(groups[key].pop())
-                progressed = True
-        if not progressed:
-            break
-
-    return sorted(selected, key=lambda test: test.id)
-
+        target_ids = set(test_ids)
+        return [t for t in tests if getattr(t, "id", "") in target_ids]
+    
+    if categories:
+        target_categories = set(categories)
+        filtered = []
+        for t in tests:
+            test_category = (getattr(t, "category", ""))
+            if test_category in target_categories:
+                filtered.append(t)
+        return filtered
+    
+    return tests
 
 def selected_test_ids(tests: list[Any]) -> list[str]:
     """IDs of a selection, for dry-run output and result metadata."""
