@@ -164,10 +164,14 @@ class RunConfig(StrictModel):
 
         ``reset_per_test`` used to force serial execution, because every
         test reset the one shared WordPress runtime. Concurrent runs now
-        provision a database per worker, so no two concurrent tests share a
-        runtime at all — pooled isolation is stronger than the serial kind
-        it replaces, not weaker, and the old constraint is gone. What is
-        left is a ceiling, because each worker costs a real database.
+        provision a database per worker, so the harness never resets or
+        grades two concurrent tests against the same database, and the old
+        constraint is gone. What is left is a ceiling, because each worker
+        costs a real database.
+
+        This buys back what serialization was protecting and no more: see
+        WordPressEnvironment._provision_worker_databases for what the pool
+        does not separate.
         """
         if self.execution_concurrency < 1:
             raise ValueError("run.execution_concurrency must be >= 1")

@@ -300,3 +300,30 @@ def test_reset_per_test_captures_a_baseline(
     runner.run()
 
     assert spy.capture_baseline is True
+
+
+def test_isolation_none_grades_on_the_runtimes_own_database(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``none`` provisions no worker databases, so it must not ask for one.
+
+    Routing this path to a pooled slot would grade against ``wp_bench_wN``,
+    a database setup() never created for an unpooled run.
+    """
+    monkeypatch.setattr(
+        "wp_bench.core.load_tests",
+        lambda dataset: [_execution_test("e-one"), _execution_test("e-two")],
+    )
+    config = _config(tmp_path, execution_isolation="none", execution_concurrency=2)
+    runner = BenchmarkRunner(config)
+    spy = SpyEnvironment()
+    runner.environment = spy  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
+
+    runner.run()
+
+    assert spy.worker_count == 1
+    assert {worker for _, worker in spy.slots} == {0}

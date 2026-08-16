@@ -439,11 +439,19 @@ def _run_concurrent_loop(
                         raise
                     print_test_warning(error)
                     result = on_error(futures[future], error)
-                except Exception:
+                except BaseException:
                     # Not a test result: a reset that failed or timed out
                     # means the runtime is no longer known-clean, and
                     # continue_on_error does not cover harness failures.
                     # Drain the queue rather than grade the rest against it.
+                    #
+                    # BaseException, not Exception, because KeyboardInterrupt
+                    # is the case that matters most: without this the executor
+                    # exits through shutdown(wait=True), which does not cancel
+                    # queued futures, so Ctrl-C would run the rest of the suite
+                    # to completion — burning model spend behind a progress bar
+                    # frozen at the interrupt. The serial loop stops after the
+                    # current test; pooled runs must not be worse.
                     _cancel_pending(futures)
                     raise
                 else:

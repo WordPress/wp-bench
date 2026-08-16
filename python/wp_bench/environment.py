@@ -228,8 +228,18 @@ class WordPressEnvironment:
         across pooled workers: ``wp-content/uploads`` is one directory and
         ``debug.log`` is one file, however many databases the pool has. The
         isolation boundary is the database, not the container. Candidate
-        plugins are already safe — class-artifact-installer.php installs each
-        one under a random directory suffix.
+        plugins are already safe from collision — class-artifact-installer.php
+        installs each one under a random directory suffix — though a candidate
+        that enumerates the plugins directory can still see a concurrent one.
+
+        The pool separates accidental interference, not deliberate access.
+        Candidates are eval'd with a full WordPress bootstrap and root MySQL
+        credentials, and nothing restricts which database ``$wpdb`` talks to,
+        so code that reaches for another worker's database reaches it. Serial
+        execution made that harmless because nothing else was running;
+        concurrency does not. Treat the guarantee as "no test observes another
+        test's leftovers", which is what ``reset_per_test`` has always meant,
+        rather than as a sandbox between concurrent tests.
         """
         for worker in range(1, worker_count):
             script = f"{self._database_env(worker)}wp db create; {self._restore_script()}"
