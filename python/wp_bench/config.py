@@ -40,13 +40,6 @@ class ModelConfig(StrictModel):
     #: Routing itself is driven by ``name`` (a LiteLLM model string).
     kind: Literal["openai", "anthropic", "ollama", "openai-compatible"] = "openai"
     name: str = "gpt-4o-mini"
-    #: Omitted from the request unless explicitly set. Current frontier
-    #: models reject the parameter outright, and no provider has ever
-    #: guaranteed reproducibility at a fixed temperature -- so sending it by
-    #: default bought nothing and broke those models. Still honored by local
-    #: and older backends (``ollama``, ``openai-compatible``), where setting
-    #: it does measurably reduce run-to-run variance.
-    temperature: float | None = None
     max_tokens: int | None = None
     top_p: float | None = None
     request_timeout: float = Field(default=300.0, gt=0)
@@ -57,13 +50,6 @@ class ModelConfig(StrictModel):
     retry_max_seconds: float = 30.0
     retry_on_rate_limit: bool = True
     retry_on_timeout: bool = True
-
-    @field_validator("temperature")
-    @classmethod
-    def _clamp_temperature(cls, value: float | None) -> float | None:
-        if value is not None and not 0 <= value <= 2:
-            raise ValueError("temperature must be between 0 and 2")
-        return value
 
     @field_validator("top_p")
     @classmethod

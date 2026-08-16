@@ -34,11 +34,12 @@ from tenacity import (
 
 from .config import ModelConfig
 
-#: Sampling parameters a provider may retire on a per-model basis. Dropping
-#: one costs us determinism we never actually had (no provider guarantees
-#: reproducibility at a fixed temperature) and is always preferable to
-#: aborting the run, so these are recoverable rather than fatal.
-_DROPPABLE_SAMPLING_PARAMS: tuple[str, ...] = ("temperature", "top_p", "top_k")
+#: Sampling parameters a provider may retire on a per-model basis. None are
+#: sent unless a config asks for them; when one is asked for and rejected,
+#: dropping it costs determinism we never actually had (no provider
+#: guarantees reproducibility at fixed sampling settings) and beats aborting
+#: the run, so these are recoverable rather than fatal.
+_DROPPABLE_SAMPLING_PARAMS: tuple[str, ...] = ("top_p", "top_k")
 
 #: Exception types that indicate a transient provider problem.
 _TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
@@ -59,10 +60,6 @@ class ModelGeneration:
     retry_count: int
     latency_ms: float
     provider_response_id: str | None
-    #: True when ``temperature`` was omitted because the model rejects it.
-    #: Kept as its own field because existing result records carry it;
-    #: ``dropped_params`` is the general form.
-    temperature_fallback: bool = False
     #: Every sampling parameter omitted from the successful call, whether
     #: dropped in response to this call's rejection or already known bad.
     dropped_params: tuple[str, ...] = field(default_factory=tuple)
@@ -161,7 +158,6 @@ class ModelInterface:
             retry_count=attempt_count - 1,
             latency_ms=latency_ms,
             provider_response_id=getattr(response, "id", None),
-            temperature_fallback="temperature" in dropped_params,
             dropped_params=dropped_params,
             prompt_tokens=usage["prompt_tokens"],
             completion_tokens=usage["completion_tokens"],
@@ -219,11 +215,9 @@ class ModelInterface:
             "max_tokens": self.config.max_tokens,
             "timeout": self.config.request_timeout,
         }
-        # Sampling parameters are opt-in: sending them by default breaks
-        # every current frontier model and never bought reproducibility.
-        # See ModelConfig.temperature.
-        if self.config.temperature is not None:
-            kwargs["temperature"] = self.config.temperature
+        # Sampling parameters are opt-in. Sending them by default breaks
+        # every current frontier model -- all of which reject them -- and
+        # never bought the reproducibility it appeared to.
         if self.config.top_p is not None:
             kwargs["top_p"] = self.config.top_p
         return kwargs

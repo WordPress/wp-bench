@@ -134,31 +134,6 @@ def test_timeout_retry_can_be_disabled(monkeypatch) -> None:
     assert len(calls) == 1
 
 
-def test_deprecated_temperature_fallback_is_flagged_not_counted(monkeypatch) -> None:
-    calls: list[dict] = []
-
-    def fake_completion(**kwargs):
-        calls.append(kwargs)
-        if len(calls) == 1:
-            raise BadRequestError(
-                message="`temperature` is deprecated for this model.",
-                model="gpt-4o-mini",
-                llm_provider="openai",
-            )
-        return _ok_response()
-
-    monkeypatch.setattr(models_module, "completion", fake_completion)
-    # temperature is opt-in now; this fallback only applies when it is set.
-    model = ModelInterface(_fast_config(temperature=0.0))
-
-    generation = model.generate_with_metadata("hello")
-
-    assert generation.text == "ok"
-    assert generation.temperature_fallback is True
-    assert generation.retry_count == 0  # fallback is not a transient retry
-    assert "temperature" not in calls[1]
-
-
 def test_retry_config_from_values() -> None:
     config = ModelConfig(
         max_retries=5,
