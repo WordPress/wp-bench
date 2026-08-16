@@ -30,9 +30,12 @@ def isolation_metadata(isolation: str, concurrency: int) -> dict[str, Any]:
 
     Args:
         isolation: The configured ``run.execution_isolation``.
-        concurrency: How many tests the run actually executed at once. Run
-            modes with their own serial loop pass 1 regardless of what the
-            config asked for, because that is what they did.
+        concurrency: The most tests this run could have had in flight at
+            once -- the configured ceiling, lowered to the number of tests
+            actually selected. A bound, not an observation: a run whose
+            tests fail in milliseconds may never reach it. Run modes with
+            their own serial loop pass 1 regardless of what the config asked
+            for, because serial is what they are.
     """
     pooled = isolation == "reset_per_test" and concurrency > 1
     return {

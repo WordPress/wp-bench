@@ -55,6 +55,21 @@ def print_test_warning(error: TestError) -> None:
     )
 
 
+def print_orphaned_databases(names: list[str]) -> None:
+    """Name the worker databases a failed cleanup left behind.
+
+    Cleanup runs after grading and must not fail a run whose results are
+    already correct, but swallowing it silently is what turns a one-off
+    failure into unbounded growth: names are per-run, so nothing later
+    reuses these.
+    """
+    console.print(
+        f"[yellow]⚠ Could not drop {len(names)} worker database(s)[/yellow]: "
+        f"{', '.join(names)}. Results are unaffected; drop them manually to "
+        "reclaim the space."
+    )
+
+
 def print_systemic_abort(error_count: int) -> None:
     """Explain why continue_on_error still aborted: every test errored."""
     console.print(

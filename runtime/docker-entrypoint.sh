@@ -38,7 +38,12 @@ fi
 # name this container was started with and single-runtime behavior is
 # unchanged. Runs on every start, not just creation, so a wp-config.php left
 # in a volume by an older image is upgraded too.
-wp config set DB_NAME "getenv('WORDPRESS_DB_NAME') ?: '$WORDPRESS_DB_NAME'" \
+# --raw writes the argument into wp-config.php verbatim, so the fallback has
+# to be escaped for a PHP single-quoted string. Unescaped, a name containing
+# a quote breaks the file, and a crafted one closes the literal and continues
+# as code that runs on every WordPress bootstrap.
+escaped_db_name=$(printf '%s' "$WORDPRESS_DB_NAME" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g")
+wp config set DB_NAME "getenv('WORDPRESS_DB_NAME') ?: '$escaped_db_name'" \
   --raw \
   --allow-root
 

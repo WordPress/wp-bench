@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import GraderConfig
+from .output import print_orphaned_databases
 
 #: Short timeout for cheap local Docker queries (e.g. ``docker ps``).
 CONTAINER_QUERY_TIMEOUT_SECONDS = 30
@@ -20,12 +21,10 @@ CONTAINER_QUERY_TIMEOUT_SECONDS = 30
 #: runtime never claim the same database.
 WORKER_DATABASE_PREFIX = "wp_bench_"
 
-#: Makes a runtime resolve ``DB_NAME`` from the environment, which is what
-#: lets a pooled worker retarget its whole command. Kept in step with the
-#: expression runtime/docker-entrypoint.sh writes; the fallback differs only
-#: in that the entrypoint knows the name its container was started with,
-#: while the harness can only assume the WordPress default.
-DATABASE_FROM_ENV = "getenv('WORDPRESS_DB_NAME') ?: 'wordpress'"
+#: Teardown runs after grading, from a finally, so it must not add
+#: minutes to a run that is otherwise finished. The per-test bound
+#: multiplied by a pool of 16 would.
+WORKER_TEARDOWN_TIMEOUT_SECONDS = 15
 
 
 
@@ -76,6 +75,11 @@ class WordPressEnvironment:
         #: How many workers were provisioned and verified, so reset() cannot
         #: be handed a slot no database was built for.
         self._provisioned_workers = 1
+        #: Teardown is terminal but may be reached twice (nested finally,
+        #: a retry). A flag makes the second call a no-op without
+        #: rewriting _provisioned_workers, which would make every later
+        #: reset() fail claiming a harness bug.
+        self._dropped = False
 
     def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         """Bring the runtime up, and record the baseline reset() restores.
@@ -290,7 +294,41 @@ class WordPressEnvironment:
                     f"{returncode}){': ' + stderr.strip() if stderr.strip() else ''}"
                 )
             self._verify_worker_database(worker)
-        self._provisioned_workers = worker_count
+            # Recorded per worker, not once at the end: a failure partway
+            # through must still leave behind a truthful count, or teardown
+            # drops nothing and every database built so far leaks.
+            self._provisioned_workers = worker + 1
+
+    @staticmethod
+    def _php_quote(value: str) -> str:
+        """Render a string as a PHP single-quoted literal.
+
+        The value is written into wp-config.php verbatim by ``--raw``, so an
+        unescaped quote would either break the file or close the literal and
+        continue as code.
+        """
+        escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+        return f"'{escaped}'"
+
+    def _current_database(self) -> str:
+        """The database this runtime resolves to with no override applied.
+
+        Used as the fallback when rewriting DB_NAME, so the rewrite preserves
+        whatever the container was configured with instead of assuming the
+        WordPress default.
+        """
+        stdout, _, returncode, _ = self._exec(
+            ["sh", "-c", "wp config get DB_NAME"],
+            timeout=self.config.setup_timeout_seconds,
+        )
+        lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+        if returncode != 0 or len(lines) != 1:
+            raise RuntimeError(
+                "Could not read the runtime's current DB_NAME, so rewriting it "
+                "would have to guess a fallback and could repoint the runtime "
+                f"at a database that does not exist. Got: {stdout.strip()!r}"
+            )
+        return lines[0]
 
     def _make_runtime_resolve_database(self) -> None:
         """Make wp-config.php read ``DB_NAME`` from the environment.
@@ -304,16 +342,23 @@ class WordPressEnvironment:
         the constant in the running container covers all three without a
         rebuild.
 
-        Idempotent, and the ``?: 'wordpress'`` fallback means an unset
-        variable resolves exactly as before — so worker 0 and every serial
-        run are untouched. Only the paths that need it are rewritten:
-        wp-env's config already resolves from the environment and is left
-        alone. :meth:`_verify_worker_database` is what proves this worked;
-        this method only tries.
+        The fallback is read from the runtime rather than hardcoded. This
+        edits the operator's container permanently, so writing a guessed
+        ``'wordpress'`` would silently repoint every non-pooled context at a
+        database that may not exist for anyone running with a custom name.
+        Taking the value the runtime already resolves to makes the rewrite a
+        no-op for anything that does not set the variable — which is worker
+        0 and every serial run — and idempotent if it has run before.
+
+        Only the paths that need it are rewritten: wp-env's config already
+        resolves from the environment and is left alone.
+        :meth:`_verify_worker_database` is what proves this worked; this
+        method only tries.
         """
         if self.config.wp_env_dir:
             return
-        script = f"wp config set DB_NAME {shlex.quote(DATABASE_FROM_ENV)} --raw"
+        expression = f"getenv('WORDPRESS_DB_NAME') ?: {self._php_quote(self._current_database())}"
+        script = f"wp config set DB_NAME {shlex.quote(expression)} --raw"
         _, stderr, returncode, timed_out = self._exec(
             ["sh", "-c", script],
             timeout=self.config.setup_timeout_seconds,
@@ -353,11 +398,16 @@ class WordPressEnvironment:
                 f"Timed out verifying worker database {expected!r} after "
                 f"{self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
             )
+        # The whole output must be the name and nothing else. Matching only
+        # the last line would accept a runtime that ignored the override but
+        # echoed the variable from a stray mu-plugin, and reject a healthy
+        # one that emitted a PHP notice. A safety check has to fail closed in
+        # both directions.
         lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-        actual = lines[-1] if lines else ""
-        if returncode != 0 or actual != expected:
+        if returncode != 0 or lines != [expected]:
+            actual = " / ".join(lines) if lines else "<no output>"
             raise RuntimeError(
-                f"Worker {worker} resolved to database {actual or '<unknown>'!r}, "
+                f"Worker {worker} resolved to database {actual!r}, "
                 f"expected {expected!r}: the runtime does not honor "
                 "WORDPRESS_DB_NAME, so concurrent tests would share one database "
                 "while results claimed per-worker isolation. Run with "
@@ -365,20 +415,66 @@ class WordPressEnvironment:
                 f"{'. ' + stderr.strip() if stderr.strip() else ''}"
             )
 
+    def _require_provisioned(self, worker: int) -> None:
+        """Refuse a slot no database was built and verified for.
+
+        Both paths that touch a worker's database need this, for different
+        reasons: ``wp db reset`` would create the database on the spot and
+        skip every setup-time check, while the verifier would grade against
+        a database that does not exist and score the resulting connection
+        error as a model failure.
+        """
+        if worker >= self._provisioned_workers:
+            raise RuntimeError(
+                f"Worker slot {worker} was never provisioned (setup built "
+                f"{self._provisioned_workers}), so its database was never "
+                "verified. This is a harness bug: the pool and setup disagree."
+            )
+
     def drop_worker_databases(self) -> None:
         """Remove this run's worker databases. Best effort, never raises.
 
         Names are per-run, so skipping this would leave a fresh set behind on
-        every invocation instead of reusing one. It runs after grading is
-        finished, so a failure here cannot invalidate results -- reporting it
-        as a run failure would be worse than the few megabytes it leaks.
+        every invocation instead of reusing one.
+
+        Each database is dropped **by name** rather than by pointing
+        ``DB_NAME`` at it. A drop that resolved through the environment would
+        target whatever wp-config.php says at that moment -- and that file
+        lives in the container the graded code runs in, with root -- so a
+        candidate that rewrote it could turn this into a drop of the
+        runtime's own database. Naming the target rules that out by
+        construction rather than trusting a check made earlier.
+
+        Nothing here can propagate. It runs from a ``finally``, so any
+        exception would replace whatever actually ended the run with a
+        cleanup error, and the harness would report the wrong cause.
         """
+        if self._dropped:
+            return
+        self._dropped = True
+        orphaned: list[str] = []
         for worker in range(1, self._provisioned_workers):
-            self._exec(
-                ["sh", "-c", self._database_env(worker) + "wp db drop --yes"],
-                timeout=self.config.timeout_seconds,
-            )
-        self._provisioned_workers = 1
+            name = self.database_name(worker)
+            if name is None:
+                continue
+            statement = f"DROP DATABASE IF EXISTS `{name}`"
+            try:
+                _, _, returncode, timed_out = self._exec(
+                    ["sh", "-c", f"wp db query {shlex.quote(statement)}"],
+                    timeout=WORKER_TEARDOWN_TIMEOUT_SECONDS,
+                )
+                failed = returncode != 0 or timed_out
+            except Exception:  # noqa: BLE001 - deliberately total; see docstring
+                # A missing docker/npx binary, exhausted file descriptors, a
+                # broken pipe: a cleanup failure, never the run's failure.
+                # Narrowing this would let some exception escape the finally
+                # and replace the run's real error, which is the one bug this
+                # method must not have.
+                failed = True
+            if failed:
+                orphaned.append(name)
+        if orphaned:
+            print_orphaned_databases(orphaned)
 
     def reset(self, worker: int = 0) -> None:
         """Restore one worker's database to the captured clean baseline.
@@ -415,15 +511,7 @@ class WordPressEnvironment:
                 "No clean baseline was captured, so reset() cannot restore one. "
                 "Call setup(capture_baseline=True) before grading."
             )
-        if worker >= self._provisioned_workers:
-            # wp db reset would create the database on the spot, so without
-            # this the pool would quietly self-provision an unverified slot
-            # and the setup-time checks would be bypassed.
-            raise RuntimeError(
-                f"Worker slot {worker} was never provisioned (setup built "
-                f"{self._provisioned_workers}), so its database was never "
-                "verified. This is a harness bug: the pool and setup disagree."
-            )
+        self._require_provisioned(worker)
         self._reset_step(
             ["sh", "-c", self._database_env(worker) + self._restore_script()],
             stdin=self._baseline,
@@ -502,6 +590,7 @@ class WordPressEnvironment:
         never become an argument (argv size limits, visible in process
         listings).
         """
+        self._require_provisioned(worker)
         verifier_path = self._runtime_verifier_path()
         database_env = self._database_env(worker)
         if not database_env:

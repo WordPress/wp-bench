@@ -20,6 +20,7 @@ import pytest
 
 from wp_bench.config import GraderConfig
 from wp_bench.environment import (
+    WORKER_TEARDOWN_TIMEOUT_SECONDS,
     EnvironmentSetupTimeout,
     WordPressEnvironment,
 )
@@ -34,6 +35,13 @@ RUN_ID = "testrun"
 
 def _worker_db(worker: int) -> str:
     return f"wp_bench_{RUN_ID}_w{worker}"
+
+
+def _dropped_in(script: str) -> str:
+    """The database a DROP statement names, or '' if it drops nothing."""
+    if "DROP DATABASE IF EXISTS" not in script:
+        return ""
+    return script.split("DROP DATABASE IF EXISTS", 1)[1].strip().strip("`'\"")
 
 
 def _database_in(script: str) -> str:
@@ -270,6 +278,7 @@ def test_pooled_verifier_keeps_the_payload_on_stdin() -> None:
     visible in process listings). The database override must not become an
     excuse to inline one."""
     environment = WordPressEnvironment(_docker(), run_id=RUN_ID)
+    environment._provisioned_workers = 8
     seen: dict[str, Any] = {}
 
     def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
@@ -314,6 +323,7 @@ def _setup_calls(
     config: GraderConfig | None = None,
     provision_result: tuple[str, str, int, bool] = ("ok", "", 0, False),
     honors_override: bool = True,
+    current_database: str = "wordpress",
 ) -> list[list[str]]:
     """Run setup(), letting the baseline capture succeed.
 
@@ -331,6 +341,8 @@ def _setup_calls(
         if "SELECT DATABASE()" in script:
             resolved = _database_in(script) if honors_override else "wordpress"
             return (resolved or "wordpress", "", 0, False)
+        if "wp config get DB_NAME" in script:
+            return (current_database, "", 0, False)
         if "wp config set" in script:
             return ("ok", "", 0, False)
         if len(calls) == 1:
@@ -516,12 +528,15 @@ def test_worker_databases_are_dropped_when_the_run_ends() -> None:
 
     environment.drop_worker_databases()
 
-    assert [_database_in(_script(call)) for call in calls] == [
+    assert [_dropped_in(_script(call)) for call in calls] == [
         _worker_db(1),
         _worker_db(2),
         _worker_db(3),
     ]
-    assert all("wp db drop --yes" in _script(call) for call in calls)
+    # Named explicitly, never resolved through DB_NAME: a candidate that
+    # rewrote wp-config.php could otherwise redirect the drop at the
+    # runtime's own database.
+    assert not any("WORDPRESS_DB_NAME" in _script(call) for call in calls)
 
 
 def test_teardown_leaves_the_runtimes_own_database_alone() -> None:
@@ -532,7 +547,7 @@ def test_teardown_leaves_the_runtimes_own_database_alone() -> None:
     environment.drop_worker_databases()
 
     assert len(calls) == 1
-    assert _database_in(_script(calls[0])) == _worker_db(1)
+    assert _dropped_in(_script(calls[0])) == _worker_db(1)
 
 
 def test_serial_teardown_drops_nothing() -> None:
@@ -551,3 +566,188 @@ def test_teardown_never_raises() -> None:
     environment._provisioned_workers = 3
 
     environment.drop_worker_databases()
+
+
+def test_failed_teardown_names_what_it_left_behind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not raising is not the same as saying nothing. Names are per-run, so
+    nothing later reuses an undropped database -- swallowing the failure
+    silently is what turns one bad cleanup into unbounded growth."""
+    environment, _ = _env(_docker(), ("", "connection refused", 1, False))
+    environment._provisioned_workers = 3
+    warned: list[list[str]] = []
+    monkeypatch.setattr(
+        "wp_bench.environment.print_orphaned_databases", lambda names: warned.append(names)
+    )
+
+    environment.drop_worker_databases()
+
+    assert warned == [[_worker_db(1), _worker_db(2)]]
+
+
+def test_successful_teardown_warns_about_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    environment, _ = _env(_docker())
+    environment._provisioned_workers = 3
+    warned: list[list[str]] = []
+    monkeypatch.setattr(
+        "wp_bench.environment.print_orphaned_databases", lambda names: warned.append(names)
+    )
+
+    environment.drop_worker_databases()
+
+    assert warned == []
+
+
+# Fixes from the second review ------------------------------------------
+
+
+def test_partial_provisioning_records_what_it_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failure partway through must leave a truthful count, or teardown
+    drops nothing and every database built so far leaks."""
+    environment = WordPressEnvironment(_docker(), run_id=RUN_ID)
+    calls: list[list[str]] = []
+
+    def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
+        calls.append(command)
+        script = command[-1]
+        if "SELECT DATABASE()" in script:
+            return (_database_in(script), "", 0, False)
+        if "wp config get DB_NAME" in script:
+            return ("wordpress", "", 0, False)
+        if len(calls) == 1:
+            return ("-- baseline SQL\n", "", 0, False)
+        # Worker 3's restore fails; workers 1 and 2 already succeeded.
+        if _database_in(script) == _worker_db(3):
+            return ("", "disk full", 1, False)
+        return ("ok", "", 0, False)
+
+    environment._exec = fake_exec  # type: ignore[method-assign]
+    monkeypatch.setattr(environment, "_container_exists", lambda: True)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        environment.setup(worker_count=4)
+
+    assert environment._provisioned_workers == 3
+
+
+def test_partial_provisioning_still_drops_what_it_built(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    environment, calls = _env(_docker())
+    environment._provisioned_workers = 3
+
+    environment.drop_worker_databases()
+
+    assert [_dropped_in(_script(call)) for call in calls] == [
+        _worker_db(1),
+        _worker_db(2),
+    ]
+
+
+def test_verification_rejects_output_with_anything_after_the_name() -> None:
+    """A runtime that ignored the override but echoed the variable from a
+    stray mu-plugin would otherwise pass by matching the last line."""
+    environment, _ = _env(_docker())
+
+    def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
+        return (f"wordpress\n{_worker_db(1)}\n", "", 0, False)
+
+    environment._exec = fake_exec  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="does not honor"):
+        environment._verify_worker_database(1)
+
+
+def test_verification_rejects_output_with_anything_before_the_name() -> None:
+    """And a PHP notice ahead of the result must not be read as the answer."""
+    environment, _ = _env(_docker())
+
+    def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
+        return (f"Deprecated: something\n{_worker_db(1)}\n", "", 0, False)
+
+    environment._exec = fake_exec  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="does not honor"):
+        environment._verify_worker_database(1)
+
+
+def test_verifier_refuses_a_slot_setup_never_provisioned() -> None:
+    """Grading against a database that does not exist scores the resulting
+    connection error as a model failure."""
+    environment, _ = _env(_docker())
+    environment._provisioned_workers = 2
+
+    with pytest.raises(RuntimeError, match="never provisioned"):
+        environment.execute_code("code", {}, worker=5)
+
+
+def test_teardown_survives_a_missing_docker_binary() -> None:
+    """It runs from a finally, so an exception here would replace whatever
+    actually ended the run."""
+    environment, _ = _env(_docker())
+    environment._provisioned_workers = 3
+
+    def exploding_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
+        raise FileNotFoundError("No such file or directory: 'docker'")
+
+    environment._exec = exploding_exec  # type: ignore[method-assign]
+
+    environment.drop_worker_databases()
+
+
+def test_teardown_is_idempotent_and_does_not_brick_the_environment() -> None:
+    """Calling it twice must not make every later reset() claim a harness
+    bug -- one shared environment spans every model/variant pass."""
+    environment, _ = _env(_docker())
+    environment._provisioned_workers = 4
+
+    environment.drop_worker_databases()
+    environment.drop_worker_databases()
+
+    assert environment._provisioned_workers == 4
+    environment.reset(3)
+
+
+def test_teardown_uses_a_short_timeout() -> None:
+    """The per-test bound times a pool of 16 would add minutes to a run that
+    is already finished."""
+    environment, _ = _env(_docker())
+    environment._provisioned_workers = 3
+    timeouts: list[Any] = []
+
+    def recording_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
+        timeouts.append(kwargs.get("timeout"))
+        return ("ok", "", 0, False)
+
+    environment._exec = recording_exec  # type: ignore[method-assign]
+
+    environment.drop_worker_databases()
+
+    assert timeouts == [WORKER_TEARDOWN_TIMEOUT_SECONDS] * 2
+    assert WORKER_TEARDOWN_TIMEOUT_SECONDS < environment.config.timeout_seconds
+
+
+def test_rewrite_preserves_the_runtimes_configured_database_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """This edits the operator's container permanently. Guessing 'wordpress'
+    would repoint every non-pooled context at a database that may not exist
+    for anyone running with a custom name."""
+    calls = _setup_calls(monkeypatch, 2, current_database="customdb")
+
+    rewrites = [_script(call) for call in calls if "wp config set DB_NAME" in _script(call)]
+    assert len(rewrites) == 1
+    assert "customdb" in rewrites[0]
+    assert "wordpress" not in rewrites[0]
+
+
+def test_rewrite_escapes_the_fallback() -> None:
+    """The fallback is written into wp-config.php verbatim by --raw."""
+    quoted = WordPressEnvironment._php_quote("my'db")
+
+    assert quoted == "'my\\'db'"

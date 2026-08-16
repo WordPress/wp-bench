@@ -318,12 +318,13 @@ class _WorkerSlots:
 
 
 def _effective_concurrency(config: HarnessConfig, test_count: int) -> int:
-    """How many tests the run could actually have had in flight at once.
+    """The most tests this run could have had in flight at once.
 
-    ``run.execution_concurrency`` is a ceiling, not an observation: a run of
-    two tests at concurrency 8 never had more than two going. Metadata
-    documents this field as what the run did, so it must not report the
-    ceiling. Floors at 1 so a run that graded nothing still reads sensibly.
+    ``run.execution_concurrency`` alone overstates it: a run of two tests at
+    concurrency 8 never had more than two going. This is still a bound
+    rather than a measurement -- tests that fail in milliseconds may never
+    reach it -- and records.isolation_metadata documents the field that way.
+    Floors at 1 so a run that graded nothing still reads sensibly.
     """
     return max(1, min(config.run.execution_concurrency, test_count))
 
@@ -518,11 +519,13 @@ class BenchmarkRunner(_ResultBookkeeping):
         if self.config.run.check_exploits:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
-        self.environment.setup(
-            capture_baseline=_restores_a_baseline(self.config),
-            worker_count=self.config.run.database_pool_size,
-        )
         try:
+            # Inside the try: provisioning can fail partway through, and the
+            # databases it built before failing still need dropping.
+            self.environment.setup(
+                capture_baseline=_restores_a_baseline(self.config),
+                worker_count=self.config.run.database_pool_size,
+            )
             with _graded_run(self._stream):
                 if reference_mode:
                     self._run_reference_solution_tests(tests)
@@ -1001,15 +1004,16 @@ class MultiModelRunner:
                 f"Dataset '{self.config.dataset.name}' contains no execution "
                 "tests. Check the dataset source and suite name."
             )
-        self.environment.setup(
-            capture_baseline=_restores_a_baseline(self.config),
-            worker_count=self.config.run.database_pool_size,
-        )
-        # Every pass runs the same selected subset, so one count describes
-        # the concurrency any of them could reach.
-        self._tests_per_pass = len(select_run_tests(tests, self.config))
-
         try:
+            # Inside the try: provisioning can fail partway through, and the
+            # databases it built before failing still need dropping.
+            self.environment.setup(
+                capture_baseline=_restores_a_baseline(self.config),
+                worker_count=self.config.run.database_pool_size,
+            )
+            # Every pass runs the same selected subset, so one count describes
+            # the concurrency any of them could reach.
+            self._tests_per_pass = len(select_run_tests(tests, self.config))
             with _graded_run(self._stream):
                 for model_config in models:
                     for variant in self.variants:

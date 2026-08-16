@@ -94,13 +94,14 @@ class PoolSpy:
         self.peak_live = 0
         self.worker_count: int | None = None
         self.capture_baseline: bool | None = None
+        self.dropped = 0
 
     def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         self.worker_count = worker_count
         self.capture_baseline = capture_baseline
 
     def drop_worker_databases(self) -> None:
-        pass
+        self.dropped += 1
 
     def reset(self, worker: int = 0) -> None:
         with self._lock:
@@ -298,7 +299,7 @@ class ExplodingResetSpy(PoolSpy):
         self.failing_worker = failing_worker
 
     def drop_worker_databases(self) -> None:
-        pass
+        self.dropped += 1
 
     def reset(self, worker: int = 0) -> None:
         if worker == self.failing_worker:
@@ -345,3 +346,36 @@ def test_a_failed_reset_stops_the_pool_from_grading_everything(
 
     graded = [call for call, _ in spy.events].count("execute")
     assert graded < 40, f"the run graded all {graded} tests after a reset failed"
+
+
+# Teardown wiring -------------------------------------------------------
+
+
+def test_the_run_drops_its_worker_databases(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Databases are named per run, so a run that does not clean up leaves a
+    fresh set behind on every invocation instead of reusing one."""
+    _, spy = _run(monkeypatch, tmp_path, tests=4, concurrency=4)
+
+    assert spy.dropped == 1
+
+
+def test_a_failed_run_still_drops_its_worker_databases(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The run that most needs cleaning up is the one that died partway."""
+    monkeypatch.setattr(
+        "wp_bench.core.load_tests",
+        lambda dataset: [_execution_test(f"e-{index}") for index in range(8)],
+    )
+    runner = BenchmarkRunner(_config(tmp_path, execution_concurrency=4))
+    spy = ExplodingResetSpy(failing_worker=2)
+    runner.environment = spy  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="Reset command failed"):
+        runner.run()
+
+    assert spy.dropped == 1

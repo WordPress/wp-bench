@@ -50,7 +50,8 @@ run:
   # tests then share mutable WordPress state (not valid for official runs).
   # execution_isolation: reset_per_test
   # How many execution tests run at once (1-16). Under 'reset_per_test' each
-  # worker is provisioned its own WordPress database (wp_bench_w1..) and
+  # worker is provisioned its own WordPress database (wp_bench_<run id>_w1..,
+  # dropped when the run ends) and
   # resets only that one, so concurrent tests never share a runtime. Most of
   # a run's wall clock is spent waiting on the model, so raising this is the
   # cheapest speedup available. Note that everything outside the database --
