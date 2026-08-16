@@ -17,30 +17,42 @@ from typing import Any
 import pytest
 
 from wp_bench.config import GraderConfig
-from wp_bench.environment import (
-    BASELINE_DUMP_PATH,
-    EnvironmentSetupTimeout,
-    WordPressEnvironment,
-)
+from wp_bench.environment import EnvironmentSetupTimeout, WordPressEnvironment
+
+#: Stands in for the captured dump in tests that skip setup().
+FAKE_BASELINE = "-- MariaDB dump\nINSERT INTO wp_options VALUES (1);\n"
 
 
-def _env(config: GraderConfig, result: tuple[str, str, int, bool]):
-    """An environment whose runtime commands return a canned result."""
+def _env(
+    config: GraderConfig,
+    result: tuple[str, str, int, bool],
+    *,
+    baseline: str | None = FAKE_BASELINE,
+):
+    """An environment whose runtime commands return a canned result.
+
+    ``baseline`` pre-seeds what setup() would have captured, so restore tests
+    need not drive a full capture first. Pass None to test the unseeded path.
+    """
     environment = WordPressEnvironment(config)
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], str | None]] = []
 
-    def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
-        calls.append(command)
+    def fake_exec(
+        command: list[str], *, stdin: str | None = None, **kwargs: Any
+    ) -> tuple[str, str, int, bool]:
+        calls.append((command, stdin))
         return result
 
     environment._exec = fake_exec  # type: ignore[method-assign]
+    environment._baseline = baseline
     return environment, calls
 
 
-def _script(call: list[str]) -> str:
+def _script(call: tuple[list[str], str | None]) -> str:
     """The shell script body from an ``sh -c`` invocation."""
-    assert call[:2] == ["sh", "-c"], f"expected an sh -c invocation, got {call!r}"
-    return call[2]
+    command = call[0]
+    assert command[:2] == ["sh", "-c"], f"expected an sh -c invocation, got {command!r}"
+    return command[2]
 
 
 # Restore ---------------------------------------------------------------
@@ -53,7 +65,7 @@ def test_reset_restores_the_baseline_instead_of_reinstalling() -> None:
 
     script = _script(calls[0])
     assert "wp db reset --yes" in script
-    assert f"wp db import {BASELINE_DUMP_PATH}" in script
+    assert "wp db import -" in script
     assert "wp core install" not in script
 
 
@@ -78,6 +90,32 @@ def test_reset_drops_before_it_restores() -> None:
     assert script.index("wp db reset") < script.index("wp db import")
 
 
+def test_reset_verifies_the_restore_actually_landed() -> None:
+    """`wp db import` exits 0 on an empty or truncated dump — verified against
+    a live runtime: the drop succeeds, nothing is imported, and WordPress is
+    left uninstalled while the command reports success. Without a check, every
+    later test fails against an empty database and is blamed on the model
+    while the results still stamp reset_per_test."""
+    environment, calls = _env(GraderConfig(kind="docker"), ("ok", "", 0, False))
+
+    environment.reset()
+
+    script = _script(calls[0])
+    assert "wp core is-installed" in script
+    assert script.index("wp db import") < script.index("wp core is-installed")
+
+
+def test_reset_error_renders_a_safe_command_string() -> None:
+    """Naive joining of an `sh -c` invocation produces a string that resets
+    the operator's own WordPress if pasted into a host shell."""
+    environment, _ = _env(GraderConfig(kind="docker"), ("", "boom", 1, False))
+
+    with pytest.raises(RuntimeError) as excinfo:
+        environment.reset()
+
+    assert "sh -c 'wp db reset" in str(excinfo.value)
+
+
 def test_reset_chains_so_a_failed_drop_aborts_the_restore() -> None:
     environment, calls = _env(GraderConfig(kind="docker"), ("ok", "", 0, False))
 
@@ -94,7 +132,7 @@ def test_wp_env_reset_also_uses_the_template_restore(tmp_path) -> None:
     environment.reset()
 
     assert len(calls) == 1
-    assert f"wp db import {BASELINE_DUMP_PATH}" in _script(calls[0])
+    assert "wp db import -" in _script(calls[0])
 
 
 # Capture ---------------------------------------------------------------
@@ -120,7 +158,7 @@ def test_setup_captures_the_baseline_from_a_clean_install(
 
     assert "wp db reset --yes" in script
     assert "wp core install" in script
-    assert f"wp db export {BASELINE_DUMP_PATH}" in script
+    assert "wp db export -" in script
 
 
 def test_capture_installs_before_it_exports(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -142,20 +180,63 @@ def test_wp_env_setup_captures_a_baseline_too(
     config = GraderConfig(kind="docker", wp_env_dir=tmp_path)
     script = _captured_script(monkeypatch, config)
 
-    assert f"wp db export {BASELINE_DUMP_PATH}" in script
+    assert "wp db export -" in script
 
 
-def test_capture_and_restore_agree_on_the_dump_path(
+def test_capture_feeds_exactly_what_restore_replays(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A restore reading a path nothing wrote leaves WordPress uninstalled
-    while the results file still stamps reset_per_test."""
-    capture = _captured_script(monkeypatch, GraderConfig(kind="docker"))
-    environment, calls = _env(GraderConfig(kind="docker"), ("ok", "", 0, False))
+    """The bytes captured at setup are the bytes every reset imports.
+
+    They travel over stdin rather than a file in the runtime, so nothing
+    between capture and restore can alter them.
+    """
+    dump = "-- MariaDB dump\nINSERT INTO wp_options VALUES (1);\n"
+    environment, calls = _env(GraderConfig(kind="docker"), (dump, "", 0, False), baseline=None)
+    monkeypatch.setattr(environment, "_container_exists", lambda: True)
+
+    environment.setup()
     environment.reset()
 
-    assert BASELINE_DUMP_PATH in capture
-    assert BASELINE_DUMP_PATH in _script(calls[0])
+    assert environment._baseline == dump
+    assert calls[1][1] == dump
+
+
+def test_baseline_is_never_written_into_the_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Candidate code is eval'd in that container as root, so a dump on disk
+    there is a file the graded code could truncate (silently emptying every
+    later reset) or append rows to (silently pre-seeding every later test)."""
+    environment, calls = _env(GraderConfig(kind="docker"), ("-- dump\n", "", 0, False), baseline=None)
+    monkeypatch.setattr(environment, "_container_exists", lambda: True)
+
+    environment.setup()
+    environment.reset()
+
+    for command, _ in calls:
+        script = command[2]
+        assert ".sql" not in script, f"baseline written into the runtime: {script!r}"
+        assert ">" not in script.replace(">/dev/null", ""), f"redirect to a file: {script!r}"
+
+
+def test_reset_refuses_without_a_captured_baseline() -> None:
+    """Restoring nothing would drop every table and leave WordPress
+    uninstalled while the results still stamp reset_per_test."""
+    environment, _ = _env(GraderConfig(kind="docker"), ("ok", "", 0, False), baseline=None)
+
+    with pytest.raises(RuntimeError, match="No clean baseline"):
+        environment.reset()
+
+
+def test_empty_capture_aborts_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty dump imports cleanly and exits 0, so it must be caught at
+    capture or every test in the run grades against an empty database."""
+    environment, _ = _env(GraderConfig(kind="docker"), ("   \n", "", 0, False), baseline=None)
+    monkeypatch.setattr(environment, "_container_exists", lambda: True)
+
+    with pytest.raises(RuntimeError, match="empty WordPress baseline"):
+        environment.setup()
 
 
 # Failure handling ------------------------------------------------------

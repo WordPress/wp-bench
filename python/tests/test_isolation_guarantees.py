@@ -11,11 +11,7 @@ from typing import Any
 import pytest
 
 from wp_bench.config import GraderConfig
-from wp_bench.environment import (
-    BASELINE_DUMP_PATH,
-    EnvironmentSetupTimeout,
-    WordPressEnvironment,
-)
+from wp_bench.environment import EnvironmentSetupTimeout, WordPressEnvironment
 
 
 def _docker_env(monkeypatch: pytest.MonkeyPatch, result: tuple[str, str, int, bool]):
@@ -28,6 +24,9 @@ def _docker_env(monkeypatch: pytest.MonkeyPatch, result: tuple[str, str, int, bo
         return result
 
     monkeypatch.setattr(environment, "_exec", fake_exec)
+    # Stand in for what setup() would have captured; these tests exercise
+    # reset() in isolation.
+    environment._baseline = "-- MariaDB dump\n"
     return environment, calls
 
 
@@ -81,4 +80,4 @@ def test_docker_reset_restores_a_baseline_after_dropping(
 
     script = calls[0][2]
     assert "wp db reset --yes" in script
-    assert f"wp db import {BASELINE_DUMP_PATH}" in script
+    assert "wp db import -" in script
