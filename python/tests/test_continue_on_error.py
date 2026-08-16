@@ -62,6 +62,9 @@ class QuietEnvironment:
     def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         pass
 
+    def drop_worker_databases(self) -> None:
+        pass
+
     def reset(self, worker: int = 0) -> None:
         pass
 

@@ -99,6 +99,9 @@ class PoolSpy:
         self.worker_count = worker_count
         self.capture_baseline = capture_baseline
 
+    def drop_worker_databases(self) -> None:
+        pass
+
     def reset(self, worker: int = 0) -> None:
         with self._lock:
             if worker in self._live:
@@ -293,6 +296,9 @@ class ExplodingResetSpy(PoolSpy):
     def __init__(self, failing_worker: int) -> None:
         super().__init__(parties=1)
         self.failing_worker = failing_worker
+
+    def drop_worker_databases(self) -> None:
+        pass
 
     def reset(self, worker: int = 0) -> None:
         if worker == self.failing_worker:

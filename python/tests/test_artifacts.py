@@ -174,6 +174,7 @@ def test_plugin_artifact_payload_reaches_environment(
     runner = BenchmarkRunner(_config(tmp_path))
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda worker=0: None  # type: ignore[method-assign]
+    runner.environment.drop_worker_databases = lambda: None  # type: ignore[method-assign]
     seen: dict = {}
 
     def fake_execute_artifact(artifact: Artifact, verification_spec: dict, worker: int = 0) -> ExecutionResult:
@@ -207,6 +208,7 @@ def test_artifact_parse_failure_is_scored_failure_not_crash(
     runner = BenchmarkRunner(_config(tmp_path))
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda worker=0: None  # type: ignore[method-assign]
+    runner.environment.drop_worker_databases = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_artifact = lambda artifact, verification_spec, worker=0: _passing_result()  # type: ignore[method-assign]
     completions = iter(["not json at all", PLUGIN_JSON])
     monkeypatch.setattr(
@@ -238,6 +240,7 @@ def test_reference_solution_uses_reference_files_for_plugin_artifacts(
     runner = BenchmarkRunner(_config(tmp_path, check_reference_solution=True))
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda worker=0: None  # type: ignore[method-assign]
+    runner.environment.drop_worker_databases = lambda: None  # type: ignore[method-assign]
     seen: dict = {}
 
     def fake_execute_artifact(artifact: Artifact, verification_spec: dict, worker: int = 0) -> ExecutionResult:

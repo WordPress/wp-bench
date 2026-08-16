@@ -72,6 +72,9 @@ class SpyEnvironment:
         self.worker_count = worker_count
         self.capture_baseline = capture_baseline
 
+    def drop_worker_databases(self) -> None:
+        pass
+
     def reset(self, worker: int = 0) -> None:
         self.calls.append("reset")
         self.slots.append(("reset", worker))

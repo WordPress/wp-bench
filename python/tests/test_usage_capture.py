@@ -160,6 +160,7 @@ def test_result_record_contains_usage_and_model_call(
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda worker=0: None  # type: ignore[method-assign]
+    runner.environment.drop_worker_databases = lambda: None  # type: ignore[method-assign]
     raw = {
         "success": True,
         "static": {"score": 1.0, "details": {"total_weight": 1}},

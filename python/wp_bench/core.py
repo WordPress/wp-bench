@@ -317,6 +317,17 @@ class _WorkerSlots:
             self._slots.put(slot)
 
 
+def _effective_concurrency(config: HarnessConfig, test_count: int) -> int:
+    """How many tests the run could actually have had in flight at once.
+
+    ``run.execution_concurrency`` is a ceiling, not an observation: a run of
+    two tests at concurrency 8 never had more than two going. Metadata
+    documents this field as what the run did, so it must not report the
+    ceiling. Floors at 1 so a run that graded nothing still reads sensibly.
+    """
+    return max(1, min(config.run.execution_concurrency, test_count))
+
+
 def _run_isolated_execution_loop(
     *,
     tests_to_run: list[Any],
@@ -511,11 +522,14 @@ class BenchmarkRunner(_ResultBookkeeping):
             capture_baseline=_restores_a_baseline(self.config),
             worker_count=self.config.run.database_pool_size,
         )
-        with _graded_run(self._stream):
-            if reference_mode:
-                self._run_reference_solution_tests(tests)
-            else:
-                self._run_execution_tests(tests)
+        try:
+            with _graded_run(self._stream):
+                if reference_mode:
+                    self._run_reference_solution_tests(tests)
+                else:
+                    self._run_execution_tests(tests)
+        finally:
+            self.environment.drop_worker_databases()
         summary = self.aggregator.finalize()
         model_config = self.config.model.model_dump(mode="json") if self.config.model else None
         payload = {
@@ -528,7 +542,7 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 **isolation_metadata(
                     self.config.run.execution_isolation,
-                    self.config.run.execution_concurrency,
+                    _effective_concurrency(self.config, len(self.records)),
                 ),
                 "scoring_version": SCORING_VERSION,
                 "seed": self.config.run.seed,
@@ -961,6 +975,9 @@ class MultiModelRunner:
         self.skills = skills or []
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
+        #: Tests each pass grades; set in run(). Metadata reports the
+        #: concurrency a pass could reach, not the configured ceiling.
+        self._tests_per_pass = 0
         self._results_path, self._stream = open_run_artifacts(config.output)
 
     def run(self) -> dict[str, Any]:
@@ -988,25 +1005,31 @@ class MultiModelRunner:
             capture_baseline=_restores_a_baseline(self.config),
             worker_count=self.config.run.database_pool_size,
         )
+        # Every pass runs the same selected subset, so one count describes
+        # the concurrency any of them could reach.
+        self._tests_per_pass = len(select_run_tests(tests, self.config))
 
-        with _graded_run(self._stream):
-            for model_config in models:
-                for variant in self.variants:
-                    display_name = f"{model_config.name}{variant.label_suffix}"
-                    print_model_header(display_name)
+        try:
+            with _graded_run(self._stream):
+                for model_config in models:
+                    for variant in self.variants:
+                        display_name = f"{model_config.name}{variant.label_suffix}"
+                        print_model_header(display_name)
 
-                    runner = SingleModelRunner(
-                        config=self.config,
-                        model_config=model_config,
-                        environment=self.environment,
-                        tests=tests,
-                        variant=variant,
-                        stream=self._stream,
-                    )
-                    result = runner.run()
-                    result["base_model"] = model_config.name
-                    result["variant"] = variant.payload_info()
-                    self.results[display_name] = result
+                        runner = SingleModelRunner(
+                            config=self.config,
+                            model_config=model_config,
+                            environment=self.environment,
+                            tests=tests,
+                            variant=variant,
+                            stream=self._stream,
+                        )
+                        result = runner.run()
+                        result["base_model"] = model_config.name
+                        result["variant"] = variant.payload_info()
+                        self.results[display_name] = result
+        finally:
+            self.environment.drop_worker_databases()
 
         print_comparison_table(self.results)
         print_skill_impact(self.results)
@@ -1059,7 +1082,7 @@ class MultiModelRunner:
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 **isolation_metadata(
                     self.config.run.execution_isolation,
-                    self.config.run.execution_concurrency,
+                    _effective_concurrency(self.config, self._tests_per_pass),
                 ),
                 "continue_on_error": self.config.run.continue_on_error,
                 "skills": self._skills_metadata(),

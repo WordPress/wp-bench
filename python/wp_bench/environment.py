@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,8 +16,16 @@ CONTAINER_QUERY_TIMEOUT_SECONDS = 30
 #: Name prefix for the databases a pooled run provisions, one per worker
 #: slot above 0. Worker 0 keeps the runtime's own default database, so a
 #: serial run creates none of these and issues the same commands it always
-#: did.
-WORKER_DATABASE_PREFIX = "wp_bench_w"
+#: did. Each run's id is appended, so concurrent harness processes on one
+#: runtime never claim the same database.
+WORKER_DATABASE_PREFIX = "wp_bench_"
+
+#: Makes the runtime resolve ``DB_NAME`` from the environment. The wp-env
+#: image already does; the grader image bakes a literal, because its
+#: entrypoint runs ``wp config create`` and ``docker exec`` never re-runs
+#: that entrypoint. Without this the per-worker override is silently inert
+#: and every worker grades against one shared database.
+DATABASE_FROM_ENV = "getenv('WORDPRESS_DB_NAME') ?: 'wordpress'"
 
 
 
@@ -51,13 +60,22 @@ class ProcessResult:
 class WordPressEnvironment:
     """Shells out to wp-env/docker runtime to execute verification."""
 
-    def __init__(self, config: GraderConfig):
+    def __init__(self, config: GraderConfig, run_id: str | None = None):
         self.config = config
         #: Clean-baseline SQL dump, held on the host between setup and reset.
         #: Deliberately not written into the runtime: candidate code is
         #: eval'd there with root, so an on-disk dump would be a file the
         #: graded code could truncate or seed to defeat isolation.
         self._baseline: str | None = None
+        #: Namespaces this run's worker databases. setup() reuses whatever
+        #: container is already up, so two harness processes against one
+        #: runtime would otherwise both claim ``wp_bench_w1`` and reset it
+        #: under each other mid-test -- producing exactly the "restore did
+        #: not land" failure that looks like a harness bug and is not one.
+        self._run_id = run_id or uuid.uuid4().hex[:8]
+        #: How many workers were provisioned and verified, so reset() cannot
+        #: be handed a slot no database was built for.
+        self._provisioned_workers = 1
 
     def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         """Bring the runtime up, and record the baseline reset() restores.
@@ -168,12 +186,16 @@ class WordPressEnvironment:
         ``wp-config.php`` resolves ``DB_NAME`` to. Worker 0 always gets it,
         which is what keeps a serial run byte-identical to a pre-pooling one:
         no database is created and no command grows an override.
+
+        Names carry this run's id so two harness processes sharing a runtime
+        cannot collide. A fixed ``wp_bench_w1`` would have each process
+        dropping and re-importing the other's database mid-test.
         """
         if worker < 0:
             raise ValueError(f"worker slot must be >= 0, got {worker}")
         if worker == 0:
             return None
-        return f"{WORKER_DATABASE_PREFIX}{worker}"
+        return f"{WORKER_DATABASE_PREFIX}{self._run_id}_w{worker}"
 
     def _database_env(self, worker: int) -> str:
         """Shell prefix pinning WP-CLI to this worker's database.
@@ -212,17 +234,23 @@ class WordPressEnvironment:
         means no two concurrent tests touch the same runtime at all, so the
         guarantee gets stronger under concurrency rather than weaker.
 
-        ``wp db create`` is deliberately best-effort and not ``&&``-chained:
-        a worker database left behind by an interrupted run is an expected
-        state, and re-creating it fails harmlessly. The restore that follows
-        is what makes a leftover database indistinguishable from a fresh one,
-        and it is not optional — the script's exit status is the restore's,
-        so a create that failed for a real reason still surfaces here.
+        ``wp db reset`` is ``DROP DATABASE IF EXISTS`` plus ``CREATE
+        DATABASE``, so it builds the database as well as clearing it; no
+        separate create is needed, and a database an interrupted run left
+        behind is restored to the baseline rather than tripping anything.
 
-        Worker databases are never dropped. Nothing in a run is keyed to
-        their contents beyond the baseline this re-imports, so leaving them
-        costs a few idle megabytes and saves a teardown path that would have
-        to run after an interrupt to be worth anything.
+        Every worker is then verified with ``SELECT DATABASE()``. That check
+        is the point: the override is a shell variable that only takes effect
+        if the runtime's wp-config.php resolves ``DB_NAME`` from the
+        environment. Where it does not, every command silently addresses the
+        default database, provisioning "succeeds" having built nothing, and
+        the run grades W concurrent tests against one database while stamping
+        per-worker isolation. Asserting the database by name is what turns
+        that from silent corruption into a failed setup.
+
+        Worker databases are dropped by :meth:`drop_worker_databases` when
+        the run ends. They are namespaced per run, so leaving them would
+        accumulate a fresh set on every invocation rather than reusing one.
 
         Filesystem state outside the candidate plugin directory stays shared
         across pooled workers: ``wp-content/uploads`` is one directory and
@@ -241,14 +269,16 @@ class WordPressEnvironment:
         test's leftovers", which is what ``reset_per_test`` has always meant,
         rather than as a sandbox between concurrent tests.
         """
+        if worker_count <= 1:
+            return
+        self._make_runtime_resolve_database()
         for worker in range(1, worker_count):
-            script = f"{self._database_env(worker)}wp db create; {self._restore_script()}"
+            name = self.database_name(worker)
             _, stderr, returncode, timed_out = self._exec(
-                ["sh", "-c", script],
+                ["sh", "-c", self._database_env(worker) + self._restore_script()],
                 stdin=self._baseline,
                 timeout=self.config.setup_timeout_seconds,
             )
-            name = self.database_name(worker)
             if timed_out:
                 raise EnvironmentSetupTimeout(
                     f"Timed out provisioning worker database {name!r} after "
@@ -259,6 +289,94 @@ class WordPressEnvironment:
                     f"Failed to provision worker database {name!r} (exit code "
                     f"{returncode}){': ' + stderr.strip() if stderr.strip() else ''}"
                 )
+            self._verify_worker_database(worker)
+        self._provisioned_workers = worker_count
+
+    def _make_runtime_resolve_database(self) -> None:
+        """Make wp-config.php read ``DB_NAME`` from the environment.
+
+        The wp-env image already ships this; the grader image does not. Its
+        entrypoint writes a literal via ``wp config create``, and ``docker
+        exec`` bypasses the entrypoint, so the file is never regenerated and
+        the per-worker override cannot take effect. Rewriting the constant in
+        the running container fixes that without rebuilding or republishing
+        an image, and reaches containers already started from the old one.
+
+        Idempotent, and the ``?: 'wordpress'`` fallback means an unset
+        variable resolves exactly as before — so worker 0 and every serial
+        run are untouched. Only the paths that need it are rewritten:
+        wp-env's config already resolves from the environment and is left
+        alone. :meth:`_verify_worker_database` is what proves this worked;
+        this method only tries.
+        """
+        if self.config.wp_env_dir:
+            return
+        script = f"wp config set DB_NAME {shlex.quote(DATABASE_FROM_ENV)} --raw"
+        _, stderr, returncode, timed_out = self._exec(
+            ["sh", "-c", script],
+            timeout=self.config.setup_timeout_seconds,
+        )
+        if timed_out:
+            raise EnvironmentSetupTimeout(
+                "Timed out making the runtime resolve DB_NAME from the environment "
+                f"after {self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
+            )
+        if returncode != 0:
+            raise RuntimeError(
+                "Failed to make the runtime resolve DB_NAME from the environment "
+                f"(exit code {returncode}), so per-worker databases cannot take "
+                f"effect{': ' + stderr.strip() if stderr.strip() else ''}"
+            )
+
+    def _verify_worker_database(self, worker: int) -> None:
+        """Confirm this worker's commands actually land in its own database.
+
+        Everything about pooling rests on the override being honored. Where
+        it is not, each step still exits 0 against the default database, so
+        without this check the run is silently unisolated while claiming
+        otherwise -- the failure mode issue #39 exists to prevent.
+        """
+        expected = self.database_name(worker)
+        stdout, stderr, returncode, timed_out = self._exec(
+            [
+                "sh",
+                "-c",
+                self._database_env(worker)
+                + "wp db query 'SELECT DATABASE()' --skip-column-names",
+            ],
+            timeout=self.config.setup_timeout_seconds,
+        )
+        if timed_out:
+            raise EnvironmentSetupTimeout(
+                f"Timed out verifying worker database {expected!r} after "
+                f"{self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
+            )
+        lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+        actual = lines[-1] if lines else ""
+        if returncode != 0 or actual != expected:
+            raise RuntimeError(
+                f"Worker {worker} resolved to database {actual or '<unknown>'!r}, "
+                f"expected {expected!r}: the runtime does not honor "
+                "WORDPRESS_DB_NAME, so concurrent tests would share one database "
+                "while results claimed per-worker isolation. Run with "
+                "run.execution_concurrency: 1"
+                f"{'. ' + stderr.strip() if stderr.strip() else ''}"
+            )
+
+    def drop_worker_databases(self) -> None:
+        """Remove this run's worker databases. Best effort, never raises.
+
+        Names are per-run, so skipping this would leave a fresh set behind on
+        every invocation instead of reusing one. It runs after grading is
+        finished, so a failure here cannot invalidate results -- reporting it
+        as a run failure would be worse than the few megabytes it leaks.
+        """
+        for worker in range(1, self._provisioned_workers):
+            self._exec(
+                ["sh", "-c", self._database_env(worker) + "wp db drop --yes"],
+                timeout=self.config.timeout_seconds,
+            )
+        self._provisioned_workers = 1
 
     def reset(self, worker: int = 0) -> None:
         """Restore one worker's database to the captured clean baseline.
@@ -294,6 +412,15 @@ class WordPressEnvironment:
             raise RuntimeError(
                 "No clean baseline was captured, so reset() cannot restore one. "
                 "Call setup(capture_baseline=True) before grading."
+            )
+        if worker >= self._provisioned_workers:
+            # wp db reset would create the database on the spot, so without
+            # this the pool would quietly self-provision an unverified slot
+            # and the setup-time checks would be bypassed.
+            raise RuntimeError(
+                f"Worker slot {worker} was never provisioned (setup built "
+                f"{self._provisioned_workers}), so its database was never "
+                "verified. This is a harness bug: the pool and setup disagree."
             )
         self._reset_step(
             ["sh", "-c", self._database_env(worker) + self._restore_script()],

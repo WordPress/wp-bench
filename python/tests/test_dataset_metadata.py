@@ -155,6 +155,7 @@ def test_result_record_includes_task_metadata(
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda worker=0: None  # type: ignore[method-assign]
+    runner.environment.drop_worker_databases = lambda: None  # type: ignore[method-assign]
 
     def fake_execute(artifact: object, verification_spec: dict, worker: int = 0) -> ExecutionResult:
         raw: dict[str, Any] = {

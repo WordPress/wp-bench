@@ -4,11 +4,12 @@
 reset before every test, so two concurrent tests would have been grading
 against each other's state. The constraint was never fundamental — it was a
 consequence of there being one database. Give every worker its own and the
-guarantee gets *stronger* under concurrency: a serial run time-slices one
-mutable runtime, a pooled run never lets two tests touch the same one.
+guarantee holds under concurrency: a serial run time-slices one database, a
+pooled run never resets or grades two concurrent tests against the same one.
 
 What these tests protect is the seam that makes that true — that a worker's
-reset, its verifier run, and its provisioning all name the same database, and
+reset, its verifier run, and its provisioning all name the same database,
+that the runtime is proven to honor the override rather than assumed to, and
 that worker 0 keeps sending exactly the commands a pre-pooling run sent.
 """
 from __future__ import annotations
@@ -27,20 +28,42 @@ from wp_bench.environment import (
 #: reaches the runtime over stdin, so reset() refuses without one.
 BASELINE_SQL = "-- baseline\nCREATE TABLE wp_options (id INT);\n"
 
+#: Fixed so database names are predictable; real runs get a random one.
+RUN_ID = "testrun"
+
+
+def _worker_db(worker: int) -> str:
+    return f"wp_bench_{RUN_ID}_w{worker}"
+
+
+def _database_in(script: str) -> str:
+    """The database a script pins itself to, or '' for the default."""
+    if "WORDPRESS_DB_NAME=" not in script:
+        return ""
+    return script.split("WORDPRESS_DB_NAME=", 1)[1].split(";", 1)[0].strip()
+
 
 def _env(config: GraderConfig, result: tuple[str, str, int, bool] = ("ok", "", 0, False)):
-    """An environment whose runtime commands return a canned result."""
-    environment = WordPressEnvironment(config)
+    """An environment whose runtime commands return a canned result.
+
+    The verification probe is answered honestly (it echoes back whichever
+    database the script pinned itself to) so tests exercising reset and the
+    verifier are not fighting the setup-time check.
+    """
+    environment = WordPressEnvironment(config, run_id=RUN_ID)
     calls: list[list[str]] = []
     stdins: list[str | None] = []
 
     def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
         calls.append(command)
         stdins.append(kwargs.get("stdin"))
+        if "SELECT DATABASE()" in command[-1]:
+            return (_database_in(command[-1]) or "wordpress", "", 0, False)
         return result
 
     environment._exec = fake_exec  # type: ignore[method-assign]
     environment._baseline = BASELINE_SQL
+    environment._provisioned_workers = 8
     environment.stdins = stdins  # type: ignore[attr-defined]
     return environment, calls
 
@@ -61,30 +84,40 @@ def _docker() -> GraderConfig:
 def test_worker_zero_uses_the_runtimes_own_database() -> None:
     """Worker 0 must not be a pool member. It is what makes a serial run a
     no-op: nothing to provision, no command to rewrite."""
-    environment = WordPressEnvironment(_docker())
+    environment, _ = _env(_docker())
 
     assert environment.database_name(0) is None
 
 
 def test_workers_above_zero_get_their_own_database() -> None:
-    environment = WordPressEnvironment(_docker())
+    environment, _ = _env(_docker())
 
-    assert environment.database_name(1) == "wp_bench_w1"
-    assert environment.database_name(3) == "wp_bench_w3"
+    assert environment.database_name(1) == _worker_db(1)
+    assert environment.database_name(3) == _worker_db(3)
 
 
 def test_worker_databases_are_distinct_per_slot() -> None:
     """Two slots resolving to one name would silently share a runtime while
     the results file still claimed per-test isolation."""
-    environment = WordPressEnvironment(_docker())
+    environment, _ = _env(_docker())
 
     names = [environment.database_name(worker) for worker in range(8)]
 
     assert len(set(names)) == len(names)
 
 
+def test_worker_databases_are_scoped_to_the_run() -> None:
+    """setup() reuses whatever container is already up, so two harness
+    processes would otherwise both claim wp_bench_w1 and reset it under each
+    other mid-test."""
+    first, _ = _env(_docker())
+    second = WordPressEnvironment(_docker())
+
+    assert first.database_name(1) != second.database_name(1)
+
+
 def test_negative_worker_slot_is_rejected() -> None:
-    environment = WordPressEnvironment(_docker())
+    environment, _ = _env(_docker())
 
     with pytest.raises(ValueError, match="worker slot must be >= 0"):
         environment.database_name(-1)
@@ -100,9 +133,7 @@ def test_worker_zero_reset_is_unchanged_by_pooling() -> None:
 
     environment.reset(0)
 
-    assert _script(calls[0]) == (
-        "wp db reset --yes && wp db import - && wp core is-installed"
-    )
+    assert _script(calls[0]) == "wp db reset --yes && wp db import - && wp core is-installed"
 
 
 def test_default_reset_targets_worker_zero() -> None:
@@ -120,7 +151,7 @@ def test_pooled_reset_targets_that_workers_database() -> None:
 
     environment.reset(3)
 
-    assert "export WORDPRESS_DB_NAME=wp_bench_w3;" in _script(calls[0])
+    assert _database_in(_script(calls[0])) == _worker_db(3)
 
 
 def test_pooled_reset_applies_the_database_to_both_steps() -> None:
@@ -129,7 +160,7 @@ def test_pooled_reset_applies_the_database_to_both_steps() -> None:
     baseline over the runtime's default one."""
     script = _script(_pooled_reset_call(2))
 
-    assert script.startswith("export WORDPRESS_DB_NAME=wp_bench_w2;")
+    assert script.startswith(f"export WORDPRESS_DB_NAME={_worker_db(2)};")
     assert script.index("export") < script.index("wp db reset")
     assert script.index("export") < script.index("wp db import")
 
@@ -150,16 +181,36 @@ def test_pooled_reset_still_drops_before_it_restores() -> None:
     assert "&&" in script
 
 
-def test_pooled_reset_restores_the_shared_baseline() -> None:
+def test_pooled_reset_restores_the_shared_baseline_over_stdin() -> None:
     """Every worker starts from the same dump, or the pool would grade
-    identical tests against different WordPress states."""
-    assert "wp db import -" in _script(_pooled_reset_call(2))
+    identical tests against different WordPress states. The dump stays on
+    the host, so it travels on stdin rather than as a path."""
+    environment, calls = _env(_docker())
+
+    environment.reset(2)
+
+    assert "wp db import -" in _script(calls[0])
+    assert environment.stdins[0] == BASELINE_SQL  # type: ignore[attr-defined]
+
+
+def test_pooled_reset_verifies_the_restore_landed() -> None:
+    assert "wp core is-installed" in _script(_pooled_reset_call(2))
 
 
 def _pooled_reset_call(worker: int) -> list[str]:
     environment, calls = _env(_docker())
     environment.reset(worker)
     return calls[0]
+
+
+def test_reset_refuses_a_slot_setup_never_provisioned() -> None:
+    """``wp db reset`` creates the database it targets, so an unprovisioned
+    slot would quietly self-provision and skip every setup-time check."""
+    environment, _ = _env(_docker())
+    environment._provisioned_workers = 2
+
+    with pytest.raises(RuntimeError, match="never provisioned"):
+        environment.reset(5)
 
 
 def test_failed_pooled_reset_still_raises() -> None:
@@ -181,6 +232,7 @@ def test_pooled_reset_timeout_still_raises() -> None:
 def test_cli_grader_refuses_a_pooled_reset_too() -> None:
     """Pooling is not a way around a grader that cannot reset at all."""
     environment = WordPressEnvironment(GraderConfig(kind="cli"))
+    environment._baseline = BASELINE_SQL
 
     with pytest.raises(RuntimeError, match="no reset implementation"):
         environment.reset(2)
@@ -209,7 +261,7 @@ def test_pooled_verifier_runs_against_that_workers_database() -> None:
 
     environment.execute_code("code", {}, worker=3)
 
-    assert "export WORDPRESS_DB_NAME=wp_bench_w3;" in _script(calls[0])
+    assert _database_in(_script(calls[0])) == _worker_db(3)
     assert "wp eval-file" in _script(calls[0])
 
 
@@ -217,7 +269,7 @@ def test_pooled_verifier_keeps_the_payload_on_stdin() -> None:
     """Payloads must never travel as argv (argv size limits, and they are
     visible in process listings). The database override must not become an
     excuse to inline one."""
-    environment = WordPressEnvironment(_docker())
+    environment = WordPressEnvironment(_docker(), run_id=RUN_ID)
     seen: dict[str, Any] = {}
 
     def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
@@ -261,24 +313,44 @@ def _setup_calls(
     worker_count: int,
     config: GraderConfig | None = None,
     provision_result: tuple[str, str, int, bool] = ("ok", "", 0, False),
+    honors_override: bool = True,
 ) -> list[list[str]]:
     """Run setup(), letting the baseline capture succeed.
 
-    ``provision_result`` is returned for every call *after* the capture, so a
-    provisioning failure cannot be mistaken for a capture failure.
+    ``provision_result`` is returned for every non-probe call after the
+    capture, so a provisioning failure cannot be mistaken for a capture
+    failure. ``honors_override`` models a runtime whose wp-config.php ignores
+    WORDPRESS_DB_NAME — the case the verification probe exists to catch.
     """
-    environment = WordPressEnvironment(config or _docker())
+    environment = WordPressEnvironment(config or _docker(), run_id=RUN_ID)
     calls: list[list[str]] = []
 
     def fake_exec(command: list[str], **kwargs: Any) -> tuple[str, str, int, bool]:
         calls.append(command)
-        return ("ok", "", 0, False) if len(calls) == 1 else provision_result
+        script = command[-1]
+        if "SELECT DATABASE()" in script:
+            resolved = _database_in(script) if honors_override else "wordpress"
+            return (resolved or "wordpress", "", 0, False)
+        if "wp config set" in script:
+            return ("ok", "", 0, False)
+        if len(calls) == 1:
+            return ("-- baseline SQL\n", "", 0, False)
+        return provision_result
 
     environment._exec = fake_exec  # type: ignore[method-assign]
     monkeypatch.setattr(environment, "_container_exists", lambda: True)
     monkeypatch.setattr(environment, "_run_wp_env", lambda command: None)
     environment.setup(worker_count=worker_count)
     return calls
+
+
+def _provision_scripts(calls: list[list[str]]) -> list[str]:
+    """Restore scripts, excluding the capture, config rewrite and probes."""
+    return [
+        _script(call)
+        for call in calls[1:]
+        if "wp db import" in _script(call) and "SELECT DATABASE()" not in _script(call)
+    ]
 
 
 def test_serial_setup_provisions_no_extra_databases(
@@ -294,12 +366,13 @@ def test_serial_setup_provisions_no_extra_databases(
 def test_pooled_setup_provisions_one_database_per_worker_above_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = _setup_calls(monkeypatch, 4)
+    scripts = _provision_scripts(_setup_calls(monkeypatch, 4))
 
-    provisioned = [_script(call) for call in calls[1:]]
-    assert len(provisioned) == 3
-    for worker, script in enumerate(provisioned, start=1):
-        assert f"export WORDPRESS_DB_NAME=wp_bench_w{worker};" in script
+    assert [_database_in(script) for script in scripts] == [
+        _worker_db(1),
+        _worker_db(2),
+        _worker_db(3),
+    ]
 
 
 def test_pooled_setup_captures_the_baseline_exactly_once(
@@ -317,35 +390,90 @@ def test_pooled_setup_captures_the_baseline_exactly_once(
 def test_pooled_setup_seeds_every_worker_from_that_baseline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = _setup_calls(monkeypatch, 4)
-
-    for call in calls[1:]:
-        assert "wp db import -" in _script(call)
+    for script in _provision_scripts(_setup_calls(monkeypatch, 4)):
+        assert "wp db import -" in script
 
 
-def test_provisioning_creates_the_database_before_restoring_into_it(
+def test_provisioning_builds_the_database_with_the_reset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    script = _script(_setup_calls(monkeypatch, 2)[1])
+    """``wp db reset`` is DROP IF EXISTS plus CREATE, so it builds the
+    database as well as clearing it. A separate ``wp db create`` would be
+    dead weight."""
+    script = _provision_scripts(_setup_calls(monkeypatch, 2))[0]
 
-    assert script.index("wp db create") < script.index("wp db import")
+    assert "wp db create" not in script
+    assert script.index("wp db reset") < script.index("wp db import")
 
 
 def test_provisioning_tolerates_a_database_left_by_an_earlier_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An interrupted run leaves its worker databases behind. Re-creating
-    one fails, which is fine and expected — the restore that follows is what
-    makes a leftover indistinguishable from a fresh database, so it must not
-    be short-circuited by the create."""
-    script = _script(_setup_calls(monkeypatch, 2)[1])
+    """An interrupted run leaves its worker databases behind. The restore is
+    what makes a leftover indistinguishable from a fresh database, and it
+    must not be conditional on the database being absent."""
+    script = _provision_scripts(_setup_calls(monkeypatch, 2))[0]
 
-    _, _, restore = script.partition("wp db create")
-    assert restore.lstrip().startswith(";"), (
-        "wp db create must not be &&-chained to the restore: an existing "
-        f"database would abort provisioning. Got: {script!r}"
+    assert script.startswith(f"export WORDPRESS_DB_NAME={_worker_db(1)};")
+    assert "wp db reset --yes" in script
+
+
+def test_provisioning_verifies_each_worker_resolves_to_its_own_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The override is only a shell variable; if the runtime's wp-config.php
+    does not read it, every command silently addresses the default database
+    and still exits 0."""
+    calls = _setup_calls(monkeypatch, 4)
+
+    probes = [_script(call) for call in calls if "SELECT DATABASE()" in _script(call)]
+    assert [_database_in(probe) for probe in probes] == [
+        _worker_db(1),
+        _worker_db(2),
+        _worker_db(3),
+    ]
+
+
+def test_setup_fails_when_the_runtime_ignores_the_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The failure this whole check exists for: a runtime that bakes DB_NAME
+    would grade every worker against one database while results claimed
+    per-worker isolation."""
+    with pytest.raises(RuntimeError, match="does not honor"):
+        _setup_calls(monkeypatch, 4, honors_override=False)
+
+
+def test_docker_setup_makes_the_runtime_resolve_the_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The grader image bakes a literal DB_NAME and docker exec never re-runs
+    its entrypoint, so the constant is rewritten in the running container."""
+    calls = _setup_calls(monkeypatch, 4)
+
+    rewrites = [call for call in calls if "wp config set DB_NAME" in _script(call)]
+    assert len(rewrites) == 1
+    assert "getenv" in _script(rewrites[0])
+    assert "WORDPRESS_DB_NAME" in _script(rewrites[0])
+    assert "--raw" in _script(rewrites[0])
+
+
+def test_wp_env_setup_leaves_its_config_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """wp-env's image already resolves DB_NAME from the environment; nothing
+    needs rewriting, so nothing is."""
+    calls = _setup_calls(
+        monkeypatch, 4, config=GraderConfig(kind="docker", wp_env_dir=tmp_path)
     )
-    assert "wp db reset --yes" in restore
+
+    assert not [call for call in calls if "wp config set" in _script(call)]
+
+
+def test_serial_setup_rewrites_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _setup_calls(monkeypatch, 1)
+
+    assert not [call for call in calls if "wp config set" in _script(call)]
 
 
 def test_failed_provisioning_aborts_setup(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -358,7 +486,7 @@ def test_failed_provisioning_aborts_setup(monkeypatch: pytest.MonkeyPatch) -> No
 def test_failed_provisioning_names_the_worker_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with pytest.raises(RuntimeError, match="wp_bench_w1"):
+    with pytest.raises(RuntimeError, match=_worker_db(1)):
         _setup_calls(monkeypatch, 4, provision_result=("", "boom", 1, False))
 
 
@@ -375,3 +503,51 @@ def test_cli_grader_provisions_nothing() -> None:
     environment.setup(worker_count=4)
 
     assert calls == []
+
+
+# Teardown --------------------------------------------------------------
+
+
+def test_worker_databases_are_dropped_when_the_run_ends() -> None:
+    """Names are per-run, so leaving them would accumulate a fresh set every
+    invocation instead of reusing one."""
+    environment, calls = _env(_docker())
+    environment._provisioned_workers = 4
+
+    environment.drop_worker_databases()
+
+    assert [_database_in(_script(call)) for call in calls] == [
+        _worker_db(1),
+        _worker_db(2),
+        _worker_db(3),
+    ]
+    assert all("wp db drop --yes" in _script(call) for call in calls)
+
+
+def test_teardown_leaves_the_runtimes_own_database_alone() -> None:
+    """Worker 0 is the runtime's database, not the pool's to drop."""
+    environment, calls = _env(_docker())
+    environment._provisioned_workers = 2
+
+    environment.drop_worker_databases()
+
+    assert len(calls) == 1
+    assert _database_in(_script(calls[0])) == _worker_db(1)
+
+
+def test_serial_teardown_drops_nothing() -> None:
+    environment, calls = _env(_docker())
+    environment._provisioned_workers = 1
+
+    environment.drop_worker_databases()
+
+    assert calls == []
+
+
+def test_teardown_never_raises() -> None:
+    """It runs after grading, so a cleanup failure must not invalidate
+    results that are already correct."""
+    environment, _ = _env(_docker(), ("", "connection refused", 1, False))
+    environment._provisioned_workers = 3
+
+    environment.drop_worker_databases()
