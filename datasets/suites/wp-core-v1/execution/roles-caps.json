@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-roles_caps",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Roles and Capabilities",
     "description": "Code generation tasks for WordPress Roles and Capabilities APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-roles-caps-001",
       "category": "roles-caps",
-      "difficulty": "basic",
       "prompt": "Implement a function that registers a role named wpbp_manager with the read and wpbp_manage capabilities, then reports whether WordPress can retrieve that role with the custom capability.",
       "expected_behavior": "Reviewer contract: The function should use the roles API to register wpbp_manager and verify the role through WordPress role helpers. The runtime checks call the function, inspect the registered role, and remove it during teardown.",
       "requirements": [
@@ -62,7 +61,6 @@
     {
       "id": "e-roles-caps-002",
       "category": "roles-caps",
-      "difficulty": "basic",
       "prompt": "Implement a function that adds wpbp_temp_cap to the Subscriber role, verifies the role has it, removes it again, and reports whether both transitions succeeded.",
       "expected_behavior": "Reviewer contract: The function should mutate the Subscriber role through WP_Role methods and leave the temporary capability removed. The runtime spies on `updated_option` for the roles option to observe `wpbp_temp_cap` actually being added during the call, so a hard-coded `return true` fails, and checks the final Subscriber role state.",
       "requirements": [
@@ -118,7 +116,6 @@
     {
       "id": "e-roles-caps-003",
       "category": "roles-caps",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that switches to the given user and reports whether the current user can perform the requested capability.",
       "expected_behavior": "Reviewer contract: The function should set the current user to the supplied user ID and delegate the capability check to WordPress. The runtime uses a Subscriber fixture to verify a granted capability and a denied capability, then deletes the user and resets the current user.",
       "requirements": [
@@ -165,7 +162,6 @@
     {
       "id": "e-roles-caps-004",
       "category": "roles-caps",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the primitive capabilities WordPress requires for the given user to edit the given post.",
       "expected_behavior": "Reviewer contract: The function should use WordPress meta-cap mapping for edit_post. The runtime creates an Author-owned draft post and expects WordPress to map the edit request to edit_posts, then removes the post and user.",
       "requirements": [
@@ -212,7 +208,6 @@
     {
       "id": "e-roles-caps-005",
       "category": "roles-caps",
-      "difficulty": "basic",
       "prompt": "Implement a function that grants the capability directly to the given user and returns whether WordPress recognizes the grant.",
       "expected_behavior": "Reviewer contract: The function should add a direct user capability through WP_User and verify it with WordPress capability checks. The runtime confirms both the return value and the user's observable capability before deleting the fixture user.",
       "requirements": [
@@ -264,7 +259,6 @@
     {
       "id": "e-roles-caps-006",
       "category": "roles-caps",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that allows Editor in the default new-user role dropdown while Administrator remains excluded.",
       "expected_behavior": "Reviewer contract: The function should register a callback on the WP 7.0 default_role_dropdown_excluded_roles filter that removes editor from the excluded-role list while preserving administrator. The runtime calls the function and applies the filter to the core default exclusions.",
       "requirements": [
@@ -314,7 +308,6 @@
     {
       "id": "e-roles-caps-007",
       "category": "roles-caps",
-      "difficulty": "basic",
       "prompt": "Implement a function that reports whether a specific user has the requested capability without changing the current user.",
       "expected_behavior": "Reviewer contract: The function should check the supplied user's capability with user_can rather than switching global current-user state. The runtime verifies both a granted and denied capability for a Subscriber and checks that the current user is unchanged.",
       "requirements": [
@@ -363,7 +356,6 @@
     {
       "id": "e-roles-caps-008",
       "category": "roles-caps",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the primitive capabilities WordPress requires for the given user to delete the given post.",
       "expected_behavior": "Reviewer contract: The function should use WordPress meta-cap mapping for delete_post. The runtime creates an Author-owned published post and expects WordPress to map the delete request to delete_published_posts, then removes the post and user.",
       "requirements": [

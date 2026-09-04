@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-rest_api",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - REST API",
     "description": "Code generation tasks for WordPress REST API APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-rest-api-001",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Create a public REST endpoint /wp-json/wpbp/v1/status that returns status ok with a numeric timestamp.",
       "expected_behavior": "Registers a public GET route in the wpbp/v1 namespace on rest_api_init. Runtime validation dispatches the route through WordPress REST internals and verifies a 200 response containing status ok and an integer timestamp.",
       "requirements": [
@@ -66,7 +65,6 @@
     {
       "id": "e-rest-api-002",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Create a REST endpoint /wp-json/wpbp/v1/books/<id> that accepts numeric IDs, rejects nonnumeric IDs through REST argument validation, and returns valid IDs as integers.",
       "expected_behavior": "Registers a wpbp/v1 books route with an id path parameter and a REST argument validator. Runtime validation confirms that /books/42 returns id 42 and /books/not-a-number is rejected by WordPress as an invalid parameter.",
       "requirements": [
@@ -126,7 +124,6 @@
     {
       "id": "e-rest-api-003",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Create a private REST endpoint /wp-json/wpbp/v1/private that requires manage_options and returns secret data.",
       "expected_behavior": "Registers a private wpbp/v1 route whose permission callback checks manage_options. Runtime validation dispatches the route as a logged-out user and as an administrator fixture, confirming unauthorized requests are denied and authorized requests receive secret true.",
       "requirements": [
@@ -182,7 +179,6 @@
     {
       "id": "e-rest-api-004",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Create a REST endpoint /wp-json/wpbp/v1/options that sanitizes a title parameter and returns it.",
       "expected_behavior": "The submission registers a POST REST endpoint at `/wp-json/wpbp/v1/options`, declares a `title` argument with `sanitize_text_field` as its sanitizer, and returns the sanitized title from WordPress REST request handling.",
       "requirements": [
@@ -238,7 +234,6 @@
     {
       "id": "e-rest-api-005",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that normalizes a WP_Error into a REST response array with code, message, and status.",
       "expected_behavior": "`wpbp_rest_api_005()` converts a `WP_Error` to a REST response with `rest_convert_error_to_response()` and returns the response status plus response data, preserving the error code and HTTP status.",
       "requirements": [
@@ -282,7 +277,6 @@
     {
       "id": "e-rest-api-006",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that ensures arbitrary callback data is converted to a WP_REST_Response.",
       "expected_behavior": "`wpbp_rest_api_006()` passes arbitrary callback data through `rest_ensure_response()` and returns the resulting `WP_REST_Response` status and data.",
       "requirements": [
@@ -326,7 +320,6 @@
     {
       "id": "e-rest-api-007",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that builds a collection response with X-WP-Total and X-WP-TotalPages headers.",
       "expected_behavior": "`wpbp_rest_api_007()` returns a WP_REST_Response for the provided collection items and sets WordPress pagination headers X-WP-Total and X-WP-TotalPages. Runtime validation checks the computed headers for a non-even page count.",
       "requirements": [
@@ -375,7 +368,6 @@
     {
       "id": "e-rest-api-008",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns a REST schema for settings data where mode is required and may only be light or dark.",
       "expected_behavior": "`wpbp_rest_api_008()` returns an object schema with a required mode property constrained to the light and dark string enum values. Runtime validation uses WordPress REST schema validation to confirm valid data passes while missing or unsupported modes fail.",
       "requirements": [
@@ -425,7 +417,6 @@
     {
       "id": "e-rest-api-009",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that checks whether a value passes WordPress REST schema validation as a positive integer.",
       "expected_behavior": "`wpbp_rest_api_009()` builds an integer schema with minimum 1 and returns true only when WordPress REST schema validation accepts the value. Runtime validation covers an integer, an integer-like request string, a below-minimum value, and a nonnumeric value.",
       "requirements": [
@@ -475,7 +466,6 @@
     {
       "id": "e-rest-api-010",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that sanitizes REST array input using rest_sanitize_value_from_schema.",
       "expected_behavior": "`wpbp_rest_api_010()` sanitizes an array of values against a REST schema whose `items` are integers, returning the integer-normalized values from WordPress schema sanitization.",
       "requirements": [
@@ -519,7 +509,6 @@
     {
       "id": "e-rest-api-011",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the correct authorization status for logged-out and logged-in users.",
       "expected_behavior": "`wpbp_rest_api_011()` checks `rest_authorization_required_code()` as an anonymous user and again as a logged-in user, returning both status codes so WordPress determines the 401/403 distinction.",
       "requirements": [
@@ -565,7 +554,6 @@
     {
       "id": "e-rest-api-012",
       "category": "rest-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that adds a custom link relation to a WP_REST_Response.",
       "expected_behavior": "`wpbp_rest_api_012()` creates a `WP_REST_Response`, adds the supplied URL under the `https://api.w.org/related` link relation, and returns the response links.",
       "requirements": [

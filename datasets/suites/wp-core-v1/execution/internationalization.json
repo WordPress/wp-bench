@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-internationalization",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Internationalization",
     "description": "Code generation tasks for WordPress Internationalization APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-internationalization-001",
       "category": "internationalization",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the translatable label \"Checkout complete\" from the `wpbp-i18n` text domain.",
       "expected_behavior": "`wpbp_internationalization_001()` uses the core translation helper with the exact source string `Checkout complete` and text domain `wpbp-i18n`. Runtime validation installs a gettext filter for that text/domain pair and expects the filtered translation to be returned.",
       "requirements": [
@@ -61,7 +60,6 @@
     {
       "id": "e-internationalization-002",
       "category": "internationalization",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the label \"Open <settings> & tools\" translated from `wpbp-i18n` and escaped for safe HTML text output.",
       "expected_behavior": "`wpbp_internationalization_002()` uses WordPress's combined translate-and-escape helper for HTML text. Runtime validation filters the translation to unsafe markup and expects the returned string to match WordPress HTML escaping.",
       "requirements": [
@@ -112,7 +110,6 @@
     {
       "id": "e-internationalization-003",
       "category": "internationalization",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that temporarily switches WordPress to a supplied locale and restores the previous locale before returning whether the switch succeeded.",
       "expected_behavior": "`wpbp_internationalization_003()` calls `switch_to_locale()`, restores after a successful switch, returns the boolean switch result, and leaves no switched locale on the stack. Runtime validation forces a non-en_US effective locale so switching to `en_US` succeeds, then checks WordPress's switch and restore hooks.",
       "requirements": [
@@ -158,7 +155,6 @@
     {
       "id": "e-internationalization-004",
       "category": "internationalization",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers the plugin text domain `wpbp-i18n-loader` with the relative languages directory `wp-bench-runtime/languages` when it is called.",
       "expected_behavior": "`wpbp_internationalization_004()` calls `load_plugin_textdomain()` with the requested domain and relative plugin languages path. Runtime validation checks WordPress's textdomain registry for the custom path instead of expecting translations to load immediately, matching the just-in-time loading behavior in modern WordPress.",
       "requirements": [
@@ -207,7 +203,6 @@
     {
       "id": "e-internationalization-005",
       "category": "internationalization",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns WordPress's translation for a supplied source text and text domain, allowing gettext filters to affect the result.",
       "expected_behavior": "`wpbp_internationalization_005()` delegates to WordPress translation with both caller-supplied arguments. Runtime validation installs a gettext filter and verifies that only the matching source string and domain are changed.",
       "requirements": [

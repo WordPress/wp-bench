@@ -5,14 +5,13 @@ from wp_bench.datasets import ExecutionTest
 from wp_bench.selection import select_tests, selected_test_ids
 
 
-def _test(test_id: str, category: str, difficulty: str = "basic") -> ExecutionTest:
+def _test(test_id: str, category: str) -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
         category=category,
-        difficulty=difficulty,
         requirements=[],
         test_function=None,
         static_checks={},
@@ -30,7 +29,7 @@ def _fixture() -> list[ExecutionTest]:
     for i in range(10):
         tests.append(_test(f"e-bbb-{i:03d}", "bbb"))
     for i in range(10):
-        tests.append(_test(f"e-ccc-{i:03d}", "ccc", difficulty="advanced"))
+        tests.append(_test(f"e-ccc-{i:03d}", "ccc"))
     return tests
 
 

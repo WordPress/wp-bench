@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-comments_users",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Comments and Users",
     "description": "Code generation tasks for WordPress Comments and Users APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-comments-users-001",
       "category": "comments-users",
-      "difficulty": "basic",
       "prompt": "Implement a function that creates a Subscriber user with a supplied login and returns the resulting WP_User object.",
       "expected_behavior": "Reviewer contract: The function should create a new Subscriber through WordPress user APIs and return the stored WP_User for the supplied login. The runtime verifies the returned object, persisted login, role, and basic read capability, then deletes the created user in teardown.",
       "requirements": [
@@ -62,7 +61,6 @@
     {
       "id": "e-comments-users-002",
       "category": "comments-users",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns user IDs whose user meta for a supplied key exactly matches the supplied value.",
       "expected_behavior": "Reviewer contract: The function should use WP_User_Query with the supplied meta key and value and return IDs only. The runtime creates matching and non-matching user fixtures, checks that only the matching user ID is present, and removes both users in teardown.",
       "requirements": [
@@ -120,7 +118,6 @@
     {
       "id": "e-comments-users-003",
       "category": "comments-users",
-      "difficulty": "basic",
       "prompt": "Implement a function that adds an approved comment with supplied content to a supplied post and returns the stored comment text.",
       "expected_behavior": "Reviewer contract: The function should insert an approved comment for the supplied post and return the text retrieved from WordPress for that new comment. The runtime creates a post, verifies the stored approved comment content and returned text, then removes comments and the post in teardown.",
       "requirements": [
@@ -173,7 +170,6 @@
     {
       "id": "e-comments-users-004",
       "category": "comments-users",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the number of approved comments for a supplied post.",
       "expected_behavior": "Reviewer contract: The function should use WordPress comment-count APIs for the supplied post and return only the approved count. The runtime creates one post with two approved and one pending comment plus a second post with no comments, expects exact counts of two and zero respectively (so no single constant can pass), and removes all fixtures in teardown.",
       "requirements": [

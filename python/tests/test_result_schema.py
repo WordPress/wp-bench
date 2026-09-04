@@ -29,7 +29,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={"required_patterns": [{"pattern": "ref", "weight": 1}]},
@@ -141,7 +140,6 @@ def test_multi_model_execution_records_include_audit_fields(
 
     assert execution["prompt_hash"]
     assert execution["category"] == "hooks"
-    assert execution["difficulty"] == "basic"
     assert execution["mode"] == "model"
     assert execution["grader"]["raw"]["runtime"]["score"] == 1.0
     assert execution["grader"]["stdout"] == "out"

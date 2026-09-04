@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-settings_options",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Settings and Options",
     "description": "Code generation tasks for WordPress Settings and Options APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-settings-options-001",
       "category": "settings-options",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers the option-backed setting 'wpbp_setting_title' in the 'wpbp' group as a REST-exposed string setting whose saved value is sanitized as plain text.",
       "expected_behavior": "`wpbp_settings_options_001()` registers `wpbp_setting_title` with `register_setting()` in the `wpbp` group, exposes it through REST settings metadata, declares string data, and registers a sanitizer that strips markup. Runtime validation inspects WordPress's registered settings registry and verifies that `sanitize_option()` applies the registered sanitizer.",
       "requirements": [
@@ -66,7 +65,6 @@
     {
       "id": "e-settings-options-002",
       "category": "settings-options",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that creates the 'wpbp_noautoload' option with a provided value sanitized as plain text and excluded from WordPress autoloading, returning whether the option was added.",
       "expected_behavior": "`wpbp_settings_options_002()` adds `wpbp_noautoload` with `add_option()`, stores the provided value after plain-text sanitization, and disables autoloading using the modern Options API behavior. Runtime validation checks the stored value and confirms the options table autoload marker is not one of WordPress's autoloaded values.",
       "requirements": [
@@ -118,7 +116,6 @@
     {
       "id": "e-settings-options-003",
       "category": "settings-options",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that updates the 'wpbp_nested' option by storing a supplied plain-text-sanitized value under a supplied sanitized key, preserving existing entries, and returning the full updated option array.",
       "expected_behavior": "`wpbp_settings_options_003()` reads the existing `wpbp_nested` array with `get_option()`, normalizes the supplied key with `sanitize_key()`, sanitizes the supplied value as plain text, persists the updated array with `update_option()`, and returns the same persisted array. Runtime validation seeds an existing entry, checks preservation, and verifies the sanitized key and value in both the return value and stored option.",
       "requirements": [
@@ -180,7 +177,6 @@
     {
       "id": "e-settings-options-004",
       "category": "settings-options",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a settings section 'wpbp_section' and a settings field 'wpbp_field' on the built-in 'reading' settings page, with the field assigned to that section.",
       "expected_behavior": "`wpbp_settings_options_004()` uses the Settings API to register `wpbp_section` on the `reading` page and `wpbp_field` inside that section. Runtime validation inspects the Settings API globals populated by `add_settings_section()` and `add_settings_field()` and checks that both callbacks are callable.",
       "requirements": [
@@ -239,7 +235,6 @@
     {
       "id": "e-settings-options-005",
       "category": "settings-options",
-      "difficulty": "basic",
       "prompt": "Implement a function that deletes a supplied option name and then returns WordPress's fallback value for that option using a supplied fallback.",
       "expected_behavior": "`wpbp_settings_options_005()` deletes the supplied option name with `delete_option()` and then returns `get_option()` using the supplied fallback, without creating or reseeding the option itself. Runtime validation creates the fixture option before execution, checks that the fallback is returned after deletion, and verifies the option no longer exists.",
       "requirements": [

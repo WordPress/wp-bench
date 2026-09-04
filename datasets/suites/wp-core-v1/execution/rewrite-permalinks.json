@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-rewrite_permalinks",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Rewrite and Permalinks",
     "description": "Code generation tasks for WordPress Rewrite and Permalinks APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-rewrite-permalinks-001",
       "category": "rewrite-permalinks",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers item URLs under items/<item-slug> as an extra permalink structure using a %wpbp_item% placeholder.",
       "expected_behavior": "Reviewer contract: The helper must register the %wpbp_item% rewrite tag, expose the wpbp_item query variable, and add a wpbp_item permastruct whose structure contains items/%wpbp_item%. Review focus: Use WordPress rewrite APIs and do not flush rewrite rules during normal runtime. The runtime inspects WordPress rewrite state after calling the helper rather than trusting its return value.",
       "requirements": [
@@ -79,7 +78,6 @@
     {
       "id": "e-rewrite-permalinks-002",
       "category": "rewrite-permalinks",
-      "difficulty": "basic",
       "prompt": "Implement a function that registers a top-priority rewrite rule for URLs like wpbp-rule/<code>, mapping the captured code to the wpbp_rule query variable.",
       "expected_behavior": "Reviewer contract: The helper must add a rewrite rule to WordPress' top rewrite-rule bucket for wpbp-rule/<code> URLs and map the first path segment to the wpbp_rule query variable. Review focus: Use the Rewrite API, use top priority, and do not flush rewrite rules during normal runtime. The runtime inspects $wp_rewrite->extra_rules_top after calling the helper.",
       "requirements": [
@@ -151,7 +149,6 @@
     {
       "id": "e-rewrite-permalinks-003",
       "category": "rewrite-permalinks",
-      "difficulty": "basic",
       "prompt": "Implement a function that makes wpbp_var available as a public query variable without removing existing public query vars.",
       "expected_behavior": "Reviewer contract: The helper must hook query_vars, append wpbp_var, and preserve the incoming public query vars array. Review focus: Use WordPress hook/query-var APIs and do not flush rewrite rules during normal runtime. The runtime applies the filter to a seed array and verifies both the new and existing vars remain present.",
       "requirements": [

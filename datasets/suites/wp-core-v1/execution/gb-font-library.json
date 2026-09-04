@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-gb_font_library",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Font Library",
     "description": "Code generation tasks for WordPress Font Library APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-gb-font-library-001",
       "category": "gb-font-library",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that disables the Font Library in every block editor by filtering the editor settings WordPress sends to the editor.",
       "expected_behavior": "`wpbp_gb_font_library_001()` registers a `block_editor_settings_all` callback that sets `fontLibraryEnabled` to false while preserving unrelated editor settings. Runtime validation applies the filter with a real block editor context after the function is called.",
       "requirements": [
@@ -61,7 +60,6 @@
     {
       "id": "e-gb-font-library-002",
       "category": "gb-font-library",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a Font Library collection with the slug 'wpbp-fonts' that contains an inline family named 'Bench Sans'.",
       "expected_behavior": "`wpbp_gb_font_library_002()` registers `wpbp-fonts` through the Font Library collection API and returns true when WordPress accepts the collection. Runtime validation inspects `WP_Font_Library` and the collection data instead of trusting the return value alone.",
       "requirements": [
@@ -122,7 +120,6 @@
     {
       "id": "e-gb-font-library-003",
       "category": "gb-font-library",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that generates WordPress Font Face style markup for the supplied font-face definitions and returns it as a string.",
       "expected_behavior": "`wpbp_gb_font_library_003()` captures the output from WordPress's Font Face printer and returns the generated style markup. Runtime validation supplies a local font definition and checks WordPress's normalized CSS, including the default `font-display: fallback` and source ordering.",
       "requirements": [

@@ -15,7 +15,7 @@ from .config import ModelConfig
 #: 2.0: the "knowledge" score key and the knowledge-only "output.answer"
 #: field were removed (knowledge track removed).
 #: 2.1: added the "variant" block for skill-injection A/B runs.
-RESULT_SCHEMA_VERSION = "2.1"
+RESULT_SCHEMA_VERSION = "2.2"
 
 
 def _baseline_variant_info() -> dict[str, Any]:
@@ -80,7 +80,6 @@ def _base_record(
         "suite": test.suite,
         "type": "execution",
         "category": test.category,
-        "difficulty": test.difficulty,
         "metadata": getattr(test, "metadata", None) or {},
         "mode": mode,
         "prompt_hash": None,
@@ -165,7 +164,7 @@ def build_exploit_audit_record(
 ) -> dict[str, Any]:
     """Build the record for one test in the adversarial assertion audit.
 
-    Shares the canonical header (test_id/suite/type/category/difficulty)
+    Shares the canonical header (test_id/suite/type/category)
     with the other builders; the tail is audit-specific — an exploit
     outcome rather than scores. ``candidates_tried == 0`` means the generic
     battery did not cover the test (no gateway function, or a plugin
@@ -177,7 +176,6 @@ def build_exploit_audit_record(
         "suite": test.suite,
         "type": "execution",
         "category": test.category,
-        "difficulty": test.difficulty,
         "candidates_tried": candidates_tried,
         "exploitable": passing_exploit is not None,
         "passing_exploit": passing_exploit,

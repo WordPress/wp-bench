@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-caching",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Caching",
     "description": "Code generation tasks for WordPress Caching APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-caching-001",
       "category": "caching",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that reads an object-cache miss for a supplied key and group, stores boolean false, then reads the same key again while reporting both found flags.",
       "expected_behavior": "Reviewer contract: `wpbp_caching_001()` returns array( $miss_value, $miss_found, $hit_value, $hit_found ) for the supplied object-cache key and group. Review focus: use the `$found` parameter on `wp_cache_get()` so a cached false is distinguishable from a miss, and store the false value through `wp_cache_set()`.",
       "requirements": [
@@ -57,7 +56,6 @@
     {
       "id": "e-caching-002",
       "category": "caching",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that stores a supplied map of object-cache values in a supplied group and fetches a requested key list without dropping falsey cached values.",
       "expected_behavior": "Reviewer contract: `wpbp_caching_002()` stores the supplied key/value map in the supplied group with `wp_cache_set_multiple()` and returns `wp_cache_get_multiple()` for the requested keys. Review focus: false and zero values remain present in the returned associative array, while missing requested keys are returned as false.",
       "requirements": [
@@ -104,7 +102,6 @@
     {
       "id": "e-caching-003",
       "category": "caching",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that stores an object-cache value for a supplied key and group with a supplied salt and returns both a matching-salt read and a stale-salt read.",
       "expected_behavior": "Reviewer contract: `wpbp_caching_003()` stores a value using `wp_cache_set_salted()` and returns array( $fresh, $stale ). Review focus: the matching salt returns the stored value, while the same key read with a different salt returns false.",
       "requirements": [
@@ -151,7 +148,6 @@
     {
       "id": "e-caching-004",
       "category": "caching",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that stores a supplied value as a transient with the supplied expiration and confirms the stored value can be retrieved.",
       "expected_behavior": "Reviewer contract: `wpbp_caching_004()` calls `set_transient()` with the caller-supplied expiration and returns true only when `get_transient()` retrieves the same value. Review focus: use the Transients API rather than writing transient options directly.",
       "requirements": [
@@ -197,7 +193,6 @@
     {
       "id": "e-caching-005",
       "category": "caching",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that primes the post object cache for a supplied post, cleans that post's cache, and reports whether the post cache entry is gone afterward.",
       "expected_behavior": "Reviewer contract: `wpbp_caching_005()` primes the supplied post ID with `_prime_post_caches()`, calls `clean_post_cache()`, and returns true only when a subsequent lookup in the `posts` cache group misses. Review focus: clean the specific post cache and rely on WordPress post-cache APIs rather than direct cache-key guessing alone.",
       "requirements": [
@@ -249,7 +244,6 @@
     {
       "id": "e-caching-006",
       "category": "caching",
-      "difficulty": "hard",
       "prompt": "Implement a function that stores a supplied batch of salted object-cache values, then returns both current-salt and stale-salt batch reads for a requested key list.",
       "expected_behavior": "Reviewer contract: `wpbp_caching_006()` stores all supplied values with `wp_cache_set_multiple_salted()` and returns array( 'current' => ..., 'stale' => ... ) from `wp_cache_get_multiple_salted()`. Review focus: current reads preserve falsey cached values, requested missing keys are false, and stale-salt reads reject previously stored values.",
       "requirements": [

@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-media",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Media",
     "description": "Code generation tasks for WordPress Media APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-media-001",
       "category": "media",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns WordPress's image source data for an attachment.",
       "expected_behavior": "`wpbp_media_001()` delegates to `wp_get_attachment_image_src()` with the supplied attachment ID and size, returning WordPress's four-item source array for full and intermediate image sizes or `false` when no image source is available. Runtime validation uses attachment metadata instead of a real upload file and verifies URL, dimensions, and intermediate-size state.",
       "requirements": [
@@ -52,7 +51,6 @@
     {
       "id": "e-media-002",
       "category": "media",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns post content after WordPress applies media tag optimizations.",
       "expected_behavior": "`wpbp_media_002()` passes the supplied HTML and optional context to `wp_filter_content_tags()`. Runtime validation creates image attachment metadata, filters an image tag with a matching `wp-image-*` class, and checks that WordPress adds dimensions and responsive image attributes rather than leaving the tag unchanged.",
       "requirements": [
@@ -93,7 +91,6 @@
     {
       "id": "e-media-003",
       "category": "media",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns WordPress image resize dimensions.",
       "expected_behavior": "`wpbp_media_003()` forwards the original size, requested size, and crop setting to `image_resize_dimensions()`. Runtime validation checks proportional downscaling, verifies WordPress refuses an upscale-only resize, and checks explicit crop positioning.",
       "requirements": [
@@ -132,7 +129,6 @@
     {
       "id": "e-media-004",
       "category": "media",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that reads embedded image alternative text from a file path.",
       "expected_behavior": "`wpbp_media_004()` loads the admin image helper if needed and calls `wp_get_image_alttext()` for the supplied file path. Runtime validation uses a temporary image-like file containing IPTC/XMP `AltTextAccessibility` metadata and a second file without XMP data, expecting the embedded alternative text for the first and an empty string for the second.",
       "requirements": [
@@ -178,7 +174,6 @@
     {
       "id": "e-media-005",
       "category": "media",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns WordPress's extension and MIME type result for an upload filename.",
       "expected_behavior": "`wpbp_media_005()` calls `wp_check_filetype()` with the supplied filename and optional MIME map, returning the `ext` and `type` array from WordPress. Runtime validation checks a normal JPEG filename, an unknown extension, and a custom MIME map to ensure the implementation uses WordPress's extension-based file-type lookup.",
       "requirements": [

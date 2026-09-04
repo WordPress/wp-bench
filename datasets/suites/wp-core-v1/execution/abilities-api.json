@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-abilities_api",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Abilities API",
     "description": "Code generation tasks for WordPress Abilities API APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-abilities-api-001",
       "category": "abilities-api",
-      "difficulty": "basic",
       "prompt": "Register an Abilities API category with the slug 'wpbp-tools' so it is discoverable by WordPress.",
       "expected_behavior": "Registers the `wpbp-tools` ability category with the public Abilities API on `wp_abilities_api_categories_init`, so WordPress can discover it through `wp_has_ability_category()`. The test focuses on category discovery through WordPress, not a custom registry or helper.",
       "requirements": [
@@ -61,7 +60,6 @@
     {
       "id": "e-abilities-api-002",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Register an Abilities API ability named 'wpbp/count-words' in the 'wpbp-content' category. It must accept an object input with a required 'text' string, return an integer, and count the words in the supplied text.",
       "expected_behavior": "Registers the `wpbp-content` category and the `wpbp/count-words` ability through the Abilities API init hooks. The ability has an object input schema requiring a `text` string, an integer output schema, and an execute callback that returns the word count for the supplied text. Runtime validation inspects the registered `WP_Ability` and executes it with deterministic input.",
       "requirements": [
@@ -132,7 +130,6 @@
     {
       "id": "e-abilities-api-003",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that retrieves the registered 'wpbp/add-one' ability and returns the result of executing it with a supplied number.",
       "expected_behavior": "`wpbp_abilities_api_003()` retrieves the pre-registered `wpbp/add-one` ability with `wp_get_ability()` and returns the result from `WP_Ability::execute()` for the supplied number. The setup registers the fixture ability, and runtime validation checks multiple inputs.",
       "requirements": [
@@ -184,7 +181,6 @@
     {
       "id": "e-abilities-api-004",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Register an Abilities API ability named 'wpbp/rest-visible' in the 'wpbp-rest-abilities' category and configure the ability to be available through the Abilities REST API.",
       "expected_behavior": "Registers the `wpbp-rest-abilities` category and the `wpbp/rest-visible` ability through the Abilities API init hooks, with `meta.show_in_rest` set to true on the ability. Runtime validation inspects the registered ability metadata and executes its callback; REST visibility should come from Abilities API metadata, not a custom REST route.",
       "requirements": [
@@ -257,7 +253,6 @@
     {
       "id": "e-abilities-api-005",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that executes the ability registered under the supplied name with no input and reports the outcome: the error code string when execution fails, or 'ok' when it succeeds.",
       "expected_behavior": "`wpbp_abilities_api_005()` retrieves the ability with `wp_get_ability()` and calls `execute()`. The runtime registers one ability whose permission callback denies execution (expected code `ability_invalid_permissions`) and one open ability (expected `'ok'`), so no constant return passes both.",
       "requirements": [
@@ -308,7 +303,6 @@
     {
       "id": "e-abilities-api-006",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that executes the existing 'wpbp/uppercase' ability with the supplied value as its input, returning the ability's result on success or the error code string when input validation fails.",
       "expected_behavior": "The fixture ability requires an object input with a required string `text` property. Valid input returns the uppercased text; a wrong-typed property or null input must surface the `ability_invalid_input` error code from `execute()`.",
       "requirements": [
@@ -358,7 +352,6 @@
     {
       "id": "e-abilities-api-007",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Register a 'wpbp/greet' ability in the existing 'wpbp-greetings' category. Its input schema is a string that defaults to 'world', and it returns 'hello ' followed by the input. Register it during the correct Abilities API action.",
       "expected_behavior": "The ability registers on `wp_abilities_api_init` with `input_schema` `array( 'type' => 'string', 'default' => 'world' )`. Executing with null input applies the schema default (`'hello world'`); executing with `'wp'` returns `'hello wp'`. The runtime inspects the registered schema and both execution paths.",
       "requirements": [
@@ -412,7 +405,6 @@
     {
       "id": "e-abilities-api-008",
       "category": "abilities-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that unregisters the ability with the supplied name through the Abilities API and returns true only when a WP_Ability instance was returned and the ability is no longer registered.",
       "expected_behavior": "`wpbp_abilities_api_008()` calls `wp_unregister_ability()` and verifies both the returned instance and the post-state with `wp_has_ability()`. The runtime independently confirms the fixture ability is gone afterward, so a constant return fails.",
       "requirements": [
@@ -457,7 +449,6 @@
     {
       "id": "e-abilities-api-009",
       "category": "abilities-api",
-      "difficulty": "basic",
       "prompt": "Register an ability category with the slug 'wpbp-audit', the label 'WPBP Audit', a description, and a meta array containing 'icon' set to 'shield'. Register it during the correct Abilities API action.",
       "expected_behavior": "The category registers on `wp_abilities_api_categories_init` with the meta array. The runtime inspects the registered `WP_Ability_Category` object's label and meta, so a hard-coded return cannot pass.",
       "requirements": [
@@ -509,7 +500,6 @@
     {
       "id": "e-abilities-api-011",
       "category": "abilities-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the sorted list of registered ability names belonging to the supplied category slug.",
       "expected_behavior": "`wpbp_abilities_api_011()` enumerates `wp_get_abilities()` and filters by each ability's `get_category()`. The runtime registers fixtures across two categories plus an empty category, expecting three different results.",
       "requirements": [
@@ -555,7 +545,6 @@
     {
       "id": "e-abilities-api-012",
       "category": "abilities-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that reports on the ability registered under the supplied name: whether it is registered at all, and whether it is exposed through REST, as array( 'registered' => bool, 'show_in_rest' => bool ). It must not trigger any registry notice for unknown names.",
       "expected_behavior": "`wpbp_abilities_api_012()` gates with `wp_has_ability()` (silent) before retrieving, and reads `show_in_rest` via ability meta. The runtime probes the built-in core abilities (`core/get-site-info` is REST-visible, `core/get-user-info` is not) plus an unknown name.",
       "requirements": [
@@ -599,7 +588,6 @@
     {
       "id": "e-abilities-api-013",
       "category": "abilities-api",
-      "difficulty": "advanced",
       "prompt": "Implement a function that hooks the ability registration arguments filter so that every ability whose name starts with 'wpbp-forced/' is registered with meta.show_in_rest forced to true, leaving other abilities untouched.",
       "expected_behavior": "`wpbp_abilities_api_013()` adds a `wp_register_ability_args` filter keyed off the ability name. The runtime calls the function before triggering registration of two fixture abilities (one in the forced namespace, one outside it) and verifies only the forced one became REST-visible.",
       "requirements": [
@@ -650,7 +638,6 @@
     {
       "id": "e-abilities-api-014",
       "category": "abilities-api",
-      "difficulty": "advanced",
       "prompt": "Implement a function that safely executes the ability registered under the supplied name with the supplied input, reporting array( 'ok' => false, 'code' => <error code> ) when execution fails and array( 'ok' => true, 'value' => <result> ) when it succeeds.",
       "expected_behavior": "`wpbp_abilities_api_014()` relies on the Abilities API error contract: callbacks that throw are converted by `execute()` into a WP_Error with code `ability_callback_exception`, never surfaced as an exception. The runtime probes a throwing fixture and a working fixture.",
       "requirements": [
