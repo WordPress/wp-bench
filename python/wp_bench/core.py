@@ -670,10 +670,18 @@ class BenchmarkRunner(_ResultBookkeeping):
         The verification spec is identical across a test's candidates, so it
         is built once here rather than per candidate. Returns None when no
         cheat passes — the test's assertions rejected every zero-effort stub.
+
+        Honors ``run.execution_isolation`` like a normal run: under
+        ``reset_per_test`` WordPress is reset before every candidate (each
+        candidate is its own execution of the test's setup/assertions);
+        under ``none`` no reset happens and the test's teardown is relied on,
+        which makes author iteration on a single test several times faster.
         """
         verification_spec = _build_verification_spec(test, self.config)
+        isolate = self.config.run.execution_isolation == "reset_per_test"
         for label, code in candidates:
-            self.environment.reset()
+            if isolate:
+                self.environment.reset()
             env_result = self.environment.execute_artifact(
                 Artifact(kind="php_snippet", code=code),
                 verification_spec,
