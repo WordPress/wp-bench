@@ -546,7 +546,7 @@
       "id": "e-abilities-api-012",
       "category": "abilities-api",
       "prompt": "Implement a function that reports on the ability registered under the supplied name: whether it is registered at all, and whether it is exposed through REST, as array( 'registered' => bool, 'show_in_rest' => bool ). It must not trigger any registry notice for unknown names.",
-      "expected_behavior": "`wpbp_abilities_api_012()` gates with `wp_has_ability()` (silent) before retrieving, and reads `show_in_rest` via ability meta. The runtime probes the built-in core abilities (`core/get-site-info` is REST-visible, `core/get-user-info` is not) plus an unknown name.",
+      "expected_behavior": "`wpbp_abilities_api_012()` gates with `wp_has_ability()` (silent) before retrieving, and reads REST exposure via the resolved `show_in_rest` ability meta. The runtime probes the built-in `core/get-site-info` ability (REST-visible), a `wpbp/hidden-probe` ability registered in setup with `show_in_rest` explicitly false, and an unknown name. (Since WordPress 7.1 every core ability is `public`, so a core ability can no longer serve as the not-exposed fixture.)",
       "requirements": [
         "Gate with wp_has_ability() so unknown names produce no notice",
         "Read REST visibility from the ability meta"
@@ -570,16 +570,18 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_abilities_api_012' ) ) { return false; } return array( 'registered' => true, 'show_in_rest' => true ) === wpbp_abilities_api_012( 'core/get-site-info' ) && array( 'registered' => true, 'show_in_rest' => false ) === wpbp_abilities_api_012( 'core/get-user-info' ) && array( 'registered' => false, 'show_in_rest' => false ) === wpbp_abilities_api_012( 'wpbp/never-registered' );",
-            "description": "Core abilities report their real REST visibility and unknown names report unregistered without notices",
+            "code": "if ( ! function_exists( 'wpbp_abilities_api_012' ) ) { return false; } return array( 'registered' => true, 'show_in_rest' => true ) === wpbp_abilities_api_012( 'core/get-site-info' ) && array( 'registered' => true, 'show_in_rest' => false ) === wpbp_abilities_api_012( 'wpbp/hidden-probe' ) && array( 'registered' => false, 'show_in_rest' => false ) === wpbp_abilities_api_012( 'wpbp/never-registered' );",
+            "description": "A REST-visible core ability, a registered-but-hidden ability, and an unknown name each report correctly without notices",
             "weight": 1
           }
-        ]
+        ],
+        "setup": "add_action( 'wp_abilities_api_categories_init', static function () { wp_register_ability_category( 'wpbp-probe', array( 'label' => 'WPBP Probe', 'description' => 'Probe abilities for WPBP.' ) ); } ); add_action( 'wp_abilities_api_init', static function () { wp_register_ability( 'wpbp/hidden-probe', array( 'label' => 'Hidden probe', 'description' => 'Registered but not exposed over REST.', 'category' => 'wpbp-probe', 'execute_callback' => '__return_true', 'permission_callback' => '__return_true', 'meta' => array( 'show_in_rest' => false ) ) ); } );"
       },
       "reference_solution": "function wpbp_abilities_api_012( string $ability_name ): array { if ( ! wp_has_ability( $ability_name ) ) { return array( 'registered' => false, 'show_in_rest' => false ); } $ability = wp_get_ability( $ability_name ); return array( 'registered' => true, 'show_in_rest' => (bool) $ability->get_meta_item( 'show_in_rest', false ) ); }",
       "metadata": {
         "source_refs": [
           "src/wp-includes/abilities-api.php",
+          "src/wp-includes/abilities-api/class-wp-ability.php",
           "src/wp-includes/abilities.php"
         ],
         "release_focus": "6.9"
