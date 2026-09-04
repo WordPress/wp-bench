@@ -14,14 +14,21 @@ permissions:
 
 jobs:
   python:
-    name: Python lint, types, tests
+    name: Python lint, types, tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor is the version pyproject advertises. Testing only the
+        # newest lets the floor rot: litellm shipped a 3.11-only import while
+        # we still claimed 3.10, and CI stayed green (#61).
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "${{ matrix.python-version }}"
           cache: pip
 
       - name: Install harness with dev tooling
