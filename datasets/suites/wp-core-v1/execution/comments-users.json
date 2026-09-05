@@ -218,6 +218,7 @@
       "prompt": "Implement a function that submits a visitor comment through WordPress's comment submission flow and, when WordPress rejects the submission (for example as a duplicate of one already on the post), returns WordPress's error object instead of letting WordPress end the request.",
       "expected_behavior": "The function calls `wp_new_comment()` with the error-returning mode enabled so a rejected submission comes back as a `WP_Error` (code `comment_duplicate` for a repeated comment) rather than reaching `wp_die()`. Runtime validation submits one comment, resubmits the identical payload, and submits a different comment from a different author; only the middle call may produce an error, and the post ends with exactly two comments.",
       "requirements": [
+        "The array holds WordPress comment fields keyed as comment_post_ID, comment_author, comment_author_email, comment_author_url and comment_content",
         "Submit the comment through the WordPress API that applies WordPress's comment checks (duplicate detection, flood control, moderation)",
         "Return the new comment ID when WordPress accepts the submission",
         "Return WordPress's error object when the submission is rejected, instead of allowing the request to be terminated"

@@ -260,7 +260,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "wpbp_patterns_004(); $template = WP_Block_Templates_Registry::get_instance()->get_registered( 'wpbp-books//book-showcase' ); if ( ! $template instanceof WP_Block_Template ) { return false; } if ( 'Book Showcase' !== $template->title || 'Full-width showcase for a single book.' !== $template->description ) { return false; } if ( 'book-showcase' !== $template->slug || 'plugin' !== $template->source || 'plugin' !== $template->origin ) { return false; } if ( array( 'wpbp_book' ) !== $template->post_types ) { return false; } return str_contains( (string) $template->content, 'Showcase content.' );",
+            "code": "if ( ! WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp-books//book-showcase' ) ) { wpbp_patterns_004(); } $template = WP_Block_Templates_Registry::get_instance()->get_registered( 'wpbp-books//book-showcase' ); if ( ! $template instanceof WP_Block_Template ) { return false; } if ( 'Book Showcase' !== $template->title || 'Full-width showcase for a single book.' !== $template->description ) { return false; } if ( 'book-showcase' !== $template->slug || 'plugin' !== $template->source || 'plugin' !== $template->origin ) { return false; } if ( array( 'wpbp_book' ) !== $template->post_types ) { return false; } return str_contains( (string) $template->content, 'Showcase content.' );",
             "description": "The template is registered as a plugin template with the requested metadata and post type",
             "weight": 1
           },

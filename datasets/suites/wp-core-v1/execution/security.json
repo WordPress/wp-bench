@@ -520,7 +520,7 @@
         "Remove the slashes WordPress added before doing anything else with the value",
         "Store the cleaned single-line text in the wpbp_tagline option",
         "Escape the value for an HTML attribute where it is used as a title",
-        "Escape the value for a JavaScript string literal where it is assigned in the script block",
+        "Escape the value with WordPress's escaping helper for a JavaScript string literal where it is assigned in the script block, rather than encoding it as JSON",
         "Return the resulting markup snippet"
       ],
       "test_function": "wpbp_security_011( string $submitted ): string",

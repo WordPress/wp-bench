@@ -16,7 +16,7 @@
       "requirements": [
         "Register the activation routine so WordPress runs it on activation of this plugin file",
         "Seed the defaults only when no settings are stored yet",
-        "Run the upgrade check when WordPress has finished loading plugins",
+        "Attach the upgrade check to the plugins_loaded action with add_action, even though this plugin file is loaded after the site has already fired plugins_loaded",
         "Upgrade only settings older than the current version, keeping the stored page size, and add one to wpbp_reader_upgrades on each upgrade",
         "Register an uninstall callback that is a named function or a static method rather than a closure"
       ],

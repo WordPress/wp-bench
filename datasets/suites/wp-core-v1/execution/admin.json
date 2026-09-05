@@ -399,7 +399,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); $GLOBALS['wp_meta_boxes'] = array(); do_action( 'add_meta_boxes', 'wpbp_book', get_post( $fixture['book'] ) ); $registered = false; foreach ( (array) ( $GLOBALS['wp_meta_boxes']['wpbp_book']['side'] ?? array() ) as $group ) { if ( isset( $group['wpbp-isbn'] ) && ! empty( $group['wpbp-isbn'] ) ) { $registered = 'ISBN' === $group['wpbp-isbn']['title']; } } $GLOBALS['wp_meta_boxes'] = array(); do_action( 'add_meta_boxes', 'post', get_post( $fixture['plain'] ) ); $leaked = ! empty( $GLOBALS['wp_meta_boxes']['post'] ); return $registered && ! $leaked;",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); $GLOBALS['wp_meta_boxes'] = array(); do_action( 'add_meta_boxes', 'wpbp_book', get_post( $fixture['book'] ) ); do_action( 'add_meta_boxes_wpbp_book', get_post( $fixture['book'] ) ); $registered = false; foreach ( (array) ( $GLOBALS['wp_meta_boxes']['wpbp_book']['side'] ?? array() ) as $group ) { if ( isset( $group['wpbp-isbn'] ) && ! empty( $group['wpbp-isbn'] ) ) { $registered = 'ISBN' === $group['wpbp-isbn']['title']; } } $GLOBALS['wp_meta_boxes'] = array(); do_action( 'add_meta_boxes', 'post', get_post( $fixture['plain'] ) ); do_action( 'add_meta_boxes_post', get_post( $fixture['plain'] ) ); $leaked = ! empty( $GLOBALS['wp_meta_boxes']['post'] ); return $registered && ! $leaked;",
             "description": "The ISBN box is registered in the side column of the book screen only",
             "weight": 1
           },
