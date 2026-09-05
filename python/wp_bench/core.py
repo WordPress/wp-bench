@@ -391,6 +391,19 @@ def _run_concurrent_loop(
     policy.finish()
 
 
+#: Told to the model with every execution prompt. The grader loads the
+#: submission into an already-booted WordPress (after ``init``), so code that
+#: defers its registrations to the ``init`` action -- idiomatic in a plugin --
+#: would silently never run. Saying so keeps the benchmark about WordPress
+#: knowledge rather than about guessing the harness's load order.
+EXECUTION_CONTEXT_NOTE = (
+    "Execution context: this code is loaded into a WordPress site that has already "
+    "finished booting (the init action has already fired), so perform any "
+    "registrations or hook attachments directly when the code runs instead of "
+    "deferring them to init."
+)
+
+
 class BenchmarkRunner(_ResultBookkeeping):
     """Primary benchmark orchestrator for single-model evaluation.
 
@@ -712,6 +725,8 @@ class BenchmarkRunner(_ResultBookkeeping):
         if test.test_function:
             lines.append("")
             lines.append(f"Define this function: {test.test_function}")
+        lines.append("")
+        lines.append(EXECUTION_CONTEXT_NOTE)
         lines.append(
             render_artifact_instructions(getattr(test, "artifact_kind", "php_snippet"))
         )
