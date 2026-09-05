@@ -159,13 +159,14 @@ def test_result_record_contains_usage_and_model_call(
     monkeypatch.setattr(models_module, "completion_cost", lambda response: 0.002)
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
-    runner.environment.reset = lambda: None  # type: ignore[method-assign]
+    runner.environment.reset = lambda worker=0: None  # type: ignore[method-assign]
+    runner.environment.drop_worker_databases = lambda: None  # type: ignore[method-assign]
     raw = {
         "success": True,
         "static": {"score": 1.0, "details": {"total_weight": 1}},
         "runtime": {"score": 1.0, "details": {"total_weight": 1}},
     }
-    runner.environment.execute_artifact = lambda artifact, verification_spec: ExecutionResult(  # type: ignore[method-assign]
+    runner.environment.execute_artifact = lambda artifact, verification_spec, worker=0: ExecutionResult(  # type: ignore[method-assign]
         success=True, raw=raw, stdout="", stderr=""
     )
 

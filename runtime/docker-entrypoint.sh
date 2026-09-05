@@ -28,6 +28,25 @@ if [ ! -f wp-config.php ]; then
     --allow-root
 fi
 
+# Resolve DB_NAME at runtime rather than baking the literal `wp config create`
+# writes. The harness runs pooled tests by setting WORDPRESS_DB_NAME per
+# command so each concurrent worker grades in its own database, and it reaches
+# this container through `docker exec`, which never re-runs this entrypoint --
+# so a literal here can never be revised and the override would be silently
+# inert, leaving every worker on one shared database. `docker exec` does
+# inherit the container's environment, so the unset case falls back to the
+# name this container was started with and single-runtime behavior is
+# unchanged. Runs on every start, not just creation, so a wp-config.php left
+# in a volume by an older image is upgraded too.
+# --raw writes the argument into wp-config.php verbatim, so the fallback has
+# to be escaped for a PHP single-quoted string. Unescaped, a name containing
+# a quote breaks the file, and a crafted one closes the literal and continues
+# as code that runs on every WordPress bootstrap.
+escaped_db_name=$(printf '%s' "$WORDPRESS_DB_NAME" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g")
+wp config set DB_NAME "getenv('WORDPRESS_DB_NAME') ?: '$escaped_db_name'" \
+  --raw \
+  --allow-root
+
 if ! wp core is-installed --allow-root >/dev/null 2>&1; then
   wp core install \
     --url="$WORDPRESS_SITE_URL" \

@@ -1,6 +1,7 @@
 """Main orchestration loop for WP-Bench."""
 from __future__ import annotations
 
+import queue
 import threading
 import traceback
 from collections.abc import Iterator
@@ -43,6 +44,7 @@ from .records import (
     build_exploit_audit_record,
     errored_test_ids,
     execution_record_passed,
+    isolation_metadata,
     sort_records,
 )
 from .results_io import RecordStream, open_run_artifacts, write_results_json
@@ -289,6 +291,43 @@ def _restores_a_baseline(config: HarnessConfig) -> bool:
     """
     return config.run.execution_isolation == "reset_per_test"
 
+class _WorkerSlots:
+    """Hands out the database slots a pooled run grades on.
+
+    The WordPressEnvironment is one object shared by every thread, so the
+    current worker index can never live on it: two threads would overwrite
+    each other's and silently grade in the same database while the results
+    file still claimed per-test isolation. A queue makes the slot a property
+    of the task instead. A task holds its slot for exactly as long as it
+    runs and returns it even when it raises, so a thread the pool recycles
+    can never be handed a database another live test is using.
+    """
+
+    def __init__(self, count: int) -> None:
+        self._slots: queue.Queue[int] = queue.Queue()
+        for slot in range(count):
+            self._slots.put(slot)
+
+    @contextmanager
+    def acquire(self) -> Iterator[int]:
+        slot = self._slots.get()
+        try:
+            yield slot
+        finally:
+            self._slots.put(slot)
+
+
+def _effective_concurrency(config: HarnessConfig, test_count: int) -> int:
+    """The most tests this run could have had in flight at once.
+
+    ``run.execution_concurrency`` alone overstates it: a run of two tests at
+    concurrency 8 never had more than two going. This is still a bound
+    rather than a measurement -- tests that fail in milliseconds may never
+    reach it -- and records.isolation_metadata documents the field that way.
+    Floors at 1 so a run that graded nothing still reads sensibly.
+    """
+    return max(1, min(config.run.execution_concurrency, test_count))
+
 
 def _run_isolated_execution_loop(
     *,
@@ -302,13 +341,17 @@ def _run_isolated_execution_loop(
 ) -> None:
     """Run execution-style tests honoring the configured isolation strategy.
 
-    ``reset_per_test`` (default): tests run serially and the WordPress
-    environment is reset to a known baseline before every test, so no test
-    can observe state (options, posts, roles, hooks persisted to DB, etc.)
-    left behind by a previous test or a previous model run.
+    ``reset_per_test`` (default): the WordPress database is reset to a known
+    baseline before every test, so no test can observe state (options,
+    posts, roles, hooks persisted to DB, etc.) left behind by a previous
+    test or a previous model run. With ``run.execution_concurrency`` above
+    1 the run provisions one database per worker and tests run concurrently
+    against their own; the reset and the grading of a given test always
+    target the same slot, and no slot is ever held by two live tests.
 
-    ``none``: legacy concurrent behavior against a shared environment,
-    bounded by ``run.execution_concurrency``. Not valid for official runs.
+    ``none``: legacy concurrent behavior against a shared environment with
+    no reset at all, bounded by ``run.execution_concurrency``. Not valid for
+    official runs.
 
     Per-test errors abort the run unless ``run.continue_on_error`` is set,
     in which case they are warned about, recorded via ``on_error``, and the
@@ -319,18 +362,42 @@ def _run_isolated_execution_loop(
         tests_to_run: Tests to execute, already limited/filtered.
         config: Harness configuration (isolation strategy, concurrency).
         environment: WordPress environment shared by this run.
-        process_test: Callable taking a test and returning a record dict.
+        process_test: Callable taking (test, worker slot) and returning a
+            record dict. The slot names the database that test was reset on
+            and must be the one it is graded against.
         on_result: Callable invoked with each record (aggregation/appending).
         on_error: Callable (test, TestError) -> error record.
         progress_label: Label for the progress bar.
     """
     policy = _ContinueOnErrorPolicy(config.run.continue_on_error)
     if config.run.execution_isolation != "reset_per_test":
+        # No reset, so nothing to keep apart: every test grades on the
+        # runtime's own database exactly as it did before pooling existed.
         _run_concurrent_loop(
             tests_to_run=tests_to_run,
             max_workers=config.run.execution_concurrency,
             progress_label=progress_label,
-            process_test=process_test,
+            process_test=lambda test: process_test(test, 0),
+            on_result=on_result,
+            on_error=on_error,
+            policy=policy,
+        )
+        return
+    if config.run.pools_databases:
+        # Same predicate that sized the pool at setup(), so the slots handed
+        # out here can never outnumber the databases that were provisioned.
+        slots = _WorkerSlots(config.run.database_pool_size)
+
+        def reset_then_process(test: Any) -> dict[str, Any]:
+            with slots.acquire() as worker:
+                environment.reset(worker)
+                return process_test(test, worker)
+
+        _run_concurrent_loop(
+            tests_to_run=tests_to_run,
+            max_workers=config.run.execution_concurrency,
+            progress_label=progress_label,
+            process_test=reset_then_process,
             on_result=on_result,
             on_error=on_error,
             policy=policy,
@@ -339,9 +406,9 @@ def _run_isolated_execution_loop(
     with create_progress() as progress:
         task = progress.add_task(progress_label, total=len(tests_to_run))
         for test in tests_to_run:
-            environment.reset()
+            environment.reset(0)
             try:
-                result = process_test(test)
+                result = process_test(test, 0)
             except TestError as error:
                 if policy.register_error(error):
                     raise
@@ -366,9 +433,10 @@ def _run_concurrent_loop(
 ) -> None:
     """Run tests concurrently, honoring the continue-on-error policy.
 
-    The concurrent core for the ``none``-isolation execution branch. A
-    per-test error aborts (cancelling pending futures) unless the policy
-    records it and lets the run continue.
+    The concurrent core for both the ``none``-isolation branch and pooled
+    ``reset_per_test``. A per-test error aborts (cancelling pending futures)
+    unless the policy records it and lets the run continue; anything that is
+    not a per-test error always aborts.
     """
     with create_progress() as progress:
         task = progress.add_task(progress_label, total=len(tests_to_run))
@@ -379,16 +447,36 @@ def _run_concurrent_loop(
                     result = future.result()
                 except TestError as error:
                     if policy.register_error(error):
-                        for f in futures:
-                            f.cancel()
+                        _cancel_pending(futures)
                         raise
                     print_test_warning(error)
                     result = on_error(futures[future], error)
+                except BaseException:
+                    # Not a test result: a reset that failed or timed out
+                    # means the runtime is no longer known-clean, and
+                    # continue_on_error does not cover harness failures.
+                    # Drain the queue rather than grade the rest against it.
+                    #
+                    # BaseException, not Exception, because KeyboardInterrupt
+                    # is the case that matters most: without this the executor
+                    # exits through shutdown(wait=True), which does not cancel
+                    # queued futures, so Ctrl-C would run the rest of the suite
+                    # to completion — burning model spend behind a progress bar
+                    # frozen at the interrupt. The serial loop stops after the
+                    # current test; pooled runs must not be worse.
+                    _cancel_pending(futures)
+                    raise
                 else:
                     policy.record_success()
                 on_result(result)
                 progress.update(task, advance=1)
     policy.finish()
+
+
+def _cancel_pending(futures: Any) -> None:
+    """Cancel every future that has not started yet."""
+    for future in futures:
+        future.cancel()
 
 
 class BenchmarkRunner(_ResultBookkeeping):
@@ -431,12 +519,20 @@ class BenchmarkRunner(_ResultBookkeeping):
         if self.config.run.check_exploits:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
-        self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
-        with _graded_run(self._stream):
-            if reference_mode:
-                self._run_reference_solution_tests(tests)
-            else:
-                self._run_execution_tests(tests)
+        try:
+            # Inside the try: provisioning can fail partway through, and the
+            # databases it built before failing still need dropping.
+            self.environment.setup(
+                capture_baseline=_restores_a_baseline(self.config),
+                worker_count=self.config.run.database_pool_size,
+            )
+            with _graded_run(self._stream):
+                if reference_mode:
+                    self._run_reference_solution_tests(tests)
+                else:
+                    self._run_execution_tests(tests)
+        finally:
+            self.environment.drop_worker_databases()
         summary = self.aggregator.finalize()
         model_config = self.config.model.model_dump(mode="json") if self.config.model else None
         payload = {
@@ -447,7 +543,10 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "model": model_config,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
-                "runtime_isolation": self.config.run.execution_isolation,
+                **isolation_metadata(
+                    self.config.run.execution_isolation,
+                    _effective_concurrency(self.config, len(self.records)),
+                ),
                 "scoring_version": SCORING_VERSION,
                 "seed": self.config.run.seed,
                 "limit": self.config.run.limit,
@@ -485,8 +584,8 @@ class BenchmarkRunner(_ResultBookkeeping):
         """
         tests_to_run = select_run_tests(tests, self.config)
 
-        def process_test(test: ExecutionTest) -> dict[str, Any]:
-            """Process a single execution test."""
+        def process_test(test: ExecutionTest, worker: int) -> dict[str, Any]:
+            """Process a single execution test on its assigned worker slot."""
             try:
                 prompt = self._render_execution_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
@@ -507,7 +606,9 @@ class BenchmarkRunner(_ResultBookkeeping):
                         model_call=_model_call_info(generation),
                     )
                 verification_spec = _build_verification_spec(test, self.config)
-                env_result = self.environment.execute_artifact(artifact, verification_spec)
+                env_result = self.environment.execute_artifact(
+                    artifact, verification_spec, worker=worker
+                )
                 scores = self._score_execution(
                     env_result.raw,
                     test,
@@ -546,7 +647,7 @@ class BenchmarkRunner(_ResultBookkeeping):
         """Run execution tests using their reference_solution as candidate code."""
         tests_to_run = select_run_tests(tests, self.config)
 
-        def process_test(test: ExecutionTest) -> dict[str, Any]:
+        def process_test(test: ExecutionTest, worker: int) -> dict[str, Any]:
             try:
                 artifact_kind = getattr(test, "artifact_kind", "php_snippet")
                 if artifact_kind == "wp_plugin_files":
@@ -558,7 +659,9 @@ class BenchmarkRunner(_ResultBookkeeping):
                         raise ValueError("Missing reference_solution")
                     artifact = Artifact(kind="php_snippet", code=test.reference_solution)
                 verification_spec = _build_verification_spec(test, self.config)
-                env_result = self.environment.execute_artifact(artifact, verification_spec)
+                env_result = self.environment.execute_artifact(
+                    artifact, verification_spec, worker=worker
+                )
                 scores = self._score_execution(
                     env_result.raw,
                     test,
@@ -622,7 +725,10 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "scoring_version": SCORING_VERSION,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
-                "runtime_isolation": self.config.run.execution_isolation,
+                # The audit runs its own serial loop over every candidate, so
+                # it never pools no matter what run.execution_concurrency
+                # asks for. Stamp what it did, not what was configured.
+                **isolation_metadata(self.config.run.execution_isolation, 1),
                 "audit": audit,
             },
             "results": sort_records(self.records),
@@ -673,10 +779,11 @@ class BenchmarkRunner(_ResultBookkeeping):
         """
         verification_spec = _build_verification_spec(test, self.config)
         for label, code in candidates:
-            self.environment.reset()
+            self.environment.reset(0)
             env_result = self.environment.execute_artifact(
                 Artifact(kind="php_snippet", code=code),
                 verification_spec,
+                worker=0,
             )
             scores = self._score_execution(
                 env_result.raw,
@@ -871,6 +978,9 @@ class MultiModelRunner:
         self.skills = skills or []
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
+        #: Tests each pass grades; set in run(). Metadata reports the
+        #: concurrency a pass could reach, not the configured ceiling.
+        self._tests_per_pass = 0
         self._results_path, self._stream = open_run_artifacts(config.output)
 
     def run(self) -> dict[str, Any]:
@@ -894,26 +1004,36 @@ class MultiModelRunner:
                 f"Dataset '{self.config.dataset.name}' contains no execution "
                 "tests. Check the dataset source and suite name."
             )
-        self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
+        try:
+            # Inside the try: provisioning can fail partway through, and the
+            # databases it built before failing still need dropping.
+            self.environment.setup(
+                capture_baseline=_restores_a_baseline(self.config),
+                worker_count=self.config.run.database_pool_size,
+            )
+            # Every pass runs the same selected subset, so one count describes
+            # the concurrency any of them could reach.
+            self._tests_per_pass = len(select_run_tests(tests, self.config))
+            with _graded_run(self._stream):
+                for model_config in models:
+                    for variant in self.variants:
+                        display_name = f"{model_config.name}{variant.label_suffix}"
+                        print_model_header(display_name)
 
-        with _graded_run(self._stream):
-            for model_config in models:
-                for variant in self.variants:
-                    display_name = f"{model_config.name}{variant.label_suffix}"
-                    print_model_header(display_name)
-
-                    runner = SingleModelRunner(
-                        config=self.config,
-                        model_config=model_config,
-                        environment=self.environment,
-                        tests=tests,
-                        variant=variant,
-                        stream=self._stream,
-                    )
-                    result = runner.run()
-                    result["base_model"] = model_config.name
-                    result["variant"] = variant.payload_info()
-                    self.results[display_name] = result
+                        runner = SingleModelRunner(
+                            config=self.config,
+                            model_config=model_config,
+                            environment=self.environment,
+                            tests=tests,
+                            variant=variant,
+                            stream=self._stream,
+                        )
+                        result = runner.run()
+                        result["base_model"] = model_config.name
+                        result["variant"] = variant.payload_info()
+                        self.results[display_name] = result
+        finally:
+            self.environment.drop_worker_databases()
 
         print_comparison_table(self.results)
         print_skill_impact(self.results)
@@ -964,7 +1084,10 @@ class MultiModelRunner:
                 "scoring_version": SCORING_VERSION,
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
-                "runtime_isolation": self.config.run.execution_isolation,
+                **isolation_metadata(
+                    self.config.run.execution_isolation,
+                    _effective_concurrency(self.config, self._tests_per_pass),
+                ),
                 "continue_on_error": self.config.run.continue_on_error,
                 "skills": self._skills_metadata(),
                 "variants": [variant.key for variant in self.variants],
@@ -1045,7 +1168,7 @@ class SingleModelRunner(_ResultBookkeeping):
         tests_to_run = select_run_tests(tests, self.config)
         variant_info = self.variant.record_info()
 
-        def process_test(test: ExecutionTest) -> dict[str, Any]:
+        def process_test(test: ExecutionTest, worker: int) -> dict[str, Any]:
             try:
                 prompt = BenchmarkRunner._render_execution_prompt(test)
                 generation = self.model.generate_with_metadata(prompt)
@@ -1067,7 +1190,9 @@ class SingleModelRunner(_ResultBookkeeping):
                         variant=variant_info,
                     )
                 verification_spec = _build_verification_spec(test, self.config)
-                env_result = self.environment.execute_artifact(artifact, verification_spec)
+                env_result = self.environment.execute_artifact(
+                    artifact, verification_spec, worker=worker
+                )
                 scores = BenchmarkRunner._score_execution(
                     env_result.raw,
                     test,

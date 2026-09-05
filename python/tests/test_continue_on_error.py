@@ -59,13 +59,16 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
 class QuietEnvironment:
     """Environment stub that always passes."""
 
-    def setup(self, *, capture_baseline: bool = True) -> None:
+    def setup(self, *, capture_baseline: bool = True, worker_count: int = 1) -> None:
         pass
 
-    def reset(self) -> None:
+    def drop_worker_databases(self) -> None:
         pass
 
-    def execute_artifact(self, artifact: object, verification_spec: dict) -> ExecutionResult:
+    def reset(self, worker: int = 0) -> None:
+        pass
+
+    def execute_artifact(self, artifact: object, verification_spec: dict, worker: int = 0) -> ExecutionResult:
         return _passing_result()
 
 
