@@ -62,8 +62,9 @@ class SpyEnvironment:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def setup(self) -> None:
+    def setup(self, *, capture_baseline: bool = True) -> None:
         self.calls.append("setup")
+        self.capture_baseline = capture_baseline
 
     def reset(self) -> None:
         self.calls.append("reset")
@@ -218,3 +219,43 @@ def test_isolation_none_still_runs_all_tests(
     assert spy.calls.count("execute") == 2
     assert spy.calls.count("reset") == 0
     assert payload["metadata"]["runtime_isolation"] == "none"
+
+
+def test_isolation_none_does_not_capture_a_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Capturing a baseline runs `wp db reset`. A run that never restores one
+    must not destroy database state the caller deliberately kept."""
+    tests = [_execution_test("e-one")]
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: tests)
+    config = _config(tmp_path, execution_isolation="none", execution_concurrency=2)
+    runner = BenchmarkRunner(config)
+    spy = SpyEnvironment()
+    runner.environment = spy  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
+
+    runner.run()
+
+    assert spy.capture_baseline is False
+
+
+def test_reset_per_test_captures_a_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tests = [_execution_test("e-one")]
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: tests)
+    config = _config(tmp_path)
+    runner = BenchmarkRunner(config)
+    spy = SpyEnvironment()
+    runner.environment = spy  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
+
+    runner.run()
+
+    assert spy.capture_baseline is True

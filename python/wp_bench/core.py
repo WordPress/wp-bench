@@ -276,6 +276,20 @@ class _ContinueOnErrorPolicy:
             raise self.last_error
 
 
+def _restores_a_baseline(config: HarnessConfig) -> bool:
+    """Whether this run will call ``environment.reset()`` at all.
+
+    Only ``reset_per_test`` restores a baseline; ``none`` routes to the
+    concurrent loop, which never resets. Capturing a baseline the run cannot
+    use is not merely wasted work — the capture runs ``wp db reset``, so it
+    would destroy database state an isolation-free run deliberately kept.
+
+    The exploit audit resets unconditionally regardless of isolation, so it
+    does not consult this.
+    """
+    return config.run.execution_isolation == "reset_per_test"
+
+
 def _run_isolated_execution_loop(
     *,
     tests_to_run: list[Any],
@@ -417,7 +431,7 @@ class BenchmarkRunner(_ResultBookkeeping):
         if self.config.run.check_exploits:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
-        self.environment.setup()
+        self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
         with _graded_run(self._stream):
             if reference_mode:
                 self._run_reference_solution_tests(tests)
@@ -880,7 +894,7 @@ class MultiModelRunner:
                 f"Dataset '{self.config.dataset.name}' contains no execution "
                 "tests. Check the dataset source and suite name."
             )
-        self.environment.setup()
+        self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
 
         with _graded_run(self._stream):
             for model_config in models:

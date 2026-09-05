@@ -72,7 +72,7 @@ def _single_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> li
         lambda dataset: [_execution_test()],
     )
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_artifact = lambda artifact, verification_spec: _passing_result()  # type: ignore[method-assign]
     monkeypatch.setattr(runner.model, "generate_with_metadata", lambda prompt: fake_generation("init"))
@@ -90,7 +90,7 @@ def _multi_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> lis
     )
 
     class FakeEnvironment:
-        def setup(self) -> None: ...
+        def setup(self, *, capture_baseline: bool = True) -> None: ...
         def reset(self) -> None: ...
 
         def execute_artifact(self, artifact: object, spec: dict) -> ExecutionResult:
@@ -164,7 +164,7 @@ def test_reference_solution_record_uses_canonical_schema(
         lambda dataset: [_execution_test()],
     )
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_artifact = lambda artifact, verification_spec: _passing_result()  # type: ignore[method-assign]
 
@@ -201,7 +201,7 @@ def test_jsonl_records_match_json_results(
         lambda dataset: [_execution_test()],
     )
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_artifact = lambda artifact, verification_spec: _passing_result()  # type: ignore[method-assign]
     monkeypatch.setattr(runner.model, "generate_with_metadata", lambda prompt: fake_generation("init"))
@@ -238,7 +238,7 @@ def test_records_are_sorted_for_stable_output(
         lambda dataset: tests,
     )
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_artifact = lambda artifact, verification_spec: _passing_result()  # type: ignore[method-assign]
     monkeypatch.setattr(

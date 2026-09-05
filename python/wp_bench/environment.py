@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 from dataclasses import dataclass
 from typing import Any
@@ -45,27 +46,40 @@ class WordPressEnvironment:
 
     def __init__(self, config: GraderConfig):
         self.config = config
+        #: Clean-baseline SQL dump, held on the host between setup and reset.
+        #: Deliberately not written into the runtime: candidate code is
+        #: eval'd there with root, so an on-disk dump would be a file the
+        #: graded code could truncate or seed to defeat isolation.
+        self._baseline: str | None = None
 
-    def setup(self) -> None:
+    def setup(self, *, capture_baseline: bool = True) -> None:
+        """Bring the runtime up, and record the baseline reset() restores.
+
+        Args:
+            capture_baseline: Whether to capture the clean baseline. Capturing
+                runs ``wp db reset``, which destroys whatever is in the
+                database, so a run that never calls :meth:`reset` (isolation
+                ``none``) must pass False: it would pay for an install it
+                cannot use and wipe state the caller deliberately kept.
+                Defaults to True so any caller that does reset is safe by
+                omission.
+        """
         if self.config.wp_env_dir:
             self._run_wp_env(["npx", "wp-env", "start"])
+        elif self.config.kind == "docker":
+            if not self._container_exists():
+                self._start_container()
+        else:
+            # A cli grader drives a runtime the harness does not own, so there
+            # is nothing to install and nothing to capture. reset() refuses
+            # rather than pretending it isolated anything.
             return
-        if self.config.kind != "docker":
-            return
-        if not self._container_exists():
-            self._start_container()
+        if capture_baseline:
+            self._capture_baseline()
 
-    def reset(self) -> None:
-        """Restore the WordPress runtime to a known clean baseline.
-
-        ``wp db reset`` drops every table, which leaves WordPress uninstalled,
-        so a fresh ``wp core install`` follows to return to a deterministic
-        just-installed state. Called before every execution test when
-        ``run.execution_isolation`` is ``reset_per_test`` so no test can
-        observe database state (options, posts, roles, transients, cron
-        events, etc.) left behind by an earlier test or model run.
-        """
-        install_cmd = [
+    def _install_command(self) -> list[str]:
+        """The canonical clean install every reset restores the site to."""
+        return [
             "wp",
             "core",
             "install",
@@ -76,38 +90,118 @@ class WordPressEnvironment:
             "--admin_email=admin@wp-bench.test",
             "--skip-email",
         ]
-        if self.config.wp_env_dir:
-            self._run_wp_env(["npx", "wp-env", "run", "cli", "wp", "db", "reset", "--yes"])
-            self._run_wp_env(["npx", "wp-env", "run", "cli", *install_cmd])
-        elif self.config.kind == "docker":
-            self._reset_step(["wp", "db", "reset", "--yes"])
-            self._reset_step(install_cmd)
-        else:
-            # Config validation rejects this pairing, so reaching here means a
-            # new grader kind was added without a reset. Refuse rather than
-            # let the run stamp an isolation guarantee it never delivered.
+
+    def _capture_baseline(self) -> None:
+        """Record the clean baseline that every later reset restores.
+
+        Reinstalling WordPress before every test rebuilds a state the harness
+        already knows, because it is the same state every time. So the run
+        pays for one install here and replays its dump per test instead.
+
+        The dump is taken from exactly what ``wp db reset`` + ``wp core
+        install`` produce, so restoring it is state-equivalent to reinstalling.
+        The one difference is that install-time timestamps (cron schedules,
+        ``user_registered``, ``post_date``) freeze at run start rather than
+        advancing per test, which removes a source of run-to-run drift.
+
+        The dump comes back on stdout and stays on the host. Writing it into
+        the runtime would put the harness's isolation source inside the blast
+        radius of the code it grades: candidates are eval'd in that container
+        with root, so any test could truncate the dump (silently emptying
+        every later reset) or append rows to it (silently pre-seeding every
+        later test). The reset feeds it back over stdin instead.
+
+        The install and drop are silenced because their WP-CLI success lines
+        would otherwise land on stdout ahead of the SQL and corrupt the dump.
+        """
+        script = " && ".join(
+            [
+                "wp db reset --yes >/dev/null",
+                f"{shlex.join(self._install_command())} >/dev/null",
+                "wp db export -",
+            ]
+        )
+        stdout, stderr, returncode, timed_out = self._exec(
+            ["sh", "-c", script],
+            timeout=self.config.setup_timeout_seconds,
+        )
+        if timed_out:
+            raise EnvironmentSetupTimeout(
+                "Timed out capturing the clean WordPress baseline after "
+                f"{self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
+            )
+        if returncode != 0:
+            raise RuntimeError(
+                f"Failed to capture the clean WordPress baseline (exit code {returncode})"
+                f"{': ' + stderr.strip() if stderr.strip() else ''}"
+            )
+        if not stdout.strip():
+            # An empty dump imports cleanly and exits 0, so catching it here is
+            # the difference between failing setup and grading every test in
+            # the run against an empty database.
+            raise RuntimeError(
+                "Captured an empty WordPress baseline: 'wp db export -' returned "
+                "no SQL, so no reset could restore a usable database."
+            )
+        self._baseline = stdout
+
+    def reset(self) -> None:
+        """Restore the WordPress runtime to the captured clean baseline.
+
+        ``wp db reset`` drops every table, then the baseline dump recorded by
+        :meth:`setup` is imported to return to a deterministic just-installed
+        state. Called before every execution test when
+        ``run.execution_isolation`` is ``reset_per_test`` so no test can
+        observe database state (options, posts, roles, transients, cron
+        events, etc.) left behind by an earlier test or model run.
+
+        Both steps travel in one invocation: a round trip into the runtime
+        costs ~0.9s through ``npx wp-env run cli`` (~0.24s through ``docker
+        exec``), so a second trip costs more than the restore itself. ``&&``
+        chains them so a failed drop can never import the baseline over
+        surviving state.
+        """
+        if not self.config.wp_env_dir and self.config.kind != "docker":
+            # Nothing rejects this pairing at config load, so it reaches here
+            # on a real run. Refuse rather than let the run stamp an isolation
+            # guarantee it never delivered.
             raise RuntimeError(
                 f"grader.kind {self.config.kind!r} has no reset implementation, so "
                 "run.execution_isolation 'reset_per_test' cannot be honored."
             )
+        if self._baseline is None:
+            raise RuntimeError(
+                "No clean baseline was captured, so reset() cannot restore one. "
+                "Call setup(capture_baseline=True) before grading."
+            )
+        # `wp db import` exits 0 on an empty or truncated dump, which would
+        # drop every table, import nothing, and report success. Every later
+        # test would then fail against an empty database and be blamed on the
+        # model, so `wp core is-installed` confirms the restore landed.
+        script = "wp db reset --yes && wp db import - && wp core is-installed"
+        self._reset_step(["sh", "-c", script], stdin=self._baseline)
 
-    def _reset_step(self, command: list[str]) -> None:
-        """Run one reset command, failing loudly like the wp-env path does.
+    def _reset_step(self, command: list[str], *, stdin: str | None = None) -> None:
+        """Run one reset command, failing loudly.
 
         A reset that times out or exits nonzero leaves the next test running
         against dirty or uninstalled WordPress, and its assertion failures
         get attributed to the model instead of the harness.
         """
-        _, stderr, returncode, timed_out = self._exec(command)
+        _, stderr, returncode, timed_out = self._exec(command, stdin=stdin)
+        # shlex.join, not ' '.join: the command is an ``sh -c`` invocation, and
+        # naive joining renders a string that runs the reset against the
+        # operator's own WordPress if they paste it into a host shell.
+        rendered = shlex.join(command)
         if timed_out:
             raise EnvironmentSetupTimeout(
-                f"Timed out resetting WordPress with {' '.join(command)} after "
+                f"Timed out resetting WordPress with {rendered} after "
                 f"{self.config.timeout_seconds}s (grader.timeout_seconds)."
             )
         if returncode != 0:
             raise RuntimeError(
                 f"Reset command failed with exit code {returncode}: "
-                f"{' '.join(command)}{': ' + stderr.strip() if stderr.strip() else ''}"
+                f"{rendered}{': ' + stderr.strip() if stderr.strip() else ''}"
             )
 
     def execute_code(self, code: str, verification_spec: dict[str, Any]) -> ExecutionResult:
@@ -291,6 +385,7 @@ class WordPressEnvironment:
         command: list[str],
         *,
         stdin: str | None = None,
+        timeout: float | None = None,
     ) -> tuple[str, str, int, bool]:
         """Execute a command in the WordPress runtime.
 
@@ -299,12 +394,17 @@ class WordPressEnvironment:
             stdin: Optional data piped to the process. Used for verifier
                 payloads, which must not travel as command arguments
                 (argv size limits, visible in process listings).
+            timeout: Override for the per-command bound. Setup work (which
+                includes a full install) is allowed the longer
+                ``grader.setup_timeout_seconds`` rather than the per-test
+                ``grader.timeout_seconds``.
 
         Returns:
-            Tuple of (stdout, stderr, returncode, timed_out). All paths are
-            bounded by ``grader.timeout_seconds``.
+            Tuple of (stdout, stderr, returncode, timed_out). No path is
+            unbounded.
         """
-        timeout = self.config.timeout_seconds
+        if timeout is None:
+            timeout = self.config.timeout_seconds
         if self.config.wp_env_dir:
             result = self._run_process(
                 ["npx", "wp-env", "run", "cli", *command],
