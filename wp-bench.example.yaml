@@ -44,6 +44,7 @@ run:
   #                      # use seeded stratified selection across categories
   # seed: 1337           # selection seed (same seed = same subset)
   # test_ids: []         # optional explicit test IDs to run
+  # categories: []       # optional category filter; ignored when test_ids is provided
   # dry_run: false       # load/filter tests without calling models
   # Execution-test isolation. 'reset_per_test' (default) resets WordPress
   # to a clean baseline before every execution test and runs them serially.

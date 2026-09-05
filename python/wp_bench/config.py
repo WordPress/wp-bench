@@ -115,6 +115,7 @@ class RunConfig(StrictModel):
     suite: str = "wp-core-v1"
     limit: int | None = Field(default=None, gt=0)
     test_ids: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(default_factory=list)
     #: Reserved for deterministic subset selection; wired by seeded
     #: stratified test limiting. Not yet consumed elsewhere.
     seed: int = 1337

@@ -182,7 +182,7 @@ def test_result_metadata_records_isolation_mode(
         "wp_bench.core.load_tests",
         lambda dataset: [_execution_test("e-one")],
     )
-    config = _config(tmp_path)
+    config = _config(tmp_path, categories=["general"])
     runner = BenchmarkRunner(config)
     spy = SpyEnvironment()
     runner.environment = spy  # type: ignore[assignment]
@@ -193,6 +193,7 @@ def test_result_metadata_records_isolation_mode(
     payload = runner.run()
 
     assert payload["metadata"]["runtime_isolation"] == "reset_per_test"
+    assert payload["metadata"]["categories"] == ["general"]
 
 
 def test_isolation_none_still_runs_all_tests(
