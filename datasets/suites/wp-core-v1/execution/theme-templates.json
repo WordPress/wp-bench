@@ -1,0 +1,661 @@
+{
+  "id": "wp-core-execution-v1-theme_templates",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Theme Templates",
+    "description": "Code generation tasks for WordPress theme, block template, global styles, and template rendering APIs",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-theme-templates-001",
+      "category": "theme-templates",
+      "prompt": "Add a brand color with the slug wpbp-brand and the value #123456 to the active theme's global color palette, so it appears in the editor next to the colors the theme already ships. Every color the theme already provides must survive.",
+      "expected_behavior": "Reviewer contract: the solution filters the theme's global styles data and appends a palette entry rather than replacing the palette. Presets are replaced wholesale when merged, so the incoming palette must contain the existing theme colors, and the data passed to the merge must declare a schema version or WordPress discards it entirely. Runtime validation seeds an extra palette color from another filter before the submission runs, checks the merged settings, then removes the filters and confirms the brand color disappears again.",
+      "requirements": [
+        "Extend the theme's global styles data rather than editing theme.json",
+        "Keep every color the theme already declares, including colors added by other extensions",
+        "Register the palette entry with the slug wpbp-brand and the color #123456"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_theme_json_data_theme",
+            "description": "Filters the theme's global styles data",
+            "weight": 1
+          },
+          {
+            "pattern": "update_with",
+            "description": "Merges new data into the theme.json structure",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-brand",
+            "description": "Registers the requested palette slug",
+            "weight": 1
+          },
+          {
+            "pattern": "#123456",
+            "description": "Registers the requested color value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) { $data = $theme_json->get_data(); $palette = $data['settings']['color']['palette']['theme'] ?? array(); $palette[] = array( 'slug' => 'wpbp-seed', 'color' => '#abcdef', 'name' => 'WPBP Seed' ); return $theme_json->update_with( array( 'version' => 3, 'settings' => array( 'color' => array( 'palette' => $palette ) ) ) ); }, 5 ); wp_clean_theme_json_cache();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wp_clean_theme_json_cache(); $settings = WP_Theme_JSON_Resolver::get_merged_data()->get_settings(); $palette = $settings['color']['palette']['theme'] ?? array(); $by_slug = array(); foreach ( $palette as $entry ) { if ( isset( $entry['slug'] ) ) { $by_slug[ $entry['slug'] ] = $entry['color'] ?? ''; } } if ( '#123456' !== ( $by_slug['wpbp-brand'] ?? '' ) ) { return false; } if ( '#abcdef' !== ( $by_slug['wpbp-seed'] ?? '' ) ) { return false; } if ( ! isset( $by_slug['accent-1'], $by_slug['base'], $by_slug['contrast'] ) ) { return false; } remove_all_filters( 'wp_theme_json_data_theme' ); wp_clean_theme_json_cache(); $after = wp_list_pluck( WP_Theme_JSON_Resolver::get_merged_data()->get_settings()['color']['palette']['theme'] ?? array(), 'slug' ); return ! in_array( 'wpbp-brand', $after, true ) && in_array( 'accent-1', $after, true );",
+            "description": "The brand color is appended to the theme palette without dropping existing colors, and disappears when the filter is removed",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'wp_theme_json_data_theme' ); wp_clean_theme_json_cache();"
+      },
+      "reference_solution": "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) {\n    $data    = $theme_json->get_data();\n    $palette = $data['settings']['color']['palette']['theme'] ?? array();\n    $palette[] = array( 'slug' => 'wpbp-brand', 'color' => '#123456', 'name' => 'WPBP Brand' );\n    return $theme_json->update_with( array( 'version' => 3, 'settings' => array( 'color' => array( 'palette' => $palette ) ) ) );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-theme-json-resolver.php",
+          "src/wp-includes/class-wp-theme-json-data.php",
+          "src/wp-includes/class-wp-theme-json.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) { return $theme_json->update_with( array( 'version' => 3, 'settings' => array( 'color' => array( 'palette' => array( array( 'slug' => 'base', 'color' => '#FFFFFF', 'name' => 'Base' ), array( 'slug' => 'contrast', 'color' => '#111111', 'name' => 'Contrast' ), array( 'slug' => 'accent-1', 'color' => '#FFEE58', 'name' => 'Accent 1' ), array( 'slug' => 'wpbp-brand', 'color' => '#123456', 'name' => 'WPBP Brand' ) ) ) ) ) ); } );",
+        "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) { $data = $theme_json->get_data(); $palette = $data['settings']['color']['palette']['theme'] ?? array(); $palette[] = array( 'slug' => 'wpbp-brand', 'color' => '#123456', 'name' => 'WPBP Brand' ); return $theme_json->update_with( array( 'settings' => array( 'color' => array( 'palette' => $palette ) ) ) ); } );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-002",
+      "category": "theme-templates",
+      "prompt": "Implement a helper that answers which block template the active site would actually use for a given template slug. Given a slug such as a category, page or single-post template slug, walk the block template hierarchy WordPress derives from it and return the slug of the first template that really exists for the site, whether it comes from the theme's files or from a site-editor customization stored in the database. Fall back to 'index' when nothing matches.",
+      "expected_behavior": "Reviewer contract: the helper derives the fallback chain with WordPress' block template hierarchy resolver (which knows about registered post types, the archive/singular fallbacks, and the special front-page chain) and then intersects it with the templates the site actually has, database entries included. Review focus: the candidate must not hard-code a slug map, and must consult the templates available to the site rather than only the theme directory. Runtime validation stores a database template that shadows a theme file so a memorized mapping produces the wrong answer.",
+      "requirements": [
+        "Derive the fallback chain from the supplied template slug rather than hard-coding one",
+        "Consider both theme files and templates stored in the database",
+        "Return 'index' when no template in the chain exists"
+      ],
+      "test_function": "wpbp_theme_templates_002( string $template_slug ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_template_hierarchy",
+            "description": "Uses the block template hierarchy resolver",
+            "weight": 1
+          },
+          {
+            "pattern": "get_block_templates",
+            "description": "Looks up the templates available to the site",
+            "weight": 1
+          },
+          {
+            "pattern": "index",
+            "description": "Falls back to the index template",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_guide', array( 'public' => true, 'label' => 'WPBP Guides' ) ); $template_id = wp_insert_post( array( 'post_type' => 'wp_template', 'post_status' => 'publish', 'post_name' => 'category', 'post_title' => 'Category', 'post_content' => '<!-- wp:paragraph --><p>WPBP category template</p><!-- /wp:paragraph -->' ) ); wp_set_post_terms( $template_id, array( get_stylesheet() ), 'wp_theme' ); $GLOBALS['wpbp_tt_002_template'] = $template_id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$cases = array( 'single-wpbp_guide-getting-started' => 'single', 'category-news' => 'category', 'page-about' => 'page', 'front-page' => 'home', '404' => '404', 'wpbp-nothing-like-this' => 'index' ); foreach ( $cases as $slug => $expected ) { $actual = wpbp_theme_templates_002( $slug ); if ( $expected !== $actual ) { return false; } } return true;",
+            "description": "Each slug resolves through the hierarchy to the template the site really has",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_tt_002_template'] ) ) { wp_delete_post( $GLOBALS['wpbp_tt_002_template'], true ); } unregister_post_type( 'wpbp_guide' );"
+      },
+      "reference_solution": "function wpbp_theme_templates_002( string $template_slug ): string {\n    $hierarchy = get_template_hierarchy( $template_slug );\n    $available = wp_list_pluck( get_block_templates(), 'slug' );\n    foreach ( $hierarchy as $candidate ) {\n        if ( in_array( $candidate, $available, true ) ) {\n            return $candidate;\n        }\n    }\n    return 'index';\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template-utils.php",
+          "src/wp-includes/template.php"
+        ],
+        "release_focus": "6.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_theme_templates_002( string $template_slug ): string { $map = array( 'single-wpbp_guide-getting-started' => 'single', 'category-news' => 'archive', 'page-about' => 'page', 'front-page' => 'home', '404' => '404' ); return $map[ $template_slug ] ?? 'index'; }",
+        "function wpbp_theme_templates_002( string $template_slug ): string { $hierarchy = get_template_hierarchy( $template_slug ); $available = array(); foreach ( get_block_templates( array(), 'wp_template' ) as $template ) { if ( 'theme' === $template->source ) { $available[] = $template->slug; } } foreach ( $hierarchy as $candidate ) { if ( in_array( $candidate, $available, true ) ) { return $candidate; } } return 'index'; }"
+      ]
+    },
+    {
+      "id": "e-theme-templates-003",
+      "category": "theme-templates",
+      "prompt": "Implement a helper that reports the block markup a named template of the active theme resolves to, together with where that markup came from: a site-editor customization saved in the database or the theme's own template file. Return an empty source and empty markup when the theme has no such template.",
+      "expected_behavior": "Reviewer contract: the helper must look the template up through the unified block template lookup, which prefers a stored customization over the theme file and reports 'custom' or 'theme' accordingly. Review focus: reading the theme directory directly, or using the file-only lookup, misses the database override. Runtime validation saves a customization for one template and leaves another as a pure theme file.",
+      "requirements": [
+        "Address the template by the active theme's stylesheet and the given slug",
+        "Return the template's markup and its reported source",
+        "Return empty strings for both when no template exists"
+      ],
+      "test_function": "wpbp_theme_templates_003( string $template_slug ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_block_template",
+            "description": "Uses the unified block template lookup",
+            "weight": 1
+          },
+          {
+            "pattern": "get_stylesheet",
+            "description": "Scopes the lookup to the active theme",
+            "weight": 1
+          },
+          {
+            "pattern": "source",
+            "description": "Reports the template source",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$template_id = wp_insert_post( array( 'post_type' => 'wp_template', 'post_status' => 'publish', 'post_name' => 'page', 'post_title' => 'Page', 'post_content' => '<!-- wp:paragraph --><p>WPBP customized page</p><!-- /wp:paragraph -->' ) ); wp_set_post_terms( $template_id, array( get_stylesheet() ), 'wp_theme' ); $GLOBALS['wpbp_tt_003_template'] = $template_id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$custom = wpbp_theme_templates_003( 'page' ); if ( ! is_array( $custom ) ) { return false; } if ( 'custom' !== ( $custom['source'] ?? '' ) ) { return false; } if ( ! str_contains( (string) ( $custom['content'] ?? '' ), 'WPBP customized page' ) ) { return false; } $theme = wpbp_theme_templates_003( 'single' ); if ( 'theme' !== ( $theme['source'] ?? '' ) ) { return false; } if ( ! str_contains( (string) ( $theme['content'] ?? '' ), 'wp:template-part' ) ) { return false; } if ( str_contains( (string) ( $theme['content'] ?? '' ), 'WPBP customized page' ) ) { return false; } $missing = wpbp_theme_templates_003( 'wpbp-no-such-template' ); return '' === ( $missing['source'] ?? null ) && '' === ( $missing['content'] ?? null );",
+            "description": "A stored customization wins over the theme file and each source is reported correctly",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_tt_003_template'] ) ) { wp_delete_post( $GLOBALS['wpbp_tt_003_template'], true ); }"
+      },
+      "reference_solution": "function wpbp_theme_templates_003( string $template_slug ): array {\n    $template = get_block_template( get_stylesheet() . '//' . $template_slug, 'wp_template' );\n    if ( ! $template instanceof WP_Block_Template ) {\n        return array( 'source' => '', 'content' => '' );\n    }\n    return array( 'source' => (string) $template->source, 'content' => (string) $template->content );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template-utils.php",
+          "src/wp-includes/class-wp-block-template.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_theme_templates_003( string $template_slug ): array { $template = get_block_file_template( get_stylesheet() . '//' . $template_slug, 'wp_template' ); if ( ! $template instanceof WP_Block_Template ) { return array( 'source' => '', 'content' => '' ); } return array( 'source' => (string) $template->source, 'content' => (string) $template->content ); }"
+      ]
+    },
+    {
+      "id": "e-theme-templates-004",
+      "category": "theme-templates",
+      "prompt": "Register an extra template part area with the slug wpbp-sidebar, labelled 'WPBP Sidebar', whose parts are wrapped in an aside element, so site editors can assign template parts to it. The areas WordPress already offers must stay available.",
+      "expected_behavior": "Reviewer contract: the solution filters the list of allowed template part areas and appends a definition with the area, label and area tag keys, preserving the built-in definitions. Review focus: returning only the new definition removes header, footer and the uncategorized fallback, which makes WordPress downgrade existing parts and emit warnings. Runtime validation checks the merged definition list and confirms a stored part assigned to the new area is queryable while the theme's header part is unaffected.",
+      "requirements": [
+        "Filter the list of allowed template part areas",
+        "Keep the areas WordPress already defines",
+        "Give the new area the slug wpbp-sidebar, a label, and an aside wrapper tag"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "default_wp_template_part_areas",
+            "description": "Filters the allowed template part areas",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-sidebar",
+            "description": "Registers the requested area slug",
+            "weight": 1
+          },
+          {
+            "pattern": "area_tag",
+            "description": "Declares the wrapper tag for the area",
+            "weight": 1
+          },
+          {
+            "pattern": "aside",
+            "description": "Wraps the area in an aside element",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$part_id = wp_insert_post( array( 'post_type' => 'wp_template_part', 'post_status' => 'publish', 'post_name' => 'wpbp-aside', 'post_title' => 'WPBP Aside', 'post_content' => '<!-- wp:paragraph --><p>WPBP aside</p><!-- /wp:paragraph -->' ) ); wp_set_post_terms( $part_id, array( get_stylesheet() ), 'wp_theme' ); wp_set_post_terms( $part_id, array( 'wpbp-sidebar' ), 'wp_template_part_area' ); $GLOBALS['wpbp_tt_004_part'] = $part_id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$areas = get_allowed_block_template_part_areas(); $by_area = array(); foreach ( $areas as $definition ) { if ( isset( $definition['area'] ) ) { $by_area[ $definition['area'] ] = $definition; } } if ( ! isset( $by_area['header'], $by_area['footer'], $by_area['uncategorized'] ) ) { return false; } if ( ! isset( $by_area['wpbp-sidebar'] ) ) { return false; } if ( 'aside' !== ( $by_area['wpbp-sidebar']['area_tag'] ?? '' ) ) { return false; } if ( 'WPBP Sidebar' !== ( $by_area['wpbp-sidebar']['label'] ?? '' ) ) { return false; } $sidebar_slugs = wp_list_pluck( get_block_templates( array( 'area' => 'wpbp-sidebar' ), 'wp_template_part' ), 'slug' ); if ( ! in_array( 'wpbp-aside', $sidebar_slugs, true ) ) { return false; } $header_slugs = wp_list_pluck( get_block_templates( array( 'area' => 'header' ), 'wp_template_part' ), 'slug' ); return in_array( 'header', $header_slugs, true ) && ! in_array( 'wpbp-aside', $header_slugs, true );",
+            "description": "The new area joins the built-in areas and a part assigned to it stays in that area",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_tt_004_part'] ) ) { wp_delete_post( $GLOBALS['wpbp_tt_004_part'], true ); } remove_all_filters( 'default_wp_template_part_areas' );"
+      },
+      "reference_solution": "add_filter( 'default_wp_template_part_areas', static function ( array $areas ): array {\n    $areas[] = array(\n        'area'        => 'wpbp-sidebar',\n        'label'       => 'WPBP Sidebar',\n        'description' => 'Template parts shown beside the main content.',\n        'icon'        => 'sidebar',\n        'area_tag'    => 'aside',\n    );\n    return $areas;\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template-utils.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'default_wp_template_part_areas', static function ( array $areas ): array { return array( array( 'area' => 'wpbp-sidebar', 'label' => 'WPBP Sidebar', 'description' => 'Sidebar parts.', 'icon' => 'sidebar', 'area_tag' => 'aside' ) ); } );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-005",
+      "category": "theme-templates",
+      "prompt": "Shorten the excerpts WordPress generates automatically from post content to eight words and finish them with the marker ' [keep reading]'. Excerpts an editor wrote by hand must be returned exactly as written.",
+      "expected_behavior": "Reviewer contract: the solution adjusts the automatic trimming knobs, which only apply while WordPress builds an excerpt from the post content. Review focus: filtering the finished excerpt instead truncates hand-written excerpts too. Runtime validation compares a post without an excerpt against a post whose excerpt is longer than eight words.",
+      "requirements": [
+        "Limit generated excerpts to eight words",
+        "End generated excerpts with the marker ' [keep reading]'",
+        "Leave manually written excerpts untouched"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "excerpt_length",
+            "description": "Adjusts the generated excerpt word count",
+            "weight": 1
+          },
+          {
+            "pattern": "excerpt_more",
+            "description": "Adjusts the trailing marker",
+            "weight": 1
+          },
+          {
+            "pattern": "keep reading",
+            "description": "Uses the requested marker text",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_tt_005_auto'] = wp_insert_post( array( 'post_type' => 'post', 'post_status' => 'publish', 'post_title' => 'WPBP Auto', 'post_content' => 'alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima mike november' ) ); $GLOBALS['wpbp_tt_005_manual'] = wp_insert_post( array( 'post_type' => 'post', 'post_status' => 'publish', 'post_title' => 'WPBP Manual', 'post_content' => 'alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima mike november', 'post_excerpt' => 'Manual excerpt written by the editor stays exactly as it is.' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$auto = get_the_excerpt( $GLOBALS['wpbp_tt_005_auto'] ); $manual = get_the_excerpt( $GLOBALS['wpbp_tt_005_manual'] ); return 'alpha bravo charlie delta echo foxtrot golf hotel [keep reading]' === $auto && 'Manual excerpt written by the editor stays exactly as it is.' === $manual;",
+            "description": "Generated excerpts are trimmed and marked while a hand-written excerpt is verbatim",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_tt_005_auto', 'wpbp_tt_005_manual' ) as $key ) { if ( ! empty( $GLOBALS[ $key ] ) ) { wp_delete_post( $GLOBALS[ $key ], true ); } } remove_all_filters( 'excerpt_length' ); remove_all_filters( 'excerpt_more' );"
+      },
+      "reference_solution": "add_filter( 'excerpt_length', static fn(): int => 8 );\nadd_filter( 'excerpt_more', static fn(): string => ' [keep reading]' );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/formatting.php",
+          "src/wp-includes/post-template.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'get_the_excerpt', static function ( $text ) { return wp_trim_words( $text, 8, ' [keep reading]' ); }, 20 );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-006",
+      "category": "theme-templates",
+      "prompt": "Make navigation menu links that point at another site open in a new browsing context and carry rel=\"noopener nofollow\", while links that stay on this site keep the markup WordPress produces by default.",
+      "expected_behavior": "Reviewer contract: the solution filters the anchor attributes a navigation menu walker builds, inspecting the menu item's own URL against the site's host, and only sets target and rel for off-site items. Review focus: the callback needs the menu item argument, so it must be registered to receive more than one argument; filtering the whole menu HTML or every anchor is wrong. Runtime validation renders a menu holding both an external and two internal items.",
+      "requirements": [
+        "Filter the attributes applied to a navigation menu item's anchor",
+        "Decide per menu item by comparing its URL host with the site's host",
+        "Set target=\"_blank\" and rel=\"noopener nofollow\" only on external items"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "nav_menu_link_attributes",
+            "description": "Filters the menu anchor attributes",
+            "weight": 1
+          },
+          {
+            "pattern": "_blank",
+            "description": "Opens external links in a new context",
+            "weight": 1
+          },
+          {
+            "pattern": "noopener",
+            "description": "Adds the noopener relationship",
+            "weight": 1
+          },
+          {
+            "pattern": "nofollow",
+            "description": "Adds the nofollow relationship",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$menu_id = wp_create_nav_menu( 'WPBP Menu' ); $GLOBALS['wpbp_tt_006_menu'] = $menu_id; wp_update_nav_menu_item( $menu_id, 0, array( 'menu-item-title' => 'Handbook', 'menu-item-url' => 'https://example.org/handbook/', 'menu-item-type' => 'custom', 'menu-item-status' => 'publish' ) ); wp_update_nav_menu_item( $menu_id, 0, array( 'menu-item-title' => 'About', 'menu-item-url' => home_url( '/about/' ), 'menu-item-type' => 'custom', 'menu-item-status' => 'publish' ) ); wp_update_nav_menu_item( $menu_id, 0, array( 'menu-item-title' => 'Contact', 'menu-item-url' => home_url( '/contact/' ), 'menu-item-type' => 'custom', 'menu-item-status' => 'publish' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$html = wp_nav_menu( array( 'menu' => $GLOBALS['wpbp_tt_006_menu'], 'echo' => false, 'container' => false, 'fallback_cb' => false ) ); if ( ! is_string( $html ) || '' === $html ) { return false; } if ( ! preg_match_all( '/<a\\s([^>]*)>/', $html, $matches ) ) { return false; } $seen_external = 0; $seen_internal = 0; foreach ( $matches[1] as $attrs ) { $is_external = str_contains( $attrs, 'example.org' ); if ( $is_external ) { ++$seen_external; if ( ! str_contains( $attrs, 'target=\"_blank\"' ) ) { return false; } if ( ! preg_match( '/rel=\"[^\"]*noopener[^\"]*\"/', $attrs ) || ! preg_match( '/rel=\"[^\"]*nofollow[^\"]*\"/', $attrs ) ) { return false; } } else { ++$seen_internal; if ( str_contains( $attrs, 'target=' ) ) { return false; } if ( preg_match( '/rel=\"[^\"]*(noopener|nofollow)[^\"]*\"/', $attrs ) ) { return false; } } } return 1 === $seen_external && 2 === $seen_internal;",
+            "description": "Only the off-site menu item gains target and rel attributes",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_tt_006_menu'] ) ) { wp_delete_nav_menu( $GLOBALS['wpbp_tt_006_menu'] ); } remove_all_filters( 'nav_menu_link_attributes' );"
+      },
+      "reference_solution": "add_filter( 'nav_menu_link_attributes', static function ( $atts, $menu_item, $args, $depth ) {\n    $url = $menu_item->url ?? '';\n    if ( '' === $url ) {\n        return $atts;\n    }\n    $host = wp_parse_url( $url, PHP_URL_HOST );\n    if ( ! $host || $host === wp_parse_url( home_url(), PHP_URL_HOST ) ) {\n        return $atts;\n    }\n    $atts['target'] = '_blank';\n    $rel            = trim( (string) ( $atts['rel'] ?? '' ) );\n    $atts['rel']    = trim( $rel . ' noopener nofollow' );\n    return $atts;\n}, 10, 4 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-walker-nav-menu.php",
+          "src/wp-includes/nav-menu-template.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'nav_menu_link_attributes', static function ( $atts ) { $atts['target'] = '_blank'; $atts['rel'] = 'noopener nofollow'; return $atts; } );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-007",
+      "category": "theme-templates",
+      "prompt": "Implement a helper that turns a block's style attribute array into the two things WordPress renders from it: the inline CSS declaration string, and the space-separated preset class names. Preset references such as a palette color must resolve to the CSS custom property WordPress generates for that preset. Return empty strings for both when the style array produces nothing.",
+      "expected_behavior": "Reviewer contract: the helper must delegate to WordPress' style engine, which both compiles the declarations (expanding var:preset|... references into var(--wp--preset--...)) and derives the has-* class names, and which omits keys entirely when there is nothing to emit. Review focus: hand-rolled string building misses the preset class names and the custom property naming. Runtime validation covers a preset color with padding, a raw hex background, and an empty style array.",
+      "requirements": [
+        "Return an array with a css string and a classnames string",
+        "Resolve preset references to the CSS custom properties WordPress generates",
+        "Return empty strings when the style array yields no declarations or class names"
+      ],
+      "test_function": "wpbp_theme_templates_007( array $block_styles ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_style_engine_get_styles",
+            "description": "Uses the style engine",
+            "weight": 1
+          },
+          {
+            "pattern": "classnames",
+            "description": "Returns the generated class names",
+            "weight": 1
+          },
+          {
+            "pattern": "css",
+            "description": "Returns the compiled declarations",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$expected = array(array( array( 'color' => array( 'text' => 'var:preset|color|accent-1' ), 'spacing' => array( 'padding' => array( 'top' => '1rem' ) ) ), 'color:var(--wp--preset--color--accent-1);padding-top:1rem;', 'has-text-color has-accent-1-color' ),array( array( 'color' => array( 'background' => '#ff0000' ) ), 'background-color:#ff0000;', 'has-background' ),array( array( 'typography' => array( 'fontSize' => 'var:preset|font-size|large' ), 'border' => array( 'radius' => '8px' ) ), 'border-radius:8px;font-size:var(--wp--preset--font-size--large);', 'has-large-font-size' ),array( array( 'color' => array( 'gradient' => 'var:preset|gradient|vivid-cyan-blue-to-vivid-purple' ), 'spacing' => array( 'margin' => array( 'bottom' => '0' ) ) ), 'background:var(--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple);margin-bottom:0;', 'has-background has-vivid-cyan-blue-to-vivid-purple-gradient-background' ),array( array(), '', '' )); foreach ( $expected as $case ) { $result = wpbp_theme_templates_007( $case[0] ); if ( ! is_array( $result ) ) { return false; } if ( $case[1] !== ( $result['css'] ?? null ) ) { return false; } if ( $case[2] !== ( $result['classnames'] ?? null ) ) { return false; } } return true;",
+            "description": "Preset, literal and empty style objects compile to the declarations and class names WordPress generates",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_theme_templates_007( array $block_styles ): array {\n    $styles = wp_style_engine_get_styles( $block_styles );\n    return array(\n        'css'        => (string) ( $styles['css'] ?? '' ),\n        'classnames' => (string) ( $styles['classnames'] ?? '' ),\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/style-engine.php",
+          "src/wp-includes/style-engine/class-wp-style-engine.php"
+        ],
+        "release_focus": "6.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_theme_templates_007( array $block_styles ): array { $css = ''; $classnames = array(); foreach ( $block_styles as $group => $values ) { foreach ( (array) $values as $property => $value ) { if ( is_array( $value ) ) { foreach ( $value as $side => $side_value ) { $css .= $property . '-' . $side . ':' . $side_value . ';'; } continue; } if ( 'text' === $property ) { $classnames[] = 'has-text-color'; $css .= 'color:' . $value . ';'; } elseif ( 'background' === $property ) { $classnames[] = 'has-background'; $css .= 'background-color:' . $value . ';'; } else { $css .= $property . ':' . $value . ';'; } } } return array( 'css' => $css, 'classnames' => implode( ' ', $classnames ) ); }",
+        "function wpbp_theme_templates_007( array $block_styles ): array { $styles = wp_style_engine_get_styles( $block_styles, array( 'convert_vars_to_classnames' => true ) ); return array( 'css' => (string) ( $styles['css'] ?? '' ), 'classnames' => (string) ( $styles['classnames'] ?? '' ) ); }"
+      ]
+    },
+    {
+      "id": "e-theme-templates-008",
+      "category": "theme-templates",
+      "prompt": "Publish two design tokens through the site's global settings so WordPress emits them as CSS custom properties in its generated global stylesheet: a brand color grouped as brandColor with the key primary set to #0abc12, and a spacing token grouped as brandSpacing with the key gutter set to 2.5rem. The variables the theme already generates must keep working.",
+      "expected_behavior": "Reviewer contract: the solution adds a settings.custom section to the theme's global styles data, and WordPress turns the nested camelCase keys into kebab-cased custom properties under the --wp--custom-- prefix, with nested levels separated by a double dash. Review focus: printing a style tag by hand does not put the tokens into the global stylesheet, and merging without a schema version silently discards the data. Runtime validation reads the generated variables stylesheet and then confirms the tokens vanish when the filter is removed.",
+      "requirements": [
+        "Add the tokens to the site's global settings rather than printing CSS directly",
+        "Group the color under brandColor with the key primary, and the spacing under brandSpacing with the key gutter",
+        "Leave the theme's own generated variables in place"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_theme_json_data_theme",
+            "description": "Filters the theme's global styles data",
+            "weight": 1
+          },
+          {
+            "pattern": "custom",
+            "description": "Registers custom settings",
+            "weight": 1
+          },
+          {
+            "pattern": "brandColor",
+            "description": "Declares the brand color group",
+            "weight": 1
+          },
+          {
+            "pattern": "brandSpacing",
+            "description": "Declares the brand spacing group",
+            "weight": 1
+          },
+          {
+            "pattern": "#0abc12",
+            "description": "Uses the requested color value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_clean_theme_json_cache();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wp_clean_theme_json_cache(); $css = wp_get_global_stylesheet( array( 'variables' ) ); if ( ! preg_match( '/--wp--custom--brand-color--primary\\s*:\\s*#0abc12/', $css ) ) { return false; } if ( ! preg_match( '/--wp--custom--brand-spacing--gutter\\s*:\\s*2\\.5rem/', $css ) ) { return false; } if ( ! str_contains( $css, '--wp--preset--color--accent-1' ) ) { return false; } remove_all_filters( 'wp_theme_json_data_theme' ); wp_clean_theme_json_cache(); $after = wp_get_global_stylesheet( array( 'variables' ) ); return ! str_contains( $after, '--wp--custom--brand-color--primary' ) && str_contains( $after, '--wp--preset--color--accent-1' );",
+            "description": "Both tokens become global custom properties and disappear when the filter is removed",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'wp_theme_json_data_theme' ); wp_clean_theme_json_cache();"
+      },
+      "reference_solution": "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) {\n    return $theme_json->update_with(\n        array(\n            'version'  => 3,\n            'settings' => array(\n                'custom' => array(\n                    'brandColor'   => array( 'primary' => '#0abc12' ),\n                    'brandSpacing' => array( 'gutter' => '2.5rem' ),\n                ),\n            ),\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-theme-json.php",
+          "src/wp-includes/class-wp-theme-json-resolver.php",
+          "src/wp-includes/global-styles-and-settings.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_head', static function () { echo '<style>:root{--wp--custom--brand-color--primary:#0abc12;--wp--custom--brand-spacing--gutter:2.5rem;}</style>'; } );",
+        "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) { return $theme_json->update_with( array( 'settings' => array( 'custom' => array( 'brandColor' => array( 'primary' => '#0abc12' ), 'brandSpacing' => array( 'gutter' => '2.5rem' ) ) ) ) ); } );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-009",
+      "category": "theme-templates",
+      "prompt": "Configure two theme features for the active theme. First, register a custom site logo that is 320 pixels wide and 80 pixels tall, may be stretched in width but not in height. Second, declare HTML5 markup support for navigation widgets, keeping every HTML5 feature the theme already declares.",
+      "expected_behavior": "Reviewer contract: the custom logo feature must be declared with width, height and the flex flags, and WordPress fills the remaining keys of that feature with defaults. HTML5 support is additive: WordPress merges a new list into the one already registered, so a plain declaration is enough, while clearing the feature first throws away the markup features the block theme registered during setup. Runtime validation inspects the stored custom logo arguments and checks several HTML5 features, including ones the candidate never mentions.",
+      "requirements": [
+        "Declare custom logo support with a width of 320, a height of 80, flexible width and fixed height",
+        "Declare HTML5 markup support for navigation widgets",
+        "Leave the HTML5 features the theme already declares in place"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_theme_support",
+            "description": "Declares theme support",
+            "weight": 1
+          },
+          {
+            "pattern": "custom-logo",
+            "description": "Registers the custom logo feature",
+            "weight": 1
+          },
+          {
+            "pattern": "html5",
+            "description": "Registers HTML5 markup support",
+            "weight": 1
+          },
+          {
+            "pattern": "navigation-widgets",
+            "description": "Adds the requested HTML5 feature",
+            "weight": 1
+          },
+          {
+            "pattern": "flex-width",
+            "description": "Configures the logo flexibility",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$logo = get_theme_support( 'custom-logo' ); if ( ! is_array( $logo ) || ! isset( $logo[0] ) || ! is_array( $logo[0] ) ) { return false; } $args = $logo[0]; if ( 320 !== (int) ( $args['width'] ?? 0 ) || 80 !== (int) ( $args['height'] ?? 0 ) ) { return false; } if ( true !== ( $args['flex-width'] ?? null ) || false !== ( $args['flex-height'] ?? null ) ) { return false; } if ( ! array_key_exists( 'header-text', $args ) || ! array_key_exists( 'unlink-homepage-logo', $args ) ) { return false; } if ( ! current_theme_supports( 'html5', 'navigation-widgets' ) ) { return false; } foreach ( array( 'comment-form', 'comment-list', 'search-form', 'gallery', 'caption', 'script' ) as $feature ) { if ( ! current_theme_supports( 'html5', $feature ) ) { return false; } } return ! current_theme_supports( 'html5', 'wpbp-unknown-feature' );",
+            "description": "The logo feature keeps its defaults and HTML5 support gains a feature without losing the theme's own",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_theme_support( 'custom-logo' );"
+      },
+      "reference_solution": "add_theme_support(\n    'custom-logo',\n    array(\n        'width'       => 320,\n        'height'      => 80,\n        'flex-width'  => true,\n        'flex-height' => false,\n    )\n);\nadd_theme_support( 'html5', array( 'navigation-widgets' ) );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/theme.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_theme_support( 'custom-logo', array( 'width' => 320, 'height' => 80, 'flex-width' => true, 'flex-height' => false ) );\nremove_theme_support( 'html5' );\nadd_theme_support( 'html5', array( 'navigation-widgets' ) );",
+        "add_theme_support( 'custom-logo', array( 'width' => 320, 'height' => 80, 'flex-width' => true, 'flex-height' => false ) );\nadd_filter( 'current_theme_supports-html5', '__return_true' );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-010",
+      "category": "theme-templates",
+      "prompt": "Insert a sponsored promo paragraph into rendered post content directly after the second top-level block, so it appears between that block and the one that follows it. Content with two or fewer top-level blocks, and content that is not made of blocks at all, must be left alone. The promo paragraph must read 'Sponsored by WPBP' and carry the class wpbp-promo, and it must be rendered as a block like the rest of the content.",
+      "expected_behavior": "Reviewer contract: the solution parses the post content into its block tree, counts only real blocks (the parser also emits nameless entries for the whitespace between blocks), splices a promo block after the second real one, and re-serializes. Review focus: to have the promo rendered as a block, the work must happen while the content is still block markup rather than after WordPress has rendered it; and string surgery on the rendered HTML lands inside nested blocks. Runtime validation uses content whose second top-level block is a group holding two paragraphs.",
+      "requirements": [
+        "Work on the parsed block structure of the content, not the rendered HTML",
+        "Count only real blocks when locating the second top-level block",
+        "Leave content with two or fewer top-level blocks unchanged"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "parse_blocks",
+            "description": "Parses the content into blocks",
+            "weight": 1
+          },
+          {
+            "pattern": "serialize_blocks|serialize_block",
+            "description": "Serializes the modified block tree",
+            "weight": 1
+          },
+          {
+            "pattern": "the_content",
+            "description": "Hooks the post content filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-promo",
+            "description": "Marks the promo paragraph",
+            "weight": 1
+          },
+          {
+            "pattern": "Sponsored by WPBP",
+            "description": "Uses the requested promo text",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$grouped = \"<!-- wp:paragraph -->\\n<p>Alpha</p>\\n<!-- /wp:paragraph -->\\n\\n<!-- wp:group -->\\n<div class=\\\"wp-block-group\\\"><!-- wp:paragraph -->\\n<p>Beta One</p>\\n<!-- /wp:paragraph -->\\n\\n<!-- wp:paragraph -->\\n<p>Beta Two</p>\\n<!-- /wp:paragraph --></div>\\n<!-- /wp:group -->\\n\\n<!-- wp:paragraph -->\\n<p>Gamma</p>\\n<!-- /wp:paragraph -->\"; $out = apply_filters( 'the_content', $grouped ); $positions = array(); foreach ( array( 'Alpha', 'Beta One', 'Beta Two', 'Sponsored by WPBP', 'Gamma' ) as $needle ) { $pos = strpos( $out, $needle ); if ( false === $pos ) { return false; } $positions[ $needle ] = $pos; } if ( 1 !== substr_count( $out, 'Sponsored by WPBP' ) ) { return false; } if ( ! str_contains( $out, 'wpbp-promo' ) ) { return false; } $ordered = array( $positions['Alpha'], $positions['Beta One'], $positions['Beta Two'], $positions['Sponsored by WPBP'], $positions['Gamma'] ); $sorted = $ordered; sort( $sorted ); if ( $ordered !== $sorted ) { return false; } $two = \"<!-- wp:paragraph -->\\n<p>One</p>\\n<!-- /wp:paragraph -->\\n\\n<!-- wp:paragraph -->\\n<p>Two</p>\\n<!-- /wp:paragraph -->\"; if ( str_contains( apply_filters( 'the_content', $two ), 'Sponsored by WPBP' ) ) { return false; } return ! str_contains( apply_filters( 'the_content', 'Just a classic paragraph of text.' ), 'Sponsored by WPBP' );",
+            "description": "The promo lands between the second top-level block and the third, and short or classic content is untouched",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'the_content' );"
+      },
+      "reference_solution": "add_filter( 'the_content', static function ( $content ) {\n    $blocks  = parse_blocks( $content );\n    $indices = array();\n    foreach ( $blocks as $index => $block ) {\n        if ( ! empty( $block['blockName'] ) ) {\n            $indices[] = $index;\n        }\n    }\n    if ( count( $indices ) <= 2 ) {\n        return $content;\n    }\n    $promo = parse_blocks( '<!-- wp:paragraph {\"className\":\"wpbp-promo\"} --><p class=\"wpbp-promo\">Sponsored by WPBP</p><!-- /wp:paragraph -->' );\n    array_splice( $blocks, $indices[1] + 1, 0, $promo );\n    return serialize_blocks( $blocks );\n}, 8 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/default-filters.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'the_content', static function ( $content ) { $parts = explode( '</p>', $content ); if ( count( $parts ) <= 3 ) { return $content; } array_splice( $parts, 2, 0, array( '<p class=\"wpbp-promo\">Sponsored by WPBP</p>' ) ); return implode( '</p>', $parts ); }, 20 );",
+        "add_filter( 'the_content', static function ( $content ) { $blocks = parse_blocks( $content ); if ( count( $blocks ) <= 2 ) { return $content; } $promo = parse_blocks( '<!-- wp:paragraph {\"className\":\"wpbp-promo\"} --><p class=\"wpbp-promo\">Sponsored by WPBP</p><!-- /wp:paragraph -->' ); array_splice( $blocks, 2, 0, $promo ); return serialize_blocks( $blocks ); }, 8 );"
+      ]
+    },
+    {
+      "id": "e-theme-templates-011",
+      "category": "theme-templates",
+      "prompt": "Provide a sidebar widget with the base ID wpbp-recent-items that lists a site's most recent published entries as links inside a ul element, one li per entry. The instance settings choose which content type to list through a post_type setting that defaults to 'post', and how many entries to show through a number setting that defaults to 3. The widget renders its title through WordPress' widget title filtering wrapped in the sidebar's own title markup, and outputs no title markup at all when the instance has no title. In every case the output is wrapped in the sidebar's widget markup.",
+      "expected_behavior": "Reviewer contract: a WP_Widget subclass registered with WordPress, whose widget() method honours before_widget/after_widget, emits before_title/after_title only for a non-empty filtered title, and reads both the post type and the entry count from the instance with the documented defaults. Review focus: the widget must be discoverable through the widget factory by its base ID, and the query must follow the instance rather than a fixed post type or length. Runtime validation renders two instances of a fixture content type holding four entries.",
+      "requirements": [
+        "Register a widget whose base ID is wpbp-recent-items",
+        "Use the sidebar arguments for the widget wrapper and, when there is a title, the title wrapper",
+        "Read the content type and the entry count from the instance, defaulting to 'post' and 3"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_Widget",
+            "description": "Extends the widget base class",
+            "weight": 1
+          },
+          {
+            "pattern": "register_widget",
+            "description": "Registers the widget with WordPress",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-recent-items",
+            "description": "Uses the requested widget base ID",
+            "weight": 1
+          },
+          {
+            "pattern": "before_widget",
+            "description": "Uses the sidebar widget wrapper",
+            "weight": 1
+          },
+          {
+            "pattern": "widget_title",
+            "description": "Filters the widget title",
+            "weight": 1
+          },
+          {
+            "pattern": "post_type",
+            "description": "Reads the content type from the instance",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_note', array( 'public' => true, 'label' => 'WPBP Notes', 'supports' => array( 'title', 'editor' ) ) ); $GLOBALS['wpbp_tt_011_posts'] = array(); $titles = array( 'WPBP Note One', 'WPBP Note Two', 'WPBP Note Three', 'WPBP Note Four' ); foreach ( $titles as $index => $title ) { $GLOBALS['wpbp_tt_011_posts'][] = wp_insert_post( array( 'post_type' => 'wpbp_note', 'post_status' => 'publish', 'post_title' => $title, 'post_content' => 'WPBP fixture body.', 'post_date' => gmdate( 'Y-m-d H:i:s', strtotime( '-' . ( 10 - $index ) . ' days' ) ) ) ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "do_action( 'widgets_init' ); global $wp_widget_factory; $class = null; foreach ( $wp_widget_factory->widgets as $registered_class => $widget ) { if ( $widget instanceof WP_Widget && 'wpbp-recent-items' === $widget->id_base ) { $class = is_string( $registered_class ) ? $registered_class : get_class( $widget ); break; } } if ( null === $class ) { return false; } $args = array( 'before_widget' => '<section class=\"wpbp-widget\">', 'after_widget' => '</section>', 'before_title' => '<h2 class=\"wpbp-title\">', 'after_title' => '</h2>' ); ob_start(); the_widget( $class, array( 'title' => 'Latest', 'number' => 2, 'post_type' => 'wpbp_note' ), $args ); $two = (string) ob_get_clean(); ob_start(); the_widget( $class, array( 'title' => '', 'post_type' => 'wpbp_note' ), $args ); $three = (string) ob_get_clean(); if ( ! str_contains( $two, '<section class=\"wpbp-widget\">' ) || ! str_contains( $two, '</section>' ) ) { return false; } if ( ! str_contains( $two, '<h2 class=\"wpbp-title\">Latest</h2>' ) ) { return false; } if ( 2 !== substr_count( $two, '<li' ) ) { return false; } if ( ! str_contains( $two, 'WPBP Note Four' ) || ! str_contains( $two, 'WPBP Note Three' ) ) { return false; } if ( str_contains( $two, 'WPBP Note Two' ) ) { return false; } if ( str_contains( $three, '<h2 class=\"wpbp-title\">' ) ) { return false; } if ( 3 !== substr_count( $three, '<li' ) ) { return false; } if ( ! str_contains( $three, 'WPBP Note Two' ) ) { return false; } return ! str_contains( $three, 'WPBP Note One' ) && str_contains( $three, '<ul' );",
+            "description": "The widget renders the requested content type and count and only emits title markup when a title is set",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_tt_011_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( $post_id, true ); } } unregister_post_type( 'wpbp_note' );"
+      },
+      "reference_solution": "class WPBP_Recent_Items_Widget extends WP_Widget {\n    public function __construct() {\n        parent::__construct( 'wpbp-recent-items', 'WPBP Recent Items', array( 'classname' => 'wpbp-recent-items', 'description' => 'Recent entries.' ) );\n    }\n\n    public function widget( $args, $instance ) {\n        $number    = isset( $instance['number'] ) ? (int) $instance['number'] : 3;\n        $post_type = isset( $instance['post_type'] ) ? (string) $instance['post_type'] : 'post';\n        if ( $number < 1 ) {\n            $number = 3;\n        }\n        $query = new WP_Query(\n            array(\n                'post_type'           => $post_type,\n                'post_status'         => 'publish',\n                'posts_per_page'      => $number,\n                'ignore_sticky_posts' => true,\n                'no_found_rows'       => true,\n            )\n        );\n        if ( ! $query->have_posts() ) {\n            return;\n        }\n        echo $args['before_widget'];\n        $title = apply_filters( 'widget_title', $instance['title'] ?? '', $instance, $this->id_base );\n        if ( '' !== trim( (string) $title ) ) {\n            echo $args['before_title'] . esc_html( $title ) . $args['after_title'];\n        }\n        echo '<ul class=\"wpbp-recent-items-list\">';\n        foreach ( $query->posts as $post ) {\n            printf( '<li><a href=\"%s\">%s</a></li>', esc_url( (string) get_permalink( $post ) ), esc_html( get_the_title( $post ) ) );\n        }\n        echo '</ul>';\n        echo $args['after_widget'];\n    }\n}\n\nregister_widget( 'WPBP_Recent_Items_Widget' );\nadd_action( 'widgets_init', static function () { register_widget( 'WPBP_Recent_Items_Widget' ); } );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/widgets.php",
+          "src/wp-includes/class-wp-widget.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "class WPBP_Fixed_Widget extends WP_Widget { public function __construct() { parent::__construct( 'wpbp-recent-items', 'WPBP Recent Items', array( 'classname' => 'wpbp-recent-items' ) ); } public function widget( $args, $instance ) { $post_type = $instance['post_type'] ?? 'post'; echo $args['before_widget']; $title = apply_filters( 'widget_title', $instance['title'] ?? '', $instance, $this->id_base ); if ( '' !== trim( (string) $title ) ) { echo $args['before_title'] . esc_html( $title ) . $args['after_title']; } $query = new WP_Query( array( 'post_type' => $post_type, 'post_status' => 'publish', 'posts_per_page' => 3, 'no_found_rows' => true ) ); echo '<ul>'; foreach ( $query->posts as $post ) { printf( '<li><a href=\"%s\">%s</a></li>', esc_url( (string) get_permalink( $post ) ), esc_html( get_the_title( $post ) ) ); } echo '</ul>'; echo $args['after_widget']; } } register_widget( 'WPBP_Fixed_Widget' );",
+        "class WPBP_Titleless_Widget extends WP_Widget { public function __construct() { parent::__construct( 'wpbp-recent-items', 'WPBP Recent Items', array( 'classname' => 'wpbp-recent-items' ) ); } public function widget( $args, $instance ) { $number = isset( $instance['number'] ) ? (int) $instance['number'] : 3; $post_type = $instance['post_type'] ?? 'post'; echo $args['before_widget']; $title = apply_filters( 'widget_title', $instance['title'] ?? '', $instance, $this->id_base ); echo $args['before_title'] . esc_html( $title ) . $args['after_title']; $query = new WP_Query( array( 'post_type' => $post_type, 'post_status' => 'publish', 'posts_per_page' => $number, 'no_found_rows' => true ) ); echo '<ul>'; foreach ( $query->posts as $post ) { printf( '<li><a href=\"%s\">%s</a></li>', esc_url( (string) get_permalink( $post ) ), esc_html( get_the_title( $post ) ) ); } echo '</ul>'; echo $args['after_widget']; } } register_widget( 'WPBP_Titleless_Widget' );"
+      ]
+    }
+  ]
+}
