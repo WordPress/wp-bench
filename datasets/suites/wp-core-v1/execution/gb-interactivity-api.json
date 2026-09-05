@@ -293,12 +293,12 @@
     {
       "id": "e-gb-interactivity-api-006",
       "category": "gb-interactivity-api",
-      "prompt": "Implement a function that server-renders a list for the supplied Interactivity API store namespace. Given the list of item labels, register them as store state and return processed markup for a <ul> region in which a <template> carrying the Interactivity API list directive has produced one <li> per item, each rendering its item's label as text. WordPress must do the repetition during server-side directive processing rather than the function looping in PHP; a list WordPress cannot repeat on the server must leave the template alone.",
+      "prompt": "Implement a function that server-renders a list for the supplied Interactivity API store namespace. Given a list whose entries are the item labels themselves as plain strings, register that list as store state and return processed markup for a <ul> region in which a <template> carrying the Interactivity API list directive has produced one <li> per item, each rendering its own entry as text. WordPress must do the repetition during server-side directive processing rather than the function looping in PHP; a list WordPress cannot repeat on the server must leave the template alone.",
       "expected_behavior": "The function stores the list under the supplied namespace and processes markup shaped as `<ul data-wp-interactive=\"NS\"><template data-wp-each=\"state.items\"><li data-wp-text=\"context.item\"></li></template></ul>`. WordPress appends one copy of the template's inner markup per item after the template's closer, tagging each top-level element with `data-wp-each-child` set to `NS::state.items`. An associative array is skipped because the client would receive it as an object, so the template is emitted unchanged with no generated children.",
       "requirements": [
         "Register the items as Interactivity API state under the supplied store namespace",
         "Let WordPress expand the list during server-side directive processing instead of looping in PHP",
-        "Render each item's label as the text of its own list item",
+        "Render each entry's own string value as the text of its list item",
         "Return the processed markup"
       ],
       "test_function": "wpbp_gb_interactivity_api_006( string $store_namespace, array $items ): string",

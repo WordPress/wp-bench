@@ -130,7 +130,7 @@
       "expected_behavior": "Reviewer contract: the helper must look the template up through the unified block template lookup, which prefers a stored customization over the theme file and reports 'custom' or 'theme' accordingly. Review focus: reading the theme directory directly, or using the file-only lookup, misses the database override. Runtime validation saves a customization for one template and leaves another as a pure theme file.",
       "requirements": [
         "Address the template by the active theme's stylesheet and the given slug",
-        "Return the template's markup and its reported source",
+        "Return an array with a 'content' key holding the template's markup and a 'source' key holding the source WordPress reports for it",
         "Return empty strings for both when no template exists"
       ],
       "test_function": "wpbp_theme_templates_003( string $template_slug ): array",
@@ -402,7 +402,7 @@
       "id": "e-theme-templates-008",
       "category": "theme-templates",
       "prompt": "Publish two design tokens through the site's global settings so WordPress emits them as CSS custom properties in its generated global stylesheet: a brand color grouped as brandColor with the key primary set to #0abc12, and a spacing token grouped as brandSpacing with the key gutter set to 2.5rem. The variables the theme already generates must keep working.",
-      "expected_behavior": "Reviewer contract: the solution adds a settings.custom section to the theme's global styles data, and WordPress turns the nested camelCase keys into kebab-cased custom properties under the --wp--custom-- prefix, with nested levels separated by a double dash. Review focus: printing a style tag by hand does not put the tokens into the global stylesheet, and merging without a schema version silently discards the data. Runtime validation reads the generated variables stylesheet and then confirms the tokens vanish when the filter is removed.",
+      "expected_behavior": "Reviewer contract: the solution adds a settings.custom section to one of the site's global styles data layers, and WordPress turns the nested camelCase keys into kebab-cased custom properties under the --wp--custom-- prefix, with nested levels separated by a double dash. Review focus: printing a style tag by hand does not put the tokens into the global stylesheet, and merging without a schema version silently discards the data. Runtime validation reads the generated variables stylesheet and then confirms the tokens vanish when the filter is removed.",
       "requirements": [
         "Add the tokens to the site's global settings rather than printing CSS directly",
         "Group the color under brandColor with the key primary, and the spacing under brandSpacing with the key gutter",
@@ -411,8 +411,8 @@
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "wp_theme_json_data_theme",
-            "description": "Filters the theme's global styles data",
+            "pattern": "wp_theme_json_data_",
+            "description": "Filters the site's global styles data",
             "weight": 1
           },
           {
@@ -442,12 +442,12 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "wp_clean_theme_json_cache(); $css = wp_get_global_stylesheet( array( 'variables' ) ); if ( ! preg_match( '/--wp--custom--brand-color--primary\\s*:\\s*#0abc12/', $css ) ) { return false; } if ( ! preg_match( '/--wp--custom--brand-spacing--gutter\\s*:\\s*2\\.5rem/', $css ) ) { return false; } if ( ! str_contains( $css, '--wp--preset--color--accent-1' ) ) { return false; } remove_all_filters( 'wp_theme_json_data_theme' ); wp_clean_theme_json_cache(); $after = wp_get_global_stylesheet( array( 'variables' ) ); return ! str_contains( $after, '--wp--custom--brand-color--primary' ) && str_contains( $after, '--wp--preset--color--accent-1' );",
-            "description": "Both tokens become global custom properties and disappear when the filter is removed",
+            "code": "wp_clean_theme_json_cache(); $css = wp_get_global_stylesheet( array( 'variables' ) ); if ( ! preg_match( '/--wp--custom--brand-color--primary\\s*:\\s*#0abc12/', $css ) ) { return false; } if ( ! preg_match( '/--wp--custom--brand-spacing--gutter\\s*:\\s*2\\.5rem/', $css ) ) { return false; } if ( ! str_contains( $css, '--wp--preset--color--accent-1' ) ) { return false; } foreach ( array( 'wp_theme_json_data_default', 'wp_theme_json_data_blocks', 'wp_theme_json_data_theme', 'wp_theme_json_data_user' ) as $wpbp_hook ) { remove_all_filters( $wpbp_hook ); } wp_clean_theme_json_cache(); $after = wp_get_global_stylesheet( array( 'variables' ) ); return ! str_contains( $after, '--wp--custom--brand-color--primary' ) && str_contains( $after, '--wp--preset--color--accent-1' );",
+            "description": "Both tokens become global custom properties and disappear when the global styles data filters are removed",
             "weight": 1
           }
         ],
-        "teardown": "remove_all_filters( 'wp_theme_json_data_theme' ); wp_clean_theme_json_cache();"
+        "teardown": "foreach ( array( 'wp_theme_json_data_default', 'wp_theme_json_data_blocks', 'wp_theme_json_data_theme', 'wp_theme_json_data_user' ) as $wpbp_hook ) { remove_all_filters( $wpbp_hook ); } wp_clean_theme_json_cache();"
       },
       "reference_solution": "add_filter( 'wp_theme_json_data_theme', static function ( $theme_json ) {\n    return $theme_json->update_with(\n        array(\n            'version'  => 3,\n            'settings' => array(\n                'custom' => array(\n                    'brandColor'   => array( 'primary' => '#0abc12' ),\n                    'brandSpacing' => array( 'gutter' => '2.5rem' ),\n                ),\n            ),\n        )\n    );\n} );",
       "metadata": {
@@ -573,7 +573,8 @@
             "weight": 1
           }
         ],
-        "teardown": "remove_all_filters( 'the_content' );"
+        "teardown": "remove_all_filters( 'the_content' ); wp_reset_postdata(); unset( $GLOBALS['post'] ); if ( ! empty( $GLOBALS['wpbp_tt010_post_id'] ) ) { wp_delete_post( (int) $GLOBALS['wpbp_tt010_post_id'], true ); }",
+        "setup": "$GLOBALS['wpbp_tt010_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP promo host', 'post_content' => '<!-- wp:paragraph --><p>Host</p><!-- /wp:paragraph -->', 'post_status' => 'publish', 'post_type' => 'post' ) ); $GLOBALS['post'] = get_post( $GLOBALS['wpbp_tt010_post_id'] ); setup_postdata( $GLOBALS['post'] );"
       },
       "reference_solution": "add_filter( 'the_content', static function ( $content ) {\n    $blocks  = parse_blocks( $content );\n    $indices = array();\n    foreach ( $blocks as $index => $block ) {\n        if ( ! empty( $block['blockName'] ) ) {\n            $indices[] = $index;\n        }\n    }\n    if ( count( $indices ) <= 2 ) {\n        return $content;\n    }\n    $promo = parse_blocks( '<!-- wp:paragraph {\"className\":\"wpbp-promo\"} --><p class=\"wpbp-promo\">Sponsored by WPBP</p><!-- /wp:paragraph -->' );\n    array_splice( $blocks, $indices[1] + 1, 0, $promo );\n    return serialize_blocks( $blocks );\n}, 8 );",
       "metadata": {
