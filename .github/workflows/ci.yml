@@ -19,9 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor is the version pyproject advertises. Testing only the
-        # newest lets the floor rot: litellm shipped a 3.11-only import while
-        # we still claimed 3.10, and CI stayed green (#61).
+        # Keep the floor from pyproject's requires-python in here (#61).
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
