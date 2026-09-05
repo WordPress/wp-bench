@@ -19,6 +19,7 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 8. Make runtime checks test the behavior inside WordPress. Use built-in assertion types when they directly express the check, such as output containment or REST response checks. Use `custom_assertion` when the verifier needs PHP to inspect the result, such as checking a registered category, returned value, database state, capability result, dispatched hook, or computed WordPress output.
 9. Design every assertion so a zero-effort cheat fails: use two or more fixtures, or a before/after contrast, so no constant return (`true`, `false`, `1`, `0`, `null`, `''`, `array()`) or empty stub satisfies it. Where the generic cheat battery cannot express a plausible shortcut, author `exploit_solutions`.
 10. Verify `reference_solution` with `--check-reference-solution` and the assertions with `--check-exploits` for every new or modified execution test.
+11. When a model later fails a new test, follow "When A Model Fails A New Test" before treating it as a model mistake.
 
 ## Field Semantics
 
@@ -184,7 +185,19 @@ git diff --check
 
 Under `reset_per_test` (the default) the exploit audit resets WordPress before every cheat candidate, so it costs several times a reference-solution pass; scope it with `--test-id` while iterating. Under `execution_isolation: none` no reset happens and state left behind by one candidate can make the next one fail for the wrong reason, so run the final `--check-exploits` before merging on `reset_per_test`.
 
-When a model fails a test, treat the failure as a suspected test bug first: compare the model's output against the WordPress source cited in `source_refs`, re-run the reference solution, and rule out over-tight assertions, 7.2-only APIs, hidden fixture knowledge, and environment artifacts before counting it as a model mistake.
+
+## When A Model Fails A New Test
+
+A model failure on a new or recently changed test is a **suspected test defect until proven otherwise**. Missing a mistake in a test is worse than missing a mistake in a model: a faulty test lowers every model's score for reasons that have nothing to do with WordPress, and it stays in the dataset. Do this before a failure counts:
+
+1. Read the model's code and the grader's per-assertion result (`grader.raw.assertions` in the results JSON; the `error` field carries thrown exceptions and `_doing_it_wrong` messages).
+2. Trace the failing assertion against the WordPress source the test cites in `metadata.source_refs`, on the `7.1` branch. Confirm the behavior the assertion demands is really what WordPress does, not what the author assumed.
+3. Ask whether the prompt and `requirements` fairly imply what the assertion checks. If the prompt can reasonably be read the model's way and that reading is also correct WordPress, the test is at fault: tighten the prompt or requirements, not the assertion.
+4. Rule out the known non-WordPress failure causes: an assertion that re-invokes a non-idempotent gateway, a fixture shape the prompt never stated (array keys, nonce field names, return keys, list entry types), a fixture the model could not know about, a `_doing_it_wrong` or notice raised by the sandbox on a legitimate code path, a `7.2`-only API assumption, a state the runtime never produces (`wp-login.php` argument combinations, `$post` being null in WP-CLI), or two equally correct WordPress mechanisms where the assertion accepts only one (`request` vs `parse_request`, `rewrite_rules_array` vs `post_rewrite_rules`, single vs double quotes around `esc_js()` output).
+5. Record a verdict per failed test: `model_wrong` (name the specific mistake), `test_fixed` (say what changed, keep the discriminating intent, and re-run `--check-reference-solution` and `--check-exploits` for that test), or `test_cut` (the test cannot be made fair).
+6. If several failures share a cause that lives in the harness rather than in WordPress (a load-order assumption, an installer quirk), fix it once in the harness and note it here rather than patching every test.
+
+Do not weaken an assertion to whatever the model produced. The goal is a test that a correct WordPress implementation passes and a plausible shortcut fails; a model failure is evidence to weigh, not a bug report to close.
 
 ## Determinism
 
