@@ -396,6 +396,15 @@ def _run_concurrent_loop(
 #: defers its registrations to the ``init`` action -- idiomatic in a plugin --
 #: would silently never run. Saying so keeps the benchmark about WordPress
 #: knowledge rather than about guessing the harness's load order.
+PLUGIN_EXECUTION_CONTEXT_NOTE = (
+    "Execution context: the plugin is installed and its main file is included into a "
+    "WordPress site that has already finished booting (plugins_loaded and init have "
+    "already fired). Write it as a normal plugin anyway: attach behavior to hooks with "
+    "add_action and add_filter exactly as you would in production, because the grader "
+    "fires the relevant actions itself. Do not skip hook registration behind "
+    "did_action() checks."
+)
+
 EXECUTION_CONTEXT_NOTE = (
     "Execution context: this code is loaded into a WordPress site that has already "
     "finished booting (the init action has already fired, as have plugins_loaded, "
@@ -726,11 +735,14 @@ class BenchmarkRunner(_ResultBookkeeping):
         if test.test_function:
             lines.append("")
             lines.append(f"Define this function: {test.test_function}")
+        artifact_kind = getattr(test, "artifact_kind", "php_snippet")
         lines.append("")
-        lines.append(EXECUTION_CONTEXT_NOTE)
         lines.append(
-            render_artifact_instructions(getattr(test, "artifact_kind", "php_snippet"))
+            PLUGIN_EXECUTION_CONTEXT_NOTE
+            if artifact_kind == "wp_plugin_files"
+            else EXECUTION_CONTEXT_NOTE
         )
+        lines.append(render_artifact_instructions(artifact_kind))
         return "\n".join(lines)
 
     @staticmethod
