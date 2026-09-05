@@ -398,9 +398,10 @@ def _run_concurrent_loop(
 #: knowledge rather than about guessing the harness's load order.
 EXECUTION_CONTEXT_NOTE = (
     "Execution context: this code is loaded into a WordPress site that has already "
-    "finished booting (the init action has already fired), so perform any "
-    "registrations or hook attachments directly when the code runs instead of "
-    "deferring them to init."
+    "finished booting (the init action has already fired, as have plugins_loaded, "
+    "after_setup_theme and wp_loaded), so perform any registrations or hook "
+    "attachments directly when the code runs instead of deferring them to those "
+    "boot-time actions."
 )
 
 
