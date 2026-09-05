@@ -1,7 +1,11 @@
 """The execution prompt must tell the model about the grader's load order."""
 from __future__ import annotations
 
-from wp_bench.core import EXECUTION_CONTEXT_NOTE, PLUGIN_EXECUTION_CONTEXT_NOTE, BenchmarkRunner
+from wp_bench.core import (
+    EXECUTION_CONTEXT_NOTE,
+    PLUGIN_EXECUTION_CONTEXT_NOTE,
+    BenchmarkRunner,
+)
 from wp_bench.datasets import ExecutionTest
 
 
