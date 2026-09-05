@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-internationalization",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Internationalization",
     "description": "Code generation tasks for WordPress Internationalization APIs",
@@ -249,6 +249,67 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-internationalization-006",
+      "category": "internationalization",
+      "prompt": "Implement a function that returns a translatable count label for a cart: the source strings are '%s item' and '%s items' in the text domain 'wpbp-i18n', and the placeholder is filled with the count rendered in the locale's number format (so 1500 reads as 1,500 in English). Translators must be able to change both the singular and the plural form.",
+      "expected_behavior": "The plural form must be selected by `_n()` with the raw integer count — passing an already-formatted number breaks plural selection in every locale — and only the substituted value goes through `number_format_i18n()`. Runtime validation installs an `ngettext` filter that records the number WordPress was given and returns marker translations, then checks the singular, plural and zero cases and the recorded numbers.",
+      "requirements": [
+        "Use the source strings '%s item' and '%s items' with the text domain 'wpbp-i18n'",
+        "Let WordPress choose the singular or plural form from the raw count",
+        "Substitute the count into the placeholder using the locale's number formatting"
+      ],
+      "test_function": "wpbp_internationalization_006( int $count ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "_n\\s*\\(",
+            "description": "Uses the plural translation API",
+            "weight": 1
+          },
+          {
+            "pattern": "number_format_i18n",
+            "description": "Formats the number for the locale",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-i18n",
+            "description": "Uses the requested text domain",
+            "weight": 1
+          },
+          {
+            "pattern": "%s item",
+            "description": "Uses the requested source strings",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_i18n_006_numbers'] = array(); $GLOBALS['wpbp_i18n_006_filter'] = static function ( $translation, $single, $plural, $number, $domain ) { if ( 'wpbp-i18n' !== $domain ) { return $translation; } $GLOBALS['wpbp_i18n_006_numbers'][] = $number; return ( 1 === (int) $number ) ? 'ONE:%s' : 'MANY:%s'; }; add_filter( 'ngettext', $GLOBALS['wpbp_i18n_006_filter'], 10, 5 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_internationalization_006' ) ) { return false; } $GLOBALS['wpbp_i18n_006_numbers'] = array(); if ( '1,500' !== number_format_i18n( 1500 ) ) { return false; } if ( 'ONE:' . number_format_i18n( 1 ) !== wpbp_internationalization_006( 1 ) ) { return false; } if ( 'MANY:' . number_format_i18n( 1500 ) !== wpbp_internationalization_006( 1500 ) ) { return false; } if ( 'MANY:' . number_format_i18n( 0 ) !== wpbp_internationalization_006( 0 ) ) { return false; } $numbers = (array) $GLOBALS['wpbp_i18n_006_numbers']; if ( 3 !== count( $numbers ) ) { return false; } foreach ( $numbers as $number ) { if ( ! is_int( $number ) && ! is_float( $number ) && ! ctype_digit( (string) $number ) ) { return false; } } return array( 1, 1500, 0 ) === array_map( 'intval', $numbers );",
+            "description": "Plural selection sees the raw count while the rendered number is locale formatted",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_i18n_006_filter'] ) ) { remove_filter( 'ngettext', $GLOBALS['wpbp_i18n_006_filter'], 10 ); } unset( $GLOBALS['wpbp_i18n_006_filter'], $GLOBALS['wpbp_i18n_006_numbers'] );"
+      },
+      "reference_solution": "function wpbp_internationalization_006( int $count ): string { return sprintf( _n( '%s item', '%s items', $count, 'wpbp-i18n' ), number_format_i18n( $count ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/l10n.php",
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_internationalization_006( int $count ): string { return sprintf( _n( '%s item', '%s items', $count, 'wpbp-i18n' ), $count ); }",
+        "function wpbp_internationalization_006( int $count ): string { $formatted = number_format_i18n( $count ); return sprintf( _n( '%s item', '%s items', $formatted, 'wpbp-i18n' ), $formatted ); }",
+        "function wpbp_internationalization_006( int $count ): string { return 1 === $count ? '1 item' : number_format_i18n( $count ) . ' items'; }"
+      ]
     }
   ]
 }

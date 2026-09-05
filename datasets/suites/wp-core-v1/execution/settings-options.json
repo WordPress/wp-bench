@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-settings_options",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Settings and Options",
     "description": "Code generation tasks for WordPress Settings and Options APIs",
@@ -283,6 +283,272 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-settings-options-006",
+      "category": "settings-options",
+      "prompt": "A site checks stock through the slow helper wpbp_stock_lookup_source( string $code ), which answers true (stocked), false (not stocked) or null (no such product) and must run at most once per code. Implement a function that returns that same three-state answer for a code and caches it as a transient named 'wpbp_stock_' followed by the code for five minutes, so the second call for the same code answers from the cache with an identical value.",
+      "expected_behavior": "Transients round-trip through the options table, so a stored `false` or `null` comes back as an empty string and `get_transient()` returns false for both a miss and a cached negative. The answer therefore has to be stored in a wrapper (an array, or a normalized string) that keeps the three states apart. Runtime validation calls each of the three codes twice and requires strictly identical results with exactly one helper invocation per code, plus a transient timeout about five minutes out.",
+      "requirements": [
+        "Call wpbp_stock_lookup_source() at most once per product code",
+        "Cache the answer as a transient named 'wpbp_stock_' followed by the code, expiring after five minutes",
+        "Return exactly the same three-state answer (true, false or null) whether it came from the helper or from the cache"
+      ],
+      "test_function": "wpbp_settings_options_006( string $code )",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_transient",
+            "description": "Reads the cached answer",
+            "weight": 1
+          },
+          {
+            "pattern": "set_transient",
+            "description": "Stores the answer as a transient",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_stock_lookup_source",
+            "description": "Calls the expensive lookup helper",
+            "weight": 1
+          },
+          {
+            "pattern": "5\\s*\\*\\s*MINUTE_IN_SECONDS|MINUTE_IN_SECONDS\\s*\\*\\s*5|\\b300\\b",
+            "description": "Uses a five minute expiration",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "foreach ( array( 'wpbp_stock_in-stock', 'wpbp_stock_sold-out', 'wpbp_stock_unknown-code' ) as $key ) { delete_transient( $key ); } $GLOBALS['wpbp_so_006_calls'] = array(); if ( ! function_exists( 'wpbp_stock_lookup_source' ) ) { function wpbp_stock_lookup_source( string $code ) { $GLOBALS['wpbp_so_006_calls'][] = $code; if ( 'in-stock' === $code ) { return true; } if ( 'sold-out' === $code ) { return false; } return null; } }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_006' ) ) { return false; } $GLOBALS['wpbp_so_006_calls'] = array(); $expected = array( 'sold-out' => false, 'unknown-code' => null, 'in-stock' => true ); $seen = array(); foreach ( $expected as $code => $answer ) { $first = wpbp_settings_options_006( $code ); if ( $answer !== $first ) { return false; } $seen[] = $code; if ( $seen !== $GLOBALS['wpbp_so_006_calls'] ) { return false; } $second = wpbp_settings_options_006( $code ); if ( $answer !== $second ) { return false; } if ( $seen !== $GLOBALS['wpbp_so_006_calls'] ) { return false; } } global $wpdb; $timeout = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT option_value FROM {$wpdb->options} WHERE option_name = %s\", '_transient_timeout_wpbp_stock_sold-out' ) ); return $timeout > time() && $timeout <= time() + 600;",
+            "description": "Each code is looked up once and every cached answer keeps its exact three-state value",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_stock_in-stock', 'wpbp_stock_sold-out', 'wpbp_stock_unknown-code' ) as $key ) { delete_transient( $key ); } unset( $GLOBALS['wpbp_so_006_calls'] );"
+      },
+      "reference_solution": "function wpbp_settings_options_006( string $code ) { $key = 'wpbp_stock_' . $code; $cached = get_transient( $key ); if ( is_array( $cached ) && array_key_exists( 'stocked', $cached ) ) { return $cached['stocked']; } $stocked = wpbp_stock_lookup_source( $code ); set_transient( $key, array( 'stocked' => $stocked ), 5 * MINUTE_IN_SECONDS ); return $stocked; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_settings_options_006( string $code ) { $key = 'wpbp_stock_' . $code; $cached = get_transient( $key ); if ( false !== $cached ) { return $cached; } $stocked = wpbp_stock_lookup_source( $code ); set_transient( $key, $stocked, 5 * MINUTE_IN_SECONDS ); return $stocked; }",
+        "function wpbp_settings_options_006( string $code ) { $key = 'wpbp_stock_' . $code; $cached = get_transient( $key ); if ( ! empty( $cached ) ) { return $cached; } $stocked = wpbp_stock_lookup_source( $code ); set_transient( $key, $stocked, 5 * MINUTE_IN_SECONDS ); return $stocked; }",
+        "function wpbp_settings_options_006( string $code ) { return wpbp_stock_lookup_source( $code ); }"
+      ]
+    },
+    {
+      "id": "e-settings-options-007",
+      "category": "settings-options",
+      "prompt": "Implement a function that applies a map of option name to desired autoload flag in a single pass over the options table, and returns a map of option name to whether that option's stored autoload value actually had to change.",
+      "expected_behavior": "The function delegates to `wp_set_option_autoload_values()`, which selects the options whose autoload value differs and issues at most two UPDATE queries, returning `true` only for the options it changed. Runtime validation seeds one autoloaded option to switch off, one already-off option requested off, and one autoloaded option requested on; the returned map must be `true`, `false`, `false`, the stored autoload column must read `off`, `off`, `on`, and the whole call must stay within a small query budget so a per-option loop fails.",
+      "requirements": [
+        "Accept a map of option name to desired autoload flag (true to autoload, false to not autoload)",
+        "Apply the whole map in one pass rather than one option at a time — the call must not cost more than a handful of database queries",
+        "Return a map of option name to true when the stored autoload value changed and false when it was already correct"
+      ],
+      "test_function": "wpbp_settings_options_007( array $autoload_map ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_set_option_autoload_values",
+            "description": "Uses the bulk autoload API",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $seed = array( 'wpbp_autoload_on' => 'on', 'wpbp_autoload_off' => 'off', 'wpbp_autoload_keep' => 'on' ); foreach ( $seed as $name => $flag ) { delete_option( $name ); add_option( $name, 'value for ' . $name, '', 'on' === $flag ); $wpdb->update( $wpdb->options, array( 'autoload' => $flag ), array( 'option_name' => $name ) ); } wp_cache_flush();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_007' ) ) { return false; } global $wpdb; wp_cache_flush(); $baseline = (int) $wpdb->num_queries; $result = wpbp_settings_options_007( array( 'wpbp_autoload_on' => false, 'wpbp_autoload_off' => false, 'wpbp_autoload_keep' => true ) ); $queries = (int) $wpdb->num_queries - $baseline; if ( ! is_array( $result ) ) { return false; } if ( true !== ( $result['wpbp_autoload_on'] ?? null ) ) { return false; } if ( false !== ( $result['wpbp_autoload_off'] ?? null ) ) { return false; } if ( false !== ( $result['wpbp_autoload_keep'] ?? null ) ) { return false; } if ( $queries > 4 ) { return false; } $rows = $wpdb->get_results( \"SELECT option_name, autoload FROM {$wpdb->options} WHERE option_name IN ( 'wpbp_autoload_on', 'wpbp_autoload_off', 'wpbp_autoload_keep' )\", OBJECT_K ); if ( 3 !== count( $rows ) ) { return false; } return 'off' === $rows['wpbp_autoload_on']->autoload && 'off' === $rows['wpbp_autoload_off']->autoload && 'on' === $rows['wpbp_autoload_keep']->autoload;",
+            "description": "Only the option that needed a change reports true, the stored flags are correct, and the batch stays within its query budget",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_autoload_on' ); delete_option( 'wpbp_autoload_off' ); delete_option( 'wpbp_autoload_keep' );"
+      },
+      "reference_solution": "function wpbp_settings_options_007( array $autoload_map ): array { return wp_set_option_autoload_values( $autoload_map ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_settings_options_007( array $autoload_map ): array { $results = array(); foreach ( $autoload_map as $option => $autoload ) { $results[ $option ] = wp_set_option_autoload( $option, $autoload ); } return $results; }",
+        "function wpbp_settings_options_007( array $autoload_map ): array { $results = array(); foreach ( $autoload_map as $option => $autoload ) { $results[ $option ] = (bool) $autoload; } return $results; }"
+      ]
+    },
+    {
+      "id": "e-settings-options-008",
+      "category": "settings-options",
+      "prompt": "The option 'wpbp_theme_mode' has never been saved. Register a fallback so that reading it without a default yields 'auto', while a caller that supplies its own default still gets exactly what it asked for (including false), and a value saved later wins over the fallback.",
+      "expected_behavior": "The code hooks `default_option_wpbp_theme_mode` and uses the third filter argument (`$passed_default`) to tell 'no default supplied' from 'a default was supplied', returning `'auto'` only in the former case. Runtime validation reads the option with no default, with 'dark', with false, then saves 'light' and reads it back both ways, and checks an unrelated missing option is untouched.",
+      "requirements": [
+        "Reading 'wpbp_theme_mode' with no default must yield 'auto'",
+        "A caller-supplied default must be returned unchanged, including when that default is false",
+        "A value saved to the option must take precedence over the fallback",
+        "Other options must not be affected"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "default_option_wpbp_theme_mode",
+            "description": "Hooks the option's default filter",
+            "weight": 1
+          },
+          {
+            "pattern": "auto",
+            "description": "Supplies the auto fallback",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers the filter",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "delete_option( 'wpbp_theme_mode' ); delete_option( 'wpbp_theme_other' ); wp_cache_flush();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( 'auto' !== get_option( 'wpbp_theme_mode' ) ) { return false; } if ( 'dark' !== get_option( 'wpbp_theme_mode', 'dark' ) ) { return false; } if ( false !== get_option( 'wpbp_theme_mode', false ) ) { return false; } if ( 'x' !== get_option( 'wpbp_theme_other', 'x' ) ) { return false; } if ( false !== get_option( 'wpbp_theme_other' ) ) { return false; } if ( true !== update_option( 'wpbp_theme_mode', 'light' ) ) { return false; } if ( 'light' !== get_option( 'wpbp_theme_mode' ) ) { return false; } if ( 'light' !== get_option( 'wpbp_theme_mode', 'dark' ) ) { return false; } delete_option( 'wpbp_theme_mode' ); return 'auto' === get_option( 'wpbp_theme_mode' );",
+            "description": "The fallback applies only when no default was passed, and a saved value wins",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_theme_mode' ); delete_option( 'wpbp_theme_other' ); remove_all_filters( 'default_option_wpbp_theme_mode' ); remove_all_filters( 'pre_option_wpbp_theme_mode' ); remove_all_filters( 'option_wpbp_theme_mode' );"
+      },
+      "reference_solution": "add_filter( 'default_option_wpbp_theme_mode', static function ( $default_value, $option, $passed_default ) { return $passed_default ? $default_value : 'auto'; }, 10, 3 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'default_option_wpbp_theme_mode', static function ( $default_value ) { return 'auto'; } );",
+        "add_filter( 'default_option_wpbp_theme_mode', static function ( $default_value ) { return false === $default_value ? 'auto' : $default_value; } );",
+        "add_filter( 'pre_option_wpbp_theme_mode', static function ( $pre ) { return 'auto'; } );"
+      ]
+    },
+    {
+      "id": "e-settings-options-009",
+      "category": "settings-options",
+      "prompt": "A plugin screen needs the values of several options that are not autoloaded. Implement a function that, given a list of option names, returns a map of option name to value while hitting the database only once for the whole list, no matter how many names are supplied. Names with no stored option must map to false.",
+      "expected_behavior": "The function calls `wp_prime_option_caches()` with the whole list so a single query loads them all into the options cache (and records the missing one in `notoptions`), then reads each value with `get_option()`, which is served from cache. Runtime validation flushes the cache, counts queries around the call, and checks the values, including an array-valued option and a missing one.",
+      "requirements": [
+        "Return a map of option name to option value, preserving each option's stored type",
+        "Load the whole list with a single database query rather than one query per option",
+        "Map option names that do not exist to false"
+      ],
+      "test_function": "wpbp_settings_options_009( array $option_names ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_prime_option_caches",
+            "description": "Primes the whole list in one query",
+            "weight": 1
+          },
+          {
+            "pattern": "get_option",
+            "description": "Reads the primed values through the Options API",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$seed = array( 'wpbp_prime_a' => 'alpha', 'wpbp_prime_b' => 'bravo', 'wpbp_prime_c' => 'charlie', 'wpbp_prime_d' => array( 'nested' => 'delta' ), 'wpbp_prime_e' => '0' ); foreach ( $seed as $name => $value ) { delete_option( $name ); add_option( $name, $value, '', false ); } delete_option( 'wpbp_prime_missing' ); wp_cache_flush();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_009' ) ) { return false; } global $wpdb; $names = array( 'wpbp_prime_a', 'wpbp_prime_b', 'wpbp_prime_c', 'wpbp_prime_d', 'wpbp_prime_e', 'wpbp_prime_missing' ); wp_cache_flush(); $baseline = (int) $wpdb->num_queries; $values = wpbp_settings_options_009( $names ); $queries = (int) $wpdb->num_queries - $baseline; if ( ! is_array( $values ) || $queries > 3 ) { return false; } $expected = array( 'wpbp_prime_a' => 'alpha', 'wpbp_prime_b' => 'bravo', 'wpbp_prime_c' => 'charlie', 'wpbp_prime_e' => '0' ); foreach ( $expected as $name => $value ) { if ( ! array_key_exists( $name, $values ) || $value !== $values[ $name ] ) { return false; } } if ( array( 'nested' => 'delta' ) !== ( $values['wpbp_prime_d'] ?? null ) ) { return false; } return array_key_exists( 'wpbp_prime_missing', $values ) && false === $values['wpbp_prime_missing'];",
+            "description": "All six values are returned correctly from a single priming query",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_prime_a', 'wpbp_prime_b', 'wpbp_prime_c', 'wpbp_prime_d', 'wpbp_prime_e', 'wpbp_prime_missing' ) as $name ) { delete_option( $name ); }"
+      },
+      "reference_solution": "function wpbp_settings_options_009( array $option_names ): array { wp_prime_option_caches( $option_names ); $values = array(); foreach ( $option_names as $name ) { $values[ $name ] = get_option( $name ); } return $values; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_settings_options_009( array $option_names ): array { $values = array(); foreach ( $option_names as $name ) { $values[ $name ] = get_option( $name ); } return $values; }"
+      ]
+    },
+    {
+      "id": "e-settings-options-010",
+      "category": "settings-options",
+      "prompt": "Implement a function that saves a value to a named option and reports which of three things happened: the option did not exist and was created, it existed and now holds a different value, or it already held exactly that value so nothing was written. Return 'created', 'updated' or 'unchanged'. Options whose stored value is an empty string or '0' still count as existing.",
+      "expected_behavior": "The function must not read a plain `get_option()` result as an existence test (an option holding '' or '0' looks missing) and must not read `update_option()` returning false as a failure (false also means 'value unchanged'). The reliable shape is an existence probe with a unique default before writing, then `update_option()`. Runtime validation exercises a missing option, an identical rewrite, a changed value, an option stored as '0', and an option stored as an empty string.",
+      "requirements": [
+        "Return exactly one of the strings 'created', 'updated' or 'unchanged'",
+        "Treat an option whose stored value is '' or '0' as existing",
+        "Write the value through the Options API"
+      ],
+      "test_function": "wpbp_settings_options_010( string $option, $value ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "update_option",
+            "description": "Writes through the Options API",
+            "weight": 1
+          },
+          {
+            "pattern": "created",
+            "description": "Reports the created state",
+            "weight": 1
+          },
+          {
+            "pattern": "updated",
+            "description": "Reports the updated state",
+            "weight": 1
+          },
+          {
+            "pattern": "unchanged",
+            "description": "Reports the unchanged state",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "delete_option( 'wpbp_state_new' ); delete_option( 'wpbp_state_zero' ); delete_option( 'wpbp_state_empty' ); add_option( 'wpbp_state_zero', '0' ); add_option( 'wpbp_state_empty', '' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_settings_options_010' ) ) { return false; } if ( 'created' !== wpbp_settings_options_010( 'wpbp_state_new', 'alpha' ) ) { return false; } if ( 'alpha' !== get_option( 'wpbp_state_new' ) ) { return false; } if ( 'unchanged' !== wpbp_settings_options_010( 'wpbp_state_new', 'alpha' ) ) { return false; } if ( 'updated' !== wpbp_settings_options_010( 'wpbp_state_new', 'beta' ) ) { return false; } if ( 'beta' !== get_option( 'wpbp_state_new' ) ) { return false; } if ( 'unchanged' !== wpbp_settings_options_010( 'wpbp_state_zero', '0' ) ) { return false; } if ( 'updated' !== wpbp_settings_options_010( 'wpbp_state_zero', '1' ) ) { return false; } if ( 'unchanged' !== wpbp_settings_options_010( 'wpbp_state_empty', '' ) ) { return false; } return 'updated' === wpbp_settings_options_010( 'wpbp_state_empty', 'gamma' ) && 'gamma' === get_option( 'wpbp_state_empty' );",
+            "description": "Creation, no-op writes and real changes are reported apart, including for falsy stored values",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_state_new' ); delete_option( 'wpbp_state_zero' ); delete_option( 'wpbp_state_empty' );"
+      },
+      "reference_solution": "function wpbp_settings_options_010( string $option, $value ): string { $sentinel = '__wpbp_absent_' . wp_generate_uuid4(); $existed = $sentinel !== get_option( $option, $sentinel ); $changed = update_option( $option, $value ); if ( ! $changed ) { return 'unchanged'; } return $existed ? 'updated' : 'created'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_settings_options_010( string $option, $value ): string { return update_option( $option, $value ) ? 'updated' : 'unchanged'; }",
+        "function wpbp_settings_options_010( string $option, $value ): string { $existed = (bool) get_option( $option ); if ( ! update_option( $option, $value ) ) { return 'unchanged'; } return $existed ? 'updated' : 'created'; }"
+      ]
     }
   ]
 }

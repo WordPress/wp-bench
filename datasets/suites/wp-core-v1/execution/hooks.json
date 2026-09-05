@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-hooks",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Hooks",
     "description": "Code generation tasks for WordPress Hooks APIs",
@@ -294,6 +294,121 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-hooks-007",
+      "category": "hooks",
+      "prompt": "Late-loading integrations often attach to an action that has already run, and their callback then never fires. Implement a function that attaches a callback to an action, except that when the action has already fired at least once it invokes the callback immediately instead of registering it. Return 'ran' when it invoked the callback and 'deferred' when it registered it for later.",
+      "expected_behavior": "The decision has to come from `did_action( $hook )`, which counts how many times the action has fired; `has_action()` or a static flag cannot tell. Runtime validation fires one action before the submitted code runs, then checks the already-fired hook invokes the callback once and leaves no registration behind, while the not-yet-fired hook registers the callback and runs it when the action is later fired.",
+      "requirements": [
+        "Invoke the callback immediately, exactly once, when the action has already fired",
+        "Register the callback on the action when it has not fired yet, so it runs when the action fires",
+        "Return 'ran' for the immediate case and 'deferred' for the registered case"
+      ],
+      "test_function": "wpbp_hooks_007( string $hook, callable $callback ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "did_action",
+            "description": "Checks whether the action already fired",
+            "weight": 1
+          },
+          {
+            "pattern": "add_action|add_filter",
+            "description": "Registers the callback for the not-yet-fired case",
+            "weight": 1
+          },
+          {
+            "pattern": "call_user_func|\\$callback\\s*\\(",
+            "description": "Invokes the callback for the already-fired case",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_hooks_007_count'] = 0; $GLOBALS['wpbp_hooks_007_callback'] = static function () { ++$GLOBALS['wpbp_hooks_007_count']; }; do_action( 'wpbp_boot_done' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_007' ) ) { return false; } $callback = $GLOBALS['wpbp_hooks_007_callback'] ?? null; if ( ! is_callable( $callback ) ) { return false; } $GLOBALS['wpbp_hooks_007_count'] = 0; if ( 'ran' !== wpbp_hooks_007( 'wpbp_boot_done', $callback ) ) { return false; } if ( 1 !== $GLOBALS['wpbp_hooks_007_count'] ) { return false; } if ( false !== has_action( 'wpbp_boot_done', $callback ) ) { return false; } if ( 'deferred' !== wpbp_hooks_007( 'wpbp_later_step', $callback ) ) { return false; } if ( 1 !== $GLOBALS['wpbp_hooks_007_count'] ) { return false; } if ( false === has_action( 'wpbp_later_step', $callback ) ) { return false; } do_action( 'wpbp_later_step' ); return 2 === $GLOBALS['wpbp_hooks_007_count'];",
+            "description": "An already-fired action runs the callback once immediately, a pending action defers it until the action fires",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_actions( 'wpbp_later_step' ); remove_all_actions( 'wpbp_boot_done' ); unset( $GLOBALS['wpbp_hooks_007_count'], $GLOBALS['wpbp_hooks_007_callback'] );"
+      },
+      "reference_solution": "function wpbp_hooks_007( string $hook, callable $callback ): string { if ( did_action( $hook ) > 0 ) { call_user_func( $callback ); return 'ran'; } add_action( $hook, $callback ); return 'deferred'; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_hooks_007( string $hook, callable $callback ): string { add_action( $hook, $callback ); return 'deferred'; }",
+        "function wpbp_hooks_007( string $hook, callable $callback ): string { if ( has_action( $hook ) ) { call_user_func( $callback ); return 'ran'; } add_action( $hook, $callback ); return 'deferred'; }",
+        "function wpbp_hooks_007( string $hook, callable $callback ): string { call_user_func( $callback ); return 'ran'; }"
+      ]
+    },
+    {
+      "id": "e-hooks-008",
+      "category": "hooks",
+      "prompt": "Implement a function that moves a callback that is already attached to a filter to a different priority on that same hook, so it still runs exactly once but in its new position. Return the priority the callback was previously attached at, or false when the callback is not attached to that hook at all. A callback attached at priority 0 is attached.",
+      "expected_behavior": "`has_filter()` returns the integer priority when the callback is attached and `false` when it is not, so a truthiness test misreads priority 0, and `remove_filter()` only removes a callback when it is given the priority the callback is actually registered at — passing the new priority leaves the old registration in place and the callback then runs twice. Runtime validation registers a callback at priority 0 ahead of one at priority 10, moves the first to 20, and checks the returned priority, the new registration and the resulting filter output, then repeats with a callback that was never attached.",
+      "requirements": [
+        "Return the previous priority as an integer, treating priority 0 as attached",
+        "Return false, and change nothing, when the callback is not attached to the hook",
+        "After the move the callback must be attached only at the new priority"
+      ],
+      "test_function": "wpbp_hooks_008( string $hook, callable $callback, int $new_priority )",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "has_filter",
+            "description": "Reads the current priority",
+            "weight": 1
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Removes the old registration",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers the callback at the new priority",
+            "weight": 1
+          },
+          {
+            "pattern": "false",
+            "description": "Distinguishes an unattached callback",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_hooks_008'] = array( 'a' => static function ( $value ) { return $value . 'A'; }, 'b' => static function ( $value ) { return $value . 'B'; }, 'c' => static function ( $value ) { return $value . 'C'; } ); add_filter( 'wpbp_move_priority', $GLOBALS['wpbp_hooks_008']['a'], 0 ); add_filter( 'wpbp_move_priority', $GLOBALS['wpbp_hooks_008']['b'], 10 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_hooks_008' ) ) { return false; } $callbacks = (array) ( $GLOBALS['wpbp_hooks_008'] ?? array() ); if ( 3 !== count( $callbacks ) ) { return false; } if ( 'AB' !== apply_filters( 'wpbp_move_priority', '' ) ) { return false; } $previous = wpbp_hooks_008( 'wpbp_move_priority', $callbacks['a'], 20 ); if ( 0 !== $previous ) { return false; } if ( 20 !== has_filter( 'wpbp_move_priority', $callbacks['a'] ) ) { return false; } if ( 'BA' !== apply_filters( 'wpbp_move_priority', '' ) ) { return false; } $missing = wpbp_hooks_008( 'wpbp_move_priority', $callbacks['c'], 20 ); if ( false !== $missing ) { return false; } if ( false !== has_filter( 'wpbp_move_priority', $callbacks['c'] ) ) { return false; } return 'BA' === apply_filters( 'wpbp_move_priority', '' );",
+            "description": "A priority 0 callback reports 0 and moves to the new position once, and an unattached callback reports false",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'wpbp_move_priority' ); unset( $GLOBALS['wpbp_hooks_008'] );"
+      },
+      "reference_solution": "function wpbp_hooks_008( string $hook, callable $callback, int $new_priority ) { $current = has_filter( $hook, $callback ); if ( false === $current ) { return false; } $current = (int) $current; remove_filter( $hook, $callback, $current ); add_filter( $hook, $callback, $new_priority ); return $current; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php",
+          "src/wp-includes/class-wp-hook.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_hooks_008( string $hook, callable $callback, int $new_priority ) { $current = has_filter( $hook, $callback ); if ( ! $current ) { return false; } remove_filter( $hook, $callback, (int) $current ); add_filter( $hook, $callback, $new_priority ); return (int) $current; }",
+        "function wpbp_hooks_008( string $hook, callable $callback, int $new_priority ) { $current = has_filter( $hook, $callback ); if ( false === $current ) { return false; } remove_filter( $hook, $callback, $new_priority ); add_filter( $hook, $callback, $new_priority ); return (int) $current; }"
+      ]
     }
   ]
 }

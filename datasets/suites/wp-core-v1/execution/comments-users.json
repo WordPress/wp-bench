@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-comments_users",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Comments and Users",
     "description": "Code generation tasks for WordPress Comments and Users APIs",
@@ -211,6 +211,169 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-comments-users-005",
+      "category": "comments-users",
+      "prompt": "Implement a function that submits a visitor comment through WordPress's comment submission flow and, when WordPress rejects the submission (for example as a duplicate of one already on the post), returns WordPress's error object instead of letting WordPress end the request.",
+      "expected_behavior": "The function calls `wp_new_comment()` with the error-returning mode enabled so a rejected submission comes back as a `WP_Error` (code `comment_duplicate` for a repeated comment) rather than reaching `wp_die()`. Runtime validation submits one comment, resubmits the identical payload, and submits a different comment from a different author; only the middle call may produce an error, and the post ends with exactly two comments.",
+      "requirements": [
+        "Submit the comment through the WordPress API that applies WordPress's comment checks (duplicate detection, flood control, moderation)",
+        "Return the new comment ID when WordPress accepts the submission",
+        "Return WordPress's error object when the submission is rejected, instead of allowing the request to be terminated"
+      ],
+      "test_function": "wpbp_comments_users_005( array $comment_data )",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_new_comment",
+            "description": "Uses the comment submission API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_new_comment\\s*\\([^)]*,\\s*true",
+            "description": "Requests error objects instead of wp_die()",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$_SERVER['REMOTE_ADDR'] = '198.51.100.10'; add_filter( 'pre_wp_mail', '__return_true' ); add_filter( 'wp_die_handler', static function () { return static function ( $message ) { throw new \\RuntimeException( is_string( $message ) ? $message : 'wp_die() was called' ); }; } ); $GLOBALS['wpbp_cu_005_post_id'] = wp_insert_post( array( 'post_title' => 'WPBP Duplicate Comment Post', 'post_content' => 'Body', 'post_status' => 'publish' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$post_id = $GLOBALS['wpbp_cu_005_post_id'] ?? 0; if ( ! function_exists( 'wpbp_comments_users_005' ) || ! is_int( $post_id ) || $post_id <= 0 ) { return false; } $payload = array( 'comment_post_ID' => $post_id, 'comment_author' => 'Ada Lovelace', 'comment_author_email' => 'ada@example.com', 'comment_author_url' => '', 'comment_content' => 'A first remark on this post.', 'comment_type' => 'comment' ); $first = wpbp_comments_users_005( $payload ); if ( is_wp_error( $first ) || (int) $first <= 0 ) { return false; } $dupe = wpbp_comments_users_005( $payload ); if ( ! is_wp_error( $dupe ) || 'comment_duplicate' !== $dupe->get_error_code() ) { return false; } $second = wpbp_comments_users_005( array( 'comment_post_ID' => $post_id, 'comment_author' => 'Bo Bench', 'comment_author_email' => 'bo@example.com', 'comment_author_url' => '', 'comment_author_IP' => '198.51.100.77', 'comment_content' => 'A different remark on this post.', 'comment_type' => 'comment' ) ); if ( is_wp_error( $second ) || (int) $second <= 0 || (int) $second === (int) $first ) { return false; } $stored = get_comments( array( 'post_id' => $post_id, 'status' => 'all', 'fields' => 'ids' ) ); return 2 === count( $stored ) && in_array( (int) $first, array_map( 'intval', $stored ), true ) && in_array( (int) $second, array_map( 'intval', $stored ), true );",
+            "description": "A repeated submission returns a comment_duplicate WP_Error while distinct submissions are stored",
+            "weight": 1
+          }
+        ],
+        "teardown": "$post_id = $GLOBALS['wpbp_cu_005_post_id'] ?? 0; if ( is_int( $post_id ) && $post_id > 0 ) { foreach ( get_comments( array( 'post_id' => $post_id, 'status' => 'all' ) ) as $comment ) { if ( $comment instanceof WP_Comment ) { wp_delete_comment( (int) $comment->comment_ID, true ); } } wp_delete_post( $post_id, true ); } unset( $GLOBALS['wpbp_cu_005_post_id'] ); remove_all_filters( 'pre_wp_mail' ); remove_all_filters( 'wp_die_handler' ); unset( $_SERVER['REMOTE_ADDR'] );"
+      },
+      "reference_solution": "function wpbp_comments_users_005( array $comment_data ) { return wp_new_comment( $comment_data, true ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/comment.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_005( array $comment_data ) { $existing = get_comments( array( 'post_id' => (int) $comment_data['comment_post_ID'], 'status' => 'all', 'fields' => 'ids' ) ); if ( count( $existing ) > 0 ) { return new WP_Error( 'comment_duplicate', 'Duplicate comment detected.' ); } return wp_insert_comment( $comment_data ); }",
+        "function wpbp_comments_users_005( array $comment_data ) { return wp_insert_comment( $comment_data ); }"
+      ]
+    },
+    {
+      "id": "e-comments-users-006",
+      "category": "comments-users",
+      "prompt": "Implement a function that changes a user's password and signs that user out everywhere except the session that made the change. Sessions belonging to other users must be left untouched. Report whether the change succeeded.",
+      "expected_behavior": "The function updates the password through the user API (`wp_update_user()` with `user_pass`, or `wp_set_password()`), then calls `WP_Session_Tokens::get_instance( $user_id )->destroy_others( $session_token )` so the supplied session survives while the user's other sessions are revoked. Runtime validation checks the old password no longer verifies, the new one does, only the kept token still verifies for that user, and a second user's two sessions are untouched.",
+      "requirements": [
+        "Store the new password through the WordPress user API so it is hashed, never written to the database in plain text",
+        "Revoke the user's other login sessions while keeping the supplied session token valid",
+        "Leave other users' sessions untouched",
+        "Return true when the password change succeeded and false when WordPress rejected it"
+      ],
+      "test_function": "wpbp_comments_users_006( int $user_id, string $new_password, string $session_token ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_Session_Tokens",
+            "description": "Uses the session token manager",
+            "weight": 1
+          },
+          {
+            "pattern": "destroy_others",
+            "description": "Keeps the current session while revoking the others",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_update_user|wp_set_password",
+            "description": "Changes the password through the user API",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_filter( 'pre_wp_mail', '__return_true' ); require_once ABSPATH . 'wp-admin/includes/user.php'; $main = wp_insert_user( array( 'user_login' => 'wpbp_cu_006_main', 'user_pass' => 'wpbp-old-secret', 'user_email' => 'wpbp-main-006@example.com', 'role' => 'subscriber' ) ); $other = wp_insert_user( array( 'user_login' => 'wpbp_cu_006_other', 'user_pass' => 'wpbp-other-secret', 'user_email' => 'wpbp-other-006@example.com', 'role' => 'subscriber' ) ); $GLOBALS['wpbp_cu_006_main'] = (int) $main; $GLOBALS['wpbp_cu_006_other'] = (int) $other; $manager = WP_Session_Tokens::get_instance( (int) $main ); $GLOBALS['wpbp_cu_006_keep'] = $manager->create( time() + DAY_IN_SECONDS ); $GLOBALS['wpbp_cu_006_drop'] = array( $manager->create( time() + DAY_IN_SECONDS ), $manager->create( time() + DAY_IN_SECONDS ) ); $other_manager = WP_Session_Tokens::get_instance( (int) $other ); $GLOBALS['wpbp_cu_006_other_tokens'] = array( $other_manager->create( time() + DAY_IN_SECONDS ), $other_manager->create( time() + DAY_IN_SECONDS ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_006' ) ) { return false; } $main = (int) ( $GLOBALS['wpbp_cu_006_main'] ?? 0 ); $other = (int) ( $GLOBALS['wpbp_cu_006_other'] ?? 0 ); $keep = (string) ( $GLOBALS['wpbp_cu_006_keep'] ?? '' ); $drop = (array) ( $GLOBALS['wpbp_cu_006_drop'] ?? array() ); $other_tokens = (array) ( $GLOBALS['wpbp_cu_006_other_tokens'] ?? array() ); if ( $main <= 0 || $other <= 0 || '' === $keep || 2 !== count( $drop ) ) { return false; } $result = wpbp_comments_users_006( $main, 'wpbp-new-secret', $keep ); if ( true !== $result ) { return false; } $user = get_userdata( $main ); if ( ! $user instanceof WP_User ) { return false; } if ( ! wp_check_password( 'wpbp-new-secret', $user->user_pass, $main ) ) { return false; } if ( wp_check_password( 'wpbp-old-secret', $user->user_pass, $main ) ) { return false; } $manager = WP_Session_Tokens::get_instance( $main ); if ( ! $manager->verify( $keep ) ) { return false; } foreach ( $drop as $token ) { if ( $manager->verify( (string) $token ) ) { return false; } } $other_manager = WP_Session_Tokens::get_instance( $other ); foreach ( $other_tokens as $token ) { if ( ! $other_manager->verify( (string) $token ) ) { return false; } } return true;",
+            "description": "The password is replaced, only the supplied session survives, and the second user's sessions are untouched",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( array( 'wpbp_cu_006_main', 'wpbp_cu_006_other' ) as $key ) { $user_id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $user_id > 0 ) { wp_delete_user( $user_id ); } unset( $GLOBALS[ $key ] ); } unset( $GLOBALS['wpbp_cu_006_keep'], $GLOBALS['wpbp_cu_006_drop'], $GLOBALS['wpbp_cu_006_other_tokens'] ); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "function wpbp_comments_users_006( int $user_id, string $new_password, string $session_token ): bool { $result = wp_update_user( array( 'ID' => $user_id, 'user_pass' => $new_password ) ); if ( is_wp_error( $result ) ) { return false; } WP_Session_Tokens::get_instance( $user_id )->destroy_others( $session_token ); return true; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/user.php",
+          "src/wp-includes/class-wp-session-tokens.php",
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_006( int $user_id, string $new_password, string $session_token ): bool { $result = wp_update_user( array( 'ID' => $user_id, 'user_pass' => $new_password ) ); if ( is_wp_error( $result ) ) { return false; } WP_Session_Tokens::get_instance( $user_id )->destroy_all(); return true; }",
+        "function wpbp_comments_users_006( int $user_id, string $new_password, string $session_token ): bool { $result = wp_update_user( array( 'ID' => $user_id, 'user_pass' => $new_password ) ); return ! is_wp_error( $result ); }",
+        "function wpbp_comments_users_006( int $user_id, string $new_password, string $session_token ): bool { wp_set_password( $new_password, $user_id ); WP_Session_Tokens::destroy_all_for_all_users(); return true; }"
+      ]
+    },
+    {
+      "id": "e-comments-users-007",
+      "category": "comments-users",
+      "prompt": "Implement a function that returns the approved discussion on a post as a tree: only the post's top-level comments, each carrying its approved replies (and their replies) as children. Comments awaiting moderation must not appear anywhere in the tree, and comments on other posts must not be included.",
+      "expected_behavior": "The function queries comments with `hierarchical => 'threaded'` and `status => 'approve'` for the given post, so WordPress returns only top-level comments with their descendants attached (`WP_Comment::get_children()`), and the descendant query inherits the approved-only status. Runtime validation builds a post with two top-level comments, a two-level approved reply chain, a pending reply, and a comment on a second post; the tree must contain both roots, the approved reply chain, and neither the pending reply nor the other post's comment.",
+      "requirements": [
+        "Return the comments as a tree of WP_Comment objects: only top-level comments at the outer level, replies reachable through each comment's children",
+        "Include only approved comments, at every level of the tree",
+        "Restrict the results to the supplied post"
+      ],
+      "test_function": "wpbp_comments_users_007( int $post_id ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "hierarchical",
+            "description": "Requests a hierarchical comment query",
+            "weight": 1
+          },
+          {
+            "pattern": "threaded",
+            "description": "Requests the threaded representation",
+            "weight": 1
+          },
+          {
+            "pattern": "approve",
+            "description": "Restricts the query to approved comments",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$post_id = wp_insert_post( array( 'post_title' => 'WPBP Threaded Discussion', 'post_status' => 'publish' ) ); $other_post_id = wp_insert_post( array( 'post_title' => 'WPBP Other Discussion', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_cu_007_post'] = (int) $post_id; $GLOBALS['wpbp_cu_007_other_post'] = (int) $other_post_id; $make = static function ( $post, $content, $parent, $approved, $date ) { return (int) wp_insert_comment( array( 'comment_post_ID' => $post, 'comment_content' => $content, 'comment_parent' => $parent, 'comment_approved' => $approved, 'comment_author' => 'WPBP Author', 'comment_author_email' => 'threads@example.com', 'comment_date' => $date, 'comment_date_gmt' => $date ) ); }; $root_one = $make( $post_id, 'Root one', 0, 1, '2025-01-01 10:00:00' ); $reply = $make( $post_id, 'Reply to root one', $root_one, 1, '2025-01-01 11:00:00' ); $pending = $make( $post_id, 'Pending reply to root one', $root_one, 0, '2025-01-01 11:30:00' ); $deep = $make( $post_id, 'Reply to the reply', $reply, 1, '2025-01-01 12:00:00' ); $root_two = $make( $post_id, 'Root two', 0, 1, '2025-01-01 13:00:00' ); $elsewhere = $make( $other_post_id, 'Root on another post', 0, 1, '2025-01-01 14:00:00' ); $GLOBALS['wpbp_cu_007_ids'] = array( 'root_one' => $root_one, 'reply' => $reply, 'pending' => $pending, 'deep' => $deep, 'root_two' => $root_two, 'elsewhere' => $elsewhere );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_007' ) ) { return false; } $post_id = (int) ( $GLOBALS['wpbp_cu_007_post'] ?? 0 ); $ids = (array) ( $GLOBALS['wpbp_cu_007_ids'] ?? array() ); if ( $post_id <= 0 || 6 !== count( $ids ) ) { return false; } $tree = wpbp_comments_users_007( $post_id ); if ( ! is_array( $tree ) ) { return false; } $roots = array(); foreach ( $tree as $node ) { if ( ! $node instanceof WP_Comment ) { return false; } $roots[ (int) $node->comment_ID ] = $node; } $root_ids = array_keys( $roots ); sort( $root_ids ); $expected_roots = array( (int) $ids['root_one'], (int) $ids['root_two'] ); sort( $expected_roots ); if ( $root_ids !== $expected_roots ) { return false; } $collect = static function ( WP_Comment $comment ) { $out = array(); foreach ( $comment->get_children() as $child ) { if ( ! $child instanceof WP_Comment ) { continue; } $out[] = (int) $child->comment_ID; } sort( $out ); return $out; }; $first_level = $collect( $roots[ (int) $ids['root_one'] ] ); if ( $first_level !== array( (int) $ids['reply'] ) ) { return false; } $reply_node = $roots[ (int) $ids['root_one'] ]->get_child( (int) $ids['reply'] ); if ( ! $reply_node instanceof WP_Comment ) { return false; } if ( $collect( $reply_node ) !== array( (int) $ids['deep'] ) ) { return false; } return array() === $collect( $roots[ (int) $ids['root_two'] ] );",
+            "description": "The tree holds both roots with their approved reply chain and omits the pending reply and the other post's comment",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_cu_007_post', 'wpbp_cu_007_other_post' ) as $key ) { $post_id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $post_id > 0 ) { foreach ( get_comments( array( 'post_id' => $post_id, 'status' => 'all' ) ) as $comment ) { if ( $comment instanceof WP_Comment ) { wp_delete_comment( (int) $comment->comment_ID, true ); } } wp_delete_post( $post_id, true ); } unset( $GLOBALS[ $key ] ); } unset( $GLOBALS['wpbp_cu_007_ids'] );"
+      },
+      "reference_solution": "function wpbp_comments_users_007( int $post_id ): array { return get_comments( array( 'post_id' => $post_id, 'status' => 'approve', 'hierarchical' => 'threaded', 'orderby' => 'comment_date_gmt', 'order' => 'ASC' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-comment-query.php",
+          "src/wp-includes/class-wp-comment.php",
+          "src/wp-includes/comment.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_007( int $post_id ): array { return get_comments( array( 'post_id' => $post_id, 'status' => 'approve', 'hierarchical' => 'flat' ) ); }",
+        "function wpbp_comments_users_007( int $post_id ): array { return get_comments( array( 'post_id' => $post_id, 'hierarchical' => 'threaded' ) ); }"
+      ]
     }
   ]
 }
