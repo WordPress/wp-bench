@@ -182,7 +182,7 @@ def test_result_metadata_records_isolation_mode(
         "wp_bench.core.load_tests",
         lambda dataset: [_execution_test("e-one")],
     )
-    config = _config(tmp_path)
+    config = _config(tmp_path, categories=["general"])
     runner = BenchmarkRunner(config)
     spy = SpyEnvironment()
     runner.environment = spy  # type: ignore[assignment]
@@ -193,6 +193,27 @@ def test_result_metadata_records_isolation_mode(
     payload = runner.run()
 
     assert payload["metadata"]["runtime_isolation"] == "reset_per_test"
+    assert payload["metadata"]["categories"] == ["general"]
+
+
+def test_result_metadata_test_ids_take_precedence_over_categories(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "wp_bench.core.load_tests",
+        lambda dataset: [_execution_test("e-one")],
+    )
+    config = _config(tmp_path, categories=["general"], test_ids=["e-one"])
+    runner = BenchmarkRunner(config)
+    runner.environment = SpyEnvironment()  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
+
+    payload = runner.run()
+
+    assert payload["metadata"]["categories"] == []
 
 
 def test_isolation_none_still_runs_all_tests(
