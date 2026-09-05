@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-mail_url",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Mail and URL Handling",
     "description": "Code generation tasks for WordPress Mail and URL Handling APIs",
@@ -173,6 +173,183 @@
         ],
         "release_focus": "6.9"
       }
+    },
+    {
+      "id": "e-mail-url-005",
+      "category": "mail-url",
+      "prompt": "Implement a function that sends a WordPress notification to one primary recipient, keeps a list of other addresses copied in so they can see each other, and points replies at a separate address that is not the sender. Everything beyond the primary recipient must be expressed to WordPress as mail headers rather than as extra recipients, and the function returns whether WordPress accepted the message.",
+      "expected_behavior": "The function calls `wp_mail()` with the recipient, subject and body, and a headers array containing a `Reply-To:` line for the reply address and a `Cc:` line listing the copied addresses (one line with a comma-separated list, or one line each). The copied addresses must not be appended to the `$to` argument, which would make them primary recipients rather than carbon copies, and the header lines must be complete `Name: value` strings rather than an associative array.",
+      "requirements": [
+        "Send through wp_mail() rather than PHPMailer directly",
+        "Express the copied addresses and the reply address as mail headers",
+        "Keep the primary recipient as the only address in the recipient argument",
+        "Return the boolean result of the send"
+      ],
+      "test_function": "wpbp_mail_url_005( string $to, string $subject, string $message, array $cc, string $reply_to ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_mail",
+            "description": "Uses wp_mail",
+            "weight": 1
+          },
+          {
+            "pattern": "/Reply-To/i",
+            "description": "Sets a reply address header",
+            "weight": 1
+          },
+          {
+            "pattern": "/Cc/i",
+            "description": "Sets a carbon copy header",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_mail_url_005_token'] = 'wpbp' . wp_rand( 100000, 999999 ); $GLOBALS['wpbp_mail_url_005_seen'] = array(); add_filter( 'pre_wp_mail', static function ( $short_circuit, $atts ) { $GLOBALS['wpbp_mail_url_005_seen'][] = $atts; return true; }, 10, 2 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_005' ) ) { return false; } $t = $GLOBALS['wpbp_mail_url_005_token']; $lines = static function ( $atts ) { $headers = $atts['headers'] ?? array(); if ( is_string( $headers ) ) { $headers = explode( \"\\n\", str_replace( \"\\r\\n\", \"\\n\", $headers ) ); } $out = array(); foreach ( (array) $headers as $header ) { if ( is_string( $header ) && str_contains( $header, ':' ) ) { $out[] = trim( $header ); } } return $out; }; $header_value = static function ( array $lines, string $name ): string { $value = ''; foreach ( $lines as $line ) { $parts = explode( ':', $line, 2 ); if ( 0 === strcasecmp( trim( $parts[0] ), $name ) ) { $value .= ( '' === $value ? '' : ',' ) . trim( $parts[1] ); } } return $value; }; $cases = array( array( 'primary-a-' . $t . '@example.com', 'Subject A ' . $t, array( 'copy1-' . $t . '@example.com', 'copy2-' . $t . '@example.com' ), 'replies-a-' . $t . '@example.com' ), array( 'primary-b-' . $t . '@example.com', 'Subject B ' . $t, array( 'copy3-' . $t . '@example.com' ), 'replies-b-' . $t . '@example.com' ) ); $GLOBALS['wpbp_mail_url_005_seen'] = array(); foreach ( $cases as $index => $case ) { $sent = wpbp_mail_url_005( $case[0], $case[1], 'Body ' . $t, $case[2], $case[3] ); if ( true !== $sent ) { return false; } $seen = $GLOBALS['wpbp_mail_url_005_seen']; if ( $index + 1 !== count( $seen ) ) { return false; } $atts = $seen[ $index ]; $to = $atts['to'] ?? null; if ( is_array( $to ) ) { if ( array( $case[0] ) !== array_values( $to ) ) { return false; } } elseif ( $case[0] !== $to ) { return false; } if ( $case[1] !== ( $atts['subject'] ?? null ) ) { return false; } $header_lines = $lines( $atts ); $reply = $header_value( $header_lines, 'Reply-To' ); $copies = $header_value( $header_lines, 'Cc' ); if ( ! str_contains( $reply, $case[3] ) ) { return false; } foreach ( $case[2] as $address ) { if ( ! str_contains( $copies, $address ) ) { return false; } } if ( str_contains( $copies, $case[3] ) ) { return false; } } return true;",
+            "description": "Copies and the reply address travel as headers while the recipient argument stays single",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_wp_mail' ); unset( $GLOBALS['wpbp_mail_url_005_seen'], $GLOBALS['wpbp_mail_url_005_token'] );"
+      },
+      "reference_solution": "function wpbp_mail_url_005( string $to, string $subject, string $message, array $cc, string $reply_to ): bool { $headers = array( 'Reply-To: ' . $reply_to ); if ( ! empty( $cc ) ) { $headers[] = 'Cc: ' . implode( ', ', $cc ); } return wp_mail( $to, $subject, $message, $headers ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_mail_url_005( string $to, string $subject, string $message, array $cc, string $reply_to ): bool { $recipients = array_merge( array( $to ), $cc ); return wp_mail( $recipients, $subject, $message, array( 'Reply-To: ' . $reply_to ) ); }",
+        "function wpbp_mail_url_005( string $to, string $subject, string $message, array $cc, string $reply_to ): bool { return wp_mail( $to, $subject, $message, array( 'Reply-To' => $reply_to, 'Cc' => implode( ', ', $cc ) ) ); }",
+        "function wpbp_mail_url_005( string $to, string $subject, string $message, array $cc, string $reply_to ): bool { $headers = array( 'Cc: ' . implode( ', ', $cc ) . ', ' . $reply_to, 'Reply-To: ' . $reply_to ); return wp_mail( $to, $subject, $message, $headers ); }"
+      ]
+    },
+    {
+      "id": "e-mail-url-006",
+      "category": "mail-url",
+      "prompt": "Implement a function that sends one WordPress email that appears to come from a supplied sender address and display name and carries a supplied file as an attachment. The custom sender must apply to this message only: any mail WordPress sends afterwards must go out under the site's usual sender address and display name again. Return whether WordPress accepted the message.",
+      "expected_behavior": "WordPress resolves the sender inside `wp_mail()` through the `wp_mail_from` and `wp_mail_from_name` filters, so the function adds those filters, calls `wp_mail()` with the file in the attachments argument, and removes the filters again afterwards (including when the send throws) so that nothing is left registered. Short-circuiting `pre_wp_mail` cannot be used to observe or set the sender: that hook runs before the sender filters are applied and before PHPMailer is built at all. The verifier reads the sender and the attachment names off the PHPMailer instance from `phpmailer_init`.",
+      "requirements": [
+        "Send through wp_mail() rather than PHPMailer directly",
+        "Set the sender address and display name WordPress uses while building this message",
+        "Attach the supplied file",
+        "Leave no site-wide sender override registered once the function returns"
+      ],
+      "test_function": "wpbp_mail_url_006( string $to, string $subject, string $message, string $from_email, string $from_name, string $attachment ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_mail",
+            "description": "Uses wp_mail",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_mail_from",
+            "description": "Filters the sender address",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_mail_from_name",
+            "description": "Filters the sender display name",
+            "weight": 1
+          },
+          {
+            "pattern": "remove_filter",
+            "description": "Removes the sender overrides afterwards",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_count = static function ( string $hook ): int { $total = 0; if ( isset( $GLOBALS['wp_filter'][ $hook ] ) ) { foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks as $callbacks ) { $total += count( $callbacks ); } } return $total; }; $GLOBALS['wpbp_mail_url_006_baseline'] = array( 'wp_mail_from' => $wpbp_count( 'wp_mail_from' ), 'wp_mail_from_name' => $wpbp_count( 'wp_mail_from_name' ) ); $GLOBALS['wpbp_mail_url_006_token'] = 'wpbp' . wp_rand( 100000, 999999 ); $GLOBALS['wpbp_mail_url_006_seen'] = array(); $files = array(); foreach ( array( 'one', 'two' ) as $suffix ) { $path = sys_get_temp_dir() . '/wpbp-invoice-' . $suffix . '-' . $GLOBALS['wpbp_mail_url_006_token'] . '.txt'; file_put_contents( $path, 'invoice ' . $suffix ); $files[] = $path; } $GLOBALS['wpbp_mail_url_006_files'] = $files; add_action( 'phpmailer_init', static function ( $phpmailer ) { $names = array(); foreach ( $phpmailer->getAttachments() as $attachment ) { $names[] = $attachment[2]; } $GLOBALS['wpbp_mail_url_006_seen'][] = array( 'from' => $phpmailer->From, 'from_name' => $phpmailer->FromName, 'attachments' => $names ); $phpmailer->clearAttachments(); $phpmailer->clearAllRecipients(); } );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_mail_url_006' ) ) { return false; } $count = static function ( string $hook ): int { $total = 0; if ( isset( $GLOBALS['wp_filter'][ $hook ] ) ) { foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks as $callbacks ) { $total += count( $callbacks ); } } return $total; }; $baseline = $GLOBALS['wpbp_mail_url_006_baseline']; $t = $GLOBALS['wpbp_mail_url_006_token']; $files = $GLOBALS['wpbp_mail_url_006_files']; $GLOBALS['wpbp_mail_url_006_seen'] = array(); $cases = array( array( 'billing-' . $t . '@example.com', 'WPBP Billing ' . $t, $files[0] ), array( 'support-' . $t . '@example.com', 'WPBP Support ' . $t, $files[1] ) ); foreach ( $cases as $index => $case ) { wpbp_mail_url_006( 'nobody-' . $t . '@example.com', 'Message ' . $index . ' ' . $t, 'Body ' . $t, $case[0], $case[1], $case[2] ); if ( $baseline['wp_mail_from'] !== $count( 'wp_mail_from' ) ) { return false; } if ( $baseline['wp_mail_from_name'] !== $count( 'wp_mail_from_name' ) ) { return false; } $seen = $GLOBALS['wpbp_mail_url_006_seen']; if ( $index + 1 !== count( $seen ) ) { return false; } $captured = $seen[ $index ]; if ( $case[0] !== $captured['from'] ) { return false; } if ( $case[1] !== $captured['from_name'] ) { return false; } if ( array( wp_basename( $case[2] ) ) !== $captured['attachments'] ) { return false; } } return true;",
+            "description": "Each message carries its own sender and attachment and leaves no sender override registered",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'phpmailer_init' ); remove_all_filters( 'wp_mail_from' ); remove_all_filters( 'wp_mail_from_name' ); remove_all_filters( 'wp_mail_failed' ); foreach ( (array) ( $GLOBALS['wpbp_mail_url_006_files'] ?? array() ) as $path ) { if ( is_string( $path ) && file_exists( $path ) ) { unlink( $path ); } } unset( $GLOBALS['wpbp_mail_url_006_seen'], $GLOBALS['wpbp_mail_url_006_files'], $GLOBALS['wpbp_mail_url_006_token'], $GLOBALS['wpbp_mail_url_006_baseline'] );"
+      },
+      "reference_solution": "function wpbp_mail_url_006( string $to, string $subject, string $message, string $from_email, string $from_name, string $attachment ): bool { $set_from = static function () use ( $from_email ) { return $from_email; }; $set_name = static function () use ( $from_name ) { return $from_name; }; add_filter( 'wp_mail_from', $set_from ); add_filter( 'wp_mail_from_name', $set_name ); try { return wp_mail( $to, $subject, $message, array(), array( $attachment ) ); } finally { remove_filter( 'wp_mail_from', $set_from ); remove_filter( 'wp_mail_from_name', $set_name ); } }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_mail_url_006( string $to, string $subject, string $message, string $from_email, string $from_name, string $attachment ): bool { add_filter( 'wp_mail_from', static function () use ( $from_email ) { return $from_email; } ); add_filter( 'wp_mail_from_name', static function () use ( $from_name ) { return $from_name; } ); return wp_mail( $to, $subject, $message, array(), array( $attachment ) ); }",
+        "function wpbp_mail_url_006( string $to, string $subject, string $message, string $from_email, string $from_name, string $attachment ): bool { return wp_mail( $to, $subject, $message, array( 'From: ' . $from_name . ' <' . $from_email . '>' ), array() ); }",
+        "function wpbp_mail_url_006( string $to, string $subject, string $message, string $from_email, string $from_name, string $attachment ): bool { $capture = static function ( $short_circuit, $atts ) use ( $from_email ) { return true; }; add_filter( 'pre_wp_mail', $capture, 10, 2 ); $sent = wp_mail( $to, $subject, $message, array(), array( $attachment ) ); remove_filter( 'pre_wp_mail', $capture, 10 ); return $sent; }"
+      ]
+    },
+    {
+      "id": "e-mail-url-007",
+      "category": "mail-url",
+      "prompt": "Teach WordPress to render links to this site's own video host inline. A bare URL of the form https://wpbp.example/v/<id>, where <id> is made of letters, digits and hyphens, must be replaced by <div class=\"wpbp-embed\" data-id=\"<id>\"></div> when WordPress automatically embeds URLs it finds in post content. URLs on any other host must not be claimed, and a URL that appears inside a sentence rather than alone must be left as text.",
+      "expected_behavior": "The handler is registered with WordPress's embed handler API, giving a regular expression that captures the video id and a callback returning the markup. WordPress's auto-embed pass then replaces a URL that stands alone on its own line, while a URL inside a line of text falls outside the auto-embed patterns and stays as written. The registered pattern must be anchored to the host so URLs elsewhere fall through to WordPress's normal oEmbed discovery.",
+      "requirements": [
+        "Register the handler with WordPress's embed handler API rather than filtering content",
+        "Capture the video id from the URL and place it in the data-id attribute",
+        "Match only URLs on this video host"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_embed_register_handler",
+            "description": "Registers an embed handler",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp\\-embed",
+            "description": "Renders the requested markup",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp\\.example",
+            "description": "Matches this video host",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-id",
+            "description": "Exposes the captured video id",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_mail_url_007_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "global $wp_embed; if ( ! $wp_embed instanceof WP_Embed ) { return false; } $t = $GLOBALS['wpbp_mail_url_007_token']; $matched_ours = 0; $matched_other = 0; foreach ( (array) $wp_embed->handlers as $priority => $handlers ) { foreach ( (array) $handlers as $handler ) { if ( empty( $handler['regex'] ) || ! is_callable( $handler['callback'] ?? null ) ) { continue; } if ( 1 === preg_match( $handler['regex'], 'https://wpbp.example/v/' . $t ) ) { ++$matched_ours; } if ( 1 === preg_match( $handler['regex'], 'https://other.example/v/' . $t ) ) { ++$matched_other; } } } if ( $matched_ours < 1 || 0 !== $matched_other ) { return false; } $first = 'first-' . $t; $second = 'second-' . $t; $content = \"Intro line\\n\\nhttps://wpbp.example/v/{$first}\\n\\nMiddle https://wpbp.example/v/{$second} inline\\n\\nhttps://wpbp.example/v/{$second}\\n\\nOutro line\"; $out = $wp_embed->autoembed( $content ); if ( ! is_string( $out ) ) { return false; } return str_contains( $out, '<div class=\"wpbp-embed\" data-id=\"' . $first . '\"></div>' ) && str_contains( $out, '<div class=\"wpbp-embed\" data-id=\"' . $second . '\"></div>' ) && str_contains( $out, 'Middle https://wpbp.example/v/' . $second . ' inline' ) && 2 === substr_count( $out, 'wpbp-embed' );",
+            "description": "Standalone video URLs become the handler's markup, inline ones stay text and other hosts are not claimed",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wp_embed; if ( $wp_embed instanceof WP_Embed ) { $wp_embed->handlers = array(); } unset( $GLOBALS['wpbp_mail_url_007_token'] );"
+      },
+      "reference_solution": "wp_embed_register_handler( 'wpbp-video', '#^https://wpbp\\\\.example/v/([A-Za-z0-9-]+)$#i', static function ( $matches, $attr, $url, $rawattr ) { return '<div class=\"wpbp-embed\" data-id=\"' . esc_attr( $matches[1] ) . '\"></div>'; } );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/embed.php",
+          "src/wp-includes/class-wp-embed.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "wp_embed_register_handler( 'wpbp-video', '#^https?://[^/]+/v/([A-Za-z0-9-]+)$#i', static function ( $matches, $attr, $url, $rawattr ) { return '<div class=\"wpbp-embed\" data-id=\"' . esc_attr( $matches[1] ) . '\"></div>'; } );",
+        "add_filter( 'the_content', static function ( $content ) { return preg_replace( '#https://wpbp\\\\.example/v/([A-Za-z0-9-]+)#', '<div class=\"wpbp-embed\" data-id=\"$1\"></div>', $content ); } );",
+        "wp_embed_register_handler( 'wpbp-video', '#^https://wpbp\\\\.example/v/([A-Za-z0-9-]+)$#i', static function ( $matches, $attr, $url, $rawattr ) { return '<div class=\"wpbp-embed\" data-id=\"video\"></div>'; } );"
+      ]
     }
   ]
 }

@@ -1,0 +1,610 @@
+{
+  "id": "wp-core-execution-v1-html_api",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - HTML API",
+    "description": "Code generation tasks for the WordPress HTML API (Tag Processor, HTML Processor, and decoder)",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-html-api-001",
+      "category": "html-api",
+      "prompt": "Implement a function that hardens the outbound links in a chunk of HTML. Every anchor whose URL points at a host other than this WordPress site must carry rel=\"noopener\". Anchors pointing at this site, root-relative links, fragment-only links and mailto: links must come back exactly as they were, and an anchor that already carries a rel value must keep its existing tokens with noopener appended after a single space. Rewrite the markup with the WordPress HTML API rather than with regular expressions.",
+      "expected_behavior": "The function walks the anchors with `WP_HTML_Tag_Processor`, resolves each `href` to a host with `wp_parse_url()`, and only touches anchors whose host is present and differs from the host of `home_url()`. A URL without a host component (relative, fragment, `mailto:`) is off-limits. An existing `rel` is preserved and `noopener` appended; markup without anchors round-trips byte-for-byte through `get_updated_html()`.",
+      "requirements": [
+        "Use the WordPress HTML API to read and update the anchors",
+        "Treat only anchors whose URL carries a host different from this site's as off-site",
+        "Append noopener to an existing rel value, separated by one space, instead of replacing it",
+        "Return the markup unchanged when there is nothing to harden"
+      ],
+      "test_function": "wpbp_html_api_001( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor",
+            "description": "Uses the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "noopener",
+            "description": "Adds the noopener relationship",
+            "weight": 1
+          },
+          {
+            "pattern": "set_attribute",
+            "description": "Writes the rel attribute through the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "home_url|site_url|network_home_url",
+            "description": "Resolves this site's address",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_parse_url|parse_url",
+            "description": "Inspects the URL host",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_001_host'] = 'ext-' . wp_rand( 100000, 999999 ) . '.example';",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_001' ) ) { return false; } $host = $GLOBALS['wpbp_html_api_001_host']; $html = '<a href=\"' . esc_url( home_url( '/about' ) ) . '\">Internal</a>' . '<a href=\"/relative\">Relative</a>' . '<a href=\"#top\">Fragment</a>' . '<a href=\"mailto:person@example.com\">Mail</a>' . '<a href=\"https://' . $host . '/one\">Ext</a>' . '<a href=\"https://' . $host . '/two\" rel=\"nofollow\">Ext2</a>'; $out = wpbp_html_api_001( $html ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $rels = array(); while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { $rels[] = $p->get_attribute( 'rel' ); } if ( 6 !== count( $rels ) ) { return false; } if ( null !== $rels[0] || null !== $rels[1] || null !== $rels[2] || null !== $rels[3] ) { return false; } if ( 'noopener' !== $rels[4] || 'nofollow noopener' !== $rels[5] ) { return false; } $plain = '<p>No links here ' . $host . '</p>'; return $plain === wpbp_html_api_001( $plain );",
+            "description": "Only off-site anchors gain noopener, existing rel tokens survive, and other markup round-trips",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_001( string $html ): string { $site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ); $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { $href = $p->get_attribute( 'href' ); if ( ! is_string( $href ) || '' === $href ) { continue; } $host = wp_parse_url( $href, PHP_URL_HOST ); if ( ! is_string( $host ) || '' === $host ) { continue; } if ( strtolower( $host ) === $site_host ) { continue; } $rel = $p->get_attribute( 'rel' ); if ( ! is_string( $rel ) || '' === trim( $rel ) ) { $p->set_attribute( 'rel', 'noopener' ); continue; } $tokens = preg_split( '/\\\\s+/', trim( $rel ) ); if ( ! in_array( 'noopener', $tokens, true ) ) { $tokens[] = 'noopener'; } $p->set_attribute( 'rel', implode( ' ', $tokens ) ); } return $p->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php",
+          "src/wp-includes/http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_001( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { $p->set_attribute( 'rel', 'noopener' ); } return $p->get_updated_html(); }",
+        "function wpbp_html_api_001( string $html ): string { $site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ); $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { $href = (string) $p->get_attribute( 'href' ); $host = wp_parse_url( $href, PHP_URL_HOST ); if ( is_string( $host ) && '' !== $host && strtolower( $host ) !== $site_host ) { $p->set_attribute( 'rel', 'noopener' ); } } return $p->get_updated_html(); }"
+      ]
+    },
+    {
+      "id": "e-html-api-002",
+      "category": "html-api",
+      "prompt": "Implement a function that marks up site navigation. Add the CSS class wpbp-crumb to every anchor that appears anywhere inside a <nav> element, however deeply it is nested, and leave every anchor outside a <nav> untouched. Classes an anchor already carries must be preserved.",
+      "expected_behavior": "The function parses the fragment with `WP_HTML_Processor::create_fragment()` (whose only supported context is `<body>`) and decides per anchor from the full element path returned by `get_breadcrumbs()`, so an anchor nested in `nav > ul > li > a` matches just as a direct `nav > a` child does. A `matches_breadcrumbs( array( 'NAV', 'A' ) )` test only catches direct children and misses the nested anchors.",
+      "requirements": [
+        "Use the WordPress HTML API's document-aware processor so element nesting is known",
+        "Match anchors at any depth inside a nav element, not only direct children",
+        "Add the class without discarding classes the anchor already has",
+        "Return the updated markup"
+      ],
+      "test_function": "wpbp_html_api_002( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Processor",
+            "description": "Uses the document-aware HTML processor",
+            "weight": 1
+          },
+          {
+            "pattern": "create_fragment",
+            "description": "Creates a fragment parser",
+            "weight": 1
+          },
+          {
+            "pattern": "get_breadcrumbs|matches_breadcrumbs",
+            "description": "Inspects the element path",
+            "weight": 1
+          },
+          {
+            "pattern": "add_class",
+            "description": "Adds the class through the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-crumb",
+            "description": "Adds the requested class name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_002_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_002' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_002_token']; $html = '<nav class=\"primary\"><ul><li><a class=\"btn\" href=\"/deep-' . $t . '\">Deep</a></li></ul><a href=\"/direct-' . $t . '\">Direct</a></nav>' . '<div><a href=\"/loose-' . $t . '\">Loose</a></div>' . '<footer><nav><span><a href=\"/foot-' . $t . '\">Foot</a></span></nav></footer>'; $out = wpbp_html_api_002( $html ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $seen = array(); $kept = null; while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { $href = $p->get_attribute( 'href' ); $seen[ $href ] = $p->has_class( 'wpbp-crumb' ); if ( '/deep-' . $t === $href ) { $kept = $p->has_class( 'btn' ); } } return 4 === count( $seen ) && true === $kept && true === ( $seen[ '/deep-' . $t ] ?? null ) && true === ( $seen[ '/direct-' . $t ] ?? null ) && false === ( $seen[ '/loose-' . $t ] ?? null ) && true === ( $seen[ '/foot-' . $t ] ?? null );",
+            "description": "Anchors at any depth inside nav are classed, other anchors are not, and existing classes survive",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_002( string $html ): string { $p = WP_HTML_Processor::create_fragment( $html ); if ( null === $p ) { return $html; } while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { if ( in_array( 'NAV', $p->get_breadcrumbs(), true ) ) { $p->add_class( 'wpbp-crumb' ); } } return $p->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-processor.php",
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_002( string $html ): string { $p = WP_HTML_Processor::create_fragment( $html ); if ( null === $p ) { return $html; } while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { if ( $p->matches_breadcrumbs( array( 'NAV', 'A' ) ) ) { $p->add_class( 'wpbp-crumb' ); } } return $p->get_updated_html(); }",
+        "function wpbp_html_api_002( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { $p->add_class( 'wpbp-crumb' ); } return $p->get_updated_html(); }",
+        "function wpbp_html_api_002( string $html ): string { $p = WP_HTML_Processor::create_fragment( $html ); if ( null === $p ) { return $html; } while ( $p->next_tag( array( 'tag_name' => 'A' ) ) ) { if ( in_array( 'NAV', $p->get_breadcrumbs(), true ) ) { $p->set_attribute( 'class', 'wpbp-crumb' ); } } return $p->get_updated_html(); }"
+      ]
+    },
+    {
+      "id": "e-html-api-003",
+      "category": "html-api",
+      "prompt": "Implement a function that relabels a call to action: replace the visible text of the first <button> in the supplied markup with the supplied replacement text and return the document. The replacement is plain text supplied by a site editor, so any HTML-significant characters in it must end up encoded rather than parsed as markup. Everything else in the document, including the button's own attributes and their original quoting, must come back byte for byte, and markup without a button must round-trip unchanged.",
+      "expected_behavior": "The function finds the first `BUTTON` with `WP_HTML_Tag_Processor::next_tag()`, advances to the element's text with `next_token()`, and writes the replacement with `set_modifiable_text()`, which performs the HTML encoding itself (`<`, `>`, `&`, `\"` and `'` become character references, the apostrophe as `&apos;`). Only the first button changes; the rest of the byte stream, including single-quoted attribute values, is preserved because only a lexical text update is queued.",
+      "requirements": [
+        "Use the WordPress HTML API to locate the button and rewrite its text",
+        "Pass the replacement through as plain, unescaped text and let the HTML API encode it",
+        "Change only the first button and leave every other byte of the document alone",
+        "Return the markup unchanged when there is no button"
+      ],
+      "test_function": "wpbp_html_api_003( string $html, string $label ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor",
+            "description": "Uses the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "set_modifiable_text",
+            "description": "Rewrites the text through the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "next_token",
+            "description": "Advances to the element's text token",
+            "weight": 1
+          },
+          {
+            "pattern": "BUTTON|button",
+            "description": "Targets the button element",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_003_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_003' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_003_token']; $label = 'Save & ' . $t . ' <now> \"yes\" ' . \"'no'\"; $expected_text = 'Save &amp; ' . $t . ' &lt;now&gt; &quot;yes&quot; &apos;no&apos;'; $html = '<div class=\"a\"><button class=\"btn\" data-x=' . \"'y'\" . '>Old</button><span>Old</span></div><button>Second</button>'; $expected = '<div class=\"a\"><button class=\"btn\" data-x=' . \"'y'\" . '>' . $expected_text . '</button><span>Old</span></div><button>Second</button>'; $out = wpbp_html_api_003( $html, $label ); if ( $expected !== $out ) { return false; } $plain = '<p>No buttons ' . $t . '</p>'; return $plain === wpbp_html_api_003( $plain, $label );",
+            "description": "The first button's text is replaced and encoded while the rest of the document is byte-identical",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_003( string $html, string $label ): string { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'BUTTON' ) ) ) { return $html; } if ( ! $p->next_token() ) { return $html; } $p->set_modifiable_text( $label ); return $p->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_003( string $html, string $label ): string { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'BUTTON' ) ) ) { return $html; } if ( ! $p->next_token() ) { return $html; } $p->set_modifiable_text( esc_html( $label ) ); return $p->get_updated_html(); }",
+        "function wpbp_html_api_003( string $html, string $label ): string { $at = stripos( $html, '<button' ); if ( false === $at ) { return $html; } $open = strpos( $html, '>', $at ); $close = stripos( $html, '</button>', $open ); if ( false === $open || false === $close ) { return $html; } return substr( $html, 0, $open + 1 ) . esc_html( $label ) . substr( $html, $close ); }"
+      ]
+    },
+    {
+      "id": "e-html-api-004",
+      "category": "html-api",
+      "prompt": "Implement a function that builds a document outline from a chunk of post content. Return one entry per heading, in document order, as an array with the key 'level' holding the heading level 1-6 as an integer, 'text' holding the heading's readable text with character references decoded and any inline markup inside it stripped, and 'id' holding the heading's id attribute or an empty string when it has none. Read the document with the WordPress HTML API rather than with regular expressions.",
+      "expected_behavior": "The function scans every token with `next_token()`, opens an entry on an `H1`-`H6` opener (recording the level and `get_attribute( 'id' )`), accumulates `get_modifiable_text()` from the `#text` tokens it then encounters (so text split by inline elements such as `EM` is joined and `&amp;` is decoded to `&`), and closes the entry on the matching heading closer. Nested headings inside sections and headings without an id are handled the same way.",
+      "requirements": [
+        "Use the WordPress HTML API to walk the document",
+        "Return a list of arrays with the keys level, text and id",
+        "Report the level as an integer and the missing id as an empty string",
+        "Join heading text that is interrupted by inline elements and decode character references"
+      ],
+      "test_function": "wpbp_html_api_004( string $html ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor",
+            "description": "Uses the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "next_token",
+            "description": "Walks every token, not only tags",
+            "weight": 1
+          },
+          {
+            "pattern": "get_modifiable_text",
+            "description": "Reads decoded text through the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "get_attribute",
+            "description": "Reads the heading id",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_004_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_004' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_004_token']; $html = '<div><h1>Top ' . $t . '</h1><section><h2 id=\"brew\">Tea &amp; <em>Coffee</em></h2><p>body</p><h3>Deep</h3></section><h2>Last</h2></div>'; $rows = wpbp_html_api_004( $html ); if ( ! is_array( $rows ) ) { return false; } $expected = array( array( 1, 'Top ' . $t, '' ), array( 2, 'Tea & Coffee', 'brew' ), array( 3, 'Deep', '' ), array( 2, 'Last', '' ) ); if ( count( $expected ) !== count( $rows ) ) { return false; } $rows = array_values( $rows ); foreach ( $expected as $i => $e ) { $r = $rows[ $i ]; if ( ! is_array( $r ) ) { return false; } if ( $e[0] !== ( $r['level'] ?? null ) ) { return false; } if ( $e[1] !== ( $r['text'] ?? null ) ) { return false; } if ( $e[2] !== ( $r['id'] ?? null ) ) { return false; } } return array() === wpbp_html_api_004( '<p>No headings ' . $t . '</p>' );",
+            "description": "Headings are reported in order with decoded joined text, integer levels and ids",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_004( string $html ): array { $p = new WP_HTML_Tag_Processor( $html ); $outline = array(); $level = 0; $text = ''; $id = ''; while ( $p->next_token() ) { $type = $p->get_token_type(); if ( '#tag' === $type ) { $tag = (string) $p->get_tag(); if ( 1 === preg_match( '/^H([1-6])$/', $tag, $m ) ) { if ( $p->is_tag_closer() ) { if ( 0 !== $level ) { $outline[] = array( 'level' => $level, 'text' => $text, 'id' => $id ); } $level = 0; $text = ''; $id = ''; } else { $level = (int) $m[1]; $text = ''; $attr = $p->get_attribute( 'id' ); $id = is_string( $attr ) ? $attr : ''; } } continue; } if ( 0 !== $level && '#text' === $type ) { $text .= $p->get_modifiable_text(); } } return $outline; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_004( string $html ): array { $out = array(); if ( 1 === preg_match_all( '/<h([1-6])([^>]*)>(.*?)<\\\\/h\\\\1>/is', $html, $m, PREG_SET_ORDER ) ) { } preg_match_all( '/<h([1-6])([^>]*)>(.*?)<\\\\/h\\\\1>/is', $html, $sets, PREG_SET_ORDER ); foreach ( $sets as $set ) { $id = ''; if ( 1 === preg_match( '/id=\"([^\"]*)\"/', $set[2], $idm ) ) { $id = $idm[1]; } $out[] = array( 'level' => (int) $set[1], 'text' => strip_tags( $set[3] ), 'id' => $id ); } return $out; }"
+      ]
+    },
+    {
+      "id": "e-html-api-005",
+      "category": "html-api",
+      "prompt": "Implement a function that applies a site's lazy-loading policy to a chunk of HTML: give loading=\"lazy\" to each <img> that does not already declare a loading attribute of any kind, and skip every image that sits inside a <picture> element because the browser picks the source there. Images that already declare loading, including the valueless form <img loading>, must be returned untouched.",
+      "expected_behavior": "The function uses `WP_HTML_Processor::create_fragment()` so `get_breadcrumbs()` can reveal a `PICTURE` ancestor, and treats an image as already configured whenever `get_attribute( 'loading' )` is not `null` -- a valueless attribute reads back as boolean `true`, so a check such as `is_string()` or `empty()` wrongly re-adds the attribute to `<img loading>`.",
+      "requirements": [
+        "Use the WordPress HTML API's document-aware processor so ancestors are known",
+        "Skip images that appear anywhere inside a picture element",
+        "Treat a valueless loading attribute as already declared",
+        "Return the updated markup"
+      ],
+      "test_function": "wpbp_html_api_005( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Processor",
+            "description": "Uses the document-aware HTML processor",
+            "weight": 1
+          },
+          {
+            "pattern": "get_breadcrumbs|matches_breadcrumbs",
+            "description": "Inspects the element path",
+            "weight": 1
+          },
+          {
+            "pattern": "get_attribute",
+            "description": "Reads the existing loading attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "lazy",
+            "description": "Applies the lazy loading value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_005_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_005' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_005_token']; $html = '<img src=\"/a-' . $t . '.jpg\">' . '<img src=\"/b-' . $t . '.jpg\" loading=\"eager\">' . '<img src=\"/c-' . $t . '.jpg\" loading>' . '<picture><source srcset=\"/d-' . $t . '.webp\"><img src=\"/d-' . $t . '.jpg\"></picture>' . '<div><figure><img src=\"/e-' . $t . '.jpg\"></figure></div>'; $out = wpbp_html_api_005( $html ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $seen = array(); while ( $p->next_tag( array( 'tag_name' => 'IMG' ) ) ) { $seen[ $p->get_attribute( 'src' ) ] = $p->get_attribute( 'loading' ); } return 5 === count( $seen ) && 'lazy' === ( $seen[ '/a-' . $t . '.jpg' ] ?? null ) && 'eager' === ( $seen[ '/b-' . $t . '.jpg' ] ?? null ) && true === ( $seen[ '/c-' . $t . '.jpg' ] ?? null ) && array_key_exists( '/d-' . $t . '.jpg', $seen ) && null === $seen[ '/d-' . $t . '.jpg' ] && 'lazy' === ( $seen[ '/e-' . $t . '.jpg' ] ?? null );",
+            "description": "Only images without any loading attribute and outside picture elements become lazy",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_005( string $html ): string { $p = WP_HTML_Processor::create_fragment( $html ); if ( null === $p ) { return $html; } while ( $p->next_tag( array( 'tag_name' => 'IMG' ) ) ) { if ( in_array( 'PICTURE', $p->get_breadcrumbs(), true ) ) { continue; } if ( null !== $p->get_attribute( 'loading' ) ) { continue; } $p->set_attribute( 'loading', 'lazy' ); } return $p->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-processor.php",
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_005( string $html ): string { $p = WP_HTML_Processor::create_fragment( $html ); if ( null === $p ) { return $html; } while ( $p->next_tag( array( 'tag_name' => 'IMG' ) ) ) { if ( in_array( 'PICTURE', $p->get_breadcrumbs(), true ) ) { continue; } $loading = $p->get_attribute( 'loading' ); if ( is_string( $loading ) && '' !== $loading ) { continue; } $p->set_attribute( 'loading', 'lazy' ); } return $p->get_updated_html(); }",
+        "function wpbp_html_api_005( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag( array( 'tag_name' => 'IMG' ) ) ) { if ( null !== $p->get_attribute( 'loading' ) ) { continue; } $p->set_attribute( 'loading', 'lazy' ); } return $p->get_updated_html(); }"
+      ]
+    },
+    {
+      "id": "e-html-api-006",
+      "category": "html-api",
+      "prompt": "Implement a function that improves image accessibility in post content: inside each <figure> that has both a <figcaption> and an image with no alt attribute at all, copy the caption's readable text into that image's alt attribute. An image that already declares alt keeps its value, including when the declared value is the empty string, and a figure without a caption is left alone. The caption may appear before or after the image.",
+      "expected_behavior": "The function scans tokens with `WP_HTML_Tag_Processor`, marks a candidate image with `set_bookmark()`, collects the caption text from the `#text` tokens inside `FIGCAPTION`, and at the figure's closer uses `seek()` to move backwards to the bookmarked image, writes `alt`, then seeks forward again to continue. `get_attribute( 'alt' )` returns `''` for `alt=\"\"` and `null` only when the attribute is absent, so an `empty()` test wrongly overwrites a deliberate empty alt.",
+      "requirements": [
+        "Use the WordPress HTML API, including its bookmark and seek support, to revisit the image",
+        "Only fill alt when the image declares no alt attribute at all",
+        "Handle a caption that appears either before or after the image in the same figure",
+        "Return the updated markup"
+      ],
+      "test_function": "wpbp_html_api_006( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor",
+            "description": "Uses the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "set_bookmark",
+            "description": "Bookmarks the image position",
+            "weight": 1
+          },
+          {
+            "pattern": "seek",
+            "description": "Seeks back to the bookmarked image",
+            "weight": 1
+          },
+          {
+            "pattern": "FIGCAPTION|figcaption",
+            "description": "Reads the caption element",
+            "weight": 1
+          },
+          {
+            "pattern": "get_modifiable_text",
+            "description": "Reads the caption text through the HTML API",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_006_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_006' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_006_token']; $html = '<figure><img src=\"/a-' . $t . '.jpg\"><figcaption>Cap <em>one</em> ' . $t . '</figcaption></figure>' . '<figure><img src=\"/b-' . $t . '.jpg\" alt=\"\"><figcaption>Cap two</figcaption></figure>' . '<figure><img src=\"/c-' . $t . '.jpg\"></figure>' . '<figure><figcaption>Cap four</figcaption><img src=\"/d-' . $t . '.jpg\"></figure>'; $out = wpbp_html_api_006( $html ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $seen = array(); while ( $p->next_tag( array( 'tag_name' => 'IMG' ) ) ) { $seen[ $p->get_attribute( 'src' ) ] = $p->get_attribute( 'alt' ); } return 4 === count( $seen ) && 'Cap one ' . $t === ( $seen[ '/a-' . $t . '.jpg' ] ?? null ) && '' === ( $seen[ '/b-' . $t . '.jpg' ] ?? null ) && array_key_exists( '/c-' . $t . '.jpg', $seen ) && null === $seen[ '/c-' . $t . '.jpg' ] && 'Cap four' === ( $seen[ '/d-' . $t . '.jpg' ] ?? null );",
+            "description": "Captions fill only genuinely missing alt attributes, in either caption order",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_006( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); $pending = false; $caption = ''; $in_caption = false; while ( $p->next_token() ) { if ( '#tag' === $p->get_token_type() ) { $tag = (string) $p->get_tag(); if ( 'FIGURE' === $tag ) { if ( $p->is_tag_closer() ) { if ( $pending && '' !== $caption ) { $p->set_bookmark( 'wpbp-return' ); $p->seek( 'wpbp-image' ); $p->set_attribute( 'alt', $caption ); $p->seek( 'wpbp-return' ); } $pending = false; $caption = ''; } else { $pending = false; $caption = ''; } $in_caption = false; continue; } if ( 'IMG' === $tag && ! $p->is_tag_closer() && null === $p->get_attribute( 'alt' ) ) { $p->set_bookmark( 'wpbp-image' ); $pending = true; continue; } if ( 'FIGCAPTION' === $tag ) { $in_caption = ! $p->is_tag_closer(); } continue; } if ( $in_caption && '#text' === $p->get_token_type() ) { $caption .= $p->get_modifiable_text(); } } return $p->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_006( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); $pending = false; $caption = ''; $in_caption = false; while ( $p->next_token() ) { if ( '#tag' === $p->get_token_type() ) { $tag = (string) $p->get_tag(); if ( 'FIGURE' === $tag ) { if ( $p->is_tag_closer() ) { if ( $pending && '' !== $caption ) { $p->set_bookmark( 'wpbp-return' ); $p->seek( 'wpbp-image' ); $p->set_attribute( 'alt', $caption ); $p->seek( 'wpbp-return' ); } $pending = false; $caption = ''; } else { $pending = false; $caption = ''; } $in_caption = false; continue; } if ( 'IMG' === $tag && ! $p->is_tag_closer() && empty( $p->get_attribute( 'alt' ) ) ) { $p->set_bookmark( 'wpbp-image' ); $pending = true; continue; } if ( 'FIGCAPTION' === $tag ) { $in_caption = ! $p->is_tag_closer(); } continue; } if ( $in_caption && '#text' === $p->get_token_type() ) { $caption .= $p->get_modifiable_text(); } } return $p->get_updated_html(); }",
+        "function wpbp_html_api_006( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); $caption = ''; $in_caption = false; while ( $p->next_token() ) { if ( '#tag' === $p->get_token_type() ) { $tag = (string) $p->get_tag(); if ( 'FIGCAPTION' === $tag ) { $in_caption = ! $p->is_tag_closer(); if ( $in_caption ) { $caption = ''; } continue; } if ( 'IMG' === $tag && ! $p->is_tag_closer() && null === $p->get_attribute( 'alt' ) && '' !== $caption ) { $p->set_attribute( 'alt', $caption ); } continue; } if ( $in_caption && '#text' === $p->get_token_type() ) { $caption .= $p->get_modifiable_text(); } } return $p->get_updated_html(); }"
+      ]
+    },
+    {
+      "id": "e-html-api-007",
+      "category": "html-api",
+      "prompt": "Implement a function that returns the normalized form of a fragment of post content: the markup as a browser would understand it, with attribute values double-quoted, duplicate attributes dropped, implied elements inserted, invalid comment-like syntax rewritten as real comments, stray text re-encoded and unterminated syntax at the end discarded. Produce it with the WordPress HTML API, whose fragments are parsed in body context.",
+      "expected_behavior": "The function delegates to `WP_HTML_Processor::normalize()` (or `create_fragment()->serialize()`), which reserializes every token from the parse tree. Hand-rolled cleanups miss the parts the parser supplies: `</p>` before text becomes `<p></p>`, a bare `<td>` gets `<tbody><tr>` wrappers with closers, `<![CDATA[x]]>` becomes `<!--[CDATA[x]]-->`, loose `<` and quotes are encoded and a trailing `<!--` is dropped.",
+      "requirements": [
+        "Use the WordPress HTML API to normalize the markup",
+        "Parse the fragment in the body context supported by the HTML API",
+        "Return the serialized markup"
+      ],
+      "test_function": "wpbp_html_api_007( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Processor",
+            "description": "Uses the document-aware HTML processor",
+            "weight": 1
+          },
+          {
+            "pattern": "normalize|serialize",
+            "description": "Serializes the parsed fragment",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_007_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_007' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_007_token']; $a = '<a href=#' . $t . ' v=5 href=\"/\" enabled>One</a another v=5><!--'; $expect_a = '<a href=\"#' . $t . '\" v=\"5\" enabled>One</a>'; $b = '<div></p>fun' . $t . '<table><td>cell</div>'; $expect_b = '<div><p></p>fun' . $t . '<table><tbody><tr><td>cell</td></tr></tbody></table></div>'; $c = '<![CDATA[invalid ' . $t . ']]> syntax < <> \"oddities\"'; $expect_c = '<!--[CDATA[invalid ' . $t . ']]--> syntax &lt; &lt;&gt; &quot;oddities&quot;'; return $expect_a === wpbp_html_api_007( $a ) && $expect_b === wpbp_html_api_007( $b ) && $expect_c === wpbp_html_api_007( $c );",
+            "description": "Three malformed fragments normalize to the markup the HTML API produces",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_007( string $html ): string { $normalized = WP_HTML_Processor::normalize( $html ); return is_string( $normalized ) ? $normalized : $html; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-processor.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_007( string $html ): string { return esc_html( $html ); }",
+        "function wpbp_html_api_007( string $html ): string { return wp_kses_post( force_balance_tags( $html ) ); }"
+      ]
+    },
+    {
+      "id": "e-html-api-008",
+      "category": "html-api",
+      "prompt": "Implement a function that sanitizes untrusted HTML before it is echoed: strip the style attribute and every inline event-handler attribute (any attribute whose name starts with \"on\") from every element, whatever case they were written in, and keep every other attribute exactly as it was, including data-style and data-onclick. Use the WordPress HTML API rather than regular expressions.",
+      "expected_behavior": "The function walks every tag with `WP_HTML_Tag_Processor::next_tag()`, calls `remove_attribute( 'style' )` (which matches attribute names case-insensitively) and removes each name reported by `get_attribute_names_with_prefix( 'on' )`, which returns the lowercased names of attributes with that prefix and therefore excludes `data-onclick`.",
+      "requirements": [
+        "Use the WordPress HTML API to inspect and remove attributes",
+        "Remove the style attribute and every attribute whose name begins with on, regardless of the case it was written in",
+        "Leave data- attributes and all other attributes untouched",
+        "Return the sanitized markup"
+      ],
+      "test_function": "wpbp_html_api_008( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor",
+            "description": "Uses the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "get_attribute_names_with_prefix",
+            "description": "Discovers the event-handler attributes",
+            "weight": 1
+          },
+          {
+            "pattern": "remove_attribute",
+            "description": "Removes attributes through the HTML API",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_008_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_008' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_008_token']; $html = '<a href=\"/x-' . $t . '\" STYLE=\"color:red\" onClick=\"go()\" data-style=\"dark\" data-onclick=\"keep\" class=\"c\">L</a>' . '<img src=\"/y-' . $t . '.jpg\" onerror=\"boom()\" style=\"width:1px\" alt=\"A\">' . '<p data-note=\"' . $t . '\" ONMOUSEOVER=boom() onfocus>t</p>'; $out = wpbp_html_api_008( $html ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $rows = array(); while ( $p->next_tag() ) { $rows[ (string) $p->get_tag() ] = array( 'style' => $p->get_attribute( 'style' ), 'on' => $p->get_attribute_names_with_prefix( 'on' ), 'data_style' => $p->get_attribute( 'data-style' ), 'data_onclick' => $p->get_attribute( 'data-onclick' ), 'class' => $p->get_attribute( 'class' ), 'href' => $p->get_attribute( 'href' ), 'alt' => $p->get_attribute( 'alt' ), 'src' => $p->get_attribute( 'src' ), 'note' => $p->get_attribute( 'data-note' ) ); } if ( 3 !== count( $rows ) ) { return false; } $a = $rows['A'] ?? null; $img = $rows['IMG'] ?? null; $para = $rows['P'] ?? null; if ( ! is_array( $a ) || ! is_array( $img ) || ! is_array( $para ) ) { return false; } return null === $a['style'] && array() === $a['on'] && 'dark' === $a['data_style'] && 'keep' === $a['data_onclick'] && 'c' === $a['class'] && '/x-' . $t === $a['href'] && null === $img['style'] && array() === $img['on'] && 'A' === $img['alt'] && '/y-' . $t . '.jpg' === $img['src'] && $t === $para['note'] && null === $para['style'] && array() === $para['on'];",
+            "description": "Style and event-handler attributes are removed in any case while data- attributes survive",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_008( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag() ) { $p->remove_attribute( 'style' ); $handlers = $p->get_attribute_names_with_prefix( 'on' ); if ( is_array( $handlers ) ) { foreach ( $handlers as $name ) { $p->remove_attribute( $name ); } } } return $p->get_updated_html(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_008( string $html ): string { return preg_replace( '/\\\\s(?:style|on\\\\w+)=\"[^\"]*\"/i', '', $html ); }",
+        "function wpbp_html_api_008( string $html ): string { $p = new WP_HTML_Tag_Processor( $html ); while ( $p->next_tag() ) { $p->remove_attribute( 'style' ); $p->remove_attribute( 'onclick' ); $p->remove_attribute( 'onerror' ); $p->remove_attribute( 'data-style' ); } return $p->get_updated_html(); }"
+      ]
+    },
+    {
+      "id": "e-html-api-009",
+      "category": "html-api",
+      "prompt": "Implement a function that audits the comment nodes in a chunk of post content so an editor can find stray notes. Return, in document order, one entry per comment node that is not a WordPress block delimiter: an array with 'type' holding the token type WordPress reports for it, 'comment_type' holding the kind of syntax that produced the comment (null when WordPress reports none) and 'text' holding the whole comment content as a browser would see it, not just the part that may be edited. Block delimiter comments, whose content starts with \" wp:\" or \" /wp:\", are skipped, and tokens that are not comments must not appear at all.",
+      "expected_behavior": "The function walks tokens with `next_token()` and keeps only `#comment` and `#funky-comment` tokens, reporting `get_token_type()`, `get_comment_type()` and `get_full_comment_text()`. The full text differs from the modifiable text for the invalid-syntax forms: a CDATA lookalike reports `[CDATA[...]]` and an XML declaration reports `?xml ...?`. A processing instruction such as `<?wp-bit {...}?>` is its own `#processing-instruction` token in WordPress 7.1 and is not a comment, so it is excluded.",
+      "requirements": [
+        "Use the WordPress HTML API to walk every token",
+        "Report the token type, the comment type and the full browser-visible comment text",
+        "Skip WordPress block delimiter comments",
+        "Include only comment tokens, funky comments included"
+      ],
+      "test_function": "wpbp_html_api_009( string $html ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Tag_Processor|WP_HTML_Processor",
+            "description": "Uses the HTML API",
+            "weight": 1
+          },
+          {
+            "pattern": "next_token",
+            "description": "Walks every token",
+            "weight": 1
+          },
+          {
+            "pattern": "get_comment_type",
+            "description": "Reports the comment syntax kind",
+            "weight": 1
+          },
+          {
+            "pattern": "get_full_comment_text",
+            "description": "Reports the full comment text",
+            "weight": 1
+          },
+          {
+            "pattern": "get_token_type|get_token_name",
+            "description": "Reports the token type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_009_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_009' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_009_token']; $html = '<!-- wp:paragraph --><p>Hi ' . $t . '</p><!-- /wp:paragraph -->' . '<!-- TODO ' . $t . ' -->' . '<![CDATA[data ' . $t . ']]>' . '<?xml version=\"1.0\"?>' . '<?wp-bit {\"id\":\"' . $t . '\"}?>' . '</%funky ' . $t . '>'; $rows = wpbp_html_api_009( $html ); if ( ! is_array( $rows ) ) { return false; } $rows = array_values( $rows ); $expected = array( array( '#comment', 'COMMENT_AS_HTML_COMMENT', ' TODO ' . $t . ' ' ), array( '#comment', 'COMMENT_AS_CDATA_LOOKALIKE', '[CDATA[data ' . $t . ']]' ), array( '#comment', 'COMMENT_AS_PI_NODE_LOOKALIKE', '?xml version=\"1.0\"?' ), array( '#funky-comment', null, '%funky ' . $t ) ); if ( count( $expected ) !== count( $rows ) ) { return false; } foreach ( $expected as $i => $e ) { $r = $rows[ $i ]; if ( ! is_array( $r ) ) { return false; } if ( $e[0] !== ( $r['type'] ?? false ) ) { return false; } if ( ! array_key_exists( 'comment_type', $r ) || $e[1] !== $r['comment_type'] ) { return false; } if ( $e[2] !== ( $r['text'] ?? false ) ) { return false; } } return array() === wpbp_html_api_009( '<!-- wp:list --><ul><li>' . $t . '</li></ul><!-- /wp:list -->' );",
+            "description": "Only non-block comment tokens are reported, with their syntax kind and full text",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_009( string $html ): array { $p = new WP_HTML_Tag_Processor( $html ); $found = array(); while ( $p->next_token() ) { $type = $p->get_token_type(); if ( '#comment' !== $type && '#funky-comment' !== $type ) { continue; } $text = $p->get_full_comment_text(); if ( ! is_string( $text ) ) { continue; } if ( str_starts_with( $text, ' wp:' ) || str_starts_with( $text, ' /wp:' ) ) { continue; } $found[] = array( 'type' => $type, 'comment_type' => $p->get_comment_type(), 'text' => $text ); } return $found; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_009( string $html ): array { $p = new WP_HTML_Tag_Processor( $html ); $found = array(); while ( $p->next_token() ) { $type = $p->get_token_type(); if ( '#comment' !== $type && '#funky-comment' !== $type && '#processing-instruction' !== $type ) { continue; } $text = (string) $p->get_modifiable_text(); if ( str_starts_with( $text, ' wp:' ) || str_starts_with( $text, ' /wp:' ) ) { continue; } $found[] = array( 'type' => $type, 'comment_type' => $p->get_comment_type(), 'text' => $text ); } return $found; }",
+        "function wpbp_html_api_009( string $html ): array { $found = array(); preg_match_all( '/<!--(.*?)-->/s', $html, $m, PREG_SET_ORDER ); foreach ( $m as $one ) { if ( str_starts_with( $one[1], ' wp:' ) || str_starts_with( $one[1], ' /wp:' ) ) { continue; } $found[] = array( 'type' => '#comment', 'comment_type' => 'COMMENT_AS_HTML_COMMENT', 'text' => $one[1] ); } return $found; }"
+      ]
+    },
+    {
+      "id": "e-html-api-010",
+      "category": "html-api",
+      "prompt": "Implement a function that screens link targets for script URLs. It is given the raw text of an href attribute exactly as it appears in an HTML source document, before any decoding, and must report whether a browser would read that value as a javascript: URL. The scheme comparison ignores ASCII case, and the value may hide the scheme behind HTML character references, including ones written without a trailing semicolon. Use the WordPress HTML API's decoding support so the attribute-context rules are applied rather than generic entity decoding.",
+      "expected_behavior": "The function calls `WP_HTML_Decoder::attribute_starts_with( $raw, 'javascript:', 'ascii-case-insensitive' )`, which compares the decoded prefix without allocating the whole decoded string and applies the attribute-context rules: numeric references decode even without a semicolon (`&#106avascript:`), while a named reference without a semicolon followed by `=` or an ASCII alphanumeric stays literal (`&colon=`), which `html_entity_decode()` and a plain prefix test both get wrong.",
+      "requirements": [
+        "Use the WordPress HTML API's attribute decoding support",
+        "Compare the scheme without regard to ASCII case",
+        "Treat the input as raw, undecoded attribute text",
+        "Return a boolean"
+      ],
+      "test_function": "wpbp_html_api_010( string $raw_href ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_HTML_Decoder",
+            "description": "Uses the HTML API decoder",
+            "weight": 1
+          },
+          {
+            "pattern": "attribute_starts_with|decode_attribute",
+            "description": "Applies attribute-context decoding",
+            "weight": 1
+          },
+          {
+            "pattern": "javascript",
+            "description": "Screens for the javascript scheme",
+            "weight": 1
+          },
+          {
+            "pattern": "ascii-case-insensitive|strtolower|stripos",
+            "description": "Ignores ASCII case",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_html_api_010_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_html_api_010' ) ) { return false; } $t = $GLOBALS['wpbp_html_api_010_token']; $cases = array( array( 'javascript:alert(\"' . $t . '\")', true ), array( 'JaVaScRiPt:alert(\"' . $t . '\")', true ), array( 'javascript&colon;alert(\"' . $t . '\")', true ), array( '&#106;avascript:alert(\"' . $t . '\")', true ), array( '&#106avascript:alert(\"' . $t . '\")', true ), array( 'javascript&colon=' . $t, false ), array( 'https://example.com/' . $t, false ), array( '/local/' . $t, false ), array( 'notjavascript:' . $t, false ) ); foreach ( $cases as $case ) { $got = wpbp_html_api_010( $case[0] ); if ( ! is_bool( $got ) || $case[1] !== $got ) { return false; } } return true;",
+            "description": "Encoded, case-varied and legacy-reference href values are classified as WordPress decodes them",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_html_api_010( string $raw_href ): bool { return WP_HTML_Decoder::attribute_starts_with( $raw_href, 'javascript:', 'ascii-case-insensitive' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/html-api/class-wp-html-decoder.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_html_api_010( string $raw_href ): bool { return str_starts_with( strtolower( $raw_href ), 'javascript:' ); }",
+        "function wpbp_html_api_010( string $raw_href ): bool { return str_starts_with( strtolower( html_entity_decode( $raw_href, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ), 'javascript:' ); }",
+        "function wpbp_html_api_010( string $raw_href ): bool { return false !== stripos( $raw_href, 'javascript' ); }"
+      ]
+    }
+  ]
+}
