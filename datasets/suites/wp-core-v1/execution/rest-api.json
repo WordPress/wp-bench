@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-rest_api",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - REST API",
     "description": "Code generation tasks for WordPress REST API APIs",
@@ -593,6 +593,768 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-rest-api-013",
+      "category": "rest-api",
+      "prompt": "A site keeps its venue directory in the wpbp_venues option; each record has a name, a capacity and an owner_email. Expose the directory read-only at /wp-json/wpbp/v1/venues. The owner_email is private: it may only appear when the request asks for the edit context, and an edit-context request from a user without the edit_posts capability must be refused. Declare the per-field visibility in the route's item schema and let WordPress strip the fields for the requested context instead of unsetting keys by hand.",
+      "expected_behavior": "The route registers a `schema` callback whose `owner_email` property carries `'context' => array( 'edit' )` while `name`/`capacity` are visible in `view`, and the callback runs each record through `rest_filter_response_by_context()` with the requested context. Runtime validation reads the registered route options to confirm the schema-declared contexts, then dispatches three requests: an editor asking for `context=edit` sees both records with `owner_email`, an anonymous `view` request sees the same records without the key at all, and a subscriber asking for `context=edit` gets a 403 `rest_forbidden_context`.",
+      "requirements": [
+        "Register the route on rest_api_init in the wpbp/v1 namespace",
+        "Give the route an item schema whose properties declare the context each field belongs to",
+        "Accept a context argument limited to view and edit, defaulting to view",
+        "Filter each record against the schema for the requested context rather than removing keys manually",
+        "Refuse context=edit for users lacking edit_posts with a 403 rest_forbidden_context error"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Registers the REST route",
+            "weight": 1
+          },
+          {
+            "pattern": "rest_filter_response_by_context|filter_response_by_context",
+            "description": "Filters the payload against the schema context",
+            "weight": 1
+          },
+          {
+            "pattern": "owner_email",
+            "description": "Declares the private field",
+            "weight": 1
+          },
+          {
+            "pattern": "rest_forbidden_context",
+            "description": "Uses the core error code for a refused context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_venues', array( array( 'name' => 'Harbor Hall', 'capacity' => 120, 'owner_email' => 'harbor@example.com' ), array( 'name' => 'Cedar Room', 'capacity' => 40, 'owner_email' => 'cedar@example.com' ) ) );\n$GLOBALS['wpbp_rest_api_013_editor'] = wp_insert_user( array( 'user_login' => 'wpbp_rest_013_editor_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'editor' ) );\n$GLOBALS['wpbp_rest_api_013_subscriber'] = wp_insert_user( array( 'user_login' => 'wpbp_rest_013_sub_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$server->get_routes();\n$options = $server->get_route_options( '/wpbp/v1/venues' );\nif ( ! is_array( $options ) || empty( $options['schema'] ) || ! is_callable( $options['schema'] ) ) { return false; }\n$schema = call_user_func( $options['schema'] );\n$properties = is_array( $schema ) && isset( $schema['properties'] ) ? $schema['properties'] : array();\n$owner_context = $properties['owner_email']['context'] ?? null;\n$name_context = $properties['name']['context'] ?? null;\nif ( ! is_array( $owner_context ) || ! is_array( $name_context ) ) { return false; }\nif ( ! in_array( 'edit', $owner_context, true ) || in_array( 'view', $owner_context, true ) ) { return false; }\nif ( ! in_array( 'view', $name_context, true ) ) { return false; }\n$venues = (array) get_option( 'wpbp_venues', array() );\n$editor_id = (int) ( $GLOBALS['wpbp_rest_api_013_editor'] ?? 0 );\n$subscriber_id = (int) ( $GLOBALS['wpbp_rest_api_013_subscriber'] ?? 0 );\nwp_set_current_user( $editor_id );\n$edit_request = new WP_REST_Request( 'GET', '/wpbp/v1/venues' );\n$edit_request->set_param( 'context', 'edit' );\n$edit_response = rest_do_request( $edit_request );\nif ( 200 !== $edit_response->get_status() ) { wp_set_current_user( 0 ); return false; }\n$edit_data = $server->response_to_data( $edit_response, false );\nif ( ! is_array( $edit_data ) || count( $edit_data ) !== count( $venues ) ) { wp_set_current_user( 0 ); return false; }\nforeach ( $venues as $index => $venue ) {\n    $item = (array) ( $edit_data[ $index ] ?? array() );\n    if ( ( $item['name'] ?? null ) !== $venue['name'] ) { wp_set_current_user( 0 ); return false; }\n    if ( (int) ( $item['capacity'] ?? 0 ) !== (int) $venue['capacity'] ) { wp_set_current_user( 0 ); return false; }\n    if ( ( $item['owner_email'] ?? null ) !== $venue['owner_email'] ) { wp_set_current_user( 0 ); return false; }\n}\n$view_request = new WP_REST_Request( 'GET', '/wpbp/v1/venues' );\n$view_response = rest_do_request( $view_request );\nif ( 200 !== $view_response->get_status() ) { wp_set_current_user( 0 ); return false; }\n$view_data = $server->response_to_data( $view_response, false );\nif ( ! is_array( $view_data ) || count( $view_data ) !== count( $venues ) ) { wp_set_current_user( 0 ); return false; }\nforeach ( $venues as $index => $venue ) {\n    $item = (array) ( $view_data[ $index ] ?? array() );\n    if ( ( $item['name'] ?? null ) !== $venue['name'] ) { wp_set_current_user( 0 ); return false; }\n    if ( (int) ( $item['capacity'] ?? 0 ) !== (int) $venue['capacity'] ) { wp_set_current_user( 0 ); return false; }\n    if ( array_key_exists( 'owner_email', $item ) ) { wp_set_current_user( 0 ); return false; }\n}\nwp_set_current_user( $subscriber_id );\n$denied_request = new WP_REST_Request( 'GET', '/wpbp/v1/venues' );\n$denied_request->set_param( 'context', 'edit' );\n$denied_response = rest_do_request( $denied_request );\n$denied_data = (array) $server->response_to_data( $denied_response, false );\nwp_set_current_user( 0 );\nreturn 403 === $denied_response->get_status() && 'rest_forbidden_context' === ( $denied_data['code'] ?? '' );",
+            "description": "Schema-declared contexts drive the payload and edit context is capability gated",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php';\nforeach ( array( 'wpbp_rest_api_013_editor', 'wpbp_rest_api_013_subscriber' ) as $key ) { $user_id = $GLOBALS[ $key ] ?? 0; if ( is_int( $user_id ) && $user_id > 0 ) { wp_delete_user( $user_id ); } unset( $GLOBALS[ $key ] ); }\nwp_set_current_user( 0 );\ndelete_option( 'wpbp_venues' );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    $schema = static function () {\n        return array(\n            '$schema'    => 'http://json-schema.org/draft-04/schema#',\n            'title'      => 'wpbp_venue',\n            'type'       => 'object',\n            'properties' => array(\n                'name'        => array( 'type' => 'string', 'context' => array( 'view', 'edit' ) ),\n                'capacity'    => array( 'type' => 'integer', 'context' => array( 'view', 'edit' ) ),\n                'owner_email' => array( 'type' => 'string', 'context' => array( 'edit' ) ),\n            ),\n        );\n    };\n    register_rest_route(\n        'wpbp/v1',\n        '/venues',\n        array(\n            array(\n                'methods'             => WP_REST_Server::READABLE,\n                'args'                => array(\n                    'context' => array( 'type' => 'string', 'enum' => array( 'view', 'edit' ), 'default' => 'view' ),\n                ),\n                'permission_callback' => static function ( WP_REST_Request $request ) {\n                    if ( 'edit' === $request['context'] && ! current_user_can( 'edit_posts' ) ) {\n                        return new WP_Error( 'rest_forbidden_context', 'Sorry, you are not allowed to edit venues.', array( 'status' => rest_authorization_required_code() ) );\n                    }\n                    return true;\n                },\n                'callback'            => static function ( WP_REST_Request $request ) use ( $schema ) {\n                    $item_schema = $schema();\n                    $context     = (string) $request['context'];\n                    $items       = array();\n                    foreach ( (array) get_option( 'wpbp_venues', array() ) as $venue ) {\n                        $items[] = rest_filter_response_by_context( $venue, $item_schema, $context );\n                    }\n                    return rest_ensure_response( $items );\n                },\n            ),\n            'schema' => $schema,\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-controller.php",
+          "src/wp-includes/rest-api/class-wp-rest-server.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/venues',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'args'                => array( 'context' => array( 'type' => 'string', 'enum' => array( 'view', 'edit' ), 'default' => 'view' ) ),\n            'permission_callback' => static function ( WP_REST_Request $request ) {\n                if ( 'edit' === $request['context'] && ! current_user_can( 'edit_posts' ) ) {\n                    return new WP_Error( 'rest_forbidden_context', 'Nope.', array( 'status' => rest_authorization_required_code() ) );\n                }\n                return true;\n            },\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $items = array();\n                foreach ( (array) get_option( 'wpbp_venues', array() ) as $venue ) {\n                    if ( 'edit' !== $request['context'] ) { unset( $venue['owner_email'] ); }\n                    $items[] = $venue;\n                }\n                return rest_ensure_response( $items );\n            },\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    $schema = static function () {\n        return array(\n            'title'      => 'wpbp_venue',\n            'type'       => 'object',\n            'properties' => array(\n                'name'        => array( 'type' => 'string', 'context' => array( 'view', 'edit' ) ),\n                'capacity'    => array( 'type' => 'integer', 'context' => array( 'view', 'edit' ) ),\n                'owner_email' => array( 'type' => 'string', 'context' => array( 'edit' ) ),\n            ),\n        );\n    };\n    register_rest_route(\n        'wpbp/v1',\n        '/venues',\n        array(\n            array(\n                'methods'             => WP_REST_Server::READABLE,\n                'args'                => array( 'context' => array( 'type' => 'string', 'enum' => array( 'view', 'edit' ), 'default' => 'view' ) ),\n                'permission_callback' => static function ( WP_REST_Request $request ) {\n                    if ( 'edit' === $request['context'] && ! current_user_can( 'edit_posts' ) ) {\n                        return new WP_Error( 'rest_forbidden_context', 'Nope.', array( 'status' => rest_authorization_required_code() ) );\n                    }\n                    return true;\n                },\n                'callback'            => static function () { return rest_ensure_response( array_values( (array) get_option( 'wpbp_venues', array() ) ) ); },\n            ),\n            'schema' => $schema,\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-014",
+      "category": "rest-api",
+      "prompt": "The wpbp_notes option maps note IDs to records with a title and an author user ID. Serve a single note at /wp-json/wpbp/v1/notes/<id>. The response must advertise a link back to its own route and a link to the note author's entry in the core users endpoint; only the author link may be resolved into the response when a client asks for embedded resources. Unknown IDs return a 404.",
+      "expected_behavior": "The callback returns a WP_REST_Response and registers its relations with `WP_REST_Response::add_link()` — `self` without attributes and `author` pointing at `rest_url( 'wp/v2/users/<id>' )` with `'embeddable' => true`. Runtime validation inspects `get_links()` on the dispatched response, then serialises it twice: `response_to_data( $response, false )` must expose `_links` and no `_embedded`, while `response_to_data( $response, true )` must resolve the author into `_embedded['author'][0]` with the right user ID and must not embed `self`. Both notes in the fixture are checked, each with a different author.",
+      "requirements": [
+        "Register the route on rest_api_init in the wpbp/v1 namespace with a numeric id path parameter",
+        "Return the note id, title and author in the payload",
+        "Register the self and author relations on the response object, not as payload keys",
+        "Point the author relation at the core users route for that note's author",
+        "Make only the author relation embeddable",
+        "Return a 404 error for an unknown note ID"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Registers the REST route",
+            "weight": 1
+          },
+          {
+            "pattern": "add_link",
+            "description": "Registers link relations on the response",
+            "weight": 1
+          },
+          {
+            "pattern": "embeddable",
+            "description": "Marks a relation embeddable",
+            "weight": 1
+          },
+          {
+            "pattern": "wp/v2/users",
+            "description": "Links to the core users endpoint",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_rest_api_014_users'] = array();\n$GLOBALS['wpbp_rest_api_014_posts'] = array();\n$notes = array();\nforeach ( array( array( 1, 'Kickoff notes' ), array( 2, 'Retro notes' ) ) as $index => $spec ) {\n    $user_id = wp_insert_user( array( 'user_login' => 'wpbp_rest_014_author_' . $index . '_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'author' ) );\n    $GLOBALS['wpbp_rest_api_014_users'][] = $user_id;\n    $GLOBALS['wpbp_rest_api_014_posts'][] = wp_insert_post( array( 'post_title' => 'WPBP note author post ' . $index, 'post_status' => 'publish', 'post_type' => 'post', 'post_author' => $user_id ) );\n    $notes[ $spec[0] ] = array( 'title' => $spec[1], 'author' => $user_id );\n}\nupdate_option( 'wpbp_notes', $notes );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$notes = (array) get_option( 'wpbp_notes', array() );\nif ( count( $notes ) !== 2 ) { return false; }\nforeach ( $notes as $note_id => $note ) {\n    $response = rest_do_request( new WP_REST_Request( 'GET', '/wpbp/v1/notes/' . (int) $note_id ) );\n    if ( ! $response instanceof WP_REST_Response || 200 !== $response->get_status() ) { return false; }\n    $links = $response->get_links();\n    if ( empty( $links['self'][0]['href'] ) || empty( $links['author'][0]['href'] ) ) { return false; }\n    if ( ! empty( $links['self'][0]['attributes']['embeddable'] ) ) { return false; }\n    if ( true !== ( $links['author'][0]['attributes']['embeddable'] ?? null ) ) { return false; }\n    $plain = $server->response_to_data( $response, false );\n    if ( ! is_array( $plain ) || isset( $plain['_embedded'] ) ) { return false; }\n    if ( empty( $plain['_links']['author'][0]['href'] ) ) { return false; }\n    if ( ( $plain['title'] ?? null ) !== $note['title'] ) { return false; }\n    $full = $server->response_to_data( $response, true );\n    if ( ! is_array( $full ) || isset( $full['_embedded']['self'] ) ) { return false; }\n    $author = $full['_embedded']['author'][0] ?? null;\n    if ( ! is_array( $author ) || (int) ( $author['id'] ?? 0 ) !== (int) $note['author'] ) { return false; }\n}\nreturn true;",
+            "description": "Links live on the response and only the author relation embeds",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php';\nforeach ( (array) ( $GLOBALS['wpbp_rest_api_014_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } }\nforeach ( (array) ( $GLOBALS['wpbp_rest_api_014_users'] ?? array() ) as $user_id ) { if ( $user_id ) { wp_delete_user( (int) $user_id ); } }\nunset( $GLOBALS['wpbp_rest_api_014_posts'], $GLOBALS['wpbp_rest_api_014_users'] );\ndelete_option( 'wpbp_notes' );\nwp_set_current_user( 0 );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/notes/(?P<id>[\\\\d]+)',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'permission_callback' => '__return_true',\n            'args'                => array( 'id' => array( 'type' => 'integer' ) ),\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $notes   = (array) get_option( 'wpbp_notes', array() );\n                $note_id = (int) $request['id'];\n                if ( ! isset( $notes[ $note_id ] ) ) {\n                    return new WP_Error( 'wpbp_note_not_found', 'Note not found.', array( 'status' => 404 ) );\n                }\n                $note     = $notes[ $note_id ];\n                $response = rest_ensure_response(\n                    array(\n                        'id'     => $note_id,\n                        'title'  => $note['title'],\n                        'author' => (int) $note['author'],\n                    )\n                );\n                $response->add_link( 'self', rest_url( 'wpbp/v1/notes/' . $note_id ) );\n                $response->add_link( 'author', rest_url( 'wp/v2/users/' . (int) $note['author'] ), array( 'embeddable' => true ) );\n                return $response;\n            },\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api/class-wp-rest-server.php",
+          "src/wp-includes/rest-api/class-wp-rest-response.php",
+          "src/wp-includes/rest-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/notes/(?P<id>[\\\\d]+)',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'permission_callback' => '__return_true',\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $notes   = (array) get_option( 'wpbp_notes', array() );\n                $note_id = (int) $request['id'];\n                if ( ! isset( $notes[ $note_id ] ) ) {\n                    return new WP_Error( 'wpbp_note_not_found', 'Note not found.', array( 'status' => 404 ) );\n                }\n                $note = $notes[ $note_id ];\n                return rest_ensure_response(\n                    array(\n                        'id'     => $note_id,\n                        'title'  => $note['title'],\n                        'author' => (int) $note['author'],\n                        '_links' => array(\n                            'self'   => array( array( 'href' => rest_url( 'wpbp/v1/notes/' . $note_id ) ) ),\n                            'author' => array( array( 'href' => rest_url( 'wp/v2/users/' . (int) $note['author'] ), 'embeddable' => true ) ),\n                        ),\n                    )\n                );\n            },\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/notes/(?P<id>[\\\\d]+)',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'permission_callback' => '__return_true',\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $notes   = (array) get_option( 'wpbp_notes', array() );\n                $note_id = (int) $request['id'];\n                if ( ! isset( $notes[ $note_id ] ) ) {\n                    return new WP_Error( 'wpbp_note_not_found', 'Note not found.', array( 'status' => 404 ) );\n                }\n                $note     = $notes[ $note_id ];\n                $response = rest_ensure_response( array( 'id' => $note_id, 'title' => $note['title'], 'author' => (int) $note['author'] ) );\n                $response->add_link( 'self', rest_url( 'wpbp/v1/notes/' . $note_id ), array( 'embeddable' => true ) );\n                $response->add_link( 'author', rest_url( 'wp/v2/users/' . (int) $note['author'] ), array( 'embeddable' => true ) );\n                return $response;\n            },\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-015",
+      "category": "rest-api",
+      "prompt": "A site already registers a public wpbp_recipe post type that is exposed in the REST API at /wp/v2/wpbp-recipes. Give each recipe a list of tag strings kept in the wpbp_tags meta key and make that list readable and writable through the recipe REST endpoint, so a client can create a recipe with a tags array, change it later, and read the current value back.",
+      "expected_behavior": "The meta is registered for the `wpbp_recipe` post type as `'type' => 'array'`, `'single' => true`, with `show_in_rest` supplying a `schema` that includes `items`, and the post type gains `custom-fields` support so `WP_REST_Posts_Controller` puts `meta` in the schema at all. Runtime validation creates a recipe over REST with two tags, updates it to three different tags, and re-reads it, checking both the REST payload and the stored post meta each time.",
+      "requirements": [
+        "Keep the list in a single wpbp_tags meta value on the wpbp_recipe post type",
+        "Describe the meta to the REST API as an array of strings",
+        "Ensure the recipe endpoint actually exposes and accepts post meta",
+        "Do not re-register or replace the existing post type"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_post_meta|register_meta",
+            "description": "Registers the meta key",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_tags",
+            "description": "Uses the requested meta key",
+            "weight": 1
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Exposes the meta in the REST API",
+            "weight": 1
+          },
+          {
+            "pattern": "items",
+            "description": "Declares the array item schema",
+            "weight": 1
+          },
+          {
+            "pattern": "custom-fields",
+            "description": "Makes the post type expose meta in REST",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_recipe', array( 'label' => 'WPBP Recipes', 'public' => true, 'show_in_rest' => true, 'rest_base' => 'wpbp-recipes', 'supports' => array( 'title', 'editor' ), 'capability_type' => 'post', 'map_meta_cap' => true ) );\n$GLOBALS['wpbp_rest_api_015_admin'] = wp_insert_user( array( 'user_login' => 'wpbp_rest_015_admin_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'administrator' ) );\n$GLOBALS['wpbp_rest_api_015_posts'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$admin_id = (int) ( $GLOBALS['wpbp_rest_api_015_admin'] ?? 0 );\nwp_set_current_user( $admin_id );\n$create = new WP_REST_Request( 'POST', '/wp/v2/wpbp-recipes' );\n$create->set_body_params( array( 'title' => 'Chili', 'status' => 'publish', 'meta' => array( 'wpbp_tags' => array( 'spicy', 'vegan' ) ) ) );\n$created = rest_do_request( $create );\n$created_data = $server->response_to_data( $created, false );\n$post_id = (int) ( $created_data['id'] ?? 0 );\nif ( $post_id > 0 ) { $GLOBALS['wpbp_rest_api_015_posts'][] = $post_id; }\nif ( 201 !== $created->get_status() || $post_id <= 0 ) { wp_set_current_user( 0 ); return false; }\nif ( array( 'spicy', 'vegan' ) !== ( $created_data['meta']['wpbp_tags'] ?? null ) ) { wp_set_current_user( 0 ); return false; }\nif ( array( 'spicy', 'vegan' ) !== get_post_meta( $post_id, 'wpbp_tags', true ) ) { wp_set_current_user( 0 ); return false; }\n$update = new WP_REST_Request( 'POST', '/wp/v2/wpbp-recipes/' . $post_id );\n$update->set_body_params( array( 'meta' => array( 'wpbp_tags' => array( 'mild', 'quick', 'winter' ) ) ) );\n$updated = rest_do_request( $update );\n$updated_data = $server->response_to_data( $updated, false );\nif ( 200 !== $updated->get_status() ) { wp_set_current_user( 0 ); return false; }\nif ( array( 'mild', 'quick', 'winter' ) !== ( $updated_data['meta']['wpbp_tags'] ?? null ) ) { wp_set_current_user( 0 ); return false; }\nif ( array( 'mild', 'quick', 'winter' ) !== get_post_meta( $post_id, 'wpbp_tags', true ) ) { wp_set_current_user( 0 ); return false; }\n$fetched = rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/wpbp-recipes/' . $post_id ) );\n$fetched_data = $server->response_to_data( $fetched, false );\nwp_set_current_user( 0 );\nreturn 200 === $fetched->get_status() && array( 'mild', 'quick', 'winter' ) === ( $fetched_data['meta']['wpbp_tags'] ?? null );",
+            "description": "The tags array round-trips through the recipe REST endpoint",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_rest_api_015_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } }\n$admin_id = $GLOBALS['wpbp_rest_api_015_admin'] ?? 0;\nif ( is_int( $admin_id ) && $admin_id > 0 ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $admin_id ); }\nunset( $GLOBALS['wpbp_rest_api_015_posts'], $GLOBALS['wpbp_rest_api_015_admin'] );\nwp_set_current_user( 0 );\nunregister_post_meta( 'wpbp_recipe', 'wpbp_tags' );\nunregister_post_type( 'wpbp_recipe' );"
+      },
+      "reference_solution": "add_post_type_support( 'wpbp_recipe', 'custom-fields' );\nregister_post_meta(\n    'wpbp_recipe',\n    'wpbp_tags',\n    array(\n        'type'         => 'array',\n        'single'       => true,\n        'default'      => array(),\n        'show_in_rest' => array(\n            'schema' => array(\n                'type'  => 'array',\n                'items' => array( 'type' => 'string' ),\n            ),\n        ),\n    )\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/meta.php",
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php",
+          "src/wp-includes/rest-api/fields/class-wp-rest-post-meta-fields.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_post_meta(\n    'wpbp_recipe',\n    'wpbp_tags',\n    array(\n        'type'         => 'array',\n        'single'       => true,\n        'default'      => array(),\n        'show_in_rest' => array(\n            'schema' => array(\n                'type'  => 'array',\n                'items' => array( 'type' => 'string' ),\n            ),\n        ),\n    )\n);",
+        "add_post_type_support( 'wpbp_recipe', 'custom-fields' );\nadd_filter( 'rest_prepare_wpbp_recipe', static function ( $response ) {\n    $data = $response->get_data();\n    $data['meta']['wpbp_tags'] = array( 'spicy', 'vegan' );\n    $response->set_data( $data );\n    return $response;\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-016",
+      "category": "rest-api",
+      "prompt": "Add a write endpoint at /wp-json/wpbp/v1/counters that adds a whole-number amount of at least 1 to the wpbp_counter option and returns the new total under a 'total' key. Amounts below 1, or a missing amount, must be refused by WordPress's own REST argument checking. Clients also need to send several of these calls in one core batch request, and when the batch is asked to validate everything before running anything, one bad call must stop all of them from taking effect.",
+      "expected_behavior": "The route declares `'amount' => array( 'type' => 'integer', 'required' => true, 'minimum' => 1 )` so `sanitize_params()` produces a `rest_invalid_param`, and opts into batching with `'allow_batch' => array( 'v1' => true )` as a route option (or on the handler). Runtime validation posts to `/batch/v1` with `validation=require-all-validate` and an invalid middle request: the response must be 207 with `failed => validation`, the valid slots null, the invalid slot an enveloped `rest_invalid_param`, and the option untouched. A second, all-valid batch must run both calls in order (totals 2 then 7) and leave the option at 7, and a direct invalid POST must return 400 without changing it.",
+      "requirements": [
+        "Register the route on rest_api_init in the wpbp/v1 namespace",
+        "Declare amount as a required integer with a minimum of 1 so REST argument checking rejects bad values",
+        "Add the amount to the wpbp_counter option and return the new value as total",
+        "Opt the route into version 1 of the core batch endpoint"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Registers the REST route",
+            "weight": 1
+          },
+          {
+            "pattern": "allow_batch",
+            "description": "Opts the route into batch requests",
+            "weight": 1
+          },
+          {
+            "pattern": "minimum",
+            "description": "Declares the lower bound for the amount",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_counter",
+            "description": "Uses the requested option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_counter', 0 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$batch = new WP_REST_Request( 'POST', '/batch/v1' );\n$batch->set_body_params( array(\n    'validation' => 'require-all-validate',\n    'requests'   => array(\n        array( 'path' => '/wpbp/v1/counters', 'method' => 'POST', 'body' => array( 'amount' => 2 ) ),\n        array( 'path' => '/wpbp/v1/counters', 'method' => 'POST', 'body' => array( 'amount' => 0 ) ),\n        array( 'path' => '/wpbp/v1/counters', 'method' => 'POST', 'body' => array( 'amount' => 5 ) ),\n    ),\n) );\n$response = rest_do_request( $batch );\nif ( 207 !== $response->get_status() ) { return false; }\n$data = $response->get_data();\nif ( 'validation' !== ( $data['failed'] ?? null ) ) { return false; }\n$responses = $data['responses'] ?? null;\nif ( ! is_array( $responses ) || 3 !== count( $responses ) ) { return false; }\nif ( null !== $responses[0] || null !== $responses[2] ) { return false; }\nif ( 'rest_invalid_param' !== ( $responses[1]['body']['code'] ?? null ) ) { return false; }\nif ( 0 !== (int) get_option( 'wpbp_counter' ) ) { return false; }\n$good = new WP_REST_Request( 'POST', '/batch/v1' );\n$good->set_body_params( array(\n    'requests' => array(\n        array( 'path' => '/wpbp/v1/counters', 'method' => 'POST', 'body' => array( 'amount' => 2 ) ),\n        array( 'path' => '/wpbp/v1/counters', 'method' => 'POST', 'body' => array( 'amount' => 5 ) ),\n    ),\n) );\n$good_response = rest_do_request( $good );\nif ( 207 !== $good_response->get_status() ) { return false; }\n$good_data = $good_response->get_data();\nif ( isset( $good_data['failed'] ) ) { return false; }\n$good_responses = $good_data['responses'] ?? null;\nif ( ! is_array( $good_responses ) || 2 !== count( $good_responses ) ) { return false; }\nif ( 200 !== (int) ( $good_responses[0]['status'] ?? 0 ) || 200 !== (int) ( $good_responses[1]['status'] ?? 0 ) ) { return false; }\nif ( 2 !== (int) ( $good_responses[0]['body']['total'] ?? -1 ) ) { return false; }\nif ( 7 !== (int) ( $good_responses[1]['body']['total'] ?? -1 ) ) { return false; }\nif ( 7 !== (int) get_option( 'wpbp_counter' ) ) { return false; }\n$single = new WP_REST_Request( 'POST', '/wpbp/v1/counters' );\n$single->set_body_params( array( 'amount' => 0 ) );\n$single_response = rest_do_request( $single );\nreturn 400 === $single_response->get_status() && 7 === (int) get_option( 'wpbp_counter' );",
+            "description": "Batch pre-validation rejects the whole batch without side effects and a valid batch applies in order",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_counter' );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/counters',\n        array(\n            array(\n                'methods'             => WP_REST_Server::CREATABLE,\n                'permission_callback' => '__return_true',\n                'args'                => array(\n                    'amount' => array(\n                        'type'     => 'integer',\n                        'required' => true,\n                        'minimum'  => 1,\n                    ),\n                ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $total = (int) get_option( 'wpbp_counter', 0 ) + (int) $request['amount'];\n                    update_option( 'wpbp_counter', $total );\n                    return rest_ensure_response( array( 'total' => $total ) );\n                },\n            ),\n            'allow_batch' => array( 'v1' => true ),\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api/class-wp-rest-server.php",
+          "src/wp-includes/rest-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/counters',\n        array(\n            'methods'             => WP_REST_Server::CREATABLE,\n            'permission_callback' => '__return_true',\n            'args'                => array(\n                'amount' => array( 'type' => 'integer', 'required' => true, 'minimum' => 1 ),\n            ),\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $total = (int) get_option( 'wpbp_counter', 0 ) + (int) $request['amount'];\n                update_option( 'wpbp_counter', $total );\n                return rest_ensure_response( array( 'total' => $total ) );\n            },\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/counters',\n        array(\n            array(\n                'methods'             => WP_REST_Server::CREATABLE,\n                'permission_callback' => '__return_true',\n                'args'                => array( 'amount' => array( 'required' => true ) ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $amount = (int) $request['amount'];\n                    if ( $amount < 1 ) { return rest_ensure_response( array( 'total' => (int) get_option( 'wpbp_counter', 0 ) ) ); }\n                    $total = (int) get_option( 'wpbp_counter', 0 ) + $amount;\n                    update_option( 'wpbp_counter', $total );\n                    return rest_ensure_response( array( 'total' => $total ) );\n                },\n            ),\n            'allow_batch' => array( 'v1' => true ),\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-017",
+      "category": "rest-api",
+      "prompt": "Editors keep a short hand-written summary for a post in the _wpbp_summary post meta key. Add a wpbp_summary field to the core posts REST endpoint that returns that summary (an empty string when none is stored) and that also accepts a new summary when a post is created or updated over REST, storing it back into that meta key as plain text. The field must describe itself in the endpoint's published schema.",
+      "expected_behavior": "The field is added with `register_rest_field( 'post', 'wpbp_summary', ... )`. The `get_callback` receives the prepared response as an **array**, so it must read `$post_arr['id']`, while the `update_callback` receives the **WP_Post object**, so it must use `$post->ID` — swapping them crashes or returns nothing. A `schema` entry is required so the field shows up in the OPTIONS payload. Runtime validation reads both fixture posts (one with a stored summary, one without), checks the OPTIONS schema, writes a summary to the second post as an administrator, and confirms both the response and the stored meta while the first post is unaffected.",
+      "requirements": [
+        "Add the field to the core post type's REST responses under the name wpbp_summary",
+        "Return the stored _wpbp_summary meta, or an empty string when it is missing",
+        "Accept the field on REST writes and persist it to _wpbp_summary as plain text",
+        "Publish a schema for the field so it appears in the endpoint's OPTIONS response"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_field",
+            "description": "Registers an additional REST field",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_summary",
+            "description": "Uses the requested field name",
+            "weight": 1
+          },
+          {
+            "pattern": "get_callback",
+            "description": "Supplies a read callback",
+            "weight": 1
+          },
+          {
+            "pattern": "update_callback",
+            "description": "Supplies a write callback",
+            "weight": 1
+          },
+          {
+            "pattern": "_wpbp_summary",
+            "description": "Persists to the requested meta key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$post_a = wp_insert_post( array( 'post_title' => 'WPBP field post A', 'post_status' => 'publish', 'post_content' => 'Alpha content' ) );\nupdate_post_meta( $post_a, '_wpbp_summary', 'Alpha summary' );\n$post_b = wp_insert_post( array( 'post_title' => 'WPBP field post B', 'post_status' => 'publish', 'post_content' => 'Beta content' ) );\n$GLOBALS['wpbp_rest_api_017_posts'] = array( $post_a, $post_b );\n$GLOBALS['wpbp_rest_api_017_admin'] = wp_insert_user( array( 'user_login' => 'wpbp_rest_017_admin_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'administrator' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\nlist( $post_a, $post_b ) = $GLOBALS['wpbp_rest_api_017_posts'];\n$read_a = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/posts/' . (int) $post_a ) ), false );\nif ( 'Alpha summary' !== ( $read_a['wpbp_summary'] ?? null ) ) { return false; }\n$read_b = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/posts/' . (int) $post_b ) ), false );\nif ( '' !== ( $read_b['wpbp_summary'] ?? null ) ) { return false; }\n$options = $server->response_to_data( rest_do_request( new WP_REST_Request( 'OPTIONS', '/wp/v2/posts' ) ), false );\n$field_schema = $options['schema']['properties']['wpbp_summary'] ?? null;\nif ( ! is_array( $field_schema ) || 'string' !== ( $field_schema['type'] ?? null ) ) { return false; }\nwp_set_current_user( (int) $GLOBALS['wpbp_rest_api_017_admin'] );\n$write = new WP_REST_Request( 'POST', '/wp/v2/posts/' . (int) $post_b );\n$write->set_body_params( array( 'wpbp_summary' => 'Beta summary' ) );\n$written = rest_do_request( $write );\n$written_data = $server->response_to_data( $written, false );\nwp_set_current_user( 0 );\nif ( 200 !== $written->get_status() ) { return false; }\nif ( 'Beta summary' !== ( $written_data['wpbp_summary'] ?? null ) ) { return false; }\nif ( 'Beta summary' !== get_post_meta( (int) $post_b, '_wpbp_summary', true ) ) { return false; }\n$reread_b = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/posts/' . (int) $post_b ) ), false );\nif ( 'Beta summary' !== ( $reread_b['wpbp_summary'] ?? null ) ) { return false; }\n$reread_a = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/posts/' . (int) $post_a ) ), false );\nreturn 'Alpha summary' === ( $reread_a['wpbp_summary'] ?? null );",
+            "description": "The field reads from the array payload, writes through the WP_Post object, and is published in the schema",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_rest_api_017_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } }\n$admin_id = $GLOBALS['wpbp_rest_api_017_admin'] ?? 0;\nif ( is_int( $admin_id ) && $admin_id > 0 ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( $admin_id ); }\nunset( $GLOBALS['wpbp_rest_api_017_posts'], $GLOBALS['wpbp_rest_api_017_admin'] );\nwp_set_current_user( 0 );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_field(\n        'post',\n        'wpbp_summary',\n        array(\n            'get_callback'    => static function ( $post_arr ) {\n                $stored = get_post_meta( (int) $post_arr['id'], '_wpbp_summary', true );\n                return is_string( $stored ) ? $stored : '';\n            },\n            'update_callback' => static function ( $value, $post ) {\n                if ( ! $post instanceof WP_Post ) {\n                    return new WP_Error( 'wpbp_invalid_object', 'Unexpected object.', array( 'status' => 400 ) );\n                }\n                update_post_meta( $post->ID, '_wpbp_summary', sanitize_text_field( (string) $value ) );\n                return true;\n            },\n            'schema'          => array(\n                'description' => 'Editor supplied summary for the post.',\n                'type'        => 'string',\n                'context'     => array( 'view', 'edit' ),\n            ),\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-controller.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    register_rest_field(\n        'post',\n        'wpbp_summary',\n        array(\n            'get_callback' => static function ( $post_arr ) {\n                $stored = get_post_meta( (int) $post_arr['id'], '_wpbp_summary', true );\n                return is_string( $stored ) ? $stored : '';\n            },\n            'schema'       => array(\n                'description' => 'Editor supplied summary for the post.',\n                'type'        => 'string',\n                'context'     => array( 'view', 'edit' ),\n            ),\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    register_rest_field(\n        'post',\n        'wpbp_summary',\n        array(\n            'get_callback'    => static function ( $post_arr ) {\n                $stored = get_post_meta( (int) $post_arr['id'], '_wpbp_summary', true );\n                return is_string( $stored ) ? $stored : '';\n            },\n            'update_callback' => static function ( $value, $post ) {\n                update_post_meta( $post->ID, '_wpbp_summary', sanitize_text_field( (string) $value ) );\n                return true;\n            },\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-018",
+      "category": "rest-api",
+      "prompt": "Add a booking endpoint at /wp-json/wpbp/v1/bookings that takes a required room, which must be either 'harbor' or 'cedar', and a whole number of guests of at least 1 that defaults to 2. Rooms already listed in the wpbp_bookings option cannot be booked again (error code wpbp_room_taken) and no room holds more than 4 guests (error code wpbp_over_capacity). A booking that succeeds responds 201, appends the room to wpbp_bookings and echoes the room and the guest count. A booking that fails must report every problem it found in a single error payload, and the HTTP status has to be 409 whenever the room is already taken, even when the party is also too large. An unknown room name or a guest count below 1 must be rejected by WordPress's own argument checking as a 400.",
+      "expected_behavior": "The route declares `room` with an `enum` and `guests` as `'type' => 'integer', 'minimum' => 1, 'default' => 2`, so the default arrives as the integer 2 and bad values produce `rest_invalid_param`. Capacity is deliberately not an argument bound. Failures are collected on one `WP_Error` and returned; `rest_convert_error_to_response()` derives the HTTP status from `get_all_error_data()`, which only ever looks at the **primary** (first added) error code, so the 409 error must be added first and the 400 error lands in `additional_errors` while still not influencing the status. Runtime validation books a free room (checking the integer default and the stored option), then exercises an invalid enum, a below-minimum guest count, an already-taken room, and an already-taken room with an oversized party.",
+      "requirements": [
+        "Register the route on rest_api_init in the wpbp/v1 namespace",
+        "Constrain room to the two allowed values and give guests a whole-number type with a lower bound of 1 and a default of 2 so REST argument checking returns the 400s",
+        "Do not cap guests in the argument definition; an oversized party is a booking problem, not an invalid parameter",
+        "Collect every booking problem on one error object using the codes wpbp_room_taken and wpbp_over_capacity",
+        "Make the response status 409 whenever the room is already taken",
+        "On success append the room to the wpbp_bookings option, respond 201 and return the room and guests"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Registers the REST route",
+            "weight": 1
+          },
+          {
+            "pattern": "enum",
+            "description": "Constrains the room argument",
+            "weight": 1
+          },
+          {
+            "pattern": "minimum",
+            "description": "Declares the guest lower bound",
+            "weight": 1
+          },
+          {
+            "pattern": "default",
+            "description": "Declares the guest default",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_Error",
+            "description": "Reports booking problems as a WP_Error",
+            "weight": 1
+          },
+          {
+            "pattern": "409",
+            "description": "Uses the conflict status",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_bookings', array( 'harbor' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$post_booking = static function ( array $body ) use ( $server ) {\n    $request = new WP_REST_Request( 'POST', '/wpbp/v1/bookings' );\n    $request->set_body_params( $body );\n    $response = rest_do_request( $request );\n    return array( $response->get_status(), $server->response_to_data( $response, false ) );\n};\n$collect_codes = static function ( $data ) {\n    $codes = array( $data['code'] ?? '' );\n    foreach ( (array) ( $data['additional_errors'] ?? array() ) as $extra ) { $codes[] = $extra['code'] ?? ''; }\n    sort( $codes );\n    return $codes;\n};\nlist( $status, $data ) = $post_booking( array( 'room' => 'cedar' ) );\nif ( 201 !== $status || 'cedar' !== ( $data['room'] ?? null ) || 2 !== ( $data['guests'] ?? null ) ) { return false; }\nif ( ! in_array( 'cedar', (array) get_option( 'wpbp_bookings', array() ), true ) ) { return false; }\nlist( $status, $data ) = $post_booking( array( 'room' => 'lagoon' ) );\nif ( 400 !== $status || 'rest_invalid_param' !== ( $data['code'] ?? null ) ) { return false; }\nlist( $status, $data ) = $post_booking( array( 'room' => 'cedar', 'guests' => 0 ) );\nif ( 400 !== $status || 'rest_invalid_param' !== ( $data['code'] ?? null ) ) { return false; }\nlist( $status, $data ) = $post_booking( array( 'room' => 'harbor', 'guests' => 2 ) );\nif ( 409 !== $status || array( 'wpbp_room_taken' ) !== $collect_codes( $data ) ) { return false; }\nlist( $status, $data ) = $post_booking( array( 'room' => 'harbor', 'guests' => 9 ) );\nif ( 409 !== $status || array( 'wpbp_over_capacity', 'wpbp_room_taken' ) !== $collect_codes( $data ) ) { return false; }\n$booked = (array) get_option( 'wpbp_bookings', array() );\nsort( $booked );\nreturn array( 'cedar', 'harbor' ) === $booked;",
+            "description": "Argument constraints and multi-error status resolution behave as WordPress defines them",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_bookings' );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/bookings',\n        array(\n            'methods'             => WP_REST_Server::CREATABLE,\n            'permission_callback' => '__return_true',\n            'args'                => array(\n                'room'   => array(\n                    'type'     => 'string',\n                    'enum'     => array( 'harbor', 'cedar' ),\n                    'required' => true,\n                ),\n                'guests' => array(\n                    'type'    => 'integer',\n                    'minimum' => 1,\n                    'default' => 2,\n                ),\n            ),\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $room   = (string) $request['room'];\n                $guests = (int) $request['guests'];\n                $booked = (array) get_option( 'wpbp_bookings', array() );\n                $error  = new WP_Error();\n                if ( in_array( $room, $booked, true ) ) {\n                    $error->add( 'wpbp_room_taken', 'That room is already booked.', array( 'status' => 409 ) );\n                }\n                if ( $guests > 4 ) {\n                    $error->add( 'wpbp_over_capacity', 'That room does not hold that many guests.', array( 'status' => 400 ) );\n                }\n                if ( $error->has_errors() ) {\n                    return $error;\n                }\n                $booked[] = $room;\n                update_option( 'wpbp_bookings', $booked );\n                $response = rest_ensure_response( array( 'room' => $room, 'guests' => $guests ) );\n                $response->set_status( 201 );\n                return $response;\n            },\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-request.php",
+          "src/wp-includes/class-wp-error.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/bookings',\n        array(\n            'methods'             => WP_REST_Server::CREATABLE,\n            'permission_callback' => '__return_true',\n            'args'                => array(\n                'room'   => array( 'type' => 'string', 'enum' => array( 'harbor', 'cedar' ), 'required' => true ),\n                'guests' => array( 'type' => 'integer', 'minimum' => 1, 'default' => 2 ),\n            ),\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $room   = (string) $request['room'];\n                $guests = (int) $request['guests'];\n                $booked = (array) get_option( 'wpbp_bookings', array() );\n                $error  = new WP_Error();\n                if ( $guests > 4 ) {\n                    $error->add( 'wpbp_over_capacity', 'That room does not hold that many guests.', array( 'status' => 400 ) );\n                }\n                if ( in_array( $room, $booked, true ) ) {\n                    $error->add( 'wpbp_room_taken', 'That room is already booked.', array( 'status' => 409 ) );\n                }\n                if ( $error->has_errors() ) {\n                    return $error;\n                }\n                $booked[] = $room;\n                update_option( 'wpbp_bookings', $booked );\n                $response = rest_ensure_response( array( 'room' => $room, 'guests' => $guests ) );\n                $response->set_status( 201 );\n                return $response;\n            },\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/bookings',\n        array(\n            'methods'             => WP_REST_Server::CREATABLE,\n            'permission_callback' => '__return_true',\n            'args'                => array(\n                'room'   => array( 'type' => 'string', 'enum' => array( 'harbor', 'cedar' ), 'required' => true ),\n                'guests' => array( 'type' => 'integer', 'minimum' => 1, 'maximum' => 4, 'default' => 2 ),\n            ),\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $room   = (string) $request['room'];\n                $guests = (int) $request['guests'];\n                $booked = (array) get_option( 'wpbp_bookings', array() );\n                if ( in_array( $room, $booked, true ) ) {\n                    return new WP_Error( 'wpbp_room_taken', 'That room is already booked.', array( 'status' => 409 ) );\n                }\n                $booked[] = $room;\n                update_option( 'wpbp_bookings', $booked );\n                $response = rest_ensure_response( array( 'room' => $room, 'guests' => $guests ) );\n                $response->set_status( 201 );\n                return $response;\n            },\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-019",
+      "category": "rest-api",
+      "prompt": "A plugin needs its own REST namespace. Register a public wpbp_guide post type that is exposed in the REST API under the namespace wpbp/v2 with the base 'guides', so a published guide is served from /wp-json/wpbp/v2/guides/<id> and the default /wp-json/wp/v2/guides/<id> address does not exist at all. Core post types must keep their usual wp/v2 routes and WordPress's own route lookup must report the guide's namespaced route.",
+      "expected_behavior": "`register_post_type()` is called with `'show_in_rest' => true`, `'rest_base' => 'guides'` and `'rest_namespace' => 'wpbp/v2'` (added in 5.9). Runtime validation calls the registration entry point, inspects the registered `WP_Post_Type`, fires `rest_api_init`, creates a guide, and requires `rest_get_route_for_post()` to return `/wpbp/v2/guides/<id>`, that route to dispatch 200, `/wp/v2/guides/<id>` to 404, and an ordinary core post to still resolve to `/wp/v2/posts/<id>` and dispatch 200.",
+      "requirements": [
+        "Register the wpbp_guide post type as public and available in the REST API",
+        "Serve it from the wpbp/v2 namespace using the rest base guides",
+        "Leave the REST routing of core post types unchanged"
+      ],
+      "test_function": "wpbp_rest_api_019(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_post_type",
+            "description": "Registers the post type",
+            "weight": 1
+          },
+          {
+            "pattern": "rest_namespace",
+            "description": "Sets the REST namespace for the post type",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_guide",
+            "description": "Uses the requested post type slug",
+            "weight": 1
+          },
+          {
+            "pattern": "guides",
+            "description": "Uses the requested rest base",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_rest_api_019_core_post'] = wp_insert_post( array( 'post_title' => 'WPBP core post', 'post_status' => 'publish', 'post_type' => 'post' ) );\n$GLOBALS['wpbp_rest_api_019_guide'] = 0;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_rest_api_019' ) ) { return false; }\nwpbp_rest_api_019();\n$type = get_post_type_object( 'wpbp_guide' );\nif ( ! $type instanceof WP_Post_Type || ! $type->show_in_rest ) { return false; }\nif ( 'wpbp/v2' !== $type->rest_namespace || 'guides' !== $type->rest_base ) { return false; }\nif ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$guide_id = wp_insert_post( array( 'post_type' => 'wpbp_guide', 'post_title' => 'WPBP guide', 'post_status' => 'publish' ) );\n$GLOBALS['wpbp_rest_api_019_guide'] = $guide_id;\nif ( ! $guide_id ) { return false; }\nif ( '/wpbp/v2/guides/' . $guide_id !== rest_get_route_for_post( $guide_id ) ) { return false; }\nif ( 200 !== rest_do_request( new WP_REST_Request( 'GET', '/wpbp/v2/guides/' . $guide_id ) )->get_status() ) { return false; }\nif ( 404 !== rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/guides/' . $guide_id ) )->get_status() ) { return false; }\n$core_id = (int) $GLOBALS['wpbp_rest_api_019_core_post'];\nif ( '/wp/v2/posts/' . $core_id !== rest_get_route_for_post( $core_id ) ) { return false; }\nreturn 200 === rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/posts/' . $core_id ) )->get_status();",
+            "description": "The guide is routed under wpbp/v2 while core post types keep wp/v2",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_rest_api_019_core_post', 'wpbp_rest_api_019_guide' ) as $key ) { $post_id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $post_id > 0 ) { wp_delete_post( $post_id, true ); } unset( $GLOBALS[ $key ] ); }\nif ( post_type_exists( 'wpbp_guide' ) ) { unregister_post_type( 'wpbp_guide' ); }"
+      },
+      "reference_solution": "function wpbp_rest_api_019(): void {\n    register_post_type(\n        'wpbp_guide',\n        array(\n            'label'          => 'WPBP Guides',\n            'public'         => true,\n            'show_in_rest'   => true,\n            'rest_base'      => 'guides',\n            'rest_namespace' => 'wpbp/v2',\n            'supports'       => array( 'title', 'editor' ),\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/rest-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_rest_api_019(): void {\n    register_post_type(\n        'wpbp_guide',\n        array(\n            'label'        => 'WPBP Guides',\n            'public'       => true,\n            'show_in_rest' => true,\n            'rest_base'    => 'guides',\n            'supports'     => array( 'title', 'editor' ),\n        )\n    );\n}",
+        "function wpbp_rest_api_019(): void {\n    register_post_type(\n        'wpbp_guide',\n        array(\n            'label'        => 'WPBP Guides',\n            'public'       => true,\n            'show_in_rest' => true,\n            'rest_base'    => 'guides',\n            'supports'     => array( 'title', 'editor' ),\n        )\n    );\n    add_filter( 'rest_route_for_post_type_items', static function ( $route, $post_type ) {\n        return 'wpbp_guide' === $post_type->name ? '/wpbp/v2/guides' : $route;\n    }, 10, 2 );\n}"
+      ]
+    },
+    {
+      "id": "e-rest-api-020",
+      "category": "rest-api",
+      "prompt": "The wpbp_reports option maps report IDs to titles, and the site already provides an expensive helper wpbp_report_stats( int $report_id ): array. Serve a single report at /wp-json/wpbp/v1/reports/<id> returning its id, its title and its stats. Clients trim responses with the REST API's _fields parameter, so the payload must contain only the fields that were asked for, and the expensive helper must never run when stats was not among them. Unknown report IDs return a 404.",
+      "expected_behavior": "The callback resolves the requested field list from `$request['_fields']` and tests membership with `rest_is_field_included()` (or a controller's `get_fields_for_response()`), assembling the payload key by key so the stats helper is only invoked when stats is requested. Runtime validation counts helper invocations: nothing may run before the first request, `_fields=id,title` must return exactly id and title with the counter untouched, an unfiltered request must return all three keys and raise the counter by exactly one, and `_fields=stats` on the other report must return only stats and raise it by one more.",
+      "requirements": [
+        "Register the route on rest_api_init in the wpbp/v1 namespace with a numeric id path parameter",
+        "Return the report id, title and stats when no field filter is supplied",
+        "Honour the _fields request parameter, including a comma separated list",
+        "Call the expensive stats helper only when stats is among the requested fields, and never at registration time",
+        "Return a 404 error for an unknown report ID"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Registers the REST route",
+            "weight": 1
+          },
+          {
+            "pattern": "_fields",
+            "description": "Reads the field filter from the request",
+            "weight": 1
+          },
+          {
+            "pattern": "rest_is_field_included|get_fields_for_response",
+            "description": "Uses the core field-inclusion helper",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_report_stats",
+            "description": "Uses the site's stats helper",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_reports', array( 7 => 'Quarterly revenue', 9 => 'Weekly signups' ) );\n$GLOBALS['wpbp_report_calls'] = 0;\nif ( ! function_exists( 'wpbp_report_stats' ) ) {\n    function wpbp_report_stats( int $report_id ): array {\n        ++$GLOBALS['wpbp_report_calls'];\n        return array( 'views' => $report_id * 10 );\n    }\n}",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\nif ( 0 !== (int) $GLOBALS['wpbp_report_calls'] ) { return false; }\n$server = rest_get_server();\n$fetch = static function ( $report_id, $fields = null ) use ( $server ) {\n    $request = new WP_REST_Request( 'GET', '/wpbp/v1/reports/' . $report_id );\n    if ( null !== $fields ) { $request->set_param( '_fields', $fields ); }\n    $response = rest_do_request( $request );\n    return array( $response->get_status(), $server->response_to_data( $response, false ) );\n};\n$sorted_keys = static function ( $data ) { $keys = array_keys( (array) $data ); sort( $keys ); return $keys; };\nlist( $status, $data ) = $fetch( 7, 'id,title' );\nif ( 200 !== $status || 0 !== (int) $GLOBALS['wpbp_report_calls'] ) { return false; }\nif ( array( 'id', 'title' ) !== $sorted_keys( $data ) ) { return false; }\nif ( 7 !== ( $data['id'] ?? null ) || 'Quarterly revenue' !== ( $data['title'] ?? null ) ) { return false; }\nlist( $status, $data ) = $fetch( 7 );\nif ( 200 !== $status || 1 !== (int) $GLOBALS['wpbp_report_calls'] ) { return false; }\nif ( array( 'id', 'stats', 'title' ) !== $sorted_keys( $data ) ) { return false; }\nif ( array( 'views' => 70 ) !== ( $data['stats'] ?? null ) ) { return false; }\nlist( $status, $data ) = $fetch( 9, 'stats' );\nif ( 200 !== $status || 2 !== (int) $GLOBALS['wpbp_report_calls'] ) { return false; }\nif ( array( 'stats' ) !== $sorted_keys( $data ) ) { return false; }\nreturn array( 'views' => 90 ) === ( $data['stats'] ?? null );",
+            "description": "Field filtering shapes the payload and suppresses the expensive call",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_reports' );\nunset( $GLOBALS['wpbp_report_calls'] );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/reports/(?P<id>[\\\\d]+)',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'permission_callback' => '__return_true',\n            'args'                => array( 'id' => array( 'type' => 'integer' ) ),\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $reports   = (array) get_option( 'wpbp_reports', array() );\n                $report_id = (int) $request['id'];\n                if ( ! isset( $reports[ $report_id ] ) ) {\n                    return new WP_Error( 'wpbp_report_not_found', 'Report not found.', array( 'status' => 404 ) );\n                }\n                $requested = isset( $request['_fields'] ) ? wp_parse_list( $request['_fields'] ) : array( 'id', 'title', 'stats' );\n                $data      = array();\n                if ( rest_is_field_included( 'id', $requested ) ) {\n                    $data['id'] = $report_id;\n                }\n                if ( rest_is_field_included( 'title', $requested ) ) {\n                    $data['title'] = $reports[ $report_id ];\n                }\n                if ( rest_is_field_included( 'stats', $requested ) ) {\n                    $data['stats'] = wpbp_report_stats( $report_id );\n                }\n                return rest_ensure_response( $data );\n            },\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-controller.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/reports/(?P<id>[\\\\d]+)',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'permission_callback' => '__return_true',\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $reports   = (array) get_option( 'wpbp_reports', array() );\n                $report_id = (int) $request['id'];\n                if ( ! isset( $reports[ $report_id ] ) ) {\n                    return new WP_Error( 'wpbp_report_not_found', 'Report not found.', array( 'status' => 404 ) );\n                }\n                $data = array( 'id' => $report_id, 'title' => $reports[ $report_id ], 'stats' => wpbp_report_stats( $report_id ) );\n                $requested = isset( $request['_fields'] ) ? wp_parse_list( $request['_fields'] ) : array();\n                if ( $requested ) {\n                    $data = array_intersect_key( $data, array_flip( $requested ) );\n                }\n                return rest_ensure_response( $data );\n            },\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    register_rest_route(\n        'wpbp/v1',\n        '/reports/(?P<id>[\\\\d]+)',\n        array(\n            'methods'             => WP_REST_Server::READABLE,\n            'permission_callback' => '__return_true',\n            'callback'            => static function ( WP_REST_Request $request ) {\n                $reports   = (array) get_option( 'wpbp_reports', array() );\n                $report_id = (int) $request['id'];\n                if ( ! isset( $reports[ $report_id ] ) ) {\n                    return new WP_Error( 'wpbp_report_not_found', 'Report not found.', array( 'status' => 404 ) );\n                }\n                return rest_ensure_response( array( 'id' => $report_id, 'title' => $reports[ $report_id ], 'stats' => wpbp_report_stats( $report_id ) ) );\n            },\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-021",
+      "category": "rest-api",
+      "prompt": "A plugin needs a maintenance switch for its own REST API. While the wpbp_maintenance option holds '1', every REST request for a route inside the wpbp/v1 namespace — including the namespace index itself — must be answered with a 503 error whose code is wpbp_maintenance, and the endpoint's own callback must never run. Requests to any other namespace, including the core /wp/v2 endpoints, must dispatch normally, and clearing the option must restore normal service without a restart.",
+      "expected_behavior": "The gate hooks `rest_pre_dispatch`, which runs before the route is matched or any callback fires, reads the option on every request, and returns a `WP_Error` with `'status' => 503` only for routes equal to `/wpbp/v1` or beginning with `/wpbp/v1/`. Runtime validation counts invocations of a fixture endpoint: it must be served once with the switch off, stay untouched while the switch is on (both the endpoint and the namespace index answering 503 `wpbp_maintenance`), while core routes still answer 200, and be served again after the switch is cleared.",
+      "requirements": [
+        "Read the wpbp_maintenance option on every request and treat the string '1' as enabled",
+        "Short-circuit the request before the matched endpoint callback runs",
+        "Answer with a WP_Error carrying the code wpbp_maintenance and HTTP status 503",
+        "Gate only routes in the wpbp/v1 namespace, including its index, and leave every other namespace alone"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "rest_pre_dispatch",
+            "description": "Hooks the pre-dispatch filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_maintenance",
+            "description": "Uses the maintenance option and error code",
+            "weight": 1
+          },
+          {
+            "pattern": "503",
+            "description": "Uses the service unavailable status",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/v1",
+            "description": "Scopes the gate to the plugin namespace",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_maintenance', '0' );\n$GLOBALS['wpbp_ping_calls'] = 0;\n$GLOBALS['wpbp_rest_api_021_post'] = wp_insert_post( array( 'post_title' => 'WPBP maintenance post', 'post_status' => 'publish', 'post_type' => 'post' ) );\nadd_action( 'rest_api_init', function () {\n    register_rest_route( 'wpbp/v1', '/ping', array(\n        'methods'             => WP_REST_Server::READABLE,\n        'permission_callback' => '__return_true',\n        'callback'            => static function () {\n            ++$GLOBALS['wpbp_ping_calls'];\n            return rest_ensure_response( array( 'pong' => true ) );\n        },\n    ) );\n} );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$get = static function ( $route ) use ( $server ) {\n    $response = rest_do_request( new WP_REST_Request( 'GET', $route ) );\n    return array( $response->get_status(), $server->response_to_data( $response, false ) );\n};\n$post_route = '/wp/v2/posts/' . (int) $GLOBALS['wpbp_rest_api_021_post'];\nlist( $status, $data ) = $get( '/wpbp/v1/ping' );\nif ( 200 !== $status || true !== ( $data['pong'] ?? null ) || 1 !== (int) $GLOBALS['wpbp_ping_calls'] ) { return false; }\nlist( $status, $data ) = $get( $post_route );\nif ( 200 !== $status ) { return false; }\nupdate_option( 'wpbp_maintenance', '1' );\nlist( $status, $data ) = $get( '/wpbp/v1/ping' );\nif ( 503 !== $status || 'wpbp_maintenance' !== ( $data['code'] ?? null ) ) { return false; }\nif ( 1 !== (int) $GLOBALS['wpbp_ping_calls'] ) { return false; }\nlist( $status, $data ) = $get( '/wpbp/v1' );\nif ( 503 !== $status || 'wpbp_maintenance' !== ( $data['code'] ?? null ) ) { return false; }\nlist( $status, $data ) = $get( $post_route );\nif ( 200 !== $status ) { return false; }\nlist( $status, $data ) = $get( '/wp/v2/types' );\nif ( 200 !== $status ) { return false; }\nupdate_option( 'wpbp_maintenance', '0' );\nlist( $status, $data ) = $get( '/wpbp/v1/ping' );\nreturn 200 === $status && true === ( $data['pong'] ?? null ) && 2 === (int) $GLOBALS['wpbp_ping_calls'];",
+            "description": "The namespace gate blocks before dispatch and only for wpbp/v1",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_maintenance' );\n$post_id = (int) ( $GLOBALS['wpbp_rest_api_021_post'] ?? 0 );\nif ( $post_id > 0 ) { wp_delete_post( $post_id, true ); }\nunset( $GLOBALS['wpbp_rest_api_021_post'], $GLOBALS['wpbp_ping_calls'] );\nremove_all_filters( 'rest_pre_dispatch' );"
+      },
+      "reference_solution": "add_filter( 'rest_pre_dispatch', function ( $result, $server, $request ) {\n    if ( '1' !== (string) get_option( 'wpbp_maintenance', '0' ) ) {\n        return $result;\n    }\n    $route = (string) $request->get_route();\n    if ( '/wpbp/v1' !== $route && ! str_starts_with( $route, '/wpbp/v1/' ) ) {\n        return $result;\n    }\n    return new WP_Error( 'wpbp_maintenance', 'The wpbp/v1 API is temporarily unavailable.', array( 'status' => 503 ) );\n}, 10, 3 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api/class-wp-rest-server.php",
+          "src/wp-includes/rest-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'rest_post_dispatch', function ( $response, $server, $request ) {\n    if ( '1' !== (string) get_option( 'wpbp_maintenance', '0' ) ) {\n        return $response;\n    }\n    $route = (string) $request->get_route();\n    if ( '/wpbp/v1' !== $route && ! str_starts_with( $route, '/wpbp/v1/' ) ) {\n        return $response;\n    }\n    return rest_ensure_response( new WP_Error( 'wpbp_maintenance', 'Unavailable.', array( 'status' => 503 ) ) );\n}, 10, 3 );",
+        "add_filter( 'rest_pre_dispatch', function ( $result, $server, $request ) {\n    if ( '1' !== (string) get_option( 'wpbp_maintenance', '0' ) ) {\n        return $result;\n    }\n    return new WP_Error( 'wpbp_maintenance', 'Unavailable.', array( 'status' => 503 ) );\n}, 10, 3 );"
+      ]
+    },
+    {
+      "id": "e-rest-api-022",
+      "category": "rest-api",
+      "prompt": "Let trusted background services call the REST API with a shared secret. When a request carries an X-WPBP-Key header matching the wpbp_api_key option, the REST API must treat the request as authenticated and run it as the user whose ID is stored in the wpbp_api_user option. A header that does not match must fail authentication with a 401 whose error code is wpbp_bad_key, leaving the current user alone. A request that does not carry the header at all must be left exactly as WordPress found it, so cookie-authenticated sessions and other authentication plugins are unaffected.",
+      "expected_behavior": "The check hooks `rest_authentication_errors`, which `WP_REST_Server::check_authentication()` applies with `null`. The callback must return the incoming `$result` untouched whenever it is not `null` (another method already decided) or when the header is absent — returning a bare `true`/`false` breaks cookie auth. Runtime validation calls `check_authentication()` directly: anonymous with no header must end up as core's `true` with user 0; a wrong key must yield the 401 `wpbp_bad_key` error; the right key must yield `true` with the service user current; the right key behind an earlier filter that already returned a WP_Error must return that error and leave the user at 0; and a logged-in editor with no header must yield `null` with the editor still current.",
+      "requirements": [
+        "Decide during the REST API's authentication phase rather than inside an endpoint",
+        "Read the secret from the X-WPBP-Key request header and compare it with the wpbp_api_key option",
+        "On a match, make the wpbp_api_user user the current user and report success",
+        "On a mismatch, fail with a WP_Error using the code wpbp_bad_key and HTTP status 401",
+        "Return the incoming value unchanged when another authentication method has already produced a result or when the header is missing"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "rest_authentication_errors",
+            "description": "Hooks the REST authentication filter",
+            "weight": 1
+          },
+          {
+            "pattern": "HTTP_X_WPBP_KEY",
+            "description": "Reads the shared secret header",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_api_key",
+            "description": "Compares against the stored key",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_bad_key",
+            "description": "Uses the requested error code",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_set_current_user",
+            "description": "Switches to the service user",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$service_id = wp_insert_user( array( 'user_login' => 'wpbp_rest_022_service_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'author' ) );\n$editor_id = wp_insert_user( array( 'user_login' => 'wpbp_rest_022_editor_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'editor' ) );\n$GLOBALS['wpbp_rest_api_022_service'] = $service_id;\n$GLOBALS['wpbp_rest_api_022_editor'] = $editor_id;\nupdate_option( 'wpbp_api_key', 'sekret-123' );\nupdate_option( 'wpbp_api_user', $service_id );\nunset( $_SERVER['HTTP_X_WPBP_KEY'] );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$service_id = (int) $GLOBALS['wpbp_rest_api_022_service'];\n$editor_id = (int) $GLOBALS['wpbp_rest_api_022_editor'];\n$server = rest_get_server();\nwp_set_current_user( 0 );\nunset( $_SERVER['HTTP_X_WPBP_KEY'] );\n$anonymous = $server->check_authentication();\nif ( true !== $anonymous || 0 !== get_current_user_id() ) { return false; }\n$_SERVER['HTTP_X_WPBP_KEY'] = 'nope';\n$bad = $server->check_authentication();\nif ( ! is_wp_error( $bad ) || 'wpbp_bad_key' !== $bad->get_error_code() ) { return false; }\n$bad_data = $bad->get_error_data();\nif ( 401 !== (int) ( $bad_data['status'] ?? 0 ) || 0 !== get_current_user_id() ) { return false; }\n$_SERVER['HTTP_X_WPBP_KEY'] = 'sekret-123';\n$good = $server->check_authentication();\nif ( true !== $good || $service_id !== get_current_user_id() ) { return false; }\nwp_set_current_user( 0 );\n$prior = static function () { return new WP_Error( 'wpbp_other_auth', 'Already decided.', array( 'status' => 403 ) ); };\nadd_filter( 'rest_authentication_errors', $prior, 5 );\n$preserved = $server->check_authentication();\nremove_filter( 'rest_authentication_errors', $prior, 5 );\nif ( ! is_wp_error( $preserved ) || 'wpbp_other_auth' !== $preserved->get_error_code() ) { return false; }\nif ( 0 !== get_current_user_id() ) { return false; }\nunset( $_SERVER['HTTP_X_WPBP_KEY'] );\nwp_set_current_user( $editor_id );\n$logged_in = $server->check_authentication();\n$still_editor = get_current_user_id();\nwp_set_current_user( 0 );\nreturn null === $logged_in && $editor_id === $still_editor;",
+            "description": "The shared-secret gate authenticates, rejects, and defers correctly",
+            "weight": 1
+          }
+        ],
+        "teardown": "unset( $_SERVER['HTTP_X_WPBP_KEY'] );\nremove_all_filters( 'rest_authentication_errors' );\ndelete_option( 'wpbp_api_key' );\ndelete_option( 'wpbp_api_user' );\nrequire_once ABSPATH . 'wp-admin/includes/user.php';\nforeach ( array( 'wpbp_rest_api_022_service', 'wpbp_rest_api_022_editor' ) as $key ) { $user_id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $user_id > 0 ) { wp_delete_user( $user_id ); } unset( $GLOBALS[ $key ] ); }\nwp_set_current_user( 0 );"
+      },
+      "reference_solution": "add_filter( 'rest_authentication_errors', function ( $result ) {\n    if ( null !== $result ) {\n        return $result;\n    }\n    if ( ! isset( $_SERVER['HTTP_X_WPBP_KEY'] ) ) {\n        return $result;\n    }\n    $key      = (string) wp_unslash( $_SERVER['HTTP_X_WPBP_KEY'] );\n    $expected = (string) get_option( 'wpbp_api_key', '' );\n    if ( '' === $expected || ! hash_equals( $expected, $key ) ) {\n        return new WP_Error( 'wpbp_bad_key', 'Invalid API key.', array( 'status' => 401 ) );\n    }\n    wp_set_current_user( (int) get_option( 'wpbp_api_user', 0 ) );\n    return true;\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api/class-wp-rest-server.php",
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/default-filters.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'rest_authentication_errors', function ( $result ) {\n    $key      = isset( $_SERVER['HTTP_X_WPBP_KEY'] ) ? (string) wp_unslash( $_SERVER['HTTP_X_WPBP_KEY'] ) : '';\n    $expected = (string) get_option( 'wpbp_api_key', '' );\n    if ( '' !== $key && ! hash_equals( $expected, $key ) ) {\n        return new WP_Error( 'wpbp_bad_key', 'Invalid API key.', array( 'status' => 401 ) );\n    }\n    if ( '' !== $key ) {\n        wp_set_current_user( (int) get_option( 'wpbp_api_user', 0 ) );\n    }\n    return true;\n} );",
+        "add_filter( 'rest_authentication_errors', function ( $result ) {\n    if ( ! isset( $_SERVER['HTTP_X_WPBP_KEY'] ) ) {\n        return $result;\n    }\n    $key      = (string) wp_unslash( $_SERVER['HTTP_X_WPBP_KEY'] );\n    $expected = (string) get_option( 'wpbp_api_key', '' );\n    if ( '' === $expected || ! hash_equals( $expected, $key ) ) {\n        return new WP_Error( 'wpbp_bad_key', 'Invalid API key.', array( 'status' => 401 ) );\n    }\n    wp_set_current_user( (int) get_option( 'wpbp_api_user', 0 ) );\n    return true;\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-023",
+      "category": "rest-api",
+      "prompt": "Build a small widget resource in the wpbp/v1 namespace backed by the wpbp_widgets option. A widget has a server-assigned integer id that clients may never set, a name string of at least 2 characters that is mandatory when creating one, and a colour that is one of blue, red or green and falls back to blue when a new widget does not name one. POST /wp-json/wpbp/v1/widgets creates a widget and answers 201 with the stored record; the editable methods on /wp-json/wpbp/v1/widgets/<id> update only the fields the client sent, so on an edit the name is not mandatory and a missing colour must leave the stored colour alone rather than resetting it to the fallback. Both endpoints must derive their accepted arguments from one shared item schema so the rules stay in a single place.",
+      "expected_behavior": "One item schema declares `id` as `readonly`, `name` as `required` with `minLength`, and `colour` with an `enum` plus a `default`. Each endpoint's `args` comes from `rest_get_endpoint_args_for_schema( $schema, $method )`, which drops read-only properties entirely and only copies `required` and `default` for `WP_REST_Server::CREATABLE`. Runtime validation inspects the registered handler args (create args have no `id`, name required, colour defaulted; the editable handler has neither a required name nor a colour default) and then exercises the endpoints: a create with no name is a 400 `rest_missing_callback_param`, a one-character name is `rest_invalid_param` on both endpoints, a bare create defaults to blue, a PATCH of colour keeps the name, and an empty PATCH leaves the record untouched.",
+      "requirements": [
+        "Register both routes on rest_api_init in the wpbp/v1 namespace",
+        "Describe the widget once in an item schema: read-only id, required name with a 2 character minimum, colour limited to blue, red or green and defaulting to blue",
+        "Derive each endpoint's accepted arguments from that schema for the method it serves",
+        "Store widgets in the wpbp_widgets option, answer 201 with the created record and 200 with the updated record",
+        "On an edit only change the fields present in the request and return a 404 for an unknown widget"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_rest_route",
+            "description": "Registers the REST routes",
+            "weight": 1
+          },
+          {
+            "pattern": "rest_get_endpoint_args_for_schema",
+            "description": "Derives endpoint args from the schema",
+            "weight": 1
+          },
+          {
+            "pattern": "readonly",
+            "description": "Marks the id read-only",
+            "weight": 1
+          },
+          {
+            "pattern": "minLength",
+            "description": "Constrains the name length",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_widgets",
+            "description": "Uses the requested storage option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "delete_option( 'wpbp_widgets' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$routes = $server->get_routes();\n$create_args = null;\nforeach ( (array) ( $routes['/wpbp/v1/widgets'] ?? array() ) as $handler ) {\n    if ( ! empty( $handler['methods']['POST'] ) ) { $create_args = $handler['args']; break; }\n}\nif ( ! is_array( $create_args ) ) { return false; }\nif ( array_key_exists( 'id', $create_args ) ) { return false; }\nif ( true !== ( $create_args['name']['required'] ?? null ) ) { return false; }\nif ( 'blue' !== ( $create_args['colour']['default'] ?? null ) ) { return false; }\n$item_args = null;\nforeach ( $routes as $route => $handlers ) {\n    if ( '/wpbp/v1/widgets' === $route || ! str_starts_with( $route, '/wpbp/v1/widgets' ) ) { continue; }\n    foreach ( (array) $handlers as $handler ) {\n        if ( ! empty( $handler['methods']['PATCH'] ) ) { $item_args = $handler['args']; break 2; }\n    }\n}\nif ( ! is_array( $item_args ) ) { return false; }\nif ( ! empty( $item_args['name']['required'] ) ) { return false; }\nif ( array_key_exists( 'default', (array) ( $item_args['colour'] ?? array() ) ) ) { return false; }\n$send = static function ( $method, $route, array $body = array() ) use ( $server ) {\n    $request = new WP_REST_Request( $method, $route );\n    if ( $body ) { $request->set_body_params( $body ); }\n    $response = rest_do_request( $request );\n    return array( $response->get_status(), $server->response_to_data( $response, false ) );\n};\nlist( $status, $data ) = $send( 'POST', '/wpbp/v1/widgets' );\nif ( 400 !== $status || 'rest_missing_callback_param' !== ( $data['code'] ?? null ) ) { return false; }\nlist( $status, $data ) = $send( 'POST', '/wpbp/v1/widgets', array( 'name' => 'A' ) );\nif ( 400 !== $status || 'rest_invalid_param' !== ( $data['code'] ?? null ) ) { return false; }\nlist( $status, $data ) = $send( 'POST', '/wpbp/v1/widgets', array( 'name' => 'Wheel' ) );\nif ( 201 !== $status || 'Wheel' !== ( $data['name'] ?? null ) || 'blue' !== ( $data['colour'] ?? null ) ) { return false; }\n$widget_id = (int) ( $data['id'] ?? 0 );\nif ( $widget_id <= 0 ) { return false; }\nlist( $status, $data ) = $send( 'PATCH', '/wpbp/v1/widgets/' . $widget_id, array( 'colour' => 'red' ) );\nif ( 200 !== $status || 'Wheel' !== ( $data['name'] ?? null ) || 'red' !== ( $data['colour'] ?? null ) ) { return false; }\nlist( $status, $data ) = $send( 'PATCH', '/wpbp/v1/widgets/' . $widget_id );\nif ( 200 !== $status || 'Wheel' !== ( $data['name'] ?? null ) || 'red' !== ( $data['colour'] ?? null ) ) { return false; }\nlist( $status, $data ) = $send( 'PATCH', '/wpbp/v1/widgets/' . $widget_id, array( 'name' => 'A' ) );\nif ( 400 !== $status || 'rest_invalid_param' !== ( $data['code'] ?? null ) ) { return false; }\n$stored = (array) get_option( 'wpbp_widgets', array() );\nreturn isset( $stored[ $widget_id ] ) && 'Wheel' === ( $stored[ $widget_id ]['name'] ?? null ) && 'red' === ( $stored[ $widget_id ]['colour'] ?? null );",
+            "description": "Schema-derived args differ correctly between create and edit",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_widgets' );"
+      },
+      "reference_solution": "add_action( 'rest_api_init', function () {\n    $schema = array(\n        '$schema'    => 'http://json-schema.org/draft-04/schema#',\n        'title'      => 'wpbp_widget',\n        'type'       => 'object',\n        'properties' => array(\n            'id'     => array( 'type' => 'integer', 'readonly' => true, 'context' => array( 'view', 'edit' ) ),\n            'name'   => array( 'type' => 'string', 'required' => true, 'minLength' => 2, 'context' => array( 'view', 'edit' ) ),\n            'colour' => array( 'type' => 'string', 'enum' => array( 'blue', 'red', 'green' ), 'default' => 'blue', 'context' => array( 'view', 'edit' ) ),\n        ),\n    );\n    register_rest_route(\n        'wpbp/v1',\n        '/widgets',\n        array(\n            array(\n                'methods'             => WP_REST_Server::CREATABLE,\n                'permission_callback' => '__return_true',\n                'args'                => rest_get_endpoint_args_for_schema( $schema, WP_REST_Server::CREATABLE ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $widgets      = (array) get_option( 'wpbp_widgets', array() );\n                    $widget_id    = $widgets ? max( array_map( 'intval', array_keys( $widgets ) ) ) + 1 : 1;\n                    $widgets[ $widget_id ] = array( 'name' => (string) $request['name'], 'colour' => (string) $request['colour'] );\n                    update_option( 'wpbp_widgets', $widgets );\n                    $response = rest_ensure_response( array_merge( array( 'id' => $widget_id ), $widgets[ $widget_id ] ) );\n                    $response->set_status( 201 );\n                    return $response;\n                },\n            ),\n            'schema' => static function () use ( $schema ) { return $schema; },\n        )\n    );\n    register_rest_route(\n        'wpbp/v1',\n        '/widgets/(?P<id>[\\\\d]+)',\n        array(\n            array(\n                'methods'             => WP_REST_Server::EDITABLE,\n                'permission_callback' => '__return_true',\n                'args'                => rest_get_endpoint_args_for_schema( $schema, WP_REST_Server::EDITABLE ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $widgets   = (array) get_option( 'wpbp_widgets', array() );\n                    $widget_id = (int) $request['id'];\n                    if ( ! isset( $widgets[ $widget_id ] ) ) {\n                        return new WP_Error( 'wpbp_widget_not_found', 'Widget not found.', array( 'status' => 404 ) );\n                    }\n                    foreach ( array( 'name', 'colour' ) as $field ) {\n                        if ( null !== $request[ $field ] ) {\n                            $widgets[ $widget_id ][ $field ] = (string) $request[ $field ];\n                        }\n                    }\n                    update_option( 'wpbp_widgets', $widgets );\n                    return rest_ensure_response( array_merge( array( 'id' => $widget_id ), $widgets[ $widget_id ] ) );\n                },\n            ),\n            'schema' => static function () use ( $schema ) { return $schema; },\n        )\n    );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api.php",
+          "src/wp-includes/rest-api/class-wp-rest-server.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'rest_api_init', function () {\n    $schema = array(\n        '$schema'    => 'http://json-schema.org/draft-04/schema#',\n        'title'      => 'wpbp_widget',\n        'type'       => 'object',\n        'properties' => array(\n            'id'     => array( 'type' => 'integer', 'readonly' => true, 'context' => array( 'view', 'edit' ) ),\n            'name'   => array( 'type' => 'string', 'required' => true, 'minLength' => 2, 'context' => array( 'view', 'edit' ) ),\n            'colour' => array( 'type' => 'string', 'enum' => array( 'blue', 'red', 'green' ), 'default' => 'blue', 'context' => array( 'view', 'edit' ) ),\n        ),\n    );\n    register_rest_route(\n        'wpbp/v1',\n        '/widgets',\n        array(\n            array(\n                'methods'             => WP_REST_Server::CREATABLE,\n                'permission_callback' => '__return_true',\n                'args'                => rest_get_endpoint_args_for_schema( $schema, WP_REST_Server::CREATABLE ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $widgets      = (array) get_option( 'wpbp_widgets', array() );\n                    $widget_id    = $widgets ? max( array_map( 'intval', array_keys( $widgets ) ) ) + 1 : 1;\n                    $widgets[ $widget_id ] = array( 'name' => (string) $request['name'], 'colour' => (string) $request['colour'] );\n                    update_option( 'wpbp_widgets', $widgets );\n                    $response = rest_ensure_response( array_merge( array( 'id' => $widget_id ), $widgets[ $widget_id ] ) );\n                    $response->set_status( 201 );\n                    return $response;\n                },\n            ),\n            'schema' => static function () use ( $schema ) { return $schema; },\n        )\n    );\n    register_rest_route(\n        'wpbp/v1',\n        '/widgets/(?P<id>[\\\\d]+)',\n        array(\n            array(\n                'methods'             => WP_REST_Server::EDITABLE,\n                'permission_callback' => '__return_true',\n                'args'                => rest_get_endpoint_args_for_schema( $schema, WP_REST_Server::CREATABLE ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $widgets   = (array) get_option( 'wpbp_widgets', array() );\n                    $widget_id = (int) $request['id'];\n                    if ( ! isset( $widgets[ $widget_id ] ) ) {\n                        return new WP_Error( 'wpbp_widget_not_found', 'Widget not found.', array( 'status' => 404 ) );\n                    }\n                    foreach ( array( 'name', 'colour' ) as $field ) {\n                        if ( null !== $request[ $field ] ) {\n                            $widgets[ $widget_id ][ $field ] = (string) $request[ $field ];\n                        }\n                    }\n                    update_option( 'wpbp_widgets', $widgets );\n                    return rest_ensure_response( array_merge( array( 'id' => $widget_id ), $widgets[ $widget_id ] ) );\n                },\n            ),\n            'schema' => static function () use ( $schema ) { return $schema; },\n        )\n    );\n} );",
+        "add_action( 'rest_api_init', function () {\n    $schema = array(\n        '$schema'    => 'http://json-schema.org/draft-04/schema#',\n        'title'      => 'wpbp_widget',\n        'type'       => 'object',\n        'properties' => array(\n            'id'     => array( 'type' => 'integer', 'readonly' => true, 'context' => array( 'view', 'edit' ) ),\n            'name'   => array( 'type' => 'string', 'required' => true, 'minLength' => 2, 'context' => array( 'view', 'edit' ) ),\n            'colour' => array( 'type' => 'string', 'enum' => array( 'blue', 'red', 'green' ), 'default' => 'blue', 'context' => array( 'view', 'edit' ) ),\n        ),\n    );\n    register_rest_route(\n        'wpbp/v1',\n        '/widgets',\n        array(\n            array(\n                'methods'             => WP_REST_Server::CREATABLE,\n                'permission_callback' => '__return_true',\n                'args'                => array( 'id' => array( 'type' => 'integer' ), 'name' => array( 'type' => 'string', 'required' => true, 'minLength' => 2 ), 'colour' => array( 'type' => 'string', 'enum' => array( 'blue', 'red', 'green' ), 'default' => 'blue' ) ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $widgets      = (array) get_option( 'wpbp_widgets', array() );\n                    $widget_id    = $widgets ? max( array_map( 'intval', array_keys( $widgets ) ) ) + 1 : 1;\n                    $widgets[ $widget_id ] = array( 'name' => (string) $request['name'], 'colour' => (string) $request['colour'] );\n                    update_option( 'wpbp_widgets', $widgets );\n                    $response = rest_ensure_response( array_merge( array( 'id' => $widget_id ), $widgets[ $widget_id ] ) );\n                    $response->set_status( 201 );\n                    return $response;\n                },\n            ),\n            'schema' => static function () use ( $schema ) { return $schema; },\n        )\n    );\n    register_rest_route(\n        'wpbp/v1',\n        '/widgets/(?P<id>[\\\\d]+)',\n        array(\n            array(\n                'methods'             => WP_REST_Server::EDITABLE,\n                'permission_callback' => '__return_true',\n                'args'                => rest_get_endpoint_args_for_schema( $schema, WP_REST_Server::EDITABLE ),\n                'callback'            => static function ( WP_REST_Request $request ) {\n                    $widgets   = (array) get_option( 'wpbp_widgets', array() );\n                    $widget_id = (int) $request['id'];\n                    if ( ! isset( $widgets[ $widget_id ] ) ) {\n                        return new WP_Error( 'wpbp_widget_not_found', 'Widget not found.', array( 'status' => 404 ) );\n                    }\n                    foreach ( array( 'name', 'colour' ) as $field ) {\n                        if ( null !== $request[ $field ] ) {\n                            $widgets[ $widget_id ][ $field ] = (string) $request[ $field ];\n                        }\n                    }\n                    update_option( 'wpbp_widgets', $widgets );\n                    return rest_ensure_response( array_merge( array( 'id' => $widget_id ), $widgets[ $widget_id ] ) );\n                },\n            ),\n            'schema' => static function () use ( $schema ) { return $schema; },\n        )\n    );\n} );"
+      ]
+    },
+    {
+      "id": "e-rest-api-024",
+      "category": "rest-api",
+      "prompt": "The site registers a wpbp_article post type served by the REST API at /wp/v2/articles. Every article returned by the REST API — whether fetched on its own or in a collection — must carry an extra wpbp_reading_minutes value: the number of whitespace separated words in the article's stored content divided by 200 and rounded up, never below 1, as a whole number. Posts of any other type, including core posts, must not gain the value.",
+      "expected_behavior": "The value is injected by hooking `rest_prepare_wpbp_article`, whose second argument is the `WP_Post`, so the word count comes from `$post->post_content` rather than the rendered payload. Rounding is a ceiling with a floor of 1, and no other post type's `rest_prepare_*` filter is touched. Runtime validation checks three articles (200 words, 201 words and 3 words) resolving to 1, 2 and 1 minutes, confirms a 201-word core post has no such key at all, and confirms the collection response carries an integer value for every article.",
+      "requirements": [
+        "Add the wpbp_reading_minutes value to REST responses for the wpbp_article post type only",
+        "Count the whitespace separated words in the article's stored content",
+        "Divide by 200 words per minute, round up, and never report less than 1",
+        "Report the value as a whole number in both single and collection responses"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "rest_prepare_wpbp_article",
+            "description": "Hooks the post-type specific prepare filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_reading_minutes",
+            "description": "Adds the requested key",
+            "weight": 1
+          },
+          {
+            "pattern": "ceil",
+            "description": "Rounds the estimate up",
+            "weight": 1
+          },
+          {
+            "pattern": "post_content",
+            "description": "Reads the stored content from the post object",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_article', array( 'label' => 'WPBP Articles', 'public' => true, 'show_in_rest' => true, 'rest_base' => 'articles', 'supports' => array( 'title', 'editor' ) ) );\n$make_words = static function ( int $count ) { return implode( ' ', array_fill( 0, $count, 'word' ) ); };\n$GLOBALS['wpbp_rest_api_024_articles'] = array(\n    'exact'  => wp_insert_post( array( 'post_type' => 'wpbp_article', 'post_status' => 'publish', 'post_title' => 'Exact', 'post_content' => $make_words( 200 ) ) ),\n    'over'   => wp_insert_post( array( 'post_type' => 'wpbp_article', 'post_status' => 'publish', 'post_title' => 'Over', 'post_content' => $make_words( 201 ) ) ),\n    'short'  => wp_insert_post( array( 'post_type' => 'wpbp_article', 'post_status' => 'publish', 'post_title' => 'Short', 'post_content' => $make_words( 3 ) ) ),\n);\n$GLOBALS['wpbp_rest_api_024_core_post'] = wp_insert_post( array( 'post_type' => 'post', 'post_status' => 'publish', 'post_title' => 'Core', 'post_content' => $make_words( 201 ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! did_action( 'rest_api_init' ) ) { do_action( 'rest_api_init' ); }\n$server = rest_get_server();\n$articles = $GLOBALS['wpbp_rest_api_024_articles'];\n$expected = array( 'exact' => 1, 'over' => 2, 'short' => 1 );\nforeach ( $expected as $key => $minutes ) {\n    $data = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/articles/' . (int) $articles[ $key ] ) ), false );\n    if ( ! is_array( $data ) || $minutes !== ( $data['wpbp_reading_minutes'] ?? null ) ) { return false; }\n}\n$core = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/posts/' . (int) $GLOBALS['wpbp_rest_api_024_core_post'] ) ), false );\nif ( ! is_array( $core ) || array_key_exists( 'wpbp_reading_minutes', $core ) ) { return false; }\n$collection = $server->response_to_data( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/articles' ) ), false );\nif ( ! is_array( $collection ) || count( $collection ) !== count( $articles ) ) { return false; }\nforeach ( $collection as $item ) {\n    if ( ! isset( $item['wpbp_reading_minutes'] ) || ! is_int( $item['wpbp_reading_minutes'] ) ) { return false; }\n}\nreturn true;",
+            "description": "Reading time is added to articles only and rounds up correctly",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_rest_api_024_articles'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } }\n$core_id = (int) ( $GLOBALS['wpbp_rest_api_024_core_post'] ?? 0 );\nif ( $core_id > 0 ) { wp_delete_post( $core_id, true ); }\nunset( $GLOBALS['wpbp_rest_api_024_articles'], $GLOBALS['wpbp_rest_api_024_core_post'] );\nif ( post_type_exists( 'wpbp_article' ) ) { unregister_post_type( 'wpbp_article' ); }"
+      },
+      "reference_solution": "add_filter( 'rest_prepare_wpbp_article', function ( $response, $post ) {\n    $words   = preg_split( '/\\\\s+/', trim( (string) $post->post_content ), -1, PREG_SPLIT_NO_EMPTY );\n    $count   = is_array( $words ) ? count( $words ) : 0;\n    $minutes = max( 1, (int) ceil( $count / 200 ) );\n    $data    = $response->get_data();\n    $data['wpbp_reading_minutes'] = $minutes;\n    $response->set_data( $data );\n    return $response;\n}, 10, 2 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "foreach ( array( 'wpbp_article', 'post' ) as $post_type ) {\n    add_filter( 'rest_prepare_' . $post_type, function ( $response, $post ) {\n        $words   = preg_split( '/\\\\s+/', trim( (string) $post->post_content ), -1, PREG_SPLIT_NO_EMPTY );\n        $count   = is_array( $words ) ? count( $words ) : 0;\n        $minutes = max( 1, (int) ceil( $count / 200 ) );\n        $data    = $response->get_data();\n        $data['wpbp_reading_minutes'] = $minutes;\n        $response->set_data( $data );\n        return $response;\n    }, 10, 2 );\n}",
+        "add_filter( 'rest_prepare_wpbp_article', function ( $response, $post ) {\n    $words   = preg_split( '/\\\\s+/', trim( (string) $post->post_content ), -1, PREG_SPLIT_NO_EMPTY );\n    $count   = is_array( $words ) ? count( $words ) : 0;\n    $minutes = max( 1, (int) round( $count / 200 ) );\n    $data    = $response->get_data();\n    $data['wpbp_reading_minutes'] = $minutes;\n    $response->set_data( $data );\n    return $response;\n}, 10, 2 );"
+      ]
     }
   ]
 }

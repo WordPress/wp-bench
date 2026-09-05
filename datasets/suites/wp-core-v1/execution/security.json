@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-security",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Security",
     "description": "Code generation tasks for WordPress Security APIs",
@@ -237,6 +237,401 @@
         ],
         "release_focus": "6.9"
       }
+    },
+    {
+      "id": "e-security-006",
+      "category": "security",
+      "prompt": "Implement a function that classifies a submitted nonce for the current user and a given action. It returns 'fresh' when WordPress reports the nonce was generated in the current time window, 'aging' when WordPress reports it came from the previous window, and 'invalid' for anything else — including a nonce minted for a different user or a different action, an empty string, and a garbage value.",
+      "expected_behavior": "`wp_verify_nonce()` returns the integer 1 for the current tick, the integer 2 for the previous tick, and `false` otherwise, so the three outcomes must be distinguished with strict integer comparisons rather than a truthiness test (which collapses 'aging' into 'fresh') or a `true` comparison (which never matches). Runtime validation mints a current-tick nonce for one editor, reconstructs the previous-tick nonce the same way core does (`wp_nonce_tick()`, `wp_get_session_token()`, `wp_hash()`), and also feeds in a nonce minted for a second editor, a nonce for a different action, an empty string and a garbage string.",
+      "requirements": [
+        "Verify the nonce with WordPress's own nonce verification",
+        "Return 'fresh' for the current window and 'aging' for the previous window",
+        "Return 'invalid' for every other outcome"
+      ],
+      "test_function": "wpbp_security_006( string $nonce, string $action ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_verify_nonce",
+            "description": "Uses core nonce verification",
+            "weight": 1
+          },
+          {
+            "pattern": "fresh",
+            "description": "Reports the current window",
+            "weight": 1
+          },
+          {
+            "pattern": "aging",
+            "description": "Reports the previous window",
+            "weight": 1
+          },
+          {
+            "pattern": "invalid",
+            "description": "Reports a failed check",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_security_006_user_a'] = wp_insert_user( array( 'user_login' => 'wpbp_sec_006_a_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'editor' ) );\n$GLOBALS['wpbp_security_006_user_b'] = wp_insert_user( array( 'user_login' => 'wpbp_sec_006_b_' . wp_rand(), 'user_pass' => wp_generate_password(), 'role' => 'editor' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_006' ) ) { return false; }\n$user_a = (int) $GLOBALS['wpbp_security_006_user_a'];\n$user_b = (int) $GLOBALS['wpbp_security_006_user_b'];\n$action = 'wpbp_publish_form';\nwp_set_current_user( $user_b );\n$other_user_nonce = wp_create_nonce( $action );\nwp_set_current_user( $user_a );\n$fresh = wp_create_nonce( $action );\n$other_action_nonce = wp_create_nonce( 'wpbp_other_form' );\n$tick = wp_nonce_tick( $action );\n$token = wp_get_session_token();\n$aging = substr( wp_hash( ( $tick - 1 ) . '|' . $action . '|' . $user_a . '|' . $token, 'nonce' ), -12, 10 );\n$results = array(\n    'fresh_nonce'        => wpbp_security_006( $fresh, $action ),\n    'aging_nonce'        => wpbp_security_006( $aging, $action ),\n    'other_user_nonce'   => wpbp_security_006( $other_user_nonce, $action ),\n    'other_action_nonce' => wpbp_security_006( $other_action_nonce, $action ),\n    'empty_nonce'        => wpbp_security_006( '', $action ),\n    'garbage_nonce'      => wpbp_security_006( 'zzzzzzzzzz', $action ),\n);\nwp_set_current_user( 0 );\nreturn array(\n    'fresh_nonce'        => 'fresh',\n    'aging_nonce'        => 'aging',\n    'other_user_nonce'   => 'invalid',\n    'other_action_nonce' => 'invalid',\n    'empty_nonce'        => 'invalid',\n    'garbage_nonce'      => 'invalid',\n) === $results;",
+            "description": "All three nonce verification outcomes are distinguished",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php';\nforeach ( array( 'wpbp_security_006_user_a', 'wpbp_security_006_user_b' ) as $key ) { $user_id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $user_id > 0 ) { wp_delete_user( $user_id ); } unset( $GLOBALS[ $key ] ); }\nwp_set_current_user( 0 );"
+      },
+      "reference_solution": "function wpbp_security_006( string $nonce, string $action ): string {\n    $result = wp_verify_nonce( $nonce, $action );\n    if ( 1 === $result ) {\n        return 'fresh';\n    }\n    if ( 2 === $result ) {\n        return 'aging';\n    }\n    return 'invalid';\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_security_006( string $nonce, string $action ): string {\n    return wp_verify_nonce( $nonce, $action ) ? 'fresh' : 'invalid';\n}",
+        "function wpbp_security_006( string $nonce, string $action ): string {\n    $result = wp_verify_nonce( $nonce, $action );\n    if ( true === $result ) {\n        return 'fresh';\n    }\n    if ( false === $result ) {\n        return 'invalid';\n    }\n    return 'aging';\n}"
+      ]
+    },
+    {
+      "id": "e-security-007",
+      "category": "security",
+      "prompt": "Editors need the CSS mix-blend-mode property to survive WordPress's inline style sanitising in post content, and nothing else may be opened up. After your change, sanitising a style attribute must keep mix-blend-mode alongside the properties WordPress already permits, must still strip the properties it does not permit, must still drop a style attribute entirely when nothing in it survives, and must leave the SVG presentation properties WordPress already understands working.",
+      "expected_behavior": "The allow-list is extended through the `safe_style_css` filter by appending to the incoming array rather than returning a fresh one — replacing it silently removes every property core allows, including the SVG presentation properties (`clip-path`, `transform`) that WordPress 7.1 permits out of the box. Runtime validation calls `safecss_filter_attr()` on a mixed declaration (color kept, mix-blend-mode kept, behavior dropped), on a 7.1 SVG declaration that must survive untouched, and on a declaration with a vendor binding that must be stripped, and runs `wp_kses_post()` twice to confirm the surviving style attribute is kept verbatim while an entirely disallowed one is removed from the tag.",
+      "requirements": [
+        "Extend the list of inline CSS properties WordPress allows instead of replacing it",
+        "Add only mix-blend-mode",
+        "Leave every other part of the inline style sanitising untouched"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "safe_style_css",
+            "description": "Filters the allowed inline CSS properties",
+            "weight": 1
+          },
+          {
+            "pattern": "mix-blend-mode",
+            "description": "Allows the requested property",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$blend = safecss_filter_attr( 'color: red; mix-blend-mode: multiply; behavior: url( evil.htc )' );\nif ( 'color: red;mix-blend-mode: multiply' !== $blend ) { return false; }\n$svg = safecss_filter_attr( 'clip-path: circle(40%); transform: rotate(15deg)' );\nif ( 'clip-path: circle(40%);transform: rotate(15deg)' !== $svg ) { return false; }\n$kept = wp_kses_post( '<span style=\"mix-blend-mode: multiply\">x</span>' );\nif ( '<span style=\"mix-blend-mode: multiply\">x</span>' !== $kept ) { return false; }\n$dropped = wp_kses_post( '<p style=\"behavior: url( evil.htc ); zoom: 1\">Hi</p>' );\nif ( '<p>Hi</p>' !== $dropped ) { return false; }\nreturn 'position: fixed' === safecss_filter_attr( 'position: fixed; -moz-binding: url( evil.xml )' );",
+            "description": "mix-blend-mode is allowed without weakening or replacing the core allow-list",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'safe_style_css' );"
+      },
+      "reference_solution": "add_filter( 'safe_style_css', function ( $attr ) {\n    $attr[] = 'mix-blend-mode';\n    return $attr;\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/kses.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "add_filter( 'safe_style_css', function () {\n    return array( 'color', 'position', 'mix-blend-mode' );\n} );",
+        "add_filter( 'safe_style_css', function ( $attr ) {\n    return array_merge( $attr, array( 'mix-blend-mode', 'behavior', 'zoom' ) );\n} );"
+      ]
+    },
+    {
+      "id": "e-security-008",
+      "category": "security",
+      "prompt": "The site needs to send visitors to a short list of partner sites whose host names are stored in the wpbp_redirect_hosts option. Make WordPress's safe-redirect validation accept URLs on those hosts while still refusing everything else: any other external host, a protocol-relative //host URL, and a javascript: URL must all come back as the caller's fallback, and the site's own host and plain local paths must keep working.",
+      "expected_behavior": "The `allowed_redirect_hosts` filter is used to append the hosts stored in the option to the incoming array, reading the option on every call; adding the requested host (the filter's second argument) defeats the check entirely and a hard-coded list stops tracking the option. Runtime validation runs `wp_validate_redirect()` over two allowed partner URLs (kept verbatim), an unlisted host, a protocol-relative URL and a javascript: URL (all replaced by the fallback), a local path and an absolute home URL (kept) — then rewrites the option to a different host and repeats, so the previously allowed partners must now fall back while the new one is kept.",
+      "requirements": [
+        "Add the hosts stored in the wpbp_redirect_hosts option to WordPress's redirect allow-list",
+        "Read the option each time validation runs so changes take effect immediately",
+        "Do not allow any host that is not in that option or the site's own host"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "allowed_redirect_hosts",
+            "description": "Filters the redirect allow-list",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_redirect_hosts",
+            "description": "Reads the configured hosts",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_redirect_hosts', array( 'partner.example.com', 'docs.example.org' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fallback = home_url( '/fallback' );\n$checks = array(\n    'https://partner.example.com/welcome'   => 'https://partner.example.com/welcome',\n    'https://docs.example.org/guide?x=1'    => 'https://docs.example.org/guide?x=1',\n    'https://evil.example.net/steal'        => $fallback,\n    '//evil.example.net/steal'              => $fallback,\n    'javascript:alert(1)'                   => $fallback,\n    '/dashboard'                            => '/dashboard',\n    home_url( '/dashboard' )                => home_url( '/dashboard' ),\n);\nforeach ( $checks as $location => $expected ) {\n    if ( $expected !== wp_validate_redirect( $location, $fallback ) ) { return false; }\n}\nupdate_option( 'wpbp_redirect_hosts', array( 'newpartner.example.com' ) );\n$rechecks = array(\n    'https://newpartner.example.com/x'    => 'https://newpartner.example.com/x',\n    'https://partner.example.com/welcome' => $fallback,\n    'https://docs.example.org/guide?x=1'  => $fallback,\n    home_url( '/dashboard' )              => home_url( '/dashboard' ),\n);\nforeach ( $rechecks as $location => $expected ) {\n    if ( $expected !== wp_validate_redirect( $location, $fallback ) ) { return false; }\n}\nreturn true;",
+            "description": "Only the configured partner hosts and the site's own host survive validation",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'allowed_redirect_hosts' );\ndelete_option( 'wpbp_redirect_hosts' );"
+      },
+      "reference_solution": "add_filter( 'allowed_redirect_hosts', function ( $hosts ) {\n    foreach ( (array) get_option( 'wpbp_redirect_hosts', array() ) as $host ) {\n        $host = (string) $host;\n        if ( '' !== $host && ! in_array( $host, $hosts, true ) ) {\n            $hosts[] = $host;\n        }\n    }\n    return $hosts;\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/pluggable.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'allowed_redirect_hosts', function ( $hosts ) {\n    $hosts[] = 'partner.example.com';\n    $hosts[] = 'docs.example.org';\n    return $hosts;\n} );",
+        "add_filter( 'allowed_redirect_hosts', function ( $hosts, $host ) {\n    foreach ( (array) get_option( 'wpbp_redirect_hosts', array() ) as $allowed ) {\n        $hosts[] = (string) $allowed;\n    }\n    if ( '' !== (string) $host ) {\n        $hosts[] = (string) $host;\n    }\n    return $hosts;\n}, 10, 2 );"
+      ]
+    },
+    {
+      "id": "e-security-009",
+      "category": "security",
+      "prompt": "Implement a function that counts the rows of a given database table whose post_title contains a caller-supplied fragment. The table arrives as a plain name and must reach the query as a properly quoted SQL identifier through WordPress's own query preparation rather than being pasted into the SQL string. The fragment must be matched literally, so a fragment containing % or _ matches those characters themselves instead of acting as a wildcard.",
+      "expected_behavior": "The query is built with `$wpdb->prepare()` using the `%i` identifier placeholder for the table (which emits a backtick-quoted identifier) and `%s` for the search term, and the term is wrapped in `%` wildcards only after being passed through `$wpdb->esc_like()`. Runtime validation seeds four posts ('100% organic', '100X organic', 'a_b marker', 'axb marker') and requires the fragment '100%' to match one row, 'a_b' to match one row, 'organic' to match two and an absent fragment to match none, then inspects the SQL that reached the database to confirm the table name was quoted as an identifier.",
+      "requirements": [
+        "Prepare the statement with WordPress's database abstraction rather than concatenating values",
+        "Pass the table through the identifier placeholder so it is quoted for SQL",
+        "Escape LIKE wildcards in the fragment so % and _ are matched literally",
+        "Return the number of matching rows as an integer"
+      ],
+      "test_function": "wpbp_security_009( string $table, string $fragment ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "esc_like",
+            "description": "Escapes LIKE wildcards",
+            "weight": 1
+          },
+          {
+            "pattern": "prepare",
+            "description": "Prepares the statement",
+            "weight": 1
+          },
+          {
+            "pattern": "%i",
+            "description": "Uses the identifier placeholder",
+            "weight": 1
+          },
+          {
+            "pattern": "COUNT",
+            "description": "Counts rows in SQL",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_security_009_posts'] = array();\nforeach ( array( '100% organic', '100X organic', 'a_b marker', 'axb marker' ) as $title ) {\n    $GLOBALS['wpbp_security_009_posts'][] = wp_insert_post( array( 'post_title' => $title, 'post_status' => 'publish', 'post_type' => 'post' ) );\n}",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_009' ) ) { return false; }\nglobal $wpdb;\n$GLOBALS['wpbp_security_009_sql'] = array();\n$capture = static function ( $query ) { $GLOBALS['wpbp_security_009_sql'][] = $query; return $query; };\nadd_filter( 'query', $capture );\n$results = array(\n    'percent'    => wpbp_security_009( $wpdb->posts, '100%' ),\n    'underscore' => wpbp_security_009( $wpdb->posts, 'a_b' ),\n    'plain'      => wpbp_security_009( $wpdb->posts, 'organic' ),\n    'missing'    => wpbp_security_009( $wpdb->posts, 'nothing here' ),\n);\nremove_filter( 'query', $capture );\nif ( array( 'percent' => 1, 'underscore' => 1, 'plain' => 2, 'missing' => 0 ) !== $results ) { return false; }\n$sql = implode( \"\\n\", (array) $GLOBALS['wpbp_security_009_sql'] );\nreturn str_contains( $sql, '`' . $wpdb->posts . '`' );",
+            "description": "LIKE wildcards are literal and the table is quoted as an identifier",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_security_009_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } }\nunset( $GLOBALS['wpbp_security_009_posts'], $GLOBALS['wpbp_security_009_sql'] );\nremove_all_filters( 'query' );"
+      },
+      "reference_solution": "function wpbp_security_009( string $table, string $fragment ): int {\n    global $wpdb;\n    $like = '%' . $wpdb->esc_like( $fragment ) . '%';\n    return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE post_title LIKE %s', $table, $like ) );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_security_009( string $table, string $fragment ): int {\n    global $wpdb;\n    return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE post_title LIKE %s', $table, '%' . $fragment . '%' ) );\n}",
+        "function wpbp_security_009( string $table, string $fragment ): int {\n    global $wpdb;\n    $like = '%' . $wpdb->esc_like( $fragment ) . '%';\n    return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . $table . ' WHERE post_title LIKE %s', $like ) );\n}"
+      ]
+    },
+    {
+      "id": "e-security-010",
+      "category": "security",
+      "prompt": "Implement a function that sanitises editor-supplied HTML for the site's newsletter panel. It must keep everything WordPress already permits in post content — including the analytics data- attributes editors add to links — and on top of that allow a <wpbp-badge> element carrying a label attribute and links whose href uses the site's internal wpbp: scheme. Event handler attributes such as onclick must still be removed, script tags must still be stripped, javascript: hrefs must still be neutralised, and ordinary https links must be untouched.",
+      "expected_behavior": "The function starts from `wp_kses_allowed_html( 'post' )` (which already carries the `data-*` wildcard through the global attributes) rather than hand-listing tags, adds the `wpbp-badge` element, and passes an explicitly extended protocol list to `wp_kses()` — the `kses_allowed_protocols` filter is a no-op once `wp_loaded` has fired, so the extra scheme has to be supplied as the third argument. Runtime validation checks the tracked wpbp: link (href and data attribute kept, onclick gone), the custom badge element, an unknown wpbp-* element that must be stripped to its text, a script tag, a javascript: href, an https link and ordinary rich text.",
+      "requirements": [
+        "Keep the tags and attributes WordPress already allows in post content, including data- attributes",
+        "Additionally allow a wpbp-badge element with a label attribute",
+        "Additionally allow hrefs using the wpbp scheme without weakening the other protocol checks",
+        "Return the sanitised HTML"
+      ],
+      "test_function": "wpbp_security_010( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_kses",
+            "description": "Runs the content through kses",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_kses_allowed_html",
+            "description": "Starts from the core allowed HTML list",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-badge",
+            "description": "Allows the custom element",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_allowed_protocols",
+            "description": "Extends the protocol list",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_010' ) ) { return false; }\n$tracked = wpbp_security_010( '<a href=\"wpbp:doc/42\" data-wpbp-track=\"cta\" onclick=\"steal()\">Doc</a>' );\nif ( ! str_contains( $tracked, 'href=\"wpbp:doc/42\"' ) ) { return false; }\nif ( ! str_contains( $tracked, 'data-wpbp-track=\"cta\"' ) ) { return false; }\nif ( str_contains( $tracked, 'onclick' ) ) { return false; }\n$badge = wpbp_security_010( '<wpbp-badge label=\"new\">Fresh</wpbp-badge>' );\nif ( ! str_contains( $badge, '<wpbp-badge' ) || ! str_contains( $badge, 'label=\"new\"' ) || ! str_contains( $badge, 'Fresh' ) ) { return false; }\n$unknown = wpbp_security_010( '<wpbp-gadget label=\"new\">Nope</wpbp-gadget>' );\nif ( str_contains( $unknown, 'wpbp-gadget' ) || ! str_contains( $unknown, 'Nope' ) ) { return false; }\n$script = wpbp_security_010( '<p>Hi</p><script>steal()</script>' );\nif ( str_contains( $script, '<script' ) || ! str_contains( $script, '<p>Hi</p>' ) ) { return false; }\n$js_href = wpbp_security_010( '<a href=\"javascript:alert(1)\">x</a>' );\nif ( str_contains( $js_href, 'javascript' ) ) { return false; }\n$https = wpbp_security_010( '<a href=\"https://example.com/\">ok</a>' );\nif ( ! str_contains( $https, 'href=\"https://example.com/\"' ) ) { return false; }\n$rich = wpbp_security_010( '<strong>bold</strong> and <em>italic</em>' );\nreturn str_contains( $rich, '<strong>bold</strong>' ) && str_contains( $rich, '<em>italic</em>' );",
+            "description": "The extended allow-list keeps the new element and scheme while the dangerous markup is still stripped",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_010( string $html ): string {\n    $tags = wp_kses_allowed_html( 'post' );\n    $tags['wpbp-badge'] = array( 'label' => true, 'class' => true );\n    $protocols = array_merge( wp_allowed_protocols(), array( 'wpbp' ) );\n    return wp_kses( $html, $tags, $protocols );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/kses.php",
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_security_010( string $html ): string {\n    return wp_kses_post( $html );\n}",
+        "function wpbp_security_010( string $html ): string {\n    $tags = array(\n        'a'          => array( 'href' => true ),\n        'p'          => array(),\n        'wpbp-badge' => array( 'label' => true ),\n    );\n    $protocols = array_merge( wp_allowed_protocols(), array( 'wpbp' ) );\n    return wp_kses( $html, $tags, $protocols );\n}"
+      ]
+    },
+    {
+      "id": "e-security-011",
+      "category": "security",
+      "prompt": "Implement a function that accepts a site tagline exactly as it arrives from a form submission — WordPress has already added slashes to it — and does three things: it stores the cleaned single-line text in the wpbp_tagline option, and it returns a markup snippet in which the stored value appears once as a span's title attribute and once as a quoted JavaScript string assigned to a variable inside a script block. Each of those three places needs the escaping that is right for it; no HTML markup from the submission may survive.",
+      "expected_behavior": "The slashes are removed with `wp_unslash()` before the value is cleaned with `sanitize_text_field()` and stored, so the option never contains stray backslashes. The same stored value is then escaped per destination: `esc_attr()` for the attribute and `esc_js()` for the JavaScript string literal — `esc_js()` backslash-escapes apostrophes, which `esc_attr()` does not, so reusing the attribute escaper inside the script is wrong. Runtime validation feeds a value containing an apostrophe, double quotes, an HTML tag and an ampersand, plus a plain value, and compares the stored option and both escaped occurrences against what the core helpers produce.",
+      "requirements": [
+        "Remove the slashes WordPress added before doing anything else with the value",
+        "Store the cleaned single-line text in the wpbp_tagline option",
+        "Escape the value for an HTML attribute where it is used as a title",
+        "Escape the value for a JavaScript string literal where it is assigned in the script block",
+        "Return the resulting markup snippet"
+      ],
+      "test_function": "wpbp_security_011( string $submitted ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_unslash",
+            "description": "Removes the added slashes",
+            "weight": 1
+          },
+          {
+            "pattern": "sanitize_text_field",
+            "description": "Cleans the submitted text",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_attr",
+            "description": "Escapes for the attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_js",
+            "description": "Escapes for the JavaScript string",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_tagline",
+            "description": "Stores in the requested option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_011' ) ) { return false; }\n$fixtures = array( 'Bob\\'s \"Big\" <b>Deal</b> & Co', 'Plain tagline' );\nforeach ( $fixtures as $raw ) {\n    $submitted = addslashes( $raw );\n    $expected  = sanitize_text_field( wp_unslash( $submitted ) );\n    $output    = wpbp_security_011( $submitted );\n    if ( ! is_string( $output ) ) { return false; }\n    if ( get_option( 'wpbp_tagline' ) !== $expected ) { return false; }\n    if ( str_contains( $output, '<b>' ) ) { return false; }\n    if ( ! str_contains( $output, 'title=\"' . esc_attr( $expected ) . '\"' ) ) { return false; }\n    if ( ! str_contains( $output, '<script' ) ) { return false; }\n    if ( ! str_contains( $output, \"'\" . esc_js( $expected ) . \"'\" ) ) { return false; }\n}\nreturn true;",
+            "description": "Unslash on input and the correct escaper per output context",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_tagline' );"
+      },
+      "reference_solution": "function wpbp_security_011( string $submitted ): string {\n    $value = sanitize_text_field( wp_unslash( $submitted ) );\n    update_option( 'wpbp_tagline', $value );\n    return '<span class=\"wpbp-tagline\" title=\"' . esc_attr( $value ) . '\">' . esc_html( $value ) . '</span>'\n        . '<script>var wpbpTagline = \\'' . esc_js( $value ) . '\\';</script>';\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_security_011( string $submitted ): string {\n    $value = sanitize_text_field( $submitted );\n    update_option( 'wpbp_tagline', $value );\n    return '<span class=\"wpbp-tagline\" title=\"' . esc_attr( $value ) . '\">' . esc_html( $value ) . '</span>'\n        . '<script>var wpbpTagline = \\'' . esc_js( $value ) . '\\';</script>';\n}",
+        "function wpbp_security_011( string $submitted ): string {\n    $value = sanitize_text_field( wp_unslash( $submitted ) );\n    update_option( 'wpbp_tagline', $value );\n    return '<span class=\"wpbp-tagline\" title=\"' . esc_attr( $value ) . '\">' . esc_html( $value ) . '</span>'\n        . '<script>var wpbpTagline = \\'' . esc_attr( $value ) . '\\';</script>';\n}"
+      ]
+    },
+    {
+      "id": "e-security-012",
+      "category": "security",
+      "prompt": "Implement a function that reports whether a caller-supplied template path may be loaded, given an optional list of paths that are allowed. Use WordPress's own path validation and translate its verdict: 'ok' when the path is acceptable, 'traversal' when it is rejected for climbing out of its directory, 'drive' when it is rejected as an absolute Windows drive path, and 'blocked' when it is rejected only because it is not in the supplied list. An empty list means no list restriction applies.",
+      "expected_behavior": "`validate_file()` returns 0 for an acceptable path, 1 for directory traversal, 2 for a Windows drive path and 3 for a path missing from the allow-list, so the acceptable case is the falsy one — a plain truthiness test inverts the whole contract, and the three rejection codes must be told apart. Runtime validation covers an allowed path, a path missing from the list, a leading `../../` path, a mid-path `../`, a drive-letter path that is nevertheless in the allow-list (which must still be reported as a drive rejection), and an allowed path checked against an empty list.",
+      "requirements": [
+        "Use WordPress's own file path validation rather than reimplementing the checks",
+        "Report 'ok' only when WordPress considers the path acceptable",
+        "Distinguish traversal, Windows drive paths and allow-list misses in the returned label"
+      ],
+      "test_function": "wpbp_security_012( string $file, array $allowed_files ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "validate_file",
+            "description": "Uses core path validation",
+            "weight": 1
+          },
+          {
+            "pattern": "traversal",
+            "description": "Reports the traversal outcome",
+            "weight": 1
+          },
+          {
+            "pattern": "drive",
+            "description": "Reports the drive-path outcome",
+            "weight": 1
+          },
+          {
+            "pattern": "blocked",
+            "description": "Reports the allow-list outcome",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_security_012' ) ) { return false; }\n$allowed = array( 'templates/single.php', 'templates/page.php' );\n$cases = array(\n    array( 'templates/single.php', $allowed, 'ok' ),\n    array( 'templates/other.php', $allowed, 'blocked' ),\n    array( '../../etc/passwd', $allowed, 'traversal' ),\n    array( 'templates/../single.php', $allowed, 'traversal' ),\n    array( 'C:/windows/win.ini', array( 'C:/windows/win.ini' ), 'drive' ),\n    array( 'templates/single.php', array(), 'ok' ),\n);\nforeach ( $cases as $case ) {\n    if ( $case[2] !== wpbp_security_012( $case[0], $case[1] ) ) { return false; }\n}\nreturn true;",
+            "description": "All four validate_file verdicts are mapped correctly",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_security_012( string $file, array $allowed_files ): string {\n    $result = validate_file( $file, $allowed_files );\n    if ( 0 === $result ) {\n        return 'ok';\n    }\n    if ( 1 === $result ) {\n        return 'traversal';\n    }\n    if ( 2 === $result ) {\n        return 'drive';\n    }\n    return 'blocked';\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_security_012( string $file, array $allowed_files ): string {\n    return validate_file( $file, $allowed_files ) ? 'blocked' : 'ok';\n}",
+        "function wpbp_security_012( string $file, array $allowed_files ): string {\n    if ( str_contains( $file, '..' ) ) {\n        return 'traversal';\n    }\n    if ( ! empty( $allowed_files ) && ! in_array( $file, $allowed_files, true ) ) {\n        return 'blocked';\n    }\n    return 'ok';\n}"
+      ]
     }
   ]
 }
