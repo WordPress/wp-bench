@@ -1,0 +1,356 @@
+{
+  "id": "wp-core-execution-v1-block_patterns_styles",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Block Patterns and Styles",
+    "description": "Code generation tasks for WordPress block pattern, block style and block template registration APIs",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-block-patterns-styles-001",
+      "category": "block-patterns-styles",
+      "prompt": "Build a small WordPress plugin that ships a block pattern named 'wpbp/hero', titled 'WPBP Hero' and filed under the 'featured' pattern category. The pattern's markup is not a fixed string: it is produced by a PHP file the plugin ships, so it can contain values computed at run time - a core heading holding the site's name, followed by a core paragraph reading 'Welcome aboard.'. Registering the pattern must not read or run that file; WordPress should evaluate it the first time the pattern's content is actually needed.",
+      "expected_behavior": "Reviewer contract: the pattern is registered with the filePath property and no content property, so WP_Block_Patterns_Registry keeps the path until get_content() runs, then captures the file's output buffer into content and drops filePath from the stored entry. The first get_registered() call therefore still reports filePath alongside the freshly evaluated content, and a second call reports content only. The evaluated content carries the live site name and contains no raw PHP. Passing content as well as filePath short-circuits the lazy evaluation and is wrong, as is reading the file into a string at registration time.",
+      "requirements": [
+        "Register the pattern when WordPress registers block patterns.",
+        "Keep the pattern markup in a PHP file the plugin ships and let WordPress evaluate it lazily.",
+        "Produce a core heading containing the site's name and a core paragraph reading 'Welcome aboard.'.",
+        "Title the pattern 'WPBP Hero' and put it in the 'featured' category."
+      ],
+      "artifact_kind": "wp_plugin_files",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_block_pattern",
+            "description": "Registers the block pattern",
+            "weight": 1
+          },
+          {
+            "pattern": "filePath",
+            "description": "Registers the pattern from a PHP file",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp\\/hero",
+            "description": "Uses the requested pattern name",
+            "weight": 1
+          },
+          {
+            "pattern": "get_bloginfo|get_option",
+            "description": "Computes the site name at render time",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_fire = static function ( string $hook ): void { if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) { return; } foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks as $callbacks ) { foreach ( $callbacks as $callback ) { $fn = $callback['function']; try { if ( is_array( $fn ) ) { $ref = new ReflectionMethod( $fn[0], $fn[1] ); } elseif ( is_string( $fn ) && str_contains( $fn, '::' ) ) { $ref = new ReflectionMethod( $fn ); } elseif ( is_object( $fn ) && ! ( $fn instanceof Closure ) ) { $ref = new ReflectionMethod( $fn, '__invoke' ); } else { $ref = new ReflectionFunction( $fn ); } } catch ( Throwable $e ) { continue; } if ( str_contains( (string) $ref->getFileName(), 'wp-bench-candidate' ) ) { call_user_func( $fn ); } } } }; if ( ! WP_Block_Patterns_Registry::get_instance()->is_registered( 'wpbp/hero' ) ) { $wpbp_fire( 'plugins_loaded' ); $wpbp_fire( 'init' ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Patterns_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/hero' ) ) { return false; } $pattern = $registry->get_registered( 'wpbp/hero' ); $GLOBALS['wpbp_146'] = $pattern; if ( 'WPBP Hero' !== ( $pattern['title'] ?? null ) ) { return false; } if ( array( 'featured' ) !== ( $pattern['categories'] ?? null ) ) { return false; } $path = $pattern['filePath'] ?? null; return is_string( $path ) && str_ends_with( $path, '.php' ) && is_file( $path ) && is_readable( $path );",
+            "description": "The pattern is registered from a shipped PHP file with the requested title and category",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$content = $GLOBALS['wpbp_146']['content'] ?? null; if ( ! is_string( $content ) || '' === $content ) { return false; } if ( str_contains( $content, '<?php' ) ) { return false; } $name = esc_html( get_bloginfo( 'name' ) ); if ( '' === $name || ! str_contains( $content, $name ) ) { return false; } return str_contains( $content, '<!-- wp:heading' ) && str_contains( $content, 'Welcome aboard.' );",
+            "description": "The stored content is the evaluated output of the file, carrying the live site name",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Patterns_Registry::get_instance(); $again = $registry->get_registered( 'wpbp/hero' ); if ( isset( $again['filePath'] ) ) { return false; } return ( $again['content'] ?? null ) === ( $GLOBALS['wpbp_146']['content'] ?? false );",
+            "description": "Once evaluated the registry keeps the content and drops the file path",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$html = do_blocks( '<!-- wp:pattern {\"slug\":\"wpbp/hero\"} /-->' ); $name = esc_html( get_bloginfo( 'name' ) ); $p = new WP_HTML_Tag_Processor( $html ); return $p->next_tag( 'H2' ) && str_contains( $html, $name ) && str_contains( $html, 'Welcome aboard.' );",
+            "description": "The pattern block renders the evaluated pattern markup",
+            "weight": 1
+          }
+        ],
+        "teardown": "unset( $GLOBALS['wpbp_146'] );"
+      },
+      "reference_solution": "// Plugin artifact test: the canonical implementation is in reference_files (wpbp-hero-pattern.php, patterns/hero.php).",
+      "reference_files": {
+        "wpbp-hero-pattern.php": "<?php\n/**\n * Plugin Name: WPBP Hero Pattern\n * Description: Registers a block pattern whose markup lives in a PHP file.\n * Version: 1.0.0\n */\n\nadd_action(\n\t'init',\n\tstatic function (): void {\n\t\tregister_block_pattern(\n\t\t\t'wpbp/hero',\n\t\t\tarray(\n\t\t\t\t'title'       => 'WPBP Hero',\n\t\t\t\t'description' => 'A hero section that greets visitors by site name.',\n\t\t\t\t'categories'  => array( 'featured' ),\n\t\t\t\t'filePath'    => __DIR__ . '/patterns/hero.php',\n\t\t\t)\n\t\t);\n\t}\n);\n",
+        "patterns/hero.php": "<?php\nprintf(\n\t'<!-- wp:heading --><h2 class=\"wp-block-heading\">%1$s</h2><!-- /wp:heading -->'\n\t. '<!-- wp:paragraph --><p>%2$s</p><!-- /wp:paragraph -->',\n\tesc_html( get_bloginfo( 'name' ) ),\n\tesc_html( 'Welcome aboard.' )\n);\n"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-patterns-registry.php",
+          "src/wp-includes/block-patterns.php",
+          "src/wp-includes/blocks/pattern.php"
+        ],
+        "release_focus": "6.5"
+      },
+      "exploit_solutions": [
+        "register_block_pattern( 'wpbp/hero', array( 'title' => 'WPBP Hero', 'description' => 'Hero.', 'categories' => array( 'featured' ), 'content' => '<!-- wp:heading --><h2 class=\"wp-block-heading\">' . esc_html( get_bloginfo( 'name' ) ) . '</h2><!-- /wp:heading --><!-- wp:paragraph --><p>Welcome aboard.</p><!-- /wp:paragraph -->' ) );",
+        "register_block_pattern( 'wpbp/hero', array( 'title' => 'WPBP Hero', 'description' => 'Hero.', 'categories' => array( 'featured' ), 'filePath' => ABSPATH . WPINC . '/version.php', 'content' => '<!-- wp:heading --><h2 class=\"wp-block-heading\">' . esc_html( get_bloginfo( 'name' ) ) . '</h2><!-- /wp:heading --><!-- wp:paragraph --><p>Welcome aboard.</p><!-- /wp:paragraph -->' ) );"
+      ]
+    },
+    {
+      "id": "e-block-patterns-styles-002",
+      "category": "block-patterns-styles",
+      "prompt": "Register two block patterns whose markup is the single core paragraph 'Callout copy.'. 'wpbp/product-callout', titled 'WPBP Product Callout', is a specialised layout: it should be offered as a starting point when a core/media-text block is empty, it belongs on the single and page template types in that order, it may only be used while editing wpbp_product or page content in that order, and it must never appear in the general pattern inserter because the theme places it programmatically. 'wpbp/plain-callout', titled 'WPBP Plain Callout', is an ordinary pattern that carries none of those restrictions.",
+      "expected_behavior": "Reviewer contract: the four scoping concerns are four separate registration properties - blockTypes for the block-level placeholder and transform offer, templateTypes for the templates the pattern suits, postTypes for the editing contexts it is available in, and inserter false to hide it from the inserter while keeping it registered. The registry stores them verbatim, so WP_Block_Patterns_Registry::get_registered() must report exactly those arrays for the restricted pattern and none of them for the unrestricted one, which must stay visible in the inserter.",
+      "requirements": [
+        "Register both patterns when the function is called.",
+        "Give the restricted pattern its block, template and post type scoping as separate registration properties.",
+        "Keep the restricted pattern registered but hidden from the inserter.",
+        "Leave the ordinary pattern unrestricted and visible."
+      ],
+      "test_function": "wpbp_patterns_002(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "blockTypes",
+            "description": "Scopes the pattern to a block type",
+            "weight": 1
+          },
+          {
+            "pattern": "templateTypes",
+            "description": "Scopes the pattern to template types",
+            "weight": 1
+          },
+          {
+            "pattern": "postTypes",
+            "description": "Scopes the pattern to post types",
+            "weight": 1
+          },
+          {
+            "pattern": "inserter",
+            "description": "Hides the pattern from the inserter",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_patterns_002(); $registry = WP_Block_Patterns_Registry::get_instance(); $pattern = $registry->get_registered( 'wpbp/product-callout' ); if ( ! is_array( $pattern ) ) { return false; } if ( 'WPBP Product Callout' !== ( $pattern['title'] ?? null ) ) { return false; } if ( array( 'core/media-text' ) !== ( $pattern['blockTypes'] ?? null ) ) { return false; } if ( array( 'single', 'page' ) !== ( $pattern['templateTypes'] ?? null ) ) { return false; } if ( array( 'wpbp_product', 'page' ) !== ( $pattern['postTypes'] ?? null ) ) { return false; } if ( false !== ( $pattern['inserter'] ?? null ) ) { return false; } return str_contains( (string) ( $pattern['content'] ?? '' ), 'Callout copy.' );",
+            "description": "The restricted pattern records all four scoping properties exactly",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Patterns_Registry::get_instance(); $pattern = $registry->get_registered( 'wpbp/plain-callout' ); if ( ! is_array( $pattern ) ) { return false; } if ( 'WPBP Plain Callout' !== ( $pattern['title'] ?? null ) ) { return false; } if ( isset( $pattern['blockTypes'] ) || isset( $pattern['templateTypes'] ) || isset( $pattern['postTypes'] ) ) { return false; } if ( false === ( $pattern['inserter'] ?? true ) ) { return false; } return str_contains( (string) ( $pattern['content'] ?? '' ), 'Callout copy.' );",
+            "description": "The ordinary pattern carries no scoping and stays in the inserter",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_patterns_002(): void { $content = '<!-- wp:paragraph --><p>Callout copy.</p><!-- /wp:paragraph -->'; register_block_pattern( 'wpbp/product-callout', array( 'title' => 'WPBP Product Callout', 'content' => $content, 'blockTypes' => array( 'core/media-text' ), 'templateTypes' => array( 'single', 'page' ), 'postTypes' => array( 'wpbp_product', 'page' ), 'inserter' => false ) ); register_block_pattern( 'wpbp/plain-callout', array( 'title' => 'WPBP Plain Callout', 'content' => $content ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-patterns-registry.php",
+          "src/wp-includes/block-patterns.php"
+        ],
+        "release_focus": "6.2"
+      },
+      "exploit_solutions": [
+        "function wpbp_patterns_002(): void { $content = '<!-- wp:paragraph --><p>Callout copy.</p><!-- /wp:paragraph -->'; register_block_pattern( 'wpbp/product-callout', array( 'title' => 'WPBP Product Callout', 'content' => $content, 'blockTypes' => array( 'core/media-text' ), 'postTypes' => array( 'wpbp_product', 'page' ), 'inserter' => false ) ); register_block_pattern( 'wpbp/plain-callout', array( 'title' => 'WPBP Plain Callout', 'content' => $content ) ); }",
+        "function wpbp_patterns_002(): void { $content = '<!-- wp:paragraph --><p>Callout copy.</p><!-- /wp:paragraph -->'; $args = array( 'blockTypes' => array( 'core/media-text' ), 'templateTypes' => array( 'single', 'page' ), 'postTypes' => array( 'wpbp_product', 'page' ), 'inserter' => false ); register_block_pattern( 'wpbp/product-callout', array_merge( array( 'title' => 'WPBP Product Callout', 'content' => $content ), $args ) ); register_block_pattern( 'wpbp/plain-callout', array_merge( array( 'title' => 'WPBP Plain Callout', 'content' => $content ), $args ) ); }"
+      ]
+    },
+    {
+      "id": "e-block-patterns-styles-003",
+      "category": "block-patterns-styles",
+      "prompt": "Offer editors a block style variation called 'wpbp-highlight', labelled 'WPBP Highlight', on both core/paragraph and core/heading, registered for the two block types in a single call. Its appearance must be described as theme.json style data - text colour #102030 on background colour #f0e0d0 - so WordPress generates the CSS itself, rather than being shipped as an inline stylesheet or a registered style handle. It must not be offered on any other block type and it must not be the default style for either block.",
+      "expected_behavior": "Reviewer contract: register_block_style() accepts an array of block names, so one call covers both block types, and the style_data property carries a theme.json-shaped array (color.text, color.background). WP_Theme_JSON_Resolver injects registered style_data into the merged theme.json under styles.blocks.<block>.variations.<name>, so the generated block styles carry rules for the is-style-wpbp-highlight class with those declarations, one selector per registered block type. Registering it via inline_style or style_handle, or naming other blocks, fails. The merged theme.json is cached, so the check clears the theme.json cache first.",
+      "requirements": [
+        "Register the variation for both block types in one call.",
+        "Describe the appearance as theme.json style data rather than CSS text or a style handle.",
+        "Label the variation 'WPBP Highlight' and leave it as a non-default style.",
+        "Do not register it for any other block type."
+      ],
+      "test_function": "wpbp_patterns_003(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_block_style",
+            "description": "Registers a block style variation",
+            "weight": 1
+          },
+          {
+            "pattern": "style_data",
+            "description": "Describes the style as theme.json data",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-highlight",
+            "description": "Uses the requested style name",
+            "weight": 1
+          },
+          {
+            "pattern": "core\\/heading",
+            "description": "Covers the heading block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_patterns_003(); $registry = WP_Block_Styles_Registry::get_instance(); foreach ( array( 'core/paragraph', 'core/heading' ) as $block ) { $styles = $registry->get_registered_styles_for_block( $block ); if ( ! isset( $styles['wpbp-highlight'] ) ) { return false; } $style = $styles['wpbp-highlight']; if ( 'WPBP Highlight' !== ( $style['label'] ?? null ) ) { return false; } if ( ! empty( $style['is_default'] ) ) { return false; } if ( '#102030' !== ( $style['style_data']['color']['text'] ?? null ) ) { return false; } if ( '#f0e0d0' !== ( $style['style_data']['color']['background'] ?? null ) ) { return false; } } $other = $registry->get_registered_styles_for_block( 'core/list' ); return ! isset( $other['wpbp-highlight'] );",
+            "description": "Both requested block types carry the shared style variation and no other block type does",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wp_clean_theme_json_cache(); $css = WP_Theme_JSON_Resolver::get_merged_data()->get_stylesheet( array( 'styles' ), null, array( 'include_block_style_variations' => true ) ); if ( 2 !== substr_count( $css, 'is-style-wpbp-highlight' ) ) { return false; } $flat = str_replace( ' ', '', $css ); return str_contains( $flat, 'color:#102030' ) && str_contains( $flat, 'background-color:#f0e0d0' );",
+            "description": "The style data reaches the generated global stylesheet as CSS for the variation class",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_patterns_003(): void { register_block_style( array( 'core/paragraph', 'core/heading' ), array( 'name' => 'wpbp-highlight', 'label' => 'WPBP Highlight', 'style_data' => array( 'color' => array( 'text' => '#102030', 'background' => '#f0e0d0' ) ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-styles-registry.php",
+          "src/wp-includes/class-wp-theme-json-resolver.php",
+          "src/wp-includes/global-styles-and-settings.php"
+        ],
+        "release_focus": "6.6"
+      },
+      "exploit_solutions": [
+        "function wpbp_patterns_003(): void { register_block_style( array( 'core/paragraph', 'core/heading' ), array( 'name' => 'wpbp-highlight', 'label' => 'WPBP Highlight', 'inline_style' => '.is-style-wpbp-highlight{color:#102030;background-color:#f0e0d0;}' ) ); }",
+        "function wpbp_patterns_003(): void { foreach ( array( 'core/paragraph', 'core/heading', 'core/list' ) as $block ) { register_block_style( $block, array( 'name' => 'wpbp-highlight', 'label' => 'WPBP Highlight', 'style_data' => array( 'color' => array( 'text' => '#102030', 'background' => '#f0e0d0' ) ) ) ); } }"
+      ]
+    },
+    {
+      "id": "e-block-patterns-styles-004",
+      "category": "block-patterns-styles",
+      "prompt": "A plugin should supply its own block template for the 'wpbp_book' post type without the active theme shipping a template file for it. Register the template under the name 'wpbp-books//book-showcase', titled 'Book Showcase', described as 'Full-width showcase for a single book.', with default content of a core group wrapping a core paragraph that reads 'Showcase content.'. It must be offered when editing wpbp_book content and must not be offered for any other post type.",
+      "expected_behavior": "Reviewer contract: register_block_template() adds a WP_Block_Template to WP_Block_Templates_Registry with source and origin 'plugin', slug taken from the part after the // prefix, and post_types straight from the args. get_block_templates() merges registered templates into its results and drops any whose post_types array does not contain the queried post type, so querying for wpbp_book must list book-showcase while querying for page must not. Omitting post_types makes the template available everywhere and is wrong.",
+      "requirements": [
+        "Register the template exactly once, under the given name.",
+        "Give it the requested title, description and default content.",
+        "Restrict it to the wpbp_book post type.",
+        "Do not create a template post in the database."
+      ],
+      "test_function": "wpbp_patterns_004(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_block_template",
+            "description": "Registers the template through the templates registry",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-books\\/\\/book-showcase",
+            "description": "Uses the requested template name",
+            "weight": 1
+          },
+          {
+            "pattern": "post_types",
+            "description": "Restricts the template to a post type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_book', array( 'public' => true, 'label' => 'WPBP Books', 'show_in_rest' => true, 'supports' => array( 'title', 'editor' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_patterns_004(); $template = WP_Block_Templates_Registry::get_instance()->get_registered( 'wpbp-books//book-showcase' ); if ( ! $template instanceof WP_Block_Template ) { return false; } if ( 'Book Showcase' !== $template->title || 'Full-width showcase for a single book.' !== $template->description ) { return false; } if ( 'book-showcase' !== $template->slug || 'plugin' !== $template->source || 'plugin' !== $template->origin ) { return false; } if ( array( 'wpbp_book' ) !== $template->post_types ) { return false; } return str_contains( (string) $template->content, 'Showcase content.' );",
+            "description": "The template is registered as a plugin template with the requested metadata and post type",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$book = wp_list_pluck( get_block_templates( array( 'post_type' => 'wpbp_book' ) ), 'slug' ); $page = wp_list_pluck( get_block_templates( array( 'post_type' => 'page' ) ), 'slug' ); return in_array( 'book-showcase', $book, true ) && ! in_array( 'book-showcase', $page, true );",
+            "description": "The template is offered for books and withheld from pages",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_patterns_004(): void { if ( WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp-books//book-showcase' ) ) { return; } register_block_template( 'wpbp-books//book-showcase', array( 'title' => 'Book Showcase', 'description' => 'Full-width showcase for a single book.', 'content' => '<!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>Showcase content.</p><!-- /wp:paragraph --></div><!-- /wp:group -->', 'post_types' => array( 'wpbp_book' ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-template.php",
+          "src/wp-includes/class-wp-block-templates-registry.php",
+          "src/wp-includes/block-template-utils.php"
+        ],
+        "release_focus": "6.7"
+      },
+      "exploit_solutions": [
+        "function wpbp_patterns_004(): void { if ( WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp-books//book-showcase' ) ) { return; } register_block_template( 'wpbp-books//book-showcase', array( 'title' => 'Book Showcase', 'description' => 'Full-width showcase for a single book.', 'content' => '<!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>Showcase content.</p><!-- /wp:paragraph --></div><!-- /wp:group -->' ) ); }",
+        "function wpbp_patterns_004(): void { if ( WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp-books//book-showcase' ) ) { return; } register_block_template( 'wpbp-books//book-showcase', array( 'title' => 'Book Showcase', 'description' => 'Full-width showcase for a single book.', 'content' => '<!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>Showcase content.</p><!-- /wp:paragraph --></div><!-- /wp:group -->', 'post_types' => array( 'page' ) ) ); }"
+      ]
+    },
+    {
+      "id": "e-block-patterns-styles-005",
+      "category": "block-patterns-styles",
+      "prompt": "Give this site two of its own pattern categories in the inserter: 'wpbp-promos', labelled 'WPBP Promos' and described as 'Promotional layouts.', and 'wpbp-footers', labelled 'WPBP Footers' with no description at all. Every pattern category WordPress ships must stay available. The site also runs without outbound access, so WordPress must stop pulling patterns from the remote pattern directory.",
+      "expected_behavior": "Reviewer contract: register_block_pattern_category() stores the properties array verbatim under the slug, so a category registered without a description must not gain one - passing an empty string still records the key. Registering categories adds to the registry rather than replacing it, so the core categories such as featured and banner remain. Remote pattern loading is governed by the should_load_remote_block_patterns filter, which every remote loader consults; it must resolve to false.",
+      "requirements": [
+        "Register both categories with the given slugs and labels.",
+        "Give a description only to the category that is described as having one.",
+        "Leave the categories WordPress ships registered.",
+        "Stop WordPress from loading patterns from the remote pattern directory."
+      ],
+      "test_function": "wpbp_patterns_005(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_block_pattern_category",
+            "description": "Registers pattern categories",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-footers",
+            "description": "Registers the second category",
+            "weight": 1
+          },
+          {
+            "pattern": "should_load_remote_block_patterns",
+            "description": "Disables remote pattern loading",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_patterns_005(); $registry = WP_Block_Pattern_Categories_Registry::get_instance(); $promos = $registry->get_registered( 'wpbp-promos' ); if ( ! is_array( $promos ) ) { return false; } if ( 'WPBP Promos' !== ( $promos['label'] ?? null ) ) { return false; } return 'Promotional layouts.' === ( $promos['description'] ?? null );",
+            "description": "The described category is registered with its label and description",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Pattern_Categories_Registry::get_instance(); $footers = $registry->get_registered( 'wpbp-footers' ); if ( ! is_array( $footers ) ) { return false; } if ( 'WPBP Footers' !== ( $footers['label'] ?? null ) ) { return false; } return ! isset( $footers['description'] );",
+            "description": "The undescribed category carries a label and no description key",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Pattern_Categories_Registry::get_instance(); foreach ( array( 'featured', 'banner', 'text' ) as $slug ) { $category = $registry->get_registered( $slug ); if ( ! is_array( $category ) || '' === (string) ( $category['label'] ?? '' ) ) { return false; } } return false === apply_filters( 'should_load_remote_block_patterns', true );",
+            "description": "Core categories survive and remote pattern loading is switched off",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_patterns_005(): void { register_block_pattern_category( 'wpbp-promos', array( 'label' => 'WPBP Promos', 'description' => 'Promotional layouts.' ) ); register_block_pattern_category( 'wpbp-footers', array( 'label' => 'WPBP Footers' ) ); add_filter( 'should_load_remote_block_patterns', '__return_false' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-patterns.php",
+          "src/wp-includes/class-wp-block-pattern-categories-registry.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_patterns_005(): void { register_block_pattern_category( 'wpbp-promos', array( 'label' => 'WPBP Promos', 'description' => 'Promotional layouts.' ) ); register_block_pattern_category( 'wpbp-footers', array( 'label' => 'WPBP Footers', 'description' => '' ) ); add_filter( 'should_load_remote_block_patterns', '__return_false' ); }",
+        "function wpbp_patterns_005(): void { register_block_pattern_category( 'wpbp-promos', array( 'label' => 'WPBP Promos', 'description' => 'Promotional layouts.' ) ); register_block_pattern_category( 'wpbp-footers', array( 'label' => 'WPBP Footers' ) ); }"
+      ]
+    }
+  ]
+}

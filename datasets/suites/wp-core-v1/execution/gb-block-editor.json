@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_editor",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Editor",
     "description": "Code generation tasks for WordPress Block Editor APIs",
@@ -236,6 +236,135 @@
         ],
         "release_focus": "7.0"
       }
+    },
+    {
+      "id": "e-gb-block-editor-005",
+      "category": "gb-block-editor",
+      "prompt": "Editing a 'wpbp_note' post should offer only four block types: core/paragraph, core/heading, core/list and core/list-item, in that order. Every other editing surface - editing an ordinary post, the site editor, the widgets screen - must keep offering every registered block type, and must not break when there is no post being edited at all.",
+      "expected_behavior": "Reviewer contract: the modern filter is allowed_block_types_all, which receives a WP_Block_Editor_Context. That context's $post property is null for editors that are not editing a post, so the callback has to check before reading a post type; reaching for $context->post->post_type unguarded raises a warning. Contexts other than a wpbp_note post must get back the incoming value unchanged, which is boolean true, not an array of every registered block. Hooking the deprecated allowed_block_types filter triggers a deprecation notice.",
+      "requirements": [
+        "Restrict only the editor for the wpbp_note post type.",
+        "Return the four block types in the order given.",
+        "Leave every other editing context with the value it was given.",
+        "Handle editor contexts that have no post."
+      ],
+      "test_function": "wpbp_gb_block_editor_005(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "allowed_block_types_all",
+            "description": "Uses the current allowed block types filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_note",
+            "description": "Scopes the restriction to the note post type",
+            "weight": 1
+          },
+          {
+            "pattern": "core\\/list-item",
+            "description": "Allows the list item block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_note', array( 'public' => true, 'label' => 'WPBP Notes', 'show_in_rest' => true, 'supports' => array( 'title', 'editor' ) ) ); $GLOBALS['wpbp_144'] = array( 'note' => wp_insert_post( array( 'post_type' => 'wpbp_note', 'post_title' => 'A note', 'post_status' => 'draft' ) ), 'post' => wp_insert_post( array( 'post_type' => 'post', 'post_title' => 'A post', 'post_status' => 'draft' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_gb_block_editor_005(); $context = new WP_Block_Editor_Context( array( 'name' => 'core/edit-post', 'post' => get_post( (int) $GLOBALS['wpbp_144']['note'] ) ) ); return array( 'core/paragraph', 'core/heading', 'core/list', 'core/list-item' ) === get_allowed_block_types( $context );",
+            "description": "Editing a note offers exactly the four requested block types in order",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_gb_block_editor_005(); $context = new WP_Block_Editor_Context( array( 'name' => 'core/edit-post', 'post' => get_post( (int) $GLOBALS['wpbp_144']['post'] ) ) ); return true === get_allowed_block_types( $context );",
+            "description": "Editing an ordinary post is left unrestricted",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_gb_block_editor_005(); $site = new WP_Block_Editor_Context( array( 'name' => 'core/edit-site' ) ); $widgets = new WP_Block_Editor_Context( array( 'name' => 'core/edit-widgets' ) ); return true === get_allowed_block_types( $site ) && true === get_allowed_block_types( $widgets );",
+            "description": "Editor contexts without a post stay unrestricted and raise nothing",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_144'] ) ) { foreach ( $GLOBALS['wpbp_144'] as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } unset( $GLOBALS['wpbp_144'] ); }"
+      },
+      "reference_solution": "function wpbp_gb_block_editor_005(): void { add_filter( 'allowed_block_types_all', static function ( $allowed, $context ) { if ( ! $context instanceof WP_Block_Editor_Context || ! $context->post instanceof WP_Post ) { return $allowed; } if ( 'wpbp_note' !== $context->post->post_type ) { return $allowed; } return array( 'core/paragraph', 'core/heading', 'core/list', 'core/list-item' ); }, 10, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-block-editor-context.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_block_editor_005(): void { add_filter( 'allowed_block_types_all', static function ( $allowed, $context ) { if ( 'wpbp_note' !== $context->post->post_type ) { return $allowed; } return array( 'core/paragraph', 'core/heading', 'core/list', 'core/list-item' ); }, 10, 2 ); }",
+        "function wpbp_gb_block_editor_005(): void { add_filter( 'allowed_block_types_all', static function ( $allowed, $context ) { if ( $context instanceof WP_Block_Editor_Context && $context->post instanceof WP_Post && 'wpbp_note' === $context->post->post_type ) { return array( 'core/paragraph', 'core/heading', 'core/list', 'core/list-item' ); } return array_keys( WP_Block_Type_Registry::get_instance()->get_all_registered() ); }, 10, 2 ); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-editor-006",
+      "category": "gb-block-editor",
+      "prompt": "The block inserter should group this site's marketing blocks under their own category: slug 'wpbp-marketing', title 'WPBP Marketing'. It has to be the first category the inserter lists, in every editor including the site editor, and every category WordPress ships must remain present, in its original order and with its original title.",
+      "expected_behavior": "Reviewer contract: block_categories_all receives the default category list and a WP_Block_Editor_Context and applies to every editor, unlike the deprecated block_categories filter, which only fires when a post is present and emits a deprecation notice when hooked. The new entry is prepended, so the returned list is exactly one longer than get_default_block_categories() and its tail is that default list unchanged, including the icon keys. The same result must come back for a post editor context and for a post-less context.",
+      "requirements": [
+        "Add the category with the given slug and title.",
+        "Put it before every category WordPress provides.",
+        "Keep the shipped categories intact, in their original order.",
+        "Apply the change in every editor, including editors with no post.",
+        "Register the hook inside the function; one call must be enough."
+      ],
+      "test_function": "wpbp_gb_block_editor_006(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "block_categories_all",
+            "description": "Uses the current block categories filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-marketing",
+            "description": "Registers the requested category slug",
+            "weight": 1
+          },
+          {
+            "pattern": "WPBP Marketing",
+            "description": "Uses the requested category title",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_gb_block_editor_006(); $context = new WP_Block_Editor_Context( array( 'name' => 'core/edit-site' ) ); $categories = get_block_categories( $context ); $defaults = get_default_block_categories(); if ( count( $defaults ) + 1 !== count( $categories ) ) { return false; } $first = array_shift( $categories ); if ( 'wpbp-marketing' !== ( $first['slug'] ?? null ) || 'WPBP Marketing' !== ( $first['title'] ?? null ) ) { return false; } return array_values( $categories ) === $defaults;",
+            "description": "The site editor lists the new category first and the shipped categories unchanged behind it",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$post_id = wp_insert_post( array( 'post_title' => 'Categories fixture', 'post_status' => 'draft' ) ); $context = new WP_Block_Editor_Context( array( 'name' => 'core/edit-post', 'post' => get_post( $post_id ) ) ); $categories = get_block_categories( $context ); wp_delete_post( $post_id, true ); $slugs = wp_list_pluck( $categories, 'slug' ); return 'wpbp-marketing' === ( $slugs[0] ?? null ) && in_array( 'text', $slugs, true ) && in_array( 'media', $slugs, true ) && 1 === count( array_keys( $slugs, 'wpbp-marketing', true ) );",
+            "description": "A post editor context gets the same list with the category added exactly once",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_block_editor_006(): void { add_filter( 'block_categories_all', static function ( $categories, $context ) { return array_merge( array( array( 'slug' => 'wpbp-marketing', 'title' => 'WPBP Marketing', 'icon' => null ) ), $categories ); }, 10, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-editor.php",
+          "src/wp-includes/class-wp-block-editor-context.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_block_editor_006(): void { add_filter( 'block_categories_all', static function ( $categories, $context ) { $categories[] = array( 'slug' => 'wpbp-marketing', 'title' => 'WPBP Marketing', 'icon' => null ); return $categories; }, 10, 2 ); }",
+        "function wpbp_gb_block_editor_006(): void { add_filter( 'block_categories_all', static function ( $categories, $context ) { return array( array( 'slug' => 'wpbp-marketing', 'title' => 'WPBP Marketing', 'icon' => null ) ); }, 10, 2 ); }"
+      ]
     }
   ]
 }

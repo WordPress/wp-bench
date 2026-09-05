@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_bindings",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Bindings",
     "description": "Code generation tasks for WordPress Block Bindings APIs",
@@ -243,6 +243,155 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-gb-block-bindings-005",
+      "category": "gb-block-bindings",
+      "prompt": "The 'wpbp_book' custom post type keeps each book's shelf code in the 'wpbp_shelf_code' post meta field. Editors should not have to retype it: a list item in the book's content should take its text from that field through WordPress's built-in post meta binding source. Implement the rendering of such a list for a given book - a list block holding a single bound list item whose saved placeholder text is 'Unknown' - and make sure the binding source is actually allowed to read that meta field.",
+      "expected_behavior": "Reviewer contract: the core/post-meta source refuses any key that is protected or not registered with show_in_rest for the post's subtype, so the meta must be registered with register_meta() using object_subtype 'wpbp_book', single true and show_in_rest true. The list item carries metadata.bindings.content pointing at core/post-meta with args.key, which 7.1 supports for core/list-item, and the block instance must be given both postId and postType context because the source declares both. Rendering two books yields their two different codes and no placeholder; rendering without post context leaves the placeholder in place.",
+      "requirements": [
+        "Take the book's post ID and return the rendered markup as a string.",
+        "Register the shelf code meta field so the built-in post meta binding source is permitted to read it.",
+        "Bind the list item's own text rather than rewriting the list markup afterwards.",
+        "Give the rendered block the post context the binding source needs.",
+        "Keep 'Unknown' as the placeholder text in the markup you build."
+      ],
+      "test_function": "wpbp_gb_block_bindings_005( int $post_id ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "core\\/post-meta",
+            "description": "Uses the built-in post meta binding source",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_shelf_code",
+            "description": "Binds the shelf code meta key",
+            "weight": 1
+          },
+          {
+            "pattern": "register_meta",
+            "description": "Registers the meta field",
+            "weight": 1
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Exposes the meta field to the binding source",
+            "weight": 1
+          },
+          {
+            "pattern": "list-item",
+            "description": "Binds a list item block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_book', array( 'public' => true, 'label' => 'WPBP Books', 'supports' => array( 'title', 'editor', 'custom-fields' ) ) ); $GLOBALS['wpbp_142'] = array(); foreach ( array( 'A-114', 'B-220' ) as $code ) { $id = wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => 'Book ' . $code, 'post_status' => 'publish' ) ); update_post_meta( $id, 'wpbp_shelf_code', $code ); $GLOBALS['wpbp_142'][] = $id; }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$a = wpbp_gb_block_bindings_005( (int) $GLOBALS['wpbp_142'][0] ); $b = wpbp_gb_block_bindings_005( (int) $GLOBALS['wpbp_142'][1] ); if ( ! str_contains( $a, 'A-114' ) || ! str_contains( $b, 'B-220' ) ) { return false; } if ( str_contains( $a, 'B-220' ) || str_contains( $b, 'A-114' ) ) { return false; } if ( str_contains( $a, 'Unknown' ) || str_contains( $b, 'Unknown' ) ) { return false; } $p = new WP_HTML_Tag_Processor( $a ); return $p->next_tag( 'UL' ) && $p->next_tag( 'LI' );",
+            "description": "Two books render their own shelf codes inside a list item and lose the placeholder",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_gb_block_bindings_005( (int) $GLOBALS['wpbp_142'][0] ); $parsed = parse_blocks( '<!-- wp:paragraph {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"core/post-meta\",\"args\":{\"key\":\"wpbp_shelf_code\"}}}}} --><p>Placeholder</p><!-- /wp:paragraph -->' )[0]; $block = new WP_Block( $parsed, array( 'postId' => (int) $GLOBALS['wpbp_142'][1], 'postType' => 'wpbp_book' ) ); $html = $block->render(); return str_contains( $html, 'B-220' ) && ! str_contains( $html, 'Placeholder' );",
+            "description": "The meta field is registered so an unrelated bound paragraph resolves it too",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_gb_block_bindings_005( (int) $GLOBALS['wpbp_142'][0] ); $parsed = parse_blocks( '<!-- wp:paragraph {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"core/post-meta\",\"args\":{\"key\":\"wpbp_shelf_code\"}}}}} --><p>Placeholder</p><!-- /wp:paragraph -->' )[0]; $block = new WP_Block( $parsed, array() ); $html = $block->render(); return str_contains( $html, 'Placeholder' ) && ! str_contains( $html, 'A-114' );",
+            "description": "Without post context the bound block keeps its saved placeholder text",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_142'] ) ) { foreach ( $GLOBALS['wpbp_142'] as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } unset( $GLOBALS['wpbp_142'] ); }"
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_005( int $post_id ): string { register_meta( 'post', 'wpbp_shelf_code', array( 'object_subtype' => 'wpbp_book', 'type' => 'string', 'single' => true, 'show_in_rest' => true ) ); $markup = '<!-- wp:list --><ul class=\"wp-block-list\">' . '<!-- wp:list-item {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"core/post-meta\",\"args\":{\"key\":\"wpbp_shelf_code\"}}}}} -->' . '<li>Unknown</li><!-- /wp:list-item --></ul><!-- /wp:list -->'; $parsed = parse_blocks( $markup )[0]; $block = new WP_Block( $parsed, array( 'postId' => $post_id, 'postType' => get_post_type( $post_id ) ) ); return $block->render(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings.php",
+          "src/wp-includes/block-bindings/post-meta.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/meta.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_block_bindings_005( int $post_id ): string { $code = (string) get_post_meta( $post_id, 'wpbp_shelf_code', true ); $markup = '<!-- wp:list --><ul class=\"wp-block-list\"><!-- wp:list-item --><li>Unknown</li><!-- /wp:list-item --></ul><!-- /wp:list -->'; $html = do_blocks( $markup ); return str_replace( 'Unknown', $code, $html ); }",
+        "function wpbp_gb_block_bindings_005( int $post_id ): string { register_meta( 'post', 'wpbp_shelf_code', array( 'object_subtype' => 'wpbp_book', 'type' => 'string', 'single' => true ) ); $markup = '<!-- wp:list --><ul class=\"wp-block-list\"><!-- wp:list-item {\"metadata\":{\"bindings\":{\"content\":{\"source\":\"core/post-meta\",\"args\":{\"key\":\"wpbp_shelf_code\"}}}}} --><li>Unknown</li><!-- /wp:list-item --></ul><!-- /wp:list -->'; $parsed = parse_blocks( $markup )[0]; $block = new WP_Block( $parsed, array( 'postId' => $post_id, 'postType' => get_post_type( $post_id ) ) ); return $block->render(); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-bindings-006",
+      "category": "gb-block-bindings",
+      "prompt": "A synced pattern can expose named blocks whose text an individual placement of that pattern may override, while the pattern itself stays shared. Given the post ID of such a synced pattern and a map of overridable block names to replacement text, render that pattern with the replacements applied to just those blocks. Blocks the map does not mention, and names that do not appear in the pattern, must render the pattern's own content.",
+      "expected_behavior": "Reviewer contract: the overrides travel as the core/block instance's 'content' attribute, which the block provides to its inner blocks as the 'pattern/overrides' context. The core/pattern-overrides source looks the value up at context['pattern/overrides'][ metadata.name ][ attribute ], so the map value must be an array keyed by attribute name - array( 'content' => $text ) - not a bare string. The legacy 'overrides' attribute name no longer works because core/block declares a default for 'content', so the back-compat branch never runs. Unmatched names simply resolve to null and the saved text stands.",
+      "requirements": [
+        "Take the synced pattern's post ID and the overrides map, and return the rendered HTML.",
+        "Apply the overrides through the pattern instance itself, not by editing the stored pattern or rewriting the rendered HTML.",
+        "Leave blocks the map does not name untouched."
+      ],
+      "test_function": "wpbp_gb_block_bindings_006( int $pattern_id, array $overrides ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "core\\/block",
+            "description": "Renders the synced pattern block",
+            "weight": 1
+          },
+          {
+            "pattern": "ref",
+            "description": "Points the instance at the pattern post",
+            "weight": 1
+          },
+          {
+            "pattern": "content",
+            "description": "Passes the per-instance overrides",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_143'] = wp_insert_post( array( 'post_type' => 'wp_block', 'post_status' => 'publish', 'post_title' => 'WPBP Synced Pattern', 'post_content' => '<!-- wp:paragraph {\"metadata\":{\"name\":\"headline\",\"bindings\":{\"__default\":{\"source\":\"core/pattern-overrides\"}}}} --><p>Default headline</p><!-- /wp:paragraph --><!-- wp:paragraph {\"metadata\":{\"name\":\"tagline\",\"bindings\":{\"__default\":{\"source\":\"core/pattern-overrides\"}}}} --><p>Default tagline</p><!-- /wp:paragraph --><!-- wp:paragraph --><p>Body text</p><!-- /wp:paragraph -->' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$html = wpbp_gb_block_bindings_006( (int) $GLOBALS['wpbp_143'], array( 'headline' => 'Fresh headline' ) ); return str_contains( $html, 'Fresh headline' ) && ! str_contains( $html, 'Default headline' ) && str_contains( $html, 'Default tagline' ) && str_contains( $html, 'Body text' );",
+            "description": "Only the named block is overridden and the rest of the pattern renders as stored",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$html = wpbp_gb_block_bindings_006( (int) $GLOBALS['wpbp_143'], array() ); return str_contains( $html, 'Default headline' ) && str_contains( $html, 'Default tagline' ) && str_contains( $html, 'Body text' );",
+            "description": "With no overrides the pattern renders entirely from its stored content",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$html = wpbp_gb_block_bindings_006( (int) $GLOBALS['wpbp_143'], array( 'tagline' => 'New tagline', 'nosuchblock' => 'Nope' ) ); return str_contains( $html, 'New tagline' ) && ! str_contains( $html, 'Default tagline' ) && str_contains( $html, 'Default headline' ) && ! str_contains( $html, 'Nope' );",
+            "description": "A second name is overridden independently and an unknown name changes nothing",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_143'] ) ) { wp_delete_post( (int) $GLOBALS['wpbp_143'], true ); } unset( $GLOBALS['wpbp_143'] );"
+      },
+      "reference_solution": "function wpbp_gb_block_bindings_006( int $pattern_id, array $overrides ): string { $content = array(); foreach ( $overrides as $name => $text ) { $content[ $name ] = array( 'content' => $text ); } return render_block( array( 'blockName' => 'core/block', 'attrs' => array( 'ref' => $pattern_id, 'content' => $content ), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/block-bindings/pattern-overrides.php",
+          "src/wp-includes/blocks/block.php",
+          "src/wp-includes/class-wp-block.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_block_bindings_006( int $pattern_id, array $overrides ): string { return render_block( array( 'blockName' => 'core/block', 'attrs' => array( 'ref' => $pattern_id, 'content' => $overrides ), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }",
+        "function wpbp_gb_block_bindings_006( int $pattern_id, array $overrides ): string { $content = array(); foreach ( $overrides as $name => $text ) { $content[ $name ] = array( 'content' => $text ); } return render_block( array( 'blockName' => 'core/block', 'attrs' => array( 'ref' => $pattern_id, 'overrides' => $content ), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }"
+      ]
     }
   ]
 }
