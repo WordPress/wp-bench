@@ -292,6 +292,7 @@
       "prompt": "Give this site two of its own pattern categories in the inserter: 'wpbp-promos', labelled 'WPBP Promos' and described as 'Promotional layouts.', and 'wpbp-footers', labelled 'WPBP Footers' with no description at all. Every pattern category WordPress ships must stay available. The site also runs without outbound access, so WordPress must stop pulling patterns from the remote pattern directory.",
       "expected_behavior": "Reviewer contract: register_block_pattern_category() stores the properties array verbatim under the slug, so a category registered without a description must not gain one - passing an empty string still records the key. Registering categories adds to the registry rather than replacing it, so the core categories such as featured and banner remain. Remote pattern loading is governed by the should_load_remote_block_patterns filter, which every remote loader consults; it must resolve to false.",
       "requirements": [
+        "Do the registration and the remote-pattern change while the function runs; WordPress has already finished loading when it is called, so deferring to a later hook has no effect.",
         "Register both categories with the given slugs and labels.",
         "Give a description only to the category that is described as having one.",
         "Leave the categories WordPress ships registered.",

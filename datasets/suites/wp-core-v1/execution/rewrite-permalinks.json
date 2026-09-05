@@ -211,11 +211,12 @@
       "id": "e-rewrite-permalinks-004",
       "category": "rewrite-permalinks",
       "prompt": "Give every single post a reviews view reachable by appending wpbp-reviews to its permalink, exposed to the site as the wpbp-reviews query variable. The suffix may carry a value, and it may also be used bare with nothing after it: WordPress hands a bare endpoint through as an empty string, but the site must see the value 'all' in that case. A value that is present must reach the site unchanged, and requests that do not use the suffix at all must not gain the variable. Do not flush the rewrite rules.",
-      "expected_behavior": "Reviewer contract: an endpoint is added to the permalink rewrite rules (which also registers the query variable), and the parsed request variables are filtered so that a present-but-empty endpoint value becomes 'all'. Review focus: the endpoint mask must cover single post permalinks, the request filter must distinguish 'key present and empty' from 'key absent', and re-initialising the rewrite object would discard the endpoint. Runtime validation inspects the generated rules and applies the request filter to three different variable sets.",
+      "expected_behavior": "Reviewer contract: an endpoint is added to the permalink rewrite rules (which also registers the query variable), and the parsed request variables are adjusted so that a present-but-empty endpoint value becomes 'all' by the time the site reads them - either through the `request` filter or on the `parse_request` action, both of which run before the query is built. Review focus: the endpoint mask must cover single post permalinks, the adjustment must distinguish 'key present and empty' from 'key absent', and re-initialising the rewrite object would discard the endpoint. Runtime validation inspects the generated rules and resolves three different variable sets through both hooks.",
       "requirements": [
         "Add the endpoint to single post permalinks and expose wpbp-reviews as a query variable",
         "Turn a present but empty endpoint value into 'all' while leaving a supplied value alone",
-        "Leave requests that never used the endpoint untouched"
+        "Leave requests that never used the endpoint untouched",
+        "Add the endpoint as this code loads: WordPress has already fired init, so deferring it to that action would never run"
       ],
       "static_checks": {
         "required_patterns": [
@@ -235,8 +236,8 @@
             "weight": 1
           },
           {
-            "pattern": "'request'|\"request\"",
-            "description": "Filters the parsed request variables",
+            "pattern": "'(parse_)?request'|\"(parse_)?request\"",
+            "description": "Adjusts the parsed request variables",
             "weight": 1
           },
           {
@@ -263,12 +264,12 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "global $wp, $wp_rewrite; $query_vars = apply_filters( 'query_vars', $wp->public_query_vars ); if ( ! in_array( 'wpbp-reviews', $query_vars, true ) ) { return false; } $rules = $wp_rewrite->wp_rewrite_rules(); $has_rule = false; foreach ( $rules as $regex => $query ) { if ( ! is_string( $query ) || ! str_contains( $query, 'wpbp-reviews=' ) ) { continue; } if ( 1 === preg_match( '#^' . $regex . '#', 'hello-world/wpbp-reviews/newest/' ) ) { $has_rule = true; break; } } if ( ! $has_rule ) { return false; } $empty = apply_filters( 'request', array( 'name' => 'hello-world', 'wpbp-reviews' => '' ) ); if ( 'all' !== ( $empty['wpbp-reviews'] ?? null ) ) { return false; } if ( 'hello-world' !== ( $empty['name'] ?? null ) ) { return false; } $valued = apply_filters( 'request', array( 'name' => 'hello-world', 'wpbp-reviews' => 'newest' ) ); if ( 'newest' !== ( $valued['wpbp-reviews'] ?? null ) ) { return false; } $absent = apply_filters( 'request', array( 'name' => 'hello-world' ) ); return ! array_key_exists( 'wpbp-reviews', $absent ) && 'hello-world' === ( $absent['name'] ?? null );",
-            "description": "The endpoint rule and query variable exist and only a present-but-empty value is promoted",
+            "code": "global $wp, $wp_rewrite; $query_vars = apply_filters( 'query_vars', $wp->public_query_vars ); if ( ! in_array( 'wpbp-reviews', $query_vars, true ) ) { return false; } $rules = $wp_rewrite->wp_rewrite_rules(); $has_rule = false; foreach ( $rules as $regex => $query ) { if ( ! is_string( $query ) || ! str_contains( $query, 'wpbp-reviews=' ) ) { continue; } if ( 1 === preg_match( '#^' . $regex . '#', 'hello-world/wpbp-reviews/newest/' ) ) { $has_rule = true; break; } } if ( ! $has_rule ) { return false; } $resolve = static function ( array $query_vars ): array { $query_vars = (array) apply_filters( 'request', $query_vars ); $env = new WP(); $env->query_vars = $query_vars; do_action_ref_array( 'parse_request', array( &$env ) ); return (array) $env->query_vars; }; $empty = $resolve( array( 'name' => 'hello-world', 'wpbp-reviews' => '' ) ); if ( 'all' !== ( $empty['wpbp-reviews'] ?? null ) ) { return false; } if ( 'hello-world' !== ( $empty['name'] ?? null ) ) { return false; } $valued = $resolve( array( 'name' => 'hello-world', 'wpbp-reviews' => 'newest' ) ); if ( 'newest' !== ( $valued['wpbp-reviews'] ?? null ) ) { return false; } $absent = $resolve( array( 'name' => 'hello-world' ) ); return ! array_key_exists( 'wpbp-reviews', $absent ) && 'hello-world' === ( $absent['name'] ?? null );",
+            "description": "The endpoint rule and query variable exist and only a present-but-empty value is promoted for the site",
             "weight": 1
           }
         ],
-        "teardown": "remove_all_filters( 'request' ); update_option( 'permalink_structure', (string) ( $GLOBALS['wpbp_rw_004_permalink'] ?? '' ) ); $GLOBALS['wp_rewrite']->init(); delete_option( 'rewrite_rules' );"
+        "teardown": "remove_all_filters( 'request' ); remove_all_actions( 'parse_request' ); update_option( 'permalink_structure', (string) ( $GLOBALS['wpbp_rw_004_permalink'] ?? '' ) ); $GLOBALS['wp_rewrite']->init(); delete_option( 'rewrite_rules' );"
       },
       "reference_solution": "add_rewrite_endpoint( 'wpbp-reviews', EP_PERMALINK );\nadd_filter(\n    'request',\n    static function ( array $query_vars ): array {\n        if ( array_key_exists( 'wpbp-reviews', $query_vars ) && '' === $query_vars['wpbp-reviews'] ) {\n            $query_vars['wpbp-reviews'] = 'all';\n        }\n        return $query_vars;\n    }\n);",
       "metadata": {
@@ -361,7 +362,7 @@
       "id": "e-rewrite-permalinks-006",
       "category": "rewrite-permalinks",
       "prompt": "This site uses /%postname%/ permalinks, so a single path segment is normally looked up as a post name. Provide a routine that makes the path wpbp-archive resolve instead to a listing, by setting the query variable wpbp_archive to 1, and that exposes that variable to WordPress. The rule must sit inside WordPress' generated rewrite rules: after the rules WordPress derives for more specific paths such as feeds, pagination and embeds, and before the generic rule that turns a lone path segment into a post name lookup. Do not flush the rewrite rules.",
-      "expected_behavior": "Reviewer contract: the rule is spliced into the generated rules array through the rules filter, immediately ahead of the first generated rule that would otherwise swallow the path, and the query variable is registered. Review focus: adding the rule at the top of the extra rules puts it ahead of every generated rule, which the ordering assertion rejects; adding it at the bottom leaves the generic post rule matching first. Runtime validation checks both the relative positions and which rule actually matches first for two paths.",
+      "expected_behavior": "Reviewer contract: the rule is spliced into WordPress' generated rules ahead of the generic rule that turns a lone segment into a post name lookup and behind the more specific generated rules, either through the whole-array rules filter or through the post rules filter. Review focus: adding the rule at the top of the extra rules puts it ahead of every generated rule, which the ordering assertion rejects; adding it at the bottom leaves the generic post rule matching first. The verbose page rule `(.?.+?)` also matches the path but WordPress skips it at parse time when no page has that slug, so the match assertion ignores verbose page rules. Runtime validation checks both the relative positions and which rule actually matches first for two paths.",
       "requirements": [
         "Register wpbp_archive as a public query variable",
         "Map the wpbp-archive path to that variable with the value 1",
@@ -370,7 +371,7 @@
       "static_checks": {
         "required_patterns": [
           {
-            "pattern": "rewrite_rules_array",
+            "pattern": "rewrite_rules_array|post_rewrite_rules",
             "description": "Filters the generated rewrite rules",
             "weight": 1
           },
@@ -408,7 +409,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "wpbp_rewrite_permalinks_006(); global $wp, $wp_rewrite; $query_vars = apply_filters( 'query_vars', $wp->public_query_vars ); if ( ! in_array( 'wpbp_archive', $query_vars, true ) ) { return false; } $rules = $wp_rewrite->wp_rewrite_rules(); $keys = array_keys( $rules ); $custom_index = null; $catch_index = null; $feed_index = null; foreach ( $keys as $index => $regex ) { $query = $rules[ $regex ]; if ( ! is_string( $query ) ) { continue; } if ( null === $custom_index && str_contains( $query, 'wpbp_archive=1' ) ) { $custom_index = $index; continue; } if ( null === $feed_index && str_contains( $query, 'feed=$matches' ) ) { $feed_index = $index; } if ( null === $catch_index && str_contains( $query, 'name=$matches[1]' ) && 1 === preg_match( '#^' . $regex . '#', 'wpbp-archive/' ) ) { $catch_index = $index; } } if ( null === $custom_index || null === $catch_index || null === $feed_index ) { return false; } if ( ! ( $feed_index < $custom_index && $custom_index < $catch_index ) ) { return false; } $first_archive = null; foreach ( $rules as $regex => $query ) { if ( 1 === preg_match( '#^' . $regex . '#', 'wpbp-archive/' ) ) { $first_archive = $query; break; } } if ( ! is_string( $first_archive ) || ! str_contains( $first_archive, 'wpbp_archive=1' ) ) { return false; } $first_feed = null; foreach ( $rules as $regex => $query ) { if ( 1 === preg_match( '#^' . $regex . '#', 'hello-world/feed/rss2/' ) ) { $first_feed = $query; break; } } return is_string( $first_feed ) && str_contains( $first_feed, 'feed=' );",
+            "code": "wpbp_rewrite_permalinks_006(); global $wp, $wp_rewrite; $query_vars = apply_filters( 'query_vars', $wp->public_query_vars ); if ( ! in_array( 'wpbp_archive', $query_vars, true ) ) { return false; } $rules = $wp_rewrite->wp_rewrite_rules(); $keys = array_keys( $rules ); $custom_index = null; $catch_index = null; $feed_index = null; foreach ( $keys as $index => $regex ) { $query = $rules[ $regex ]; if ( ! is_string( $query ) ) { continue; } if ( null === $custom_index && str_contains( $query, 'wpbp_archive=1' ) ) { $custom_index = $index; continue; } if ( null === $feed_index && str_contains( $query, 'feed=$matches' ) ) { $feed_index = $index; } if ( null === $catch_index && str_contains( $query, 'name=$matches[1]' ) && 1 === preg_match( '#^' . $regex . '#', 'wpbp-archive/' ) ) { $catch_index = $index; } } if ( null === $custom_index || null === $catch_index || null === $feed_index ) { return false; } if ( ! ( $feed_index < $custom_index && $custom_index < $catch_index ) ) { return false; } $first_archive = null; foreach ( $rules as $regex => $query ) { if ( ! is_string( $query ) ) { continue; } if ( str_contains( $query, 'pagename=$matches' ) ) { continue; } if ( 1 === preg_match( '#^' . $regex . '#', 'wpbp-archive/' ) ) { $first_archive = $query; break; } } if ( ! is_string( $first_archive ) || ! str_contains( $first_archive, 'wpbp_archive=1' ) ) { return false; } $first_feed = null; foreach ( $rules as $regex => $query ) { if ( 1 === preg_match( '#^' . $regex . '#', 'hello-world/feed/rss2/' ) ) { $first_feed = $query; break; } } return is_string( $first_feed ) && str_contains( $first_feed, 'feed=' );",
             "description": "The custom rule sits between the specific generated rules and the generic post rule, and wins for its own path only",
             "weight": 1
           }

@@ -128,7 +128,7 @@ The grader is a WP-CLI PHP process (`wp eval-file`) against a single-site WordPr
 - `wp_update_term()` merges the stored term over the caller's args: omitting `slug` keeps the old one; only an explicit empty `slug` re-derives and uniquifies it. Assertions measuring state the submission should restore (KSES filters) must not call `wp_set_current_user()` first. In teardown, `remove_all_filters()` on core hooks must come after any `wp_delete_post()` that relies on them.
 - `$a[ $k ] ?? 'missing'` never observes a stored `null`; use `array_key_exists()`.
 - `WP_REST_Server::get_route_options()` returns null until `get_routes()` has run; call `rest_get_server()->get_routes()` before inspecting a route's schema/options. `rest_convert_error_to_response()` takes the HTTP status from the *first-added* error code's data, not from later `add()` calls. `kses_allowed_protocols` only applies before `wp_loaded`, so in the grader a custom scheme must be passed as `wp_kses()`'s third argument. `wp_validate_redirect()` always allows the site's own host regardless of `allowed_redirect_hosts`.
-- The submitted snippet runs after `init` has fired, so `add_action( 'init', … )` in a snippet never runs; register post types in `setup` or through a gateway.
+- The submitted snippet runs after `init` has fired, so `add_action( 'init', … )` in a snippet never runs. The harness tells the model this in every prompt (`EXECUTION_CONTEXT_NOTE` in `core.py`), so tests may expect direct registration; still register fixtures such as post types in `setup` or through a gateway.
 - Debugging: `throw new Exception( wp_json_encode( $data ) )` inside a `custom_assertion` surfaces the payload in the assertion's `error` field of the results JSON.
 
 ## Setup, Teardown, And Isolation

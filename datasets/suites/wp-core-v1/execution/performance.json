@@ -145,7 +145,8 @@
       "requirements": [
         "Register the wpbp/notice block with a render callback producing the given markup",
         "Attach the stylesheet to the block rather than to the page",
-        "Use the handle wpbp-notice-style and the source /wp-content/wpbp/notice.css"
+        "Use the handle wpbp-notice-style and the source /wp-content/wpbp/notice.css",
+        "Do the registration when the routine is called: WordPress has already fired init by then, so deferring the work to that action would never run"
       ],
       "test_function": "wpbp_performance_003(): void",
       "static_checks": {
