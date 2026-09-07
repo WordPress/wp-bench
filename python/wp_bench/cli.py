@@ -28,19 +28,19 @@ def main() -> None:
     """WP-Bench command line interface."""
 
 
-def _normalize_test_ids(values: list[str] | None) -> list[str]:
-    """Normalize repeated and comma-separated --test-id values."""
+def _normalize_list_option(values: list[str] | None) -> list[str]:
+    """Normalize repeated and comma-separated list-option values."""
     if not values:
         return []
 
     normalized: list[str] = []
     seen: set[str] = set()
     for value in values:
-        for test_id in value.split(","):
-            test_id = test_id.strip()
-            if test_id and test_id not in seen:
-                normalized.append(test_id)
-                seen.add(test_id)
+        for item in value.split(","):
+            item = item.strip()
+            if item and item not in seen:
+                normalized.append(item)
+                seen.add(item)
     return normalized
 
 
@@ -62,7 +62,7 @@ def _print_dry_run_counts(
     tests: list[ExecutionTest],
     harness_config: HarnessConfig,
 ) -> None:
-    """Print selected test counts (and IDs when limited) for a dry run.
+    """Print selected test counts and IDs for limited or filtered dry runs.
 
     Selection goes through the same guarded chokepoint as every run mode,
     so zero selected tests (missing suite, execution-less dataset) fails
@@ -70,8 +70,13 @@ def _print_dry_run_counts(
     """
     selected = select_run_tests(tests, harness_config)
     console.print(f"Execution tests: {len(selected)}")
-    if harness_config.run.limit is not None and not harness_config.run.test_ids:
-        console.print(f"Selection seed: {harness_config.run.seed}")
+    categories_active = bool(harness_config.run.categories) and not harness_config.run.test_ids
+    if categories_active:
+        categories = ", ".join(harness_config.run.categories)
+        console.print(f"Categories: {categories}")
+    if (harness_config.run.limit is not None or categories_active) and not harness_config.run.test_ids:
+        if harness_config.run.limit is not None:
+            console.print(f"Selection seed: {harness_config.run.seed}")
         ids = ", ".join(test.id for test in selected)
         console.print(f"Selected test ids: {ids}")
 
@@ -108,6 +113,11 @@ def run(
         None,
         "--test-id",
         help="Run only the given dataset test ID. May be repeated or comma-separated.",
+    ),
+    category: list[str] | None = typer.Option(
+        None,
+        "--category",
+        help="Run only tests in the given category. May be repeated or comma-separated.",
     ),
     skill: list[Path] | None = typer.Option(
         None,
@@ -147,9 +157,12 @@ def run(
             harness_config.run.check_reference_solution = True
         if check_exploits:
             harness_config.run.check_exploits = True
-        normalized_test_ids = _normalize_test_ids(test_id)
+        normalized_test_ids = _normalize_list_option(test_id)
         if normalized_test_ids:
             harness_config.run.test_ids = normalized_test_ids
+        normalized_categories = _normalize_list_option(category)
+        if normalized_categories:
+            harness_config.run.categories = normalized_categories
         if skill:
             harness_config.skills.paths = list(skill)
         if skills_include_references is not None:
