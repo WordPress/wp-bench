@@ -19,6 +19,7 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 8. Make runtime checks test the behavior inside WordPress. Use built-in assertion types when they directly express the check, such as output containment or REST response checks. Use `custom_assertion` when the verifier needs PHP to inspect the result, such as checking a registered category, returned value, database state, capability result, dispatched hook, or computed WordPress output.
 9. Design every assertion so a zero-effort cheat fails: use two or more fixtures, or a before/after contrast, so no constant return (`true`, `false`, `1`, `0`, `null`, `''`, `array()`) or empty stub satisfies it. Where the generic cheat battery cannot express a plausible shortcut, author `exploit_solutions`.
 10. Verify `reference_solution` with `--check-reference-solution` and the assertions with `--check-exploits` for every new or modified execution test.
+11. When a model later fails a new test, follow "When A Model Fails A New Test" before treating it as a model mistake.
 
 ## Field Semantics
 
@@ -109,6 +110,28 @@ The grader is a WP-CLI PHP process (`wp eval-file`) against a single-site WordPr
 - KSES state follows `wp_set_current_user()`; reset to user 0 in teardown. Role and capability changes persist in the `wp_user_roles` option; remove them in teardown.
 - `assert_returns_value` compares with `===` against JSON-decoded values (scalars and arrays only); use `custom_assertion` for objects.
 
+### Traps found while authoring the 2026-09 batch
+
+- **Never re-fire `do_action( 'init' )` on 7.1.** Core re-registers icon collections, blocks, patterns, and bindings and each raises `_doing_it_wrong` ("already registered"), which aborts the run. Use a gateway function for registration tasks. `wp_enqueue_scripts` and `widgets_init` are safe to re-fire; `admin_init`, `admin_menu`, `wp_dashboard_setup` are notice-clean; `admin_enqueue_scripts` needs `remove_all_actions( 'admin_enqueue_scripts' )` or `set_current_screen()` first (core's `wp_auth_check_load()` reads `$screen->id` on null).
+- **Plugin-artifact tests must run the plugin's own hook callbacks.** The plugin loads after `init`; in `setup`, walk `$GLOBALS['wp_filter'][ $hook ]->callbacks`, reflect each callback, and invoke only those whose file path contains `wp-bench-candidate`, guarded by "not already registered". This degrades to a no-op for PHP-snippet exploit runs, which share the setup.
+- `$wp_rewrite->rewrite_rules()` produces `$1`-style queries and does not set `$wp_rewrite->matches`; `url_to_postid()` and assertions grepping `$matches[1]` need `$wp_rewrite->wp_rewrite_rules()` (which writes the `rewrite_rules` option — delete it in teardown). `WP_Rewrite::init()` clears registered endpoints, so call it in setup *before* the submitted code. `add_filter( 'query_vars', … )` does not update `$wp->public_query_vars`; assert with `apply_filters( 'query_vars', $wp->public_query_vars )`.
+- Block themes get blanket `post-thumbnails` support from `_add_default_theme_supports()`, so `add_theme_support( 'post-thumbnails', array( … ) )` is a no-op; `html5` and `custom-logo` do merge.
+- 7.1 renders `core/paragraph` with `class="wp-block-paragraph"`; regexes over rendered core markup must allow attributes. `generated-classname` yields `wp-block-<namespace>-<name>`. Colour classes come out `has-background has-<slug>-background-color` in that order. Block style variation CSS is only visible through `WP_Theme_JSON_Resolver::get_merged_data()->get_stylesheet( array( 'styles' ), null, array( 'include_block_style_variations' => true ) )`.
+- `core/query`'s `namespace` is a block attribute, not context; a `query_loop_block_query_vars` test must build the `WP_Block` with `context['query']['namespace']` itself. `WP_Block_Templates_Registry::register()` raises `_doing_it_wrong` on duplicates — guard with `is_registered()`.
+- Non-idempotent gateways (prepend/wrap tasks) double up when every assertion calls them; call such a gateway once and say so in `requirements`.
+- `wp_interactivity_state()` merges with `array_replace_recursive` (lists merge index-wise) — give repeated fixtures their own namespace. `data-wp-text` double-escapes character references; keep `&`/`<` out of those fixtures.
+- WP-CLI registers its own `wp_mail_from` filter, so `has_filter( 'wp_mail_from' )` is truthy in a clean run; compare against a baseline captured in setup. The default `wordpress@localhost` sender fails PHPMailer validation and `wp_mail()` returns `false` before `phpmailer_init`; supply a valid From. In a `phpmailer_init` capture, record what you need, then `clearAttachments()` + `clearAllRecipients()` so no transport is attempted.
+- Transients cannot express "cached `false`" without a persistent object cache (`set_transient( $k, false )` stores `''`); use a three-state value (`true`/`false`/`null`) or `wp_cache_get()`'s `$found` parameter.
+- `update_metadata()` unslashes values, so a missing `wp_unslash()` is unobservable through post meta; test unslashing through `update_option()`. `wp_update_post()` creates a revision whose insert fires `save_post` — a real discriminator for `wp_is_post_revision()` guards, and a setup-registered recursion counter must skip `revision` posts.
+- `add_menu_page()` never capability-checks (only `add_submenu_page()` bails and fills `$_wp_submenu_nopriv`); only `toplevel_page_*` hook suffixes are reproducible in CLI. `add_meta_box()`/`wp_add_dashboard_widget()` silently register nothing without `set_current_screen()`.
+- `wp_allow_comment()` flood control matches on IP *or* email; consecutive comment fixtures need distinct `comment_author_email` and `comment_author_IP`. `wp_update_user()` writes auth cookies when the updated user is the current user — keep the current user at 0.
+- `media_handle_sideload()` calls `getimagesize()` unsilenced under `WP_DEBUG`; sideload fixtures must be real image bytes (a base64 1×1 PNG works).
+- `wp_update_term()` merges the stored term over the caller's args: omitting `slug` keeps the old one; only an explicit empty `slug` re-derives and uniquifies it. Assertions measuring state the submission should restore (KSES filters) must not call `wp_set_current_user()` first. In teardown, `remove_all_filters()` on core hooks must come after any `wp_delete_post()` that relies on them.
+- `$a[ $k ] ?? 'missing'` never observes a stored `null`; use `array_key_exists()`.
+- `WP_REST_Server::get_route_options()` returns null until `get_routes()` has run; call `rest_get_server()->get_routes()` before inspecting a route's schema/options. `rest_convert_error_to_response()` takes the HTTP status from the *first-added* error code's data, not from later `add()` calls. `kses_allowed_protocols` only applies before `wp_loaded`, so in the grader a custom scheme must be passed as `wp_kses()`'s third argument. `wp_validate_redirect()` always allows the site's own host regardless of `allowed_redirect_hosts`.
+- The submitted snippet runs after `init` has fired, so `add_action( 'init', … )` in a snippet never runs. The harness tells the model this in every prompt (`EXECUTION_CONTEXT_NOTE` in `core.py`), so tests may expect direct registration; still register fixtures such as post types in `setup` or through a gateway.
+- Debugging: `throw new Exception( wp_json_encode( $data ) )` inside a `custom_assertion` surfaces the payload in the assertion's `error` field of the results JSON.
+
 ## Setup, Teardown, And Isolation
 
 Use `runtime_checks.setup` to create fixtures the submitted code or assertions need. Use `runtime_checks.teardown` to remove persistent fixtures and restore global state. Keep assertions focused on measuring behavior.
@@ -162,7 +185,19 @@ git diff --check
 
 Under `reset_per_test` (the default) the exploit audit resets WordPress before every cheat candidate, so it costs several times a reference-solution pass; scope it with `--test-id` while iterating. Under `execution_isolation: none` no reset happens and state left behind by one candidate can make the next one fail for the wrong reason, so run the final `--check-exploits` before merging on `reset_per_test`.
 
-When a model fails a test, treat the failure as a suspected test bug first: compare the model's output against the WordPress source cited in `source_refs`, re-run the reference solution, and rule out over-tight assertions, 7.2-only APIs, hidden fixture knowledge, and environment artifacts before counting it as a model mistake.
+
+## When A Model Fails A New Test
+
+A model failure on a new or recently changed test is a **suspected test defect until proven otherwise**. Missing a mistake in a test is worse than missing a mistake in a model: a faulty test lowers every model's score for reasons that have nothing to do with WordPress, and it stays in the dataset. Do this before a failure counts:
+
+1. Read the model's code and the grader's per-assertion result (`grader.raw.assertions` in the results JSON; the `error` field carries thrown exceptions and `_doing_it_wrong` messages).
+2. Trace the failing assertion against the WordPress source the test cites in `metadata.source_refs`, on the `7.1` branch. Confirm the behavior the assertion demands is really what WordPress does, not what the author assumed.
+3. Ask whether the prompt and `requirements` fairly imply what the assertion checks. If the prompt can reasonably be read the model's way and that reading is also correct WordPress, the test is at fault: tighten the prompt or requirements, not the assertion.
+4. Rule out the known non-WordPress failure causes: an assertion that re-invokes a non-idempotent gateway, a fixture shape the prompt never stated (array keys, nonce field names, return keys, list entry types), a fixture the model could not know about, a `_doing_it_wrong` or notice raised by the sandbox on a legitimate code path, a `7.2`-only API assumption, a state the runtime never produces (`wp-login.php` argument combinations, `$post` being null in WP-CLI), or two equally correct WordPress mechanisms where the assertion accepts only one (`request` vs `parse_request`, `rewrite_rules_array` vs `post_rewrite_rules`, single vs double quotes around `esc_js()` output).
+5. Record a verdict per failed test: `model_wrong` (name the specific mistake), `test_fixed` (say what changed, keep the discriminating intent, and re-run `--check-reference-solution` and `--check-exploits` for that test), or `test_cut` (the test cannot be made fair).
+6. If several failures share a cause that lives in the harness rather than in WordPress (a load-order assumption, an installer quirk), fix it once in the harness and note it here rather than patching every test.
+
+Do not weaken an assertion to whatever the model produced. The goal is a test that a correct WordPress implementation passes and a plausible shortcut fails; a model failure is evidence to weigh, not a bug report to close.
 
 ## Determinism
 

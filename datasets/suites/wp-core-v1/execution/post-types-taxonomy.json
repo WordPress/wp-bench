@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-post_types_taxonomy",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Post Types and Taxonomy",
     "description": "Code generation tasks for WordPress Post Types and Taxonomy APIs",
@@ -358,6 +358,316 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-post-types-taxonomy-009",
+      "category": "post-types-taxonomy",
+      "prompt": "Term IDs arrive from a submitted form, so they are strings. Replace a post's terms in the existing non-hierarchical 'wpbp_ptt_topic' taxonomy with exactly the supplied terms and return the term IDs the post carries afterwards. The taxonomy must not gain any new terms.",
+      "expected_behavior": "`wp_set_object_terms()` resolves a string entry through `term_exists()` as a slug or name, not as an ID, and creates a new term when it does not match, so numeric strings must be cast to integers first (`wp_set_post_terms()` only casts them for hierarchical taxonomies). Runtime validation assigns two posts from string IDs and checks the assignments and an unchanged term count.",
+      "requirements": [
+        "Assign exactly the supplied terms to the post, replacing any existing ones",
+        "Do not create new terms",
+        "Return the term IDs on the post as integers"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_009( int $post_id, array $submitted_term_ids ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_set_object_terms|wp_set_post_terms",
+            "description": "Assigns the terms",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_ptt_topic",
+            "description": "Targets the topic taxonomy",
+            "weight": 1
+          },
+          {
+            "pattern": "intval|\\(int\\)|absint",
+            "description": "Casts the submitted IDs to integers",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_taxonomy( 'wpbp_ptt_topic', 'post', array( 'hierarchical' => false, 'public' => false, 'show_ui' => false ) ); $GLOBALS['wpbp_ptt_009_terms'] = array(); foreach ( array( 'one', 'two', 'three' ) as $name ) { $term = wp_insert_term( 'WPBP topic ' . $name, 'wpbp_ptt_topic' ); if ( ! is_wp_error( $term ) ) { $GLOBALS['wpbp_ptt_009_terms'][ $name ] = (int) $term['term_id']; } } $GLOBALS['wpbp_ptt_009_posts'] = array( (int) wp_insert_post( array( 'post_title' => 'WPBP PTT9 A', 'post_status' => 'publish' ) ), (int) wp_insert_post( array( 'post_title' => 'WPBP PTT9 B', 'post_status' => 'publish' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$terms = $GLOBALS['wpbp_ptt_009_terms']; $posts = $GLOBALS['wpbp_ptt_009_posts']; if ( 3 !== count( $terms ) ) { return false; } $before = (int) wp_count_terms( array( 'taxonomy' => 'wpbp_ptt_topic', 'hide_empty' => false ) ); $first = wpbp_post_types_taxonomy_009( $posts[0], array( (string) $terms['one'], (string) $terms['two'] ) ); $second = wpbp_post_types_taxonomy_009( $posts[1], array( (string) $terms['three'] ) ); sort( $first ); sort( $second ); $expected_first = array( $terms['one'], $terms['two'] ); sort( $expected_first ); if ( $first !== $expected_first || $second !== array( $terms['three'] ) ) { return false; } $stored = array_map( 'intval', wp_get_object_terms( $posts[0], 'wpbp_ptt_topic', array( 'fields' => 'ids' ) ) ); sort( $stored ); $after = (int) wp_count_terms( array( 'taxonomy' => 'wpbp_ptt_topic', 'hide_empty' => false ) ); return $stored === $expected_first && $after === $before;",
+            "description": "String IDs resolve to the existing terms without creating any",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_ptt_009_posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } foreach ( (array) get_terms( array( 'taxonomy' => 'wpbp_ptt_topic', 'hide_empty' => false, 'fields' => 'ids' ) ) as $term_id ) { wp_delete_term( (int) $term_id, 'wpbp_ptt_topic' ); } unset( $GLOBALS['wpbp_ptt_009_posts'], $GLOBALS['wpbp_ptt_009_terms'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_009( int $post_id, array $submitted_term_ids ): array {\n    $term_ids = array_map( 'intval', $submitted_term_ids );\n    wp_set_object_terms( $post_id, $term_ids, 'wpbp_ptt_topic' );\n    return array_map( 'intval', wp_get_object_terms( $post_id, 'wpbp_ptt_topic', array( 'fields' => 'ids' ) ) );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_post_types_taxonomy_009( int $post_id, array $submitted_term_ids ): array { wp_set_object_terms( $post_id, $submitted_term_ids, 'wpbp_ptt_topic' ); return array_map( 'intval', wp_get_object_terms( $post_id, 'wpbp_ptt_topic', array( 'fields' => 'ids' ) ) ); }",
+        "function wpbp_post_types_taxonomy_009( int $post_id, array $submitted_term_ids ): array { wp_set_post_terms( $post_id, $submitted_term_ids, 'wpbp_ptt_topic' ); return array_map( 'intval', $submitted_term_ids ); }"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-010",
+      "category": "post-types-taxonomy",
+      "prompt": "Rename a category and make its slug follow the new name. When the slug derived from the new name is already taken by another category, WordPress must settle on a unique variant of it rather than failing. Return the slug the category ends up with.",
+      "expected_behavior": "`wp_update_term()` merges the stored term over the supplied arguments, so an update that only passes `name` keeps the old slug, while passing an explicitly derived slug that collides returns `WP_Error( 'duplicate_term_slug' )`. Passing an empty `slug` makes WordPress derive it from the name and uniquify it. Runtime validation renames one category and then renames a second one onto an existing slug.",
+      "requirements": [
+        "Rename the category to the supplied name",
+        "The stored slug must follow the new name",
+        "A slug collision must resolve to a unique slug instead of an error",
+        "Return the category's resulting slug"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_010( int $term_id, string $new_name ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_update_term",
+            "description": "Updates the term",
+            "weight": 1
+          },
+          {
+            "pattern": "slug",
+            "description": "Controls the term slug",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_010_terms'] = array(); foreach ( array( 'alpha' => 'WPBP Alpha', 'bravo' => 'WPBP Bravo', 'charlie' => 'WPBP Charlie' ) as $key => $name ) { $term = wp_insert_term( $name, 'category' ); if ( ! is_wp_error( $term ) ) { $GLOBALS['wpbp_ptt_010_terms'][ $key ] = (int) $term['term_id']; } }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_ptt_010_terms']; if ( 3 !== count( $ids ) ) { return false; } if ( 'wpbp-alpha' !== get_term( $ids['alpha'], 'category' )->slug ) { return false; } $renamed = wpbp_post_types_taxonomy_010( $ids['alpha'], 'WPBP Delta' ); $alpha = get_term( $ids['alpha'], 'category' ); if ( 'wpbp-delta' !== $renamed || 'wpbp-delta' !== $alpha->slug || 'WPBP Delta' !== $alpha->name ) { return false; } $collided = wpbp_post_types_taxonomy_010( $ids['charlie'], 'WPBP Bravo' ); $charlie = get_term( $ids['charlie'], 'category' ); if ( 'wpbp-bravo-2' !== $collided || 'wpbp-bravo-2' !== $charlie->slug || 'WPBP Bravo' !== $charlie->name ) { return false; } return 'wpbp-bravo' === get_term( $ids['bravo'], 'category' )->slug;",
+            "description": "The slug follows the new name and collisions resolve to a unique slug",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_ptt_010_terms'] ?? array() ) as $term_id ) { wp_delete_term( (int) $term_id, 'category' ); } unset( $GLOBALS['wpbp_ptt_010_terms'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_010( int $term_id, string $new_name ): string {\n    $updated = wp_update_term(\n        $term_id,\n        'category',\n        array(\n            'name' => $new_name,\n            'slug' => '',\n        )\n    );\n    if ( is_wp_error( $updated ) ) {\n        return '';\n    }\n    $term = get_term( (int) $updated['term_id'], 'category' );\n    return $term instanceof WP_Term ? (string) $term->slug : '';\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_post_types_taxonomy_010( int $term_id, string $new_name ): string { $updated = wp_update_term( $term_id, 'category', array( 'name' => $new_name ) ); if ( is_wp_error( $updated ) ) { return ''; } return (string) get_term( (int) $updated['term_id'], 'category' )->slug; }",
+        "function wpbp_post_types_taxonomy_010( int $term_id, string $new_name ): string { $slug = sanitize_title( $new_name ); $updated = wp_update_term( $term_id, 'category', array( 'name' => $new_name, 'slug' => $slug ) ); if ( is_wp_error( $updated ) ) { return ''; } return (string) get_term( (int) $updated['term_id'], 'category' )->slug; }"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-011",
+      "category": "post-types-taxonomy",
+      "prompt": "Make sure a category with the supplied name exists directly under the supplied parent category and return its ID. Running the routine again with the same name and parent must return the same category rather than creating another one, while the same name under a different parent is a different category of its own.",
+      "expected_behavior": "A name lookup has to be confined to the parent (`term_exists( $name, 'category', $parent )`), and `wp_insert_term()` reports an existing sibling as `WP_Error( 'term_exists' )` whose error data holds the existing term ID. Runtime validation calls the routine twice for one parent and once for a second parent and checks that exactly two categories were created.",
+      "requirements": [
+        "Return the ID of the category with that name under that parent",
+        "Create the category only when it does not already exist under that parent",
+        "The same name under a different parent must be a separate category"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_011( string $name, int $parent_id ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "term_exists|get_terms|get_term_by",
+            "description": "Looks the term up before creating it",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_insert_term",
+            "description": "Creates the term when missing",
+            "weight": 1
+          },
+          {
+            "pattern": "parent",
+            "description": "Scopes the lookup and creation to the parent",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_011_parents'] = array(); foreach ( array( 'one', 'two' ) as $key ) { $term = wp_insert_term( 'WPBP Parent ' . $key, 'category' ); if ( ! is_wp_error( $term ) ) { $GLOBALS['wpbp_ptt_011_parents'][ $key ] = (int) $term['term_id']; } }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$parents = $GLOBALS['wpbp_ptt_011_parents']; if ( 2 !== count( $parents ) ) { return false; } $before = (int) wp_count_terms( array( 'taxonomy' => 'category', 'hide_empty' => false ) ); $first = wpbp_post_types_taxonomy_011( 'WPBP Handbook', $parents['one'] ); $again = wpbp_post_types_taxonomy_011( 'WPBP Handbook', $parents['one'] ); $other = wpbp_post_types_taxonomy_011( 'WPBP Handbook', $parents['two'] ); if ( $first < 1 || $first !== $again || $other < 1 || $other === $first ) { return false; } $after = (int) wp_count_terms( array( 'taxonomy' => 'category', 'hide_empty' => false ) ); if ( $after !== $before + 2 ) { return false; } $term_one = get_term( $first, 'category' ); $term_two = get_term( $other, 'category' ); if ( ! $term_one instanceof WP_Term || ! $term_two instanceof WP_Term ) { return false; } return $parents['one'] === (int) $term_one->parent && $parents['two'] === (int) $term_two->parent && 'WPBP Handbook' === $term_one->name && 'WPBP Handbook' === $term_two->name;",
+            "description": "The routine is idempotent per parent and distinguishes parents",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) get_terms( array( 'taxonomy' => 'category', 'hide_empty' => false, 'name' => 'WPBP Handbook', 'fields' => 'ids' ) ) as $term_id ) { wp_delete_term( (int) $term_id, 'category' ); } foreach ( ( $GLOBALS['wpbp_ptt_011_parents'] ?? array() ) as $term_id ) { wp_delete_term( (int) $term_id, 'category' ); } unset( $GLOBALS['wpbp_ptt_011_parents'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_011( string $name, int $parent_id ): int {\n    $existing = term_exists( $name, 'category', $parent_id );\n    if ( is_array( $existing ) ) {\n        return (int) $existing['term_id'];\n    }\n    $created = wp_insert_term( $name, 'category', array( 'parent' => $parent_id ) );\n    if ( is_wp_error( $created ) ) {\n        $data = $created->get_error_data();\n        return is_numeric( $data ) ? (int) $data : 0;\n    }\n    return (int) $created['term_id'];\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_post_types_taxonomy_011( string $name, int $parent_id ): int { $existing = term_exists( $name, 'category' ); if ( is_array( $existing ) ) { return (int) $existing['term_id']; } $created = wp_insert_term( $name, 'category', array( 'parent' => $parent_id ) ); return is_wp_error( $created ) ? 0 : (int) $created['term_id']; }",
+        "function wpbp_post_types_taxonomy_011( string $name, int $parent_id ): int { $created = wp_insert_term( $name, 'category', array( 'parent' => $parent_id ) ); return is_wp_error( $created ) ? 0 : (int) $created['term_id']; }"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-012",
+      "category": "post-types-taxonomy",
+      "prompt": "Retire a category: delete it and make sure every post that was in it ends up in the supplied fallback category, including posts that also belong to other categories, which keep those other categories. Return whether WordPress reported the deletion succeeded — the site's default category cannot be deleted and must report failure.",
+      "expected_behavior": "`wp_delete_term()` only moves a post to the `default` term when that post has no other term in the taxonomy; posts with additional categories simply lose the deleted one unless `force_default` is set. Deleting the site's default category returns 0. Runtime validation deletes a category holding a single-category post and a two-category post, then attempts to delete the default category.",
+      "requirements": [
+        "Delete the supplied category",
+        "Every post that was in it must end up in the fallback category",
+        "Posts keep the other categories they already had",
+        "Return whether the deletion succeeded"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_012( int $term_id, int $fallback_term_id ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_delete_term",
+            "description": "Deletes the term through the taxonomy API",
+            "weight": 1
+          },
+          {
+            "pattern": "default",
+            "description": "Supplies the fallback term",
+            "weight": 1
+          },
+          {
+            "pattern": "force_default",
+            "description": "Forces the fallback onto multi-term posts",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_012'] = array(); foreach ( array( 'retire', 'other', 'fallback' ) as $key ) { $term = wp_insert_term( 'WPBP Cat ' . $key, 'category' ); if ( ! is_wp_error( $term ) ) { $GLOBALS['wpbp_ptt_012'][ $key ] = (int) $term['term_id']; } } $single = (int) wp_insert_post( array( 'post_title' => 'WPBP PTT12 single', 'post_status' => 'publish' ) ); $multi = (int) wp_insert_post( array( 'post_title' => 'WPBP PTT12 multi', 'post_status' => 'publish' ) ); wp_set_post_terms( $single, array( $GLOBALS['wpbp_ptt_012']['retire'] ), 'category' ); wp_set_post_terms( $multi, array( $GLOBALS['wpbp_ptt_012']['retire'], $GLOBALS['wpbp_ptt_012']['other'] ), 'category' ); $GLOBALS['wpbp_ptt_012']['single_post'] = $single; $GLOBALS['wpbp_ptt_012']['multi_post'] = $multi;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_ptt_012']; if ( true !== wpbp_post_types_taxonomy_012( $fixture['retire'], $fixture['fallback'] ) ) { return false; } if ( null !== get_term( $fixture['retire'], 'category' ) ) { return false; } $single = array_map( 'intval', wp_get_object_terms( $fixture['single_post'], 'category', array( 'fields' => 'ids' ) ) ); $multi = array_map( 'intval', wp_get_object_terms( $fixture['multi_post'], 'category', array( 'fields' => 'ids' ) ) ); sort( $single ); sort( $multi ); $expected_multi = array( $fixture['other'], $fixture['fallback'] ); sort( $expected_multi ); if ( array( $fixture['fallback'] ) !== $single || $expected_multi !== $multi ) { return false; } return false === wpbp_post_types_taxonomy_012( (int) get_option( 'default_category' ), $fixture['fallback'] );",
+            "description": "Both posts land in the fallback and the default category is refused",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_ptt_012'] ?? array(); foreach ( array( 'single_post', 'multi_post' ) as $key ) { if ( ! empty( $fixture[ $key ] ) ) { wp_delete_post( (int) $fixture[ $key ], true ); } } foreach ( array( 'retire', 'other', 'fallback' ) as $key ) { if ( ! empty( $fixture[ $key ] ) ) { wp_delete_term( (int) $fixture[ $key ], 'category' ); } } unset( $GLOBALS['wpbp_ptt_012'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_012( int $term_id, int $fallback_term_id ): bool {\n    $deleted = wp_delete_term(\n        $term_id,\n        'category',\n        array(\n            'default'       => $fallback_term_id,\n            'force_default' => true,\n        )\n    );\n    return true === $deleted;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_post_types_taxonomy_012( int $term_id, int $fallback_term_id ): bool { return true === wp_delete_term( $term_id, 'category', array( 'default' => $fallback_term_id ) ); }",
+        "function wpbp_post_types_taxonomy_012( int $term_id, int $fallback_term_id ): bool { return true === wp_delete_term( $term_id, 'category' ); }"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-013",
+      "category": "post-types-taxonomy",
+      "prompt": "Build the breadcrumb trail for a category: return the IDs of its ancestor categories ordered from the top-level ancestor down to its immediate parent, and an empty array for a top-level category.",
+      "expected_behavior": "`get_ancestors()` returns the ancestors nearest-first (immediate parent first), so a breadcrumb has to reverse them. Runtime validation walks a four-level category chain and checks the trail for the deepest term, a middle term and the root.",
+      "requirements": [
+        "Return ancestor term IDs from the top-level ancestor down to the immediate parent",
+        "Return an empty array for a top-level category",
+        "Return plain integers"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_013( int $term_id ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_ancestors|get_term",
+            "description": "Reads the term ancestry",
+            "weight": 1
+          },
+          {
+            "pattern": "array_reverse|krsort|usort",
+            "description": "Orders the trail from the top down",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_013'] = array(); $parent = 0; foreach ( array( 'root', 'section', 'topic', 'leaf' ) as $key ) { $term = wp_insert_term( 'WPBP Trail ' . $key, 'category', array( 'parent' => $parent ) ); if ( is_wp_error( $term ) ) { continue; } $parent = (int) $term['term_id']; $GLOBALS['wpbp_ptt_013'][ $key ] = $parent; }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_ptt_013']; if ( 4 !== count( $ids ) ) { return false; } $leaf = wpbp_post_types_taxonomy_013( $ids['leaf'] ); $topic = wpbp_post_types_taxonomy_013( $ids['topic'] ); $root = wpbp_post_types_taxonomy_013( $ids['root'] ); return array( $ids['root'], $ids['section'], $ids['topic'] ) === $leaf && array( $ids['root'], $ids['section'] ) === $topic && array() === $root;",
+            "description": "Trails are ordered from the top-level ancestor downwards",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array_reverse( $GLOBALS['wpbp_ptt_013'] ?? array() ) as $term_id ) { wp_delete_term( (int) $term_id, 'category' ); } unset( $GLOBALS['wpbp_ptt_013'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_013( int $term_id ): array {\n    $ancestors = get_ancestors( $term_id, 'category', 'taxonomy' );\n    return array_values( array_map( 'intval', array_reverse( $ancestors ) ) );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_post_types_taxonomy_013( int $term_id ): array { return array_values( array_map( 'intval', get_ancestors( $term_id, 'category', 'taxonomy' ) ) ); }"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-014",
+      "category": "post-types-taxonomy",
+      "prompt": "Report how many published posts a category currently holds, using the count WordPress maintains for the term. Drafts and trashed posts must not be counted, and the number must be current immediately after a post's status changes.",
+      "expected_behavior": "Term counts are recalculated on status transitions and only count posts with the 'publish' status, but `get_term()` serves a cached object, so the count has to be read fresh (for example via `get_term()` after WordPress cleaned the cache, or `wp_update_term_count_now()`). Runtime validation reads two categories, publishes a draft, and trashes a post, checking the count each time.",
+      "requirements": [
+        "Return the number of published posts in the category",
+        "Do not count drafts or trashed posts",
+        "The number must reflect the current state of the site"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_014( int $term_id ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_term|wp_count_terms|WP_Query|get_posts",
+            "description": "Reads the term or its posts",
+            "weight": 1
+          },
+          {
+            "pattern": "count",
+            "description": "Reports the published post count",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_014'] = array(); foreach ( array( 'main', 'side' ) as $key ) { $term = wp_insert_term( 'WPBP Count ' . $key, 'category' ); $GLOBALS['wpbp_ptt_014'][ $key ] = is_wp_error( $term ) ? 0 : (int) $term['term_id']; } $GLOBALS['wpbp_ptt_014']['posts'] = array(); $make = static function ( $title, $status, $term_id ) { $post_id = (int) wp_insert_post( array( 'post_title' => $title, 'post_status' => $status ) ); wp_set_post_terms( $post_id, array( $term_id ), 'category' ); $GLOBALS['wpbp_ptt_014']['posts'][] = $post_id; return $post_id; }; $GLOBALS['wpbp_ptt_014']['live'] = $make( 'WPBP PTT14 live', 'publish', $GLOBALS['wpbp_ptt_014']['main'] ); $GLOBALS['wpbp_ptt_014']['draft'] = $make( 'WPBP PTT14 draft', 'draft', $GLOBALS['wpbp_ptt_014']['main'] ); $make( 'WPBP PTT14 side one', 'publish', $GLOBALS['wpbp_ptt_014']['side'] ); $make( 'WPBP PTT14 side two', 'publish', $GLOBALS['wpbp_ptt_014']['side'] );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_ptt_014']; if ( 1 !== wpbp_post_types_taxonomy_014( $fixture['main'] ) ) { return false; } if ( 2 !== wpbp_post_types_taxonomy_014( $fixture['side'] ) ) { return false; } wp_update_post( array( 'ID' => $fixture['draft'], 'post_status' => 'publish' ) ); if ( 2 !== wpbp_post_types_taxonomy_014( $fixture['main'] ) ) { return false; } wp_trash_post( $fixture['live'] ); return 1 === wpbp_post_types_taxonomy_014( $fixture['main'] );",
+            "description": "The count tracks published posts only, before and after status changes",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_ptt_014'] ?? array(); foreach ( ( $fixture['posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } foreach ( array( 'main', 'side' ) as $key ) { if ( ! empty( $fixture[ $key ] ) ) { wp_delete_term( (int) $fixture[ $key ], 'category' ); } } unset( $GLOBALS['wpbp_ptt_014'] );"
+      },
+      "reference_solution": "function wpbp_post_types_taxonomy_014( int $term_id ): int {\n    $term = get_term( $term_id, 'category' );\n    return $term instanceof WP_Term ? (int) $term->count : 0;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_post_types_taxonomy_014( int $term_id ): int { $posts = get_posts( array( 'category' => $term_id, 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids' ) ); return count( $posts ); }"
+      ]
     }
   ]
 }

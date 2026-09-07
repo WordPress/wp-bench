@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-database",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Database",
     "description": "Code generation tasks for WordPress Database APIs",
@@ -335,6 +335,125 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-database-007",
+      "category": "database",
+      "prompt": "Implement a function that counts the rows of a WordPress-prefixed custom table whose `item_key` column starts with a supplied search string. The table is identified by the suffix that follows the site's table prefix, and the search string is user input: characters that mean something to SQL pattern matching, such as _ and %, must match literally.",
+      "expected_behavior": "The table name is dynamic, so it belongs in the query through the `%i` identifier placeholder rather than raw interpolation, and the search string must go through `$wpdb->esc_like()` before the trailing `%` is appended, or `alpha_` also matches `alphaXone` and `100%` matches everything starting with `100`. Runtime validation queries two different fixture tables with the same search string and checks the underscore and percent fixtures.",
+      "requirements": [
+        "Build the table name from the site's table prefix and the supplied suffix",
+        "Match `item_key` values that begin with the search string, treating _ and % in the search string as literal characters",
+        "Return the number of matching rows as an integer"
+      ],
+      "test_function": "wpbp_database_007( string $table_suffix, string $search ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "esc_like",
+            "description": "Escapes LIKE wildcards in the search string",
+            "weight": 1
+          },
+          {
+            "pattern": "%i",
+            "description": "Passes the table name as an identifier placeholder",
+            "weight": 1
+          },
+          {
+            "pattern": "->prepare",
+            "description": "Builds the query with prepare()",
+            "weight": 1
+          },
+          {
+            "pattern": "->prefix",
+            "description": "Builds the table name from the site prefix",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $charset_collate = $wpdb->get_charset_collate(); $fixtures = array( 'wpbp_database_007_a' => array( 'alpha_one', 'alphaXone', 'alpha_two', 'beta_one', '100% sure', '100X sure' ), 'wpbp_database_007_b' => array( 'alpha_one', 'beta_two' ) ); foreach ( $fixtures as $suffix => $keys ) { $table = $wpdb->prefix . $suffix; $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, item_key varchar(64) NOT NULL, PRIMARY KEY  (id), KEY item_key (item_key) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } foreach ( $keys as $key ) { $wpdb->insert( $table, array( 'item_key' => $key ), array( '%s' ) ); } }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_007' ) ) { return false; } if ( 2 !== wpbp_database_007( 'wpbp_database_007_a', 'alpha_' ) ) { return false; } if ( 1 !== wpbp_database_007( 'wpbp_database_007_a', '100%' ) ) { return false; } if ( 3 !== wpbp_database_007( 'wpbp_database_007_a', 'alpha' ) ) { return false; } if ( 1 !== wpbp_database_007( 'wpbp_database_007_b', 'alpha_' ) ) { return false; } if ( 2 !== wpbp_database_007( 'wpbp_database_007_b', '' ) ) { return false; } return 0 === wpbp_database_007( 'wpbp_database_007_a', 'gamma' );",
+            "description": "Underscore and percent characters in the search string match literally, and each table is counted separately",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; foreach ( array( 'wpbp_database_007_a', 'wpbp_database_007_b' ) as $suffix ) { $table = $wpdb->prefix . $suffix; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" ); }"
+      },
+      "reference_solution": "function wpbp_database_007( string $table_suffix, string $search ): int { global $wpdb; $table = $wpdb->prefix . $table_suffix; $like = $wpdb->esc_like( $search ) . '%'; return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE item_key LIKE %s', $table, $like ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_database_007( string $table_suffix, string $search ): int { global $wpdb; $table = $wpdb->prefix . $table_suffix; return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE item_key LIKE %s', $table, $search . '%' ) ); }",
+        "function wpbp_database_007( string $table_suffix, string $search ): int { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_007_a'; $like = $wpdb->esc_like( $search ) . '%'; return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE item_key LIKE %s', $table, $like ) ); }"
+      ]
+    },
+    {
+      "id": "e-database-008",
+      "category": "database",
+      "prompt": "Implement a function that records a measurement in a WordPress-prefixed custom table and returns the new row's auto-increment ID. The measurement has a label, a floating point score, and an optional note: when no note is supplied the row's `note` column must end up as SQL NULL, not as the column's default text and not as an empty string.",
+      "expected_behavior": "`$wpdb->insert()` writes a NULL literal for a value that is PHP null (regardless of the declared format), so the null note has to be passed through rather than cast to a string or omitted from the data array — omitting it would leave the column's `unset` default. The score must be written with the float format so it round-trips, and the return value is `$wpdb->insert_id`, not the affected-row count. Runtime validation seeds a row so the first new ID is greater than 1, then inserts one row with a null note and one with a note.",
+      "requirements": [
+        "Target the WordPress-prefixed `wpbp_database_008` custom table and write the `label`, `score` and `note` columns",
+        "Store a missing note as SQL NULL, not as the column default or an empty string",
+        "Store the score as a floating point value",
+        "Return the new row's auto-increment ID"
+      ],
+      "test_function": "wpbp_database_008( string $label, float $score, ?string $note ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "->insert",
+            "description": "Uses $wpdb->insert",
+            "weight": 1
+          },
+          {
+            "pattern": "insert_id",
+            "description": "Returns the auto-increment ID",
+            "weight": 1
+          },
+          {
+            "pattern": "%f",
+            "description": "Writes the score with the float format",
+            "weight": 1
+          },
+          {
+            "pattern": "note",
+            "description": "Writes the note column",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_008'; $charset_collate = $wpdb->get_charset_collate(); $created = $wpdb->query( \"CREATE TABLE {$table} ( id bigint(20) unsigned NOT NULL AUTO_INCREMENT, label varchar(64) NOT NULL, score double NOT NULL DEFAULT 0, note varchar(64) DEFAULT 'unset', PRIMARY KEY  (id) ) {$charset_collate}\" ); if ( false === $created ) { throw new \\RuntimeException( 'Could not create fixture table: ' . $wpdb->last_error ); } $wpdb->insert( $table, array( 'label' => 'seed', 'score' => 1.0, 'note' => 'seeded' ), array( '%s', '%f', '%s' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_database_008' ) ) { return false; } global $wpdb; $table = $wpdb->prefix . 'wpbp_database_008'; $first = wpbp_database_008( 'alpha', 12.5, null ); if ( $first <= 1 ) { return false; } $second = wpbp_database_008( 'beta', -0.25, 'checked' ); if ( $second <= $first ) { return false; } $rows = $wpdb->get_results( $wpdb->prepare( \"SELECT id, label, score, note FROM {$table} WHERE id IN ( %d, %d )\", $first, $second ), OBJECT_K ); if ( 2 !== count( $rows ) ) { return false; } $alpha = $rows[ (string) $first ] ?? null; $beta = $rows[ (string) $second ] ?? null; if ( ! $alpha || ! $beta ) { return false; } if ( 'alpha' !== $alpha->label || null !== $alpha->note ) { return false; } if ( 'beta' !== $beta->label || 'checked' !== $beta->note ) { return false; } if ( abs( (float) $alpha->score - 12.5 ) > 0.000001 ) { return false; } if ( abs( (float) $beta->score + 0.25 ) > 0.000001 ) { return false; } $nulls = (int) $wpdb->get_var( \"SELECT COUNT(*) FROM {$table} WHERE note IS NULL\" ); return 1 === $nulls;",
+            "description": "The null note is stored as SQL NULL, the float round-trips, and each call returns its own new row ID",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $table = $wpdb->prefix . 'wpbp_database_008'; $wpdb->query( \"DROP TABLE IF EXISTS {$table}\" );"
+      },
+      "reference_solution": "function wpbp_database_008( string $label, float $score, ?string $note ): int { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_008'; $result = $wpdb->insert( $table, array( 'label' => $label, 'score' => $score, 'note' => $note ), array( '%s', '%f', '%s' ) ); return false === $result ? 0 : (int) $wpdb->insert_id; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wpdb.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_database_008( string $label, float $score, ?string $note ): int { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_008'; $wpdb->insert( $table, array( 'label' => $label, 'score' => $score, 'note' => (string) $note ), array( '%s', '%f', '%s' ) ); return (int) $wpdb->insert_id; }",
+        "function wpbp_database_008( string $label, float $score, ?string $note ): int { global $wpdb; $table = $wpdb->prefix . 'wpbp_database_008'; $data = array( 'label' => $label, 'score' => $score ); $formats = array( '%s', '%f' ); if ( null !== $note ) { $data['note'] = $note; $formats[] = '%s'; } $wpdb->insert( $table, $data, $formats ); return (int) $wpdb->insert_id; }"
+      ]
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-cron",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Cron",
     "description": "Code generation tasks for WordPress Cron APIs",
@@ -250,6 +250,104 @@
         ],
         "release_focus": "6.9"
       }
+    },
+    {
+      "id": "e-cron-006",
+      "category": "cron",
+      "prompt": "A plugin is being deactivated and must leave no scheduled work behind. Implement a function that cancels every scheduled event for a given hook — including the events that were scheduled with different argument sets — and returns how many events it removed. Events registered on other hooks must survive.",
+      "expected_behavior": "Cancelling by hook name alone requires `wp_unschedule_hook()`, which returns the number of events removed across all argument sets; `wp_clear_scheduled_hook( $hook )` only clears the events whose arguments are the empty array. Runtime validation schedules the same hook with two different argument sets and once with no arguments, plus one event on a second hook, then checks the return value is 3, that all three are gone, that the other hook survives, and that a second call returns 0.",
+      "requirements": [
+        "Cancel every scheduled event for the supplied hook, whatever arguments it was scheduled with",
+        "Return the number of events that were removed",
+        "Leave events on other hooks scheduled"
+      ],
+      "test_function": "wpbp_cron_006( string $hook ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_unschedule_hook",
+            "description": "Clears the hook across all argument sets",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_unschedule_hook( 'wpbp_purge_cache' ); wp_unschedule_hook( 'wpbp_keep_cache' ); $now = time(); wp_schedule_single_event( $now + 3600, 'wpbp_purge_cache', array( 'site-1' ) ); wp_schedule_single_event( $now + 7200, 'wpbp_purge_cache', array( 'site-2' ) ); wp_schedule_single_event( $now + 10800, 'wpbp_purge_cache' ); wp_schedule_single_event( $now + 3600, 'wpbp_keep_cache', array( 'site-1' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_006' ) ) { return false; } if ( false === wp_next_scheduled( 'wpbp_purge_cache', array( 'site-1' ) ) ) { return false; } $removed = wpbp_cron_006( 'wpbp_purge_cache' ); if ( 3 !== $removed ) { return false; } if ( false !== wp_next_scheduled( 'wpbp_purge_cache', array( 'site-1' ) ) ) { return false; } if ( false !== wp_next_scheduled( 'wpbp_purge_cache', array( 'site-2' ) ) ) { return false; } if ( false !== wp_next_scheduled( 'wpbp_purge_cache' ) ) { return false; } if ( ! is_int( wp_next_scheduled( 'wpbp_keep_cache', array( 'site-1' ) ) ) ) { return false; } return 0 === wpbp_cron_006( 'wpbp_purge_cache' );",
+            "description": "All three argument sets are cancelled, the other hook survives, and a repeat call removes nothing",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_unschedule_hook( 'wpbp_purge_cache' ); wp_unschedule_hook( 'wpbp_keep_cache' );"
+      },
+      "reference_solution": "function wpbp_cron_006( string $hook ): int { $removed = wp_unschedule_hook( $hook ); return is_int( $removed ) ? $removed : 0; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_cron_006( string $hook ): int { $removed = wp_clear_scheduled_hook( $hook ); return is_int( $removed ) ? $removed : 0; }",
+        "function wpbp_cron_006( string $hook ): int { $count = 0; while ( false !== ( $timestamp = wp_next_scheduled( $hook ) ) ) { wp_unschedule_event( $timestamp, $hook ); ++$count; } return $count; }"
+      ]
+    },
+    {
+      "id": "e-cron-007",
+      "category": "cron",
+      "prompt": "A status screen shows what WordPress has queued for one hook and one exact argument set. Implement a function that, given a hook and its argument array, returns an array with 'timestamp' (the Unix timestamp of the next run), 'schedule' (the recurrence name, or false for a one-off event) and 'interval' (the recurrence length in seconds, 0 for a one-off event). Return false when nothing is scheduled for that hook with exactly those arguments.",
+      "expected_behavior": "`wp_next_scheduled()` only exposes the timestamp, so the recurrence has to come from `wp_get_scheduled_event()`, whose returned object carries `schedule` (false for single events) and an `interval` that is only set for recurring events. Runtime validation registers an hourly event with one argument set and a single event with another, then checks both shapes, an unknown argument set and an unknown hook.",
+      "requirements": [
+        "Match the event by hook and by the exact argument array",
+        "Report 'timestamp', 'schedule' and 'interval', with schedule false and interval 0 for a one-off event",
+        "Return false when no event is scheduled for that hook and argument set"
+      ],
+      "test_function": "wpbp_cron_007( string $hook, array $args )",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_get_scheduled_event",
+            "description": "Reads the scheduled event object",
+            "weight": 1
+          },
+          {
+            "pattern": "schedule",
+            "description": "Reports the recurrence name",
+            "weight": 1
+          },
+          {
+            "pattern": "interval",
+            "description": "Reports the recurrence interval",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_unschedule_hook( 'wpbp_sync_feed' ); $now = time(); $recurring = $now + 1800; $single = $now + 900; wp_schedule_event( $recurring, 'hourly', 'wpbp_sync_feed', array( 'alpha' ) ); wp_schedule_single_event( $single, 'wpbp_sync_feed', array( 'beta' ) ); $GLOBALS['wpbp_cron_007_times'] = array( 'recurring' => $recurring, 'single' => $single );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_cron_007' ) ) { return false; } $times = (array) ( $GLOBALS['wpbp_cron_007_times'] ?? array() ); if ( 2 !== count( $times ) ) { return false; } $recurring = wpbp_cron_007( 'wpbp_sync_feed', array( 'alpha' ) ); if ( ! is_array( $recurring ) ) { return false; } if ( (int) $times['recurring'] !== ( $recurring['timestamp'] ?? null ) ) { return false; } if ( 'hourly' !== ( $recurring['schedule'] ?? null ) ) { return false; } if ( 3600 !== ( $recurring['interval'] ?? null ) ) { return false; } $single = wpbp_cron_007( 'wpbp_sync_feed', array( 'beta' ) ); if ( ! is_array( $single ) ) { return false; } if ( (int) $times['single'] !== ( $single['timestamp'] ?? null ) ) { return false; } if ( false !== ( $single['schedule'] ?? null ) ) { return false; } if ( 0 !== ( $single['interval'] ?? null ) ) { return false; } if ( false !== wpbp_cron_007( 'wpbp_sync_feed', array( 'gamma' ) ) ) { return false; } return false === wpbp_cron_007( 'wpbp_missing_feed', array( 'alpha' ) );",
+            "description": "Recurring and one-off events report distinct shapes and unknown argument sets report nothing",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_unschedule_hook( 'wpbp_sync_feed' ); unset( $GLOBALS['wpbp_cron_007_times'] );"
+      },
+      "reference_solution": "function wpbp_cron_007( string $hook, array $args ) { $event = wp_get_scheduled_event( $hook, $args ); if ( ! $event ) { return false; } return array( 'timestamp' => (int) $event->timestamp, 'schedule' => $event->schedule, 'interval' => isset( $event->interval ) ? (int) $event->interval : 0 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_cron_007( string $hook, array $args ) { $timestamp = wp_next_scheduled( $hook, $args ); if ( false === $timestamp ) { return false; } return array( 'timestamp' => (int) $timestamp, 'schedule' => 'hourly', 'interval' => 3600 ); }",
+        "function wpbp_cron_007( string $hook, array $args ) { $event = wp_get_scheduled_event( $hook ); if ( ! $event ) { return false; } return array( 'timestamp' => (int) $event->timestamp, 'schedule' => $event->schedule, 'interval' => isset( $event->interval ) ? (int) $event->interval : 0 ); }"
+      ]
     }
   ]
 }

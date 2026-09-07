@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-caching",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Caching",
     "description": "Code generation tasks for WordPress Caching APIs",
@@ -286,6 +286,161 @@
         ],
         "release_focus": "6.9"
       }
+    },
+    {
+      "id": "e-caching-007",
+      "category": "caching",
+      "prompt": "A long job must never run twice at once. Implement a function that tries to claim a run lock for a supplied job key, storing the lock in the object cache under that key in the 'wpbp_locks' group with a 30 second lifetime. It must return true only for the call that actually claimed the lock: a second attempt while the lock is held returns false, and once the lock is released the next attempt claims it again.",
+      "expected_behavior": "The claim must use `wp_cache_add()`, which refuses to overwrite an existing key and returns false, rather than `wp_cache_set()` (always true) or a read-then-write pair. Runtime validation claims a key, re-claims it, claims a second key, deletes the first lock and re-claims it, and checks the lock value is actually stored in the 'wpbp_locks' group.",
+      "requirements": [
+        "Store the lock under the supplied key in the 'wpbp_locks' object cache group with a 30 second expiry",
+        "Return true only when this call took the lock, false when another holder already has it",
+        "Do not overwrite a lock that is already held"
+      ],
+      "test_function": "wpbp_caching_007( string $job_key ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_cache_add",
+            "description": "Claims the lock with an add operation",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_locks",
+            "description": "Uses the requested cache group",
+            "weight": 1
+          },
+          {
+            "pattern": "30",
+            "description": "Sets the 30 second lifetime",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_cache_delete( 'wpbp-nightly-sync', 'wpbp_locks' ); wp_cache_delete( 'wpbp-weekly-report', 'wpbp_locks' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_007' ) ) { return false; } if ( true !== wpbp_caching_007( 'wpbp-nightly-sync' ) ) { return false; } if ( false !== wpbp_caching_007( 'wpbp-nightly-sync' ) ) { return false; } if ( false === wp_cache_get( 'wpbp-nightly-sync', 'wpbp_locks' ) ) { return false; } if ( false !== wp_cache_get( 'wpbp-nightly-sync', 'default' ) ) { return false; } if ( true !== wpbp_caching_007( 'wpbp-weekly-report' ) ) { return false; } if ( false !== wpbp_caching_007( 'wpbp-weekly-report' ) ) { return false; } wp_cache_delete( 'wpbp-nightly-sync', 'wpbp_locks' ); if ( true !== wpbp_caching_007( 'wpbp-nightly-sync' ) ) { return false; } return false !== wp_cache_get( 'wpbp-weekly-report', 'wpbp_locks' );",
+            "description": "Only the first claim of each key succeeds, and a released lock can be claimed again",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_cache_delete( 'wpbp-nightly-sync', 'wpbp_locks' ); wp_cache_delete( 'wpbp-weekly-report', 'wpbp_locks' );"
+      },
+      "reference_solution": "function wpbp_caching_007( string $job_key ): bool { return (bool) wp_cache_add( $job_key, time(), 'wpbp_locks', 30 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/class-wp-object-cache.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_007( string $job_key ): bool { wp_cache_set( $job_key, time(), 'wpbp_locks', 30 ); return true; }",
+        "function wpbp_caching_007( string $job_key ): bool { return (bool) wp_cache_add( $job_key, time(), 'default', 30 ); }"
+      ]
+    },
+    {
+      "id": "e-caching-008",
+      "category": "caching",
+      "prompt": "Implement a function that invalidates one named object cache group and nothing else: every key in that group is dropped, while keys in other groups — including the cache WordPress uses for options — survive. Return whether the object cache performed the group invalidation.",
+      "expected_behavior": "The function uses `wp_cache_flush_group()` (guarded by `wp_cache_supports( 'flush_group' )` if desired) rather than `wp_cache_flush()`, which would empty every group. Runtime validation seeds two custom groups plus a probe in the `options` group, flushes one group, checks only that group is gone, then flushes the second group and checks the options probe is still cached.",
+      "requirements": [
+        "Drop every key in the supplied cache group",
+        "Leave keys in every other cache group untouched",
+        "Return true when the object cache performed the group invalidation"
+      ],
+      "test_function": "wpbp_caching_008( string $group ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_cache_flush_group",
+            "description": "Flushes a single cache group",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_cache_set( 'wpbp_report_a', 'alpha', 'wpbp_reports' ); wp_cache_set( 'wpbp_report_b', 'bravo', 'wpbp_reports' ); wp_cache_set( 'wpbp_invoice_a', 'charlie', 'wpbp_invoices' ); wp_cache_set( 'wpbp_options_probe', 'delta', 'options' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_008' ) ) { return false; } if ( true !== wpbp_caching_008( 'wpbp_reports' ) ) { return false; } if ( false !== wp_cache_get( 'wpbp_report_a', 'wpbp_reports' ) || false !== wp_cache_get( 'wpbp_report_b', 'wpbp_reports' ) ) { return false; } if ( 'charlie' !== wp_cache_get( 'wpbp_invoice_a', 'wpbp_invoices' ) ) { return false; } if ( 'delta' !== wp_cache_get( 'wpbp_options_probe', 'options' ) ) { return false; } if ( true !== wpbp_caching_008( 'wpbp_invoices' ) ) { return false; } if ( false !== wp_cache_get( 'wpbp_invoice_a', 'wpbp_invoices' ) ) { return false; } return 'delta' === wp_cache_get( 'wpbp_options_probe', 'options' );",
+            "description": "Each named group is emptied while other groups keep their values",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_cache_delete( 'wpbp_report_a', 'wpbp_reports' ); wp_cache_delete( 'wpbp_report_b', 'wpbp_reports' ); wp_cache_delete( 'wpbp_invoice_a', 'wpbp_invoices' ); wp_cache_delete( 'wpbp_options_probe', 'options' );"
+      },
+      "reference_solution": "function wpbp_caching_008( string $group ): bool { if ( ! wp_cache_supports( 'flush_group' ) ) { return false; } return (bool) wp_cache_flush_group( $group ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/class-wp-object-cache.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_008( string $group ): bool { return (bool) wp_cache_flush(); }",
+        "function wpbp_caching_008( string $group ): bool { wp_cache_delete( 'wpbp_report_a', $group ); wp_cache_delete( 'wpbp_report_b', $group ); return true; }"
+      ]
+    },
+    {
+      "id": "e-caching-009",
+      "category": "caching",
+      "prompt": "Implement a hit counter backed by the object cache: given a counter key, increase the count for that key in the 'wpbp_counters' group and return the new total. The first call for a key must return 1 and leave the count stored, later calls return 2, 3 and so on, and each key counts independently.",
+      "expected_behavior": "The object cache cannot increment a key that does not exist yet — `wp_cache_incr()` returns false for a missing key — so the implementation has to seed the counter (for example with `wp_cache_add()`/`wp_cache_set()`) before or after a failed increment. Runtime validation counts one key three times, counts a second key once, reads the stored value back from the group, then deletes the key and checks the count restarts at 1.",
+      "requirements": [
+        "Store the count in the object cache under the supplied key in the 'wpbp_counters' group",
+        "Return the new total as an integer, starting from 1 for a key that has no stored count",
+        "Keep separate keys counting independently"
+      ],
+      "test_function": "wpbp_caching_009( string $counter_key ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_cache_incr",
+            "description": "Increments through the object cache",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_counters",
+            "description": "Uses the requested cache group",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_cache_add|wp_cache_set",
+            "description": "Seeds the counter when it does not exist yet",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_cache_delete( 'wpbp-views-home', 'wpbp_counters' ); wp_cache_delete( 'wpbp-views-about', 'wpbp_counters' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_009' ) ) { return false; } if ( 1 !== wpbp_caching_009( 'wpbp-views-home' ) ) { return false; } if ( 1 !== (int) wp_cache_get( 'wpbp-views-home', 'wpbp_counters' ) ) { return false; } if ( 2 !== wpbp_caching_009( 'wpbp-views-home' ) ) { return false; } if ( 3 !== wpbp_caching_009( 'wpbp-views-home' ) ) { return false; } if ( 1 !== wpbp_caching_009( 'wpbp-views-about' ) ) { return false; } if ( 3 !== (int) wp_cache_get( 'wpbp-views-home', 'wpbp_counters' ) ) { return false; } if ( 4 !== wpbp_caching_009( 'wpbp-views-home' ) ) { return false; } wp_cache_delete( 'wpbp-views-home', 'wpbp_counters' ); return 1 === wpbp_caching_009( 'wpbp-views-home' ) && 2 === wpbp_caching_009( 'wpbp-views-about' );",
+            "description": "Counting starts at 1 per key, keeps rising, is stored in the group, and restarts after the key is dropped",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_cache_delete( 'wpbp-views-home', 'wpbp_counters' ); wp_cache_delete( 'wpbp-views-about', 'wpbp_counters' );"
+      },
+      "reference_solution": "function wpbp_caching_009( string $counter_key ): int { $total = wp_cache_incr( $counter_key, 1, 'wpbp_counters' ); if ( false === $total ) { wp_cache_add( $counter_key, 1, 'wpbp_counters' ); $total = (int) wp_cache_get( $counter_key, 'wpbp_counters' ); } return (int) $total; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/class-wp-object-cache.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_009( string $counter_key ): int { return (int) wp_cache_incr( $counter_key, 1, 'wpbp_counters' ); }",
+        "function wpbp_caching_009( string $counter_key ): int { $total = (int) wp_cache_get( $counter_key, 'wpbp_counters' ) + 1; wp_cache_set( $counter_key, $total, 'default' ); return $total; }"
+      ]
     }
   ]
 }

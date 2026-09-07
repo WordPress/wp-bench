@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_interactivity_api",
-  "version": "2.2.0",
+  "version": "2.3.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Interactivity API",
     "description": "Code generation tasks for WordPress Interactivity API APIs",
@@ -224,6 +224,448 @@
         ],
         "release_focus": "6.9"
       }
+    },
+    {
+      "id": "e-gb-interactivity-api-005",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that renders the server-side markup of a disclosure button for the 'wpbp/binder' Interactivity API store. It is given the button's label, whether the control is disabled, whether the panel it controls is expanded, an item count and a completion ratio. Return processed markup containing a single <button> whose disabled attribute, aria-expanded attribute, data-count attribute, data-ratio attribute and visible text are all produced by the Interactivity API's server-side directive processing from store state, so the client can keep updating them after hydration.",
+      "expected_behavior": "The function puts the five values in `wp_interactivity_state( 'wpbp/binder', ... )`, writes a `data-wp-interactive` region containing a BUTTON with `data-wp-bind--disabled`, `data-wp-bind--aria-expanded`, `data-wp-bind--data-count`, `data-wp-bind--data-ratio` and `data-wp-text`, and returns `wp_interactivity_process_directives()`. WordPress removes a bound attribute whose value is `false` unless the attribute is an `aria-`/`data-` attribute, where it renders the string `\"true\"`/`\"false\"` instead, and in 7.1 formats a bound number with the JSON encoder, so a float renders as the client would receive it rather than as a PHP string cast.",
+      "requirements": [
+        "Use the 'wpbp/binder' store namespace",
+        "Keep the supplied values in Interactivity API state and bind the attributes and the text with directives instead of writing resolved values into the markup",
+        "Return the markup after WordPress has processed the directives on the server"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_005( string $label, bool $disabled, bool $expanded, int $count, float $ratio ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Registers store state",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-bind",
+            "description": "Binds attributes with directives",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-text",
+            "description": "Binds the button text with a directive",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/binder",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_iapi_005_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_005' ) ) { return false; } $t = $GLOBALS['wpbp_iapi_005_token']; $read = static function ( string $html ) { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'BUTTON' ) ) ) { return null; } $row = array( 'disabled' => $p->get_attribute( 'disabled' ), 'aria' => $p->get_attribute( 'aria-expanded' ), 'count' => $p->get_attribute( 'data-count' ), 'ratio' => $p->get_attribute( 'data-ratio' ), 'bind_disabled' => $p->get_attribute( 'data-wp-bind--disabled' ), 'bind_aria' => $p->get_attribute( 'data-wp-bind--aria-expanded' ), 'bind_count' => $p->get_attribute( 'data-wp-bind--data-count' ), 'bind_ratio' => $p->get_attribute( 'data-wp-bind--data-ratio' ), 'bind_text' => $p->get_attribute( 'data-wp-text' ), 'text' => '' ); while ( $p->next_token() ) { if ( '#text' === $p->get_token_type() ) { $row['text'] .= $p->get_modifiable_text(); continue; } break; } return $row; }; $one = $read( wpbp_gb_interactivity_api_005( 'Save now ' . $t, false, false, 12, 0.1 + 0.2 ) ); $two = $read( wpbp_gb_interactivity_api_005( 'Close ' . $t, true, true, 0, 2.5 ) ); if ( ! is_array( $one ) || ! is_array( $two ) ) { return false; } foreach ( array( $one, $two ) as $row ) { foreach ( array( 'bind_disabled', 'bind_aria', 'bind_count', 'bind_ratio', 'bind_text' ) as $key ) { if ( null === $row[ $key ] ) { return false; } } } return null === $one['disabled'] && 'false' === $one['aria'] && '12' === $one['count'] && '0.30000000000000004' === $one['ratio'] && 'Save now ' . $t === $one['text'] && true === $two['disabled'] && 'true' === $two['aria'] && '0' === $two['count'] && '2.5' === $two['ratio'] && 'Close ' . $t === $two['text'];",
+            "description": "Bound booleans, numbers and text render as WordPress 7.1 serializes them for the client",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_005( string $label, bool $disabled, bool $expanded, int $count, float $ratio ): string { wp_interactivity_state( 'wpbp/binder', array( 'label' => $label, 'isDisabled' => $disabled, 'isExpanded' => $expanded, 'count' => $count, 'ratio' => $ratio ) ); $html = '<div data-wp-interactive=\"wpbp/binder\"><button data-wp-bind--disabled=\"state.isDisabled\" data-wp-bind--aria-expanded=\"state.isExpanded\" data-wp-bind--data-count=\"state.count\" data-wp-bind--data-ratio=\"state.ratio\" data-wp-text=\"state.label\">placeholder</button></div>'; return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_005( string $label, bool $disabled, bool $expanded, int $count, float $ratio ): string { wp_interactivity_state( 'wpbp/binder', array( 'label' => $label, 'isDisabled' => $disabled, 'isExpanded' => $expanded, 'count' => (string) $count, 'ratio' => (string) $ratio ) ); $html = '<div data-wp-interactive=\"wpbp/binder\"><button data-wp-bind--disabled=\"state.isDisabled\" data-wp-bind--aria-expanded=\"state.isExpanded\" data-wp-bind--data-count=\"state.count\" data-wp-bind--data-ratio=\"state.ratio\" data-wp-text=\"state.label\">placeholder</button></div>'; return wp_interactivity_process_directives( $html ); }",
+        "function wpbp_gb_interactivity_api_005( string $label, bool $disabled, bool $expanded, int $count, float $ratio ): string { $attrs = $disabled ? ' disabled' : ''; return '<div data-wp-interactive=\"wpbp/binder\"><button' . $attrs . ' aria-expanded=\"' . ( $expanded ? 'true' : 'false' ) . '\" data-count=\"' . $count . '\" data-ratio=\"' . $ratio . '\">' . esc_html( $label ) . '</button></div>'; }",
+        "function wpbp_gb_interactivity_api_005( string $label, bool $disabled, bool $expanded, int $count, float $ratio ): string { wp_interactivity_state( 'wpbp/binder', array( 'label' => $label, 'isDisabled' => $disabled ? 'true' : 'false', 'isExpanded' => $expanded ? 'true' : 'false', 'count' => $count, 'ratio' => $ratio ) ); $html = '<div data-wp-interactive=\"wpbp/binder\"><button data-wp-bind--disabled=\"state.isDisabled\" data-wp-bind--aria-expanded=\"state.isExpanded\" data-wp-bind--data-count=\"state.count\" data-wp-bind--data-ratio=\"state.ratio\" data-wp-text=\"state.label\">placeholder</button></div>'; return wp_interactivity_process_directives( $html ); }"
+      ]
+    },
+    {
+      "id": "e-gb-interactivity-api-006",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that server-renders a list for the supplied Interactivity API store namespace. Given a list whose entries are the item labels themselves as plain strings, register that list as store state and return processed markup for a <ul> region in which a <template> carrying the Interactivity API list directive has produced one <li> per item, each rendering its own entry as text. WordPress must do the repetition during server-side directive processing rather than the function looping in PHP; a list WordPress cannot repeat on the server must leave the template alone.",
+      "expected_behavior": "The function stores the list under the supplied namespace and processes markup shaped as `<ul data-wp-interactive=\"NS\"><template data-wp-each=\"state.items\"><li data-wp-text=\"context.item\"></li></template></ul>`. WordPress appends one copy of the template's inner markup per item after the template's closer, tagging each top-level element with `data-wp-each-child` set to `NS::state.items`. An associative array is skipped because the client would receive it as an object, so the template is emitted unchanged with no generated children.",
+      "requirements": [
+        "Register the items as Interactivity API state under the supplied store namespace",
+        "Store the list under the state key `items`",
+        "Let WordPress expand the list during server-side directive processing instead of looping in PHP",
+        "Render each entry's own string value as the text of its list item",
+        "Return the processed markup"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_006( string $store_namespace, array $items ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Registers store state",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-each",
+            "description": "Uses the list directive",
+            "weight": 1
+          },
+          {
+            "pattern": "template",
+            "description": "Uses a template element for the list",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-text",
+            "description": "Renders each item's label with a directive",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_iapi_006_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_006' ) ) { return false; } $t = $GLOBALS['wpbp_iapi_006_token']; $children = static function ( string $html ) { $p = new WP_HTML_Tag_Processor( $html ); $rows = array(); while ( $p->next_tag( array( 'tag_name' => 'LI' ) ) ) { $child = $p->get_attribute( 'data-wp-each-child' ); if ( null === $child ) { continue; } $text = ''; while ( $p->next_token() ) { if ( '#text' === $p->get_token_type() ) { $text .= $p->get_modifiable_text(); continue; } break; } $rows[] = array( $child, $text ); } return $rows; }; $ns_a = 'wpbp/list-a-' . $t; $ns_b = 'wpbp/list-b-' . $t; $listed = $children( wpbp_gb_interactivity_api_006( $ns_a, array( 'Alpha ' . $t, 'Beta', 'Gamma' ) ) ); $assoc = $children( wpbp_gb_interactivity_api_006( $ns_b, array( 'x' => 'Ex', 'y' => 'Why' ) ) ); if ( 3 !== count( $listed ) || 0 !== count( $assoc ) ) { return false; } $expected = array( 'Alpha ' . $t, 'Beta', 'Gamma' ); foreach ( $expected as $i => $label ) { if ( $ns_a . '::state.items' !== $listed[ $i ][0] ) { return false; } if ( $label !== $listed[ $i ][1] ) { return false; } } return true;",
+            "description": "The list directive generates one tagged list item per entry and skips an associative list",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_006( string $store_namespace, array $items ): string { wp_interactivity_state( $store_namespace, array( 'items' => $items ) ); $html = '<ul data-wp-interactive=\"' . esc_attr( $store_namespace ) . '\"><template data-wp-each=\"state.items\"><li data-wp-text=\"context.item\"></li></template></ul>'; return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_006( string $store_namespace, array $items ): string { wp_interactivity_state( $store_namespace, array( 'items' => $items ) ); $html = '<ul data-wp-interactive=\"' . esc_attr( $store_namespace ) . '\">'; foreach ( (array) $items as $item ) { $html .= '<li data-wp-each-child=\"' . esc_attr( $store_namespace ) . '::state.items\">' . esc_html( $item ) . '</li>'; } return $html . '</ul>'; }",
+        "function wpbp_gb_interactivity_api_006( string $store_namespace, array $items ): string { wp_interactivity_state( $store_namespace, array( 'items' => $items ) ); $html = '<ul data-wp-interactive=\"' . esc_attr( $store_namespace ) . '\"><template data-wp-each=\"state.items\">item</template></ul>'; return wp_interactivity_process_directives( $html ); }"
+      ]
+    },
+    {
+      "id": "e-gb-interactivity-api-007",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that registers a derived greeting for the 'wpbp/ctx' Interactivity API store and returns the supplied markup after server-side directive processing. The greeting is the word Hello, a space, the name found in the local context of the element that is rendering it, and an exclamation mark. An element whose local context carries no name greets the name nobody. Sibling elements with different local contexts must therefore render different greetings from the one registered value.",
+      "expected_behavior": "The derived value is a PHP Closure stored with `wp_interactivity_state( 'wpbp/ctx', ... )`. During directive processing the closure reads the element's own context with `wp_interactivity_get_context()`, which returns the current context for the namespace on the stack, so the same `state.greeting` reference resolves differently on each element. Precomputing a single string, or reading the context outside the closure, produces the same greeting everywhere.",
+      "requirements": [
+        "Use the 'wpbp/ctx' store namespace",
+        "Register the greeting as derived state backed by a PHP closure",
+        "Read the rendering element's local context from inside the closure",
+        "Return the supplied markup after WordPress has processed its directives"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_007( string $html ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Registers store state",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_get_context",
+            "description": "Reads the element's local context",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/ctx",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          },
+          {
+            "pattern": "static\\s+fn|function\\s*\\(",
+            "description": "Uses a closure for the derived value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_iapi_007_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_007' ) ) { return false; } $t = $GLOBALS['wpbp_iapi_007_token']; $ada = 'Ada' . $t; $bob = 'Bob' . $t; $q = chr( 39 ); $html = '<div data-wp-interactive=\"wpbp/ctx\">' . '<p data-wp-context=' . $q . '{\"name\":\"' . $ada . '\"}' . $q . ' data-wp-text=\"state.greeting\">x</p>' . '<p data-wp-context=' . $q . '{\"name\":\"' . $bob . '\"}' . $q . ' data-wp-text=\"state.greeting\">y</p>' . '<p data-wp-text=\"state.greeting\">z</p>' . '</div>'; $out = wpbp_gb_interactivity_api_007( $html ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $texts = array(); while ( $p->next_tag( array( 'tag_name' => 'P' ) ) ) { $text = ''; while ( $p->next_token() ) { if ( '#text' === $p->get_token_type() ) { $text .= $p->get_modifiable_text(); continue; } break; } $texts[] = $text; } return array( 'Hello ' . $ada . '!', 'Hello ' . $bob . '!', 'Hello nobody!' ) === $texts;",
+            "description": "The derived greeting resolves per element from each element's own local context",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_007( string $html ): string { wp_interactivity_state( 'wpbp/ctx', array( 'greeting' => static function (): string { $context = wp_interactivity_get_context(); $name = $context['name'] ?? ''; if ( ! is_string( $name ) || '' === $name ) { $name = 'nobody'; } return 'Hello ' . $name . '!'; } ) ); return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_007( string $html ): string { wp_interactivity_state( 'wpbp/ctx', array( 'greeting' => 'Hello nobody!' ) ); return wp_interactivity_process_directives( $html ); }",
+        "function wpbp_gb_interactivity_api_007( string $html ): string { wp_interactivity_state( 'wpbp/ctx', array( 'name' => 'nobody', 'greeting' => static function (): string { $state = wp_interactivity_state(); return 'Hello ' . $state['name'] . '!'; } ) ); return wp_interactivity_process_directives( $html ); }"
+      ]
+    },
+    {
+      "id": "e-gb-interactivity-api-008",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that renders the server-side markup of a to-do list wrapper for the 'wpbp/klass' Interactivity API store. Given the number of items in the list and whether the list is pinned, return processed markup for one <div> that always keeps the base class wpbp-list, carries the class wpbp-pinned exactly while the list is pinned, and carries the class wpbp-empty exactly while the item count is zero. Both conditional classes must be decided by the Interactivity API's server-side directive processing from store state, so the client can recompute them after hydration.",
+      "expected_behavior": "The function stores the count and the pinned flag with `wp_interactivity_state( 'wpbp/klass', ... )` and emits a `data-wp-interactive` region whose DIV carries `data-wp-class--wpbp-pinned` and `data-wp-class--wpbp-empty` directives, then returns `wp_interactivity_process_directives()`. WordPress adds a class when the referenced value is truthy and removes it otherwise, so the empty-state class is expressed by negating the count reference with a leading `!` (or by a derived boolean); the base class is untouched.",
+      "requirements": [
+        "Use the 'wpbp/klass' store namespace",
+        "Decide both conditional classes with Interactivity API class directives rather than composing the class attribute in PHP",
+        "Keep the base class on the element",
+        "Return the markup after WordPress has processed the directives on the server"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_008( int $count, bool $pinned ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Registers store state",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-class",
+            "description": "Uses class directives",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/klass",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp\\-empty",
+            "description": "Handles the empty-state class",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_008' ) ) { return false; } $read = static function ( string $html ) { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'DIV' ) ) ) { return null; } return array( 'list' => $p->has_class( 'wpbp-list' ), 'pinned' => $p->has_class( 'wpbp-pinned' ), 'empty' => $p->has_class( 'wpbp-empty' ), 'd_pinned' => $p->get_attribute( 'data-wp-class--wpbp-pinned' ), 'd_empty' => $p->get_attribute( 'data-wp-class--wpbp-empty' ) ); }; $cases = array( array( 0, false, false, true ), array( 0, true, true, true ), array( 3, false, false, false ), array( 3, true, true, false ) ); foreach ( $cases as $case ) { $row = $read( wpbp_gb_interactivity_api_008( $case[0], $case[1] ) ); if ( ! is_array( $row ) ) { return false; } if ( true !== $row['list'] ) { return false; } if ( null === $row['d_pinned'] || null === $row['d_empty'] ) { return false; } if ( $case[2] !== $row['pinned'] ) { return false; } if ( $case[3] !== $row['empty'] ) { return false; } } return true;",
+            "description": "Both conditional classes follow the state across all four combinations and the base class survives",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_008( int $count, bool $pinned ): string { wp_interactivity_state( 'wpbp/klass', array( 'count' => $count, 'isPinned' => $pinned ) ); $html = '<div data-wp-interactive=\"wpbp/klass\" class=\"wpbp-list\" data-wp-class--wpbp-pinned=\"state.isPinned\" data-wp-class--wpbp-empty=\"!state.count\"></div>'; return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_008( int $count, bool $pinned ): string { $classes = 'wpbp-list' . ( $pinned ? ' wpbp-pinned' : '' ) . ( 0 === $count ? ' wpbp-empty' : '' ); return '<div data-wp-interactive=\"wpbp/klass\" class=\"' . $classes . '\"></div>'; }",
+        "function wpbp_gb_interactivity_api_008( int $count, bool $pinned ): string { wp_interactivity_state( 'wpbp/klass', array( 'count' => $count, 'isPinned' => $pinned ) ); $html = '<div data-wp-interactive=\"wpbp/klass\" class=\"wpbp-list\" data-wp-class--wpbp-pinned=\"state.isPinned\" data-wp-class--wpbp-empty=\"state.count\"></div>'; return wp_interactivity_process_directives( $html ); }",
+        "function wpbp_gb_interactivity_api_008( int $count, bool $pinned ): string { wp_interactivity_state( 'wpbp/klass', array( 'count' => $count, 'isPinned' => $pinned ) ); $html = '<div data-wp-interactive=\"wpbp/klass\" class=\"wpbp-list wpbp-empty\" data-wp-class--wpbp-pinned=\"state.isPinned\" data-wp-class--wpbp-empty=\"state.isEmpty\"></div>'; return wp_interactivity_process_directives( $html ); }"
+      ]
+    },
+    {
+      "id": "e-gb-interactivity-api-009",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that contributes a plugin's settings to the shared 'wpbp/merge' Interactivity API store. The supplied settings belong under the store's settings key. Anything another plugin has already registered for that store, including keys nested inside settings, must survive unless the supplied settings replace it, and the function returns the store's resulting state.",
+      "expected_behavior": "The function calls `wp_interactivity_state( 'wpbp/merge', array( 'settings' => $settings ) )` and returns its result. WordPress merges the new data into the existing state with `array_replace_recursive()`, so nested keys the caller did not mention (such as `settings.labels.open`) survive while the ones it did mention are replaced. Reading the state and writing back a shallow `array_merge()` drops the untouched nested keys.",
+      "requirements": [
+        "Use the 'wpbp/merge' store namespace",
+        "Place the supplied settings under the store's settings key",
+        "Preserve state that other code already registered, including nested keys",
+        "Return the resulting state array"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_009( array $settings ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Uses the Interactivity API state helper",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/merge",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          },
+          {
+            "pattern": "settings",
+            "description": "Writes under the settings key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_interactivity_state( 'wpbp/merge', array( 'version' => 1, 'settings' => array( 'theme' => 'light', 'speed' => 1, 'labels' => array( 'open' => 'Open', 'close' => 'Close' ) ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_009' ) ) { return false; } $first = wpbp_gb_interactivity_api_009( array( 'speed' => 3, 'labels' => array( 'close' => 'Dismiss', 'more' => 'More' ) ) ); if ( ! is_array( $first ) ) { return false; } $ok = 1 === ( $first['version'] ?? null ) && 'light' === ( $first['settings']['theme'] ?? null ) && 3 === ( $first['settings']['speed'] ?? null ) && 'Open' === ( $first['settings']['labels']['open'] ?? null ) && 'Dismiss' === ( $first['settings']['labels']['close'] ?? null ) && 'More' === ( $first['settings']['labels']['more'] ?? null ); if ( ! $ok ) { return false; } $second = wpbp_gb_interactivity_api_009( array( 'theme' => 'dark' ) ); if ( ! is_array( $second ) ) { return false; } $stored = wp_interactivity_state( 'wpbp/merge' ); return 'dark' === ( $second['settings']['theme'] ?? null ) && 3 === ( $second['settings']['speed'] ?? null ) && 'Open' === ( $second['settings']['labels']['open'] ?? null ) && 'Dismiss' === ( $second['settings']['labels']['close'] ?? null ) && 1 === ( $second['version'] ?? null ) && 'dark' === ( $stored['settings']['theme'] ?? null );",
+            "description": "Nested pre-existing state survives while supplied keys replace their counterparts",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_009( array $settings ): array { return wp_interactivity_state( 'wpbp/merge', array( 'settings' => $settings ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_009( array $settings ): array { return wp_interactivity_state( 'wpbp/merge', $settings ); }",
+        "function wpbp_gb_interactivity_api_009( array $settings ): array { wp_interactivity_state( 'wpbp/merge', array( 'settings' => $settings ) ); return array( 'settings' => $settings ); }",
+        "function wpbp_gb_interactivity_api_009( array $settings ): array { wp_interactivity_config( 'wpbp/merge', array( 'settings' => $settings ) ); return wp_interactivity_state( 'wpbp/merge' ); }"
+      ]
+    },
+    {
+      "id": "e-gb-interactivity-api-010",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that renders the server-side markup of a progress bar for the 'wpbp/style' Interactivity API store. The element carries the class wpbp-bar and a hand-written inline declaration of position:relative that must survive. Its inline width and its inline background colour must both be produced by the Interactivity API's server-side directive processing from store state, so the client can keep them in sync. When the supplied colour is null the finished style attribute must carry no background colour declaration at all.",
+      "expected_behavior": "The function stores the width and colour with `wp_interactivity_state( 'wpbp/style', ... )` and emits a DIV with `style=\"position:relative;\"`, `data-wp-style--width` and `data-wp-style--background-color` inside a `data-wp-interactive` region. WordPress merges each style property into the existing attribute value, keeping declarations it does not manage, and drops a property whose reference resolves to a falsy value, so a null colour removes the declaration rather than writing an empty one.",
+      "requirements": [
+        "Use the 'wpbp/style' store namespace",
+        "Write position:relative directly in the element's style attribute",
+        "Set the width and background colour with Interactivity API style directives rather than composing the style attribute in PHP",
+        "Return the markup after WordPress has processed the directives on the server"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_010( string $width, ?string $color ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_state",
+            "description": "Registers store state",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-style",
+            "description": "Uses style directives",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/style",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          },
+          {
+            "pattern": "position\\s*:\\s*relative",
+            "description": "Keeps the hand-written declaration",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_010' ) ) { return false; } $read = static function ( string $html ) { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'DIV', 'class_name' => 'wpbp-bar' ) ) ) { return null; } $style = $p->get_attribute( 'style' ); $declarations = array(); if ( is_string( $style ) ) { foreach ( explode( ';', $style ) as $piece ) { if ( '' === trim( $piece ) ) { continue; } $parts = explode( ':', $piece, 2 ); if ( 2 !== count( $parts ) ) { continue; } $declarations[ trim( $parts[0] ) ] = trim( $parts[1] ); } } return array( 'class' => $p->has_class( 'wpbp-bar' ), 'declarations' => $declarations, 'd_width' => $p->get_attribute( 'data-wp-style--width' ), 'd_color' => $p->get_attribute( 'data-wp-style--background-color' ) ); }; $one = $read( wpbp_gb_interactivity_api_010( '40%', '#ff0000' ) ); $two = $read( wpbp_gb_interactivity_api_010( '75px', null ) ); if ( ! is_array( $one ) || ! is_array( $two ) ) { return false; } if ( true !== $one['class'] || true !== $two['class'] ) { return false; } if ( null === $one['d_width'] || null === $one['d_color'] || null === $two['d_width'] || null === $two['d_color'] ) { return false; } return 'relative' === ( $one['declarations']['position'] ?? null ) && '40%' === ( $one['declarations']['width'] ?? null ) && '#ff0000' === ( $one['declarations']['background-color'] ?? null ) && 'relative' === ( $two['declarations']['position'] ?? null ) && '75px' === ( $two['declarations']['width'] ?? null ) && ! array_key_exists( 'background-color', $two['declarations'] );",
+            "description": "Style directives merge into the existing declarations and a null colour removes its declaration",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_010( string $width, ?string $color ): string { wp_interactivity_state( 'wpbp/style', array( 'width' => $width, 'color' => $color ) ); $html = '<div data-wp-interactive=\"wpbp/style\" class=\"wpbp-bar\" style=\"position:relative;\" data-wp-style--width=\"state.width\" data-wp-style--background-color=\"state.color\"></div>'; return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_010( string $width, ?string $color ): string { $style = 'position:relative;width:' . $width . ';'; if ( null !== $color ) { $style .= 'background-color:' . $color . ';'; } return '<div data-wp-interactive=\"wpbp/style\" class=\"wpbp-bar\" style=\"' . esc_attr( $style ) . '\"></div>'; }",
+        "function wpbp_gb_interactivity_api_010( string $width, ?string $color ): string { wp_interactivity_state( 'wpbp/style', array( 'width' => $width, 'color' => (string) $color ) ); $html = '<div data-wp-interactive=\"wpbp/style\" class=\"wpbp-bar\" data-wp-style--width=\"state.width\" data-wp-style--background-color=\"state.color\"></div>'; return wp_interactivity_process_directives( $html ); }"
+      ]
+    },
+    {
+      "id": "e-gb-interactivity-api-011",
+      "category": "gb-interactivity-api",
+      "prompt": "Implement a function that renders a nested Interactivity API region for the 'wpbp/nested' store. The outer element declares the store and a local context holding a card object with the supplied title and the supplied outer theme. Inside it sits a nested element that sets only the card's theme to the supplied inner theme in its own local context: it must not restate the card title and must not declare the store again, relying on the store it inherits from its ancestor. Return the processed markup containing exactly four <span> elements whose text comes from the local context, in this order: the card theme as seen directly inside the outer element, then the card title and the card theme as seen inside the nested element, then the card theme as seen again after the nested element has closed.",
+      "expected_behavior": "The outer element carries `data-wp-interactive=\"wpbp/nested\"` and a `data-wp-context` value; the nested element carries only a `data-wp-context` with the theme. WordPress merges a nested context into the inherited one with `array_replace_recursive()`, so the title survives inside the nested element, and pops the context when the element closes, so the fourth span shows the outer theme again. The namespace on the stack is inherited by the nested element, so its text directives resolve without repeating `data-wp-interactive`.",
+      "requirements": [
+        "Use the 'wpbp/nested' store namespace and declare it only once, on the outer element",
+        "Give the nested element a local context that names only the card theme",
+        "Render the four values with Interactivity API text directives reading the local context",
+        "Return the markup after WordPress has processed the directives on the server"
+      ],
+      "test_function": "wpbp_gb_interactivity_api_011( string $title, string $outer_theme, string $inner_theme ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_interactivity_process_directives",
+            "description": "Processes directives on the server",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-context|wp_interactivity_data_wp_context",
+            "description": "Sets local context",
+            "weight": 1
+          },
+          {
+            "pattern": "data\\-wp\\-text",
+            "description": "Renders context values with text directives",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/nested",
+            "description": "Uses the requested store namespace",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_iapi_011_token'] = 'wpbp' . wp_rand( 100000, 999999 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_011' ) ) { return false; } $t = $GLOBALS['wpbp_iapi_011_token']; $title = 'Card' . $t; $outer = 'light' . $t; $inner = 'dark' . $t; $out = wpbp_gb_interactivity_api_011( $title, $outer, $inner ); if ( ! is_string( $out ) ) { return false; } $p = new WP_HTML_Tag_Processor( $out ); $texts = array(); $contexts = array(); $interactive = 0; while ( $p->next_tag() ) { $ctx = $p->get_attribute( 'data-wp-context' ); if ( null !== $ctx ) { $contexts[] = (string) $ctx; } if ( null !== $p->get_attribute( 'data-wp-interactive' ) ) { ++$interactive; } if ( 'SPAN' !== $p->get_tag() ) { continue; } $text = ''; while ( $p->next_token() ) { if ( '#text' === $p->get_token_type() ) { $text .= $p->get_modifiable_text(); continue; } break; } $texts[] = $text; } if ( 1 !== $interactive || 2 !== count( $contexts ) ) { return false; } if ( str_contains( $contexts[1], $title ) ) { return false; } return array( $outer, $title, $inner, $outer ) === $texts;",
+            "description": "The nested context inherits the store and the untouched card title, and is popped on exit",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_gb_interactivity_api_011( string $title, string $outer_theme, string $inner_theme ): string { $outer_context = wp_interactivity_data_wp_context( array( 'card' => array( 'title' => $title, 'theme' => $outer_theme ) ) ); $inner_context = wp_interactivity_data_wp_context( array( 'card' => array( 'theme' => $inner_theme ) ) ); $html = '<div data-wp-interactive=\"wpbp/nested\" ' . $outer_context . '>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '<div ' . $inner_context . '>' . '<span data-wp-text=\"context.card.title\">?</span>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '</div>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '</div>'; return wp_interactivity_process_directives( $html ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/interactivity-api/interactivity-api.php",
+          "src/wp-includes/interactivity-api/class-wp-interactivity-api.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_gb_interactivity_api_011( string $title, string $outer_theme, string $inner_theme ): string { $outer_context = wp_interactivity_data_wp_context( array( 'card' => array( 'title' => $title, 'theme' => $outer_theme ) ) ); $inner_context = wp_interactivity_data_wp_context( array( 'card' => array( 'title' => $title, 'theme' => $inner_theme ) ) ); $html = '<div data-wp-interactive=\"wpbp/nested\" ' . $outer_context . '>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '<div ' . $inner_context . '>' . '<span data-wp-text=\"context.card.title\">?</span>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '</div>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '</div>'; return wp_interactivity_process_directives( $html ); }",
+        "function wpbp_gb_interactivity_api_011( string $title, string $outer_theme, string $inner_theme ): string { return '<div data-wp-interactive=\"wpbp/nested\"><span>' . esc_html( $outer_theme ) . '</span><div><span>' . esc_html( $title ) . '</span><span>' . esc_html( $inner_theme ) . '</span></div><span>' . esc_html( $outer_theme ) . '</span></div>'; }",
+        "function wpbp_gb_interactivity_api_011( string $title, string $outer_theme, string $inner_theme ): string { $outer_context = wp_interactivity_data_wp_context( array( 'card' => array( 'title' => $title, 'theme' => $outer_theme ) ) ); $inner_context = wp_interactivity_data_wp_context( array( 'card' => array( 'theme' => $inner_theme ) ) ); $html = '<div data-wp-interactive=\"wpbp/nested\" ' . $outer_context . '>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '<div data-wp-interactive=\"wpbp/nested\" ' . $inner_context . '>' . '<span data-wp-text=\"context.card.title\">?</span>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '</div>' . '<span data-wp-text=\"context.card.theme\">?</span>' . '</div>'; return wp_interactivity_process_directives( $html ); }"
+      ]
     }
   ]
 }

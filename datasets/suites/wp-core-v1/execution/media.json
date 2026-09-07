@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-media",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Media",
     "description": "Code generation tasks for WordPress Media APIs",
@@ -208,6 +208,236 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-media-006",
+      "category": "media",
+      "prompt": "Extend the media library so files with the .wpbp extension and the MIME type application/x-wpbp may be uploaded by users who are allowed to manage options, while everyone else keeps WordPress's default set of allowed types unchanged. WordPress asks this question about a specific user in some code paths and about whoever is logged in in others, and both must be answered correctly.",
+      "expected_behavior": "A callback on the allowed-upload-types filter accepts both the types array and the user WordPress is asking about, and grants the extra type only when that user can `manage_options`. Because the user argument is `null` when WordPress is asking about the current user, the callback must fall back to `current_user_can()` in that case; registering the filter with a single accepted argument, or ignoring the argument entirely, gets one of the two paths wrong. The default types are returned untouched.",
+      "requirements": [
+        "Register the extra type through the WordPress filter for allowed upload types",
+        "Grant the type only to users who can manage options",
+        "Answer correctly both when WordPress names the user and when it means the current user",
+        "Leave WordPress's default types in place"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "upload_mimes",
+            "description": "Uses the allowed upload types filter",
+            "weight": 1
+          },
+          {
+            "pattern": "add_filter",
+            "description": "Registers the filter",
+            "weight": 1
+          },
+          {
+            "pattern": "application/x-wpbp",
+            "description": "Adds the requested MIME type",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp",
+            "description": "Adds the requested extension",
+            "weight": 1
+          },
+          {
+            "pattern": "manage_options",
+            "description": "Gates on the manage options capability",
+            "weight": 1
+          },
+          {
+            "pattern": "user_can",
+            "description": "Answers for the user WordPress names",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$admin = wp_insert_user( array( 'user_login' => 'wpbp-media-006-admin', 'user_pass' => wp_generate_password( 20 ), 'user_email' => 'wpbp-media-006-admin@example.com', 'role' => 'administrator' ) ); $subscriber = wp_insert_user( array( 'user_login' => 'wpbp-media-006-sub', 'user_pass' => wp_generate_password( 20 ), 'user_email' => 'wpbp-media-006-sub@example.com', 'role' => 'subscriber' ) ); $GLOBALS['wpbp_media_006_admin'] = is_wp_error( $admin ) ? 0 : (int) $admin; $GLOBALS['wpbp_media_006_sub'] = is_wp_error( $subscriber ) ? 0 : (int) $subscriber;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$admin = (int) ( $GLOBALS['wpbp_media_006_admin'] ?? 0 ); $subscriber = (int) ( $GLOBALS['wpbp_media_006_sub'] ?? 0 ); if ( $admin <= 0 || $subscriber <= 0 ) { return false; } $admin_types = get_allowed_mime_types( $admin ); $sub_types = get_allowed_mime_types( $subscriber ); if ( 'application/x-wpbp' !== ( $admin_types['wpbp'] ?? null ) ) { return false; } if ( array_key_exists( 'wpbp', $sub_types ) ) { return false; } if ( ! array_key_exists( 'jpg|jpeg|jpe', $admin_types ) || ! array_key_exists( 'jpg|jpeg|jpe', $sub_types ) ) { return false; } if ( ! array_key_exists( 'pdf', $sub_types ) ) { return false; } $previous = get_current_user_id(); wp_set_current_user( $admin ); $current_admin = get_allowed_mime_types(); wp_set_current_user( $subscriber ); $current_sub = get_allowed_mime_types(); wp_set_current_user( $previous ); if ( 'application/x-wpbp' !== ( $current_admin['wpbp'] ?? null ) ) { return false; } if ( array_key_exists( 'wpbp', $current_sub ) ) { return false; } $allowed = wp_check_filetype( 'quarterly.wpbp', get_allowed_mime_types( $admin ) ); $denied = wp_check_filetype( 'quarterly.wpbp', get_allowed_mime_types( $subscriber ) ); return 'wpbp' === $allowed['ext'] && 'application/x-wpbp' === $allowed['type'] && false === $denied['ext'] && false === $denied['type'];",
+            "description": "The extra type is offered to managers only, for both the named-user and current-user paths",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'upload_mimes' ); wp_set_current_user( 0 ); require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( array( 'wpbp_media_006_admin', 'wpbp_media_006_sub' ) as $key ) { $id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $id > 0 ) { wp_delete_user( $id ); } unset( $GLOBALS[ $key ] ); }"
+      },
+      "reference_solution": "add_filter( 'upload_mimes', static function ( $mimes, $user = null ) { $can = $user ? user_can( $user, 'manage_options' ) : current_user_can( 'manage_options' ); if ( $can ) { $mimes['wpbp'] = 'application/x-wpbp'; } return $mimes; }, 10, 2 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'upload_mimes', static function ( $mimes ) { $mimes['wpbp'] = 'application/x-wpbp'; return $mimes; } );",
+        "add_filter( 'upload_mimes', static function ( $mimes ) { if ( current_user_can( 'manage_options' ) ) { $mimes['wpbp'] = 'application/x-wpbp'; } return $mimes; } );",
+        "add_filter( 'upload_mimes', static function ( $mimes, $user = null ) { if ( user_can( $user, 'manage_options' ) ) { $mimes['wpbp'] = 'application/x-wpbp'; } return $mimes; }, 10, 2 );",
+        "add_filter( 'upload_mimes', static function ( $mimes, $user = null ) { $can = $user ? user_can( $user, 'manage_options' ) : current_user_can( 'manage_options' ); return $can ? array( 'wpbp' => 'application/x-wpbp' ) : $mimes; }, 10, 2 );"
+      ]
+    },
+    {
+      "id": "e-media-007",
+      "category": "media",
+      "prompt": "Configure this site so WordPress never advertises a responsive image candidate wider than 900 pixels, then implement a function that returns the srcset value WordPress generates for the supplied attachment at the supplied size. Change how WordPress builds the candidate list rather than editing the string it produces, and do not defeat any exception WordPress makes for the source it is actually rendering.",
+      "expected_behavior": "A filter on the maximum srcset image width returns 900, and the function delegates to `wp_get_attachment_image_srcset()`. `wp_calculate_image_srcset()` drops every candidate wider than the cap except the one matching the `src` being rendered, so requesting a size wider than the cap still advertises that size itself while the wider siblings disappear. Trimming the finished srcset string instead removes that source too.",
+      "requirements": [
+        "Apply the 900 pixel cap through the WordPress filter for the maximum srcset candidate width",
+        "Return WordPress's srcset value for the supplied attachment and size",
+        "Do not post-process the srcset string WordPress produces"
+      ],
+      "test_function": "wpbp_media_007( int $attachment_id, string|array $size ): string|false",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "max_srcset_image_width",
+            "description": "Uses the srcset width filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_get_attachment_image_srcset|wp_calculate_image_srcset",
+            "description": "Delegates srcset generation to WordPress",
+            "weight": 1
+          },
+          {
+            "pattern": "900",
+            "description": "Caps candidates at 900 pixels",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$a = wp_insert_attachment( array( 'post_title' => 'WPBP Media 007 A', 'post_mime_type' => 'image/jpeg', 'guid' => home_url( '/wp-content/uploads/2026/06/wpbp-media-007a.jpg' ) ) ); update_post_meta( $a, '_wp_attached_file', '2026/06/wpbp-media-007a.jpg' ); update_post_meta( $a, '_wp_attachment_metadata', array( 'width' => 2200, 'height' => 1650, 'file' => '2026/06/wpbp-media-007a.jpg', 'sizes' => array( 'medium' => array( 'file' => 'wpbp-media-007a-400x300.jpg', 'width' => 400, 'height' => 300, 'mime-type' => 'image/jpeg' ), 'wpbp-small' => array( 'file' => 'wpbp-media-007a-800x600.jpg', 'width' => 800, 'height' => 600, 'mime-type' => 'image/jpeg' ), 'large' => array( 'file' => 'wpbp-media-007a-1024x768.jpg', 'width' => 1024, 'height' => 768, 'mime-type' => 'image/jpeg' ), 'wpbp-wide' => array( 'file' => 'wpbp-media-007a-1500x1125.jpg', 'width' => 1500, 'height' => 1125, 'mime-type' => 'image/jpeg' ) ) ) ); $b = wp_insert_attachment( array( 'post_title' => 'WPBP Media 007 B', 'post_mime_type' => 'image/jpeg', 'guid' => home_url( '/wp-content/uploads/2026/06/wpbp-media-007b.jpg' ) ) ); update_post_meta( $b, '_wp_attached_file', '2026/06/wpbp-media-007b.jpg' ); update_post_meta( $b, '_wp_attachment_metadata', array( 'width' => 1800, 'height' => 1200, 'file' => '2026/06/wpbp-media-007b.jpg', 'sizes' => array( 'wpbp-tiny' => array( 'file' => 'wpbp-media-007b-300x200.jpg', 'width' => 300, 'height' => 200, 'mime-type' => 'image/jpeg' ), 'medium' => array( 'file' => 'wpbp-media-007b-600x400.jpg', 'width' => 600, 'height' => 400, 'mime-type' => 'image/jpeg' ), 'large' => array( 'file' => 'wpbp-media-007b-1200x800.jpg', 'width' => 1200, 'height' => 800, 'mime-type' => 'image/jpeg' ) ) ) ); $GLOBALS['wpbp_media_007_a'] = (int) $a; $GLOBALS['wpbp_media_007_b'] = (int) $b;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_007' ) ) { return false; } $a = (int) $GLOBALS['wpbp_media_007_a']; $b = (int) $GLOBALS['wpbp_media_007_b']; $a_medium = wpbp_media_007( $a, 'medium' ); $a_large = wpbp_media_007( $a, 'large' ); $b_medium = wpbp_media_007( $b, 'medium' ); if ( ! is_string( $a_medium ) || ! is_string( $a_large ) || ! is_string( $b_medium ) ) { return false; } $has = static function ( string $srcset, string $needle ): bool { return str_contains( $srcset, $needle ); }; return $has( $a_medium, 'wpbp-media-007a-400x300.jpg 400w' ) && $has( $a_medium, 'wpbp-media-007a-800x600.jpg 800w' ) && ! $has( $a_medium, ' 1024w' ) && ! $has( $a_medium, ' 1500w' ) && ! $has( $a_medium, ' 2200w' ) && $has( $a_large, 'wpbp-media-007a-1024x768.jpg 1024w' ) && $has( $a_large, 'wpbp-media-007a-800x600.jpg 800w' ) && $has( $a_large, 'wpbp-media-007a-400x300.jpg 400w' ) && ! $has( $a_large, ' 1500w' ) && ! $has( $a_large, ' 2200w' ) && $has( $b_medium, 'wpbp-media-007b-300x200.jpg 300w' ) && $has( $b_medium, 'wpbp-media-007b-600x400.jpg 600w' ) && ! $has( $b_medium, ' 1200w' ) && ! $has( $b_medium, ' 1800w' );",
+            "description": "Candidates above the cap are dropped for both attachments while the rendered source survives",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'max_srcset_image_width' ); foreach ( array( 'wpbp_media_007_a', 'wpbp_media_007_b' ) as $key ) { $id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $id > 0 ) { wp_delete_attachment( $id, true ); } unset( $GLOBALS[ $key ] ); }"
+      },
+      "reference_solution": "add_filter( 'max_srcset_image_width', static function ( $max_width ) { return 900; } ); function wpbp_media_007( int $attachment_id, string|array $size ): string|false { return wp_get_attachment_image_srcset( $attachment_id, $size ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_media_007( int $attachment_id, string|array $size ): string|false { $srcset = wp_get_attachment_image_srcset( $attachment_id, $size ); if ( ! is_string( $srcset ) ) { return $srcset; } $kept = array(); foreach ( explode( ',', $srcset ) as $candidate ) { $candidate = trim( $candidate ); if ( 1 === preg_match( '/ (\\\\d+)w$/', $candidate, $m ) && (int) $m[1] <= 900 ) { $kept[] = $candidate; } } return implode( ', ', $kept ); }",
+        "add_filter( 'max_srcset_image_width', static function ( $max_width ) { return 900; } ); function wpbp_media_007( int $attachment_id, string|array $size ): string|false { return wp_get_attachment_image_url( $attachment_id, $size ); }"
+      ]
+    },
+    {
+      "id": "e-media-008",
+      "category": "media",
+      "prompt": "Implement a function that returns WordPress's <img> markup for an attachment at a requested size, applying the supplied extra attributes and letting WordPress resolve everything it knows about the attachment itself: the alternative text stored with the attachment, and the loading and decoding behaviour that follows from the attributes it is given. An attachment that has no image source must produce an empty string.",
+      "expected_behavior": "The function delegates to `wp_get_attachment_image( $attachment_id, $size, false, $attr )`. WordPress fills `alt` from the attachment's stored alternative text (empty string when there is none) unless the caller overrides it, omits the `loading` attribute entirely when the caller passes `false` for it, and drops a `decoding` value that is not one of `async`, `sync` or `auto` instead of printing it. Building the tag by hand loses all three behaviours.",
+      "requirements": [
+        "Use WordPress's attachment image markup API rather than assembling the tag",
+        "Pass the requested size and the supplied attributes through to WordPress",
+        "Return an empty string when WordPress has no image for the attachment"
+      ],
+      "test_function": "wpbp_media_008( int $attachment_id, string|array $size, array $attr ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_get_attachment_image",
+            "description": "Uses the attachment image markup API",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_media_008_token'] = 'wpbp' . wp_rand( 100000, 999999 ); $t = $GLOBALS['wpbp_media_008_token']; $a = wp_insert_attachment( array( 'post_title' => 'WPBP Media 008 A', 'post_mime_type' => 'image/jpeg', 'guid' => home_url( '/wp-content/uploads/2026/06/wpbp-media-008a.jpg' ) ) ); update_post_meta( $a, '_wp_attached_file', '2026/06/wpbp-media-008a.jpg' ); update_post_meta( $a, '_wp_attachment_metadata', array( 'width' => 640, 'height' => 480, 'file' => '2026/06/wpbp-media-008a.jpg', 'sizes' => array() ) ); update_post_meta( $a, '_wp_attachment_image_alt', 'Fixture alt ' . $t ); $b = wp_insert_attachment( array( 'post_title' => 'WPBP Media 008 B', 'post_mime_type' => 'image/jpeg', 'guid' => home_url( '/wp-content/uploads/2026/06/wpbp-media-008b.jpg' ) ) ); update_post_meta( $b, '_wp_attached_file', '2026/06/wpbp-media-008b.jpg' ); update_post_meta( $b, '_wp_attachment_metadata', array( 'width' => 320, 'height' => 240, 'file' => '2026/06/wpbp-media-008b.jpg', 'sizes' => array() ) ); $GLOBALS['wpbp_media_008_a'] = (int) $a; $GLOBALS['wpbp_media_008_b'] = (int) $b;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_008' ) ) { return false; } $t = $GLOBALS['wpbp_media_008_token']; $a = (int) $GLOBALS['wpbp_media_008_a']; $b = (int) $GLOBALS['wpbp_media_008_b']; $plain = wpbp_media_008( $a, 'full', array() ); $omitted = wpbp_media_008( $a, 'full', array( 'loading' => false, 'decoding' => 'wpbp-bogus' ) ); $overridden = wpbp_media_008( $a, 'full', array( 'decoding' => 'sync', 'alt' => 'Override ' . $t ) ); $no_alt = wpbp_media_008( $b, 'full', array() ); $missing = wpbp_media_008( 0, 'full', array() ); foreach ( array( $plain, $omitted, $overridden, $no_alt, $missing ) as $one ) { if ( ! is_string( $one ) ) { return false; } } return str_contains( $plain, 'alt=\"Fixture alt ' . $t . '\"' ) && str_contains( $plain, 'decoding=\"async\"' ) && str_contains( $omitted, 'alt=\"Fixture alt ' . $t . '\"' ) && ! str_contains( $omitted, 'loading=' ) && ! str_contains( $omitted, 'decoding=' ) && str_contains( $overridden, 'decoding=\"sync\"' ) && str_contains( $overridden, 'alt=\"Override ' . $t . '\"' ) && ! str_contains( $overridden, 'Fixture alt' ) && str_contains( $no_alt, 'alt=\"\"' ) && '' === $missing;",
+            "description": "Stored alt text, omitted loading and an invalid decoding value are handled the way WordPress does",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array( 'wpbp_media_008_a', 'wpbp_media_008_b' ) as $key ) { $id = (int) ( $GLOBALS[ $key ] ?? 0 ); if ( $id > 0 ) { wp_delete_attachment( $id, true ); } unset( $GLOBALS[ $key ] ); } unset( $GLOBALS['wpbp_media_008_token'] );"
+      },
+      "reference_solution": "function wpbp_media_008( int $attachment_id, string|array $size, array $attr ): string { return wp_get_attachment_image( $attachment_id, $size, false, $attr ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_media_008( int $attachment_id, string|array $size, array $attr ): string { $src = wp_get_attachment_image_src( $attachment_id, $size ); if ( ! is_array( $src ) ) { return ''; } $attr = array_merge( array( 'src' => $src[0], 'alt' => get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) ), $attr ); $html = '<img'; foreach ( $attr as $name => $value ) { $html .= ' ' . $name . '=\"' . esc_attr( $value ) . '\"'; } return $html . ' />'; }",
+        "function wpbp_media_008( int $attachment_id, string|array $size, array $attr ): string { return wp_get_attachment_image( $attachment_id, $size ); }"
+      ]
+    },
+    {
+      "id": "e-media-009",
+      "category": "media",
+      "prompt": "Implement a function that imports a batch of files that already live on this server into the media library, attaching each one to the supplied post, and returns the new attachment IDs in the order the files were given. Each entry of the batch is an array with the file's intended name under the key 'name' and the path of the file on disk under the key 'tmp_name'. Nothing arrives through an HTTP form here, so WordPress's form validation must be skipped, and the imported files must end up in the uploads directory rather than staying where they were.",
+      "expected_behavior": "The function loads the admin helpers it needs (`wp-admin/includes/file.php`, `media.php` and `image.php` are not loaded on the front end) and calls `media_handle_sideload()` for each entry, which itself passes `test_form => false` to the sideload handler. WordPress moves each file into the uploads directory, so the original paths no longer exist afterwards, creates one attachment per file parented to the supplied post, and generates its metadata. `wp_handle_upload()` would reject these files because they were never uploaded through PHP.",
+      "requirements": [
+        "Use WordPress's sideload API to import files that are already on the server",
+        "Load the admin includes those functions live in before calling them",
+        "Attach every imported file to the supplied post",
+        "Return the attachment IDs in the order the files were supplied"
+      ],
+      "test_function": "wpbp_media_009( array $files, int $post_id ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "media_handle_sideload|wp_handle_sideload",
+            "description": "Uses the sideload API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp\\-admin\\/includes\\/file\\.php",
+            "description": "Loads the admin file helpers",
+            "weight": 1
+          },
+          {
+            "pattern": "wp\\-admin\\/includes\\/media\\.php",
+            "description": "Loads the admin media helpers",
+            "weight": 1
+          },
+          {
+            "pattern": "wp\\-admin\\/includes\\/image\\.php",
+            "description": "Loads the admin image helpers",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_media_009_token'] = 'wpbp' . wp_rand( 100000, 999999 ); $t = $GLOBALS['wpbp_media_009_token']; $GLOBALS['wpbp_media_009_post'] = (int) wp_insert_post( array( 'post_title' => 'WPBP Media 009 Parent', 'post_status' => 'publish', 'post_type' => 'post' ) ); $png = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' ); $files = array(); foreach ( array( 'a', 'b' ) as $suffix ) { $path = sys_get_temp_dir() . '/wpbp-src-' . $t . '-' . $suffix . '.png'; file_put_contents( $path, $png ); $files[] = $path; } $GLOBALS['wpbp_media_009_files'] = $files;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_media_009' ) ) { return false; } $t = $GLOBALS['wpbp_media_009_token']; $parent = (int) $GLOBALS['wpbp_media_009_post']; $sources = $GLOBALS['wpbp_media_009_files']; $batch = array( array( 'name' => 'wpbp-report-a-' . $t . '.png', 'tmp_name' => $sources[0] ), array( 'name' => 'wpbp-report-b-' . $t . '.png', 'tmp_name' => $sources[1] ) ); $ids = wpbp_media_009( $batch, $parent ); if ( ! is_array( $ids ) || 2 !== count( $ids ) ) { return false; } $ids = array_values( $ids ); $paths = array(); foreach ( $ids as $id ) { if ( ! is_int( $id ) || $id <= 0 ) { return false; } if ( 'attachment' !== get_post_type( $id ) ) { return false; } if ( $parent !== (int) get_post_field( 'post_parent', $id ) ) { return false; } if ( 'image/png' !== get_post_mime_type( $id ) ) { return false; } $path = get_attached_file( $id ); if ( ! is_string( $path ) || ! file_exists( $path ) ) { return false; } $paths[] = $path; } if ( $paths[0] === $paths[1] ) { return false; } if ( ! str_starts_with( wp_basename( $paths[0] ), 'wpbp-report-a-' . $t ) ) { return false; } if ( ! str_starts_with( wp_basename( $paths[1] ), 'wpbp-report-b-' . $t ) ) { return false; } $uploads = wp_get_upload_dir(); if ( ! str_starts_with( $paths[0], $uploads['basedir'] ) ) { return false; } return ! file_exists( $sources[0] ) && ! file_exists( $sources[1] );",
+            "description": "Both files become attachments of the post, land in the uploads directory and leave their sources behind",
+            "weight": 1
+          }
+        ],
+        "teardown": "$parent = (int) ( $GLOBALS['wpbp_media_009_post'] ?? 0 ); if ( $parent > 0 ) { foreach ( get_posts( array( 'post_type' => 'attachment', 'post_parent' => $parent, 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids' ) ) as $attachment_id ) { wp_delete_attachment( (int) $attachment_id, true ); } wp_delete_post( $parent, true ); } foreach ( (array) ( $GLOBALS['wpbp_media_009_files'] ?? array() ) as $path ) { if ( is_string( $path ) && file_exists( $path ) ) { unlink( $path ); } } unset( $GLOBALS['wpbp_media_009_post'], $GLOBALS['wpbp_media_009_files'], $GLOBALS['wpbp_media_009_token'] );"
+      },
+      "reference_solution": "function wpbp_media_009( array $files, int $post_id ): array { require_once ABSPATH . 'wp-admin/includes/file.php'; require_once ABSPATH . 'wp-admin/includes/media.php'; require_once ABSPATH . 'wp-admin/includes/image.php'; $ids = array(); foreach ( $files as $file ) { $attachment_id = media_handle_sideload( array( 'name' => $file['name'], 'tmp_name' => $file['tmp_name'] ), $post_id ); if ( is_wp_error( $attachment_id ) ) { continue; } $ids[] = (int) $attachment_id; } return $ids; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/media.php",
+          "src/wp-admin/includes/file.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_media_009( array $files, int $post_id ): array { $ids = array(); foreach ( $files as $file ) { $id = wp_insert_attachment( array( 'post_title' => $file['name'], 'post_mime_type' => 'image/png', 'post_parent' => $post_id, 'post_status' => 'inherit' ), $file['tmp_name'], $post_id ); if ( ! is_wp_error( $id ) ) { $ids[] = (int) $id; } } return $ids; }",
+        "function wpbp_media_009( array $files, int $post_id ): array { require_once ABSPATH . 'wp-admin/includes/file.php'; require_once ABSPATH . 'wp-admin/includes/media.php'; require_once ABSPATH . 'wp-admin/includes/image.php'; $ids = array(); foreach ( $files as $file ) { $upload = wp_handle_upload( array( 'name' => $file['name'], 'tmp_name' => $file['tmp_name'] ), array( 'test_form' => false ) ); if ( isset( $upload['error'] ) ) { continue; } $ids[] = 1; } return $ids; }"
+      ]
     }
   ]
 }

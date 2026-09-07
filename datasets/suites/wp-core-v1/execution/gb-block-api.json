@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_api",
-  "version": "2.2.0",
+  "version": "2.3.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block API",
     "description": "Code generation tasks for WordPress Block API APIs",
@@ -316,6 +316,696 @@
         ],
         "release_focus": "6.9"
       }
+    },
+    {
+      "id": "e-gb-block-api-007",
+      "category": "gb-block-api",
+      "prompt": "Build a small WordPress plugin that provides a dynamic block named 'wpbp/post-badge'. The block renders a short badge for the post it is placed in: a label, a colon and a space, then the title of the post that the surrounding block context identifies. When the block is rendered with no post in context the title part is the word none instead. The label comes from a 'label' block attribute whose default is 'Post'. Describe the block with block.json metadata and keep the server markup in a separate render file.",
+      "expected_behavior": "Reviewer contract: block.json declares name 'wpbp/post-badge', an attributes entry for 'label' (string, default 'Post'), \"usesContext\": [\"postId\"], and \"render\": \"file:./render.php\". The plugin registers the block from that metadata, so WP_Block_Type::$uses_context contains postId and the render callback is the one synthesized by register_block_type_from_metadata(). Rendering the block with context postId set to two different posts yields the two different post titles; rendering with no context yields 'Post: none'; an explicit label attribute replaces the default. The markup is a single span carrying the class wpbp-post-badge.",
+      "requirements": [
+        "Ship a block.json that declares the block name, its label attribute and default, and the post context the block consumes.",
+        "Keep the server-side markup in its own PHP render file referenced from the block metadata rather than an inline render callback.",
+        "Render exactly one span element carrying the class wpbp-post-badge whose text is the label, a colon and a space, then the post title.",
+        "Register the block when WordPress registers block types."
+      ],
+      "artifact_kind": "wp_plugin_files",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp\\/post-badge",
+            "description": "Declares the requested block name",
+            "weight": 1
+          },
+          {
+            "pattern": "usesContext",
+            "description": "Declares the consumed block context in block.json",
+            "weight": 1
+          },
+          {
+            "pattern": "file:\\.\\/render\\.php",
+            "description": "Points block.json at a separate render file",
+            "weight": 1
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Registers the block type from its metadata",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_fire = static function ( string $hook ): void { if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) { return; } foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks as $callbacks ) { foreach ( $callbacks as $callback ) { $fn = $callback['function']; try { if ( is_array( $fn ) ) { $ref = new ReflectionMethod( $fn[0], $fn[1] ); } elseif ( is_string( $fn ) && str_contains( $fn, '::' ) ) { $ref = new ReflectionMethod( $fn ); } elseif ( is_object( $fn ) && ! ( $fn instanceof Closure ) ) { $ref = new ReflectionMethod( $fn, '__invoke' ); } else { $ref = new ReflectionFunction( $fn ); } } catch ( Throwable $e ) { continue; } if ( str_contains( (string) $ref->getFileName(), 'wp-bench-candidate' ) ) { call_user_func( $fn ); } } } }; if ( ! WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/post-badge' ) ) { $wpbp_fire( 'plugins_loaded' ); $wpbp_fire( 'init' ); } $GLOBALS['wpbp_140'] = array( 'a' => wp_insert_post( array( 'post_title' => 'Alpha Report', 'post_content' => 'a', 'post_status' => 'publish' ) ), 'b' => wp_insert_post( array( 'post_title' => 'Beta Digest', 'post_content' => 'b', 'post_status' => 'publish' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$type = WP_Block_Type_Registry::get_instance()->get_registered( 'wpbp/post-badge' ); if ( ! $type instanceof WP_Block_Type ) { return false; } if ( ! is_callable( $type->render_callback ) ) { return false; } if ( ! in_array( 'postId', (array) $type->uses_context, true ) ) { return false; } $attrs = (array) $type->attributes; return isset( $attrs['label']['default'] ) && 'Post' === $attrs['label']['default'];",
+            "description": "The block type is registered from metadata declaring the postId context and a defaulted label attribute",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$render = static function ( array $attrs, array $context ): string { $parsed = array( 'blockName' => 'wpbp/post-badge', 'attrs' => $attrs, 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ); $instance = new WP_Block( $parsed, $context ); return $instance->render(); }; $a = $render( array(), array( 'postId' => $GLOBALS['wpbp_140']['a'] ) ); $b = $render( array(), array( 'postId' => $GLOBALS['wpbp_140']['b'] ) ); if ( ! str_contains( $a, 'Post: Alpha Report' ) || ! str_contains( $b, 'Post: Beta Digest' ) ) { return false; } if ( str_contains( $a, 'Beta Digest' ) || str_contains( $b, 'Alpha Report' ) ) { return false; } $p = new WP_HTML_Tag_Processor( $a ); if ( ! $p->next_tag( 'SPAN' ) ) { return false; } $class = (string) $p->get_attribute( 'class' ); return str_contains( ' ' . $class . ' ', ' wpbp-post-badge ' ) && ! $p->next_tag( 'SPAN' );",
+            "description": "Two different post contexts render the two different post titles inside one wpbp-post-badge span",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$render = static function ( array $attrs, array $context ): string { $parsed = array( 'blockName' => 'wpbp/post-badge', 'attrs' => $attrs, 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ); $instance = new WP_Block( $parsed, $context ); return $instance->render(); }; $none = $render( array(), array() ); $labelled = $render( array( 'label' => 'Feature' ), array( 'postId' => $GLOBALS['wpbp_140']['b'] ) ); if ( ! str_contains( $none, 'Post: none' ) ) { return false; } if ( ! str_contains( $labelled, 'Feature: Beta Digest' ) ) { return false; } return ! str_contains( $labelled, 'Post: Beta Digest' );",
+            "description": "Missing context falls back to none and an explicit label attribute replaces the default",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_140'] ) ) { foreach ( $GLOBALS['wpbp_140'] as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } unset( $GLOBALS['wpbp_140'] ); }"
+      },
+      "reference_solution": "// Plugin artifact test: the canonical implementation is in reference_files (wpbp-post-badge.php, blocks/post-badge/block.json, blocks/post-badge/render.php).",
+      "reference_files": {
+        "wpbp-post-badge.php": "<?php\n/**\n * Plugin Name: WPBP Post Badge\n * Description: Dynamic badge block rendered from block.json metadata.\n * Version: 1.0.0\n */\n\nadd_action(\n\t'init',\n\tstatic function (): void {\n\t\tregister_block_type_from_metadata( __DIR__ . '/blocks/post-badge' );\n\t}\n);\n",
+        "blocks/post-badge/block.json": "{\n\t\"$schema\": \"https://schemas.wp.org/trunk/block.json\",\n\t\"apiVersion\": 3,\n\t\"name\": \"wpbp/post-badge\",\n\t\"title\": \"Post Badge\",\n\t\"category\": \"text\",\n\t\"attributes\": {\n\t\t\"label\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"default\": \"Post\"\n\t\t}\n\t},\n\t\"usesContext\": [ \"postId\" ],\n\t\"render\": \"file:./render.php\"\n}\n",
+        "blocks/post-badge/render.php": "<?php\n$wpbp_label   = isset( $attributes['label'] ) ? (string) $attributes['label'] : 'Post';\n$wpbp_post_id = isset( $block->context['postId'] ) ? (int) $block->context['postId'] : 0;\n$wpbp_title   = $wpbp_post_id ? get_the_title( $wpbp_post_id ) : 'none';\nprintf(\n\t'<span %1$s>%2$s</span>',\n\tget_block_wrapper_attributes( array( 'class' => 'wpbp-post-badge' ) ),\n\tesc_html( $wpbp_label . ': ' . $wpbp_title )\n);\n"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-type.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_block_type( 'wpbp/post-badge', array( 'attributes' => array( 'label' => array( 'type' => 'string', 'default' => 'Post' ) ), 'uses_context' => array( 'postId' ), 'render_callback' => static function ( $attributes, $content, $block ): string { return '<span class=\"wpbp-post-badge\">' . esc_html( ( $attributes['label'] ?? 'Post' ) . ': Alpha Report' ) . '</span>'; } ) );",
+        "register_block_type( 'wpbp/post-badge', array( 'attributes' => array( 'label' => array( 'type' => 'string', 'default' => 'Post' ) ), 'render_callback' => static function ( $attributes, $content, $block ): string { $id = (int) get_the_ID(); $title = $id ? get_the_title( $id ) : 'none'; return '<span class=\"wpbp-post-badge\">' . esc_html( ( $attributes['label'] ?? 'Post' ) . ': ' . $title ) . '</span>'; } ) );"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-008",
+      "category": "gb-block-api",
+      "prompt": "Build a small WordPress plugin providing two blocks that work together. 'wpbp/roster' is a container block that carries a team name in a 'team' attribute. 'wpbp/roster-member' renders a single span with the class wpbp-roster-member whose text is 'Team: ' followed by the team name of the roster it sits in, however deeply it is nested inside other blocks. A member block placed outside any roster renders 'Team: unassigned'. Describe both blocks with block.json metadata.",
+      "expected_behavior": "Reviewer contract: wpbp/roster declares a 'team' attribute and shares it through providesContext; wpbp/roster-member lists that same context key in usesContext and renders it server-side. Because WP_Block passes its available context down through every descendant, a member nested inside a core/group inside the roster still sees the value. Rendering rosters with two different team names produces two different outputs, and a standalone member falls back to 'unassigned'. The registry must show the parent's providesContext mapping the 'team' attribute onto a key the child consumes, so a solution that smuggles the value through a global or a hard-coded string does not qualify.",
+      "requirements": [
+        "Register both block types from block.json metadata.",
+        "Take the team name from the container's 'team' block attribute and share it with descendants through block context.",
+        "Render the member block server-side as exactly one span with the class wpbp-roster-member.",
+        "Fall back to the word unassigned when no roster context is present."
+      ],
+      "artifact_kind": "wp_plugin_files",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp\\/roster-member",
+            "description": "Declares the member block",
+            "weight": 1
+          },
+          {
+            "pattern": "providesContext",
+            "description": "The container shares its attribute as block context",
+            "weight": 1
+          },
+          {
+            "pattern": "usesContext",
+            "description": "The member block consumes the shared context",
+            "weight": 1
+          },
+          {
+            "pattern": "register_block_type",
+            "description": "Registers both block types",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_fire = static function ( string $hook ): void { if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) { return; } foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks as $callbacks ) { foreach ( $callbacks as $callback ) { $fn = $callback['function']; try { if ( is_array( $fn ) ) { $ref = new ReflectionMethod( $fn[0], $fn[1] ); } elseif ( is_string( $fn ) && str_contains( $fn, '::' ) ) { $ref = new ReflectionMethod( $fn ); } elseif ( is_object( $fn ) && ! ( $fn instanceof Closure ) ) { $ref = new ReflectionMethod( $fn, '__invoke' ); } else { $ref = new ReflectionFunction( $fn ); } } catch ( Throwable $e ) { continue; } if ( str_contains( (string) $ref->getFileName(), 'wp-bench-candidate' ) ) { call_user_func( $fn ); } } } }; if ( ! WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/roster-member' ) ) { $wpbp_fire( 'plugins_loaded' ); $wpbp_fire( 'init' ); } $GLOBALS['wpbp_141'] = static function ( string $team ): string { return '<!-- wp:wpbp/roster {\"team\":\"' . $team . '\"} --><div class=\"wpbp-roster\"><!-- wp:wpbp/roster-member /--><!-- wp:group --><div class=\"wp-block-group\"><!-- wp:wpbp/roster-member /--></div><!-- /wp:group --></div><!-- /wp:wpbp/roster -->'; };",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$registry = WP_Block_Type_Registry::get_instance(); $parent = $registry->get_registered( 'wpbp/roster' ); $child = $registry->get_registered( 'wpbp/roster-member' ); if ( ! $parent instanceof WP_Block_Type || ! $child instanceof WP_Block_Type ) { return false; } $provides = (array) $parent->provides_context; $key = array_search( 'team', $provides, true ); if ( false === $key ) { return false; } return in_array( $key, (array) $child->uses_context, true );",
+            "description": "The container provides its team attribute as context under a key the member block consumes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$markup = $GLOBALS['wpbp_141']; $blue = do_blocks( $markup( 'Blue' ) ); $red = do_blocks( $markup( 'Red' ) ); if ( 2 !== substr_count( $blue, 'Team: Blue' ) ) { return false; } if ( 2 !== substr_count( $red, 'Team: Red' ) ) { return false; } if ( str_contains( $blue, 'Red' ) || str_contains( $red, 'Blue' ) ) { return false; } return ! str_contains( $blue, 'unassigned' );",
+            "description": "Members render their roster's team name, including one nested inside a group block",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$standalone = do_blocks( '<!-- wp:wpbp/roster-member /-->' ); if ( ! str_contains( $standalone, 'Team: unassigned' ) ) { return false; } $p = new WP_HTML_Tag_Processor( $standalone ); if ( ! $p->next_tag( 'SPAN' ) ) { return false; } $class = (string) $p->get_attribute( 'class' ); return str_contains( ' ' . $class . ' ', ' wpbp-roster-member ' ) && ! $p->next_tag( 'SPAN' );",
+            "description": "A member block outside any roster falls back to unassigned inside one member span",
+            "weight": 1
+          }
+        ],
+        "teardown": "unset( $GLOBALS['wpbp_141'] );"
+      },
+      "reference_solution": "// Plugin artifact test: the canonical implementation is in reference_files (wpbp-roster.php, blocks/roster/block.json, blocks/roster-member/block.json, blocks/roster-member/render.php).",
+      "reference_files": {
+        "wpbp-roster.php": "<?php\n/**\n * Plugin Name: WPBP Roster\n * Description: Container and member blocks connected through block context.\n * Version: 1.0.0\n */\n\nadd_action(\n\t'init',\n\tstatic function (): void {\n\t\tregister_block_type_from_metadata( __DIR__ . '/blocks/roster' );\n\t\tregister_block_type_from_metadata( __DIR__ . '/blocks/roster-member' );\n\t}\n);\n",
+        "blocks/roster/block.json": "{\n\t\"$schema\": \"https://schemas.wp.org/trunk/block.json\",\n\t\"apiVersion\": 3,\n\t\"name\": \"wpbp/roster\",\n\t\"title\": \"Roster\",\n\t\"category\": \"design\",\n\t\"attributes\": {\n\t\t\"team\": {\n\t\t\t\"type\": \"string\",\n\t\t\t\"default\": \"\"\n\t\t}\n\t},\n\t\"providesContext\": {\n\t\t\"wpbp/team\": \"team\"\n\t}\n}\n",
+        "blocks/roster-member/block.json": "{\n\t\"$schema\": \"https://schemas.wp.org/trunk/block.json\",\n\t\"apiVersion\": 3,\n\t\"name\": \"wpbp/roster-member\",\n\t\"title\": \"Roster Member\",\n\t\"category\": \"design\",\n\t\"parent\": [ \"wpbp/roster\" ],\n\t\"usesContext\": [ \"wpbp/team\" ],\n\t\"render\": \"file:./render.php\"\n}\n",
+        "blocks/roster-member/render.php": "<?php\n$wpbp_team = isset( $block->context['wpbp/team'] ) ? (string) $block->context['wpbp/team'] : '';\nif ( '' === $wpbp_team ) {\n\t$wpbp_team = 'unassigned';\n}\nprintf(\n\t'<span %1$s>%2$s</span>',\n\tget_block_wrapper_attributes( array( 'class' => 'wpbp-roster-member' ) ),\n\tesc_html( 'Team: ' . $wpbp_team )\n);\n"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/class-wp-block-list.php",
+          "src/wp-includes/blocks.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_block_type( 'wpbp/roster', array( 'attributes' => array( 'team' => array( 'type' => 'string', 'default' => '' ) ), 'provides_context' => array( 'wpbp/team' => 'team' ) ) ); register_block_type( 'wpbp/roster-member', array( 'render_callback' => static function (): string { return '<span class=\"wpbp-roster-member\">Team: Blue</span>'; } ) );",
+        "register_block_type( 'wpbp/roster', array( 'attributes' => array( 'team' => array( 'type' => 'string', 'default' => '' ) ) ) ); register_block_type( 'wpbp/roster-member', array( 'uses_context' => array( 'wpbp/team' ), 'render_callback' => static function ( $attributes, $content, $block ): string { $team = $block->context['wpbp/team'] ?? 'unassigned'; return '<span class=\"wpbp-roster-member\">' . esc_html( 'Team: ' . $team ) . '</span>'; } ) );"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-009",
+      "category": "gb-block-api",
+      "prompt": "Register a dynamic block type 'wpbp/promo' that opts into wide and full alignment and into background colour, and that stores its copy in a 'text' attribute defaulting to 'Promo'. The block renders as a single div containing the escaped text. That div must carry every class and inline style WordPress derives from the block's supports and attributes for the editor's saved values, and in addition the class 'promo' before any of them plus the attribute data-promo=\"1\".",
+      "expected_behavior": "Reviewer contract: the render callback builds its opening tag with get_block_wrapper_attributes(), passing array( 'class' => 'promo', 'data-promo' => '1' ). Core merges the extra class list before the support-generated one, so 'promo' leads and alignwide, wp-block-wpbp-promo, has-background, has-accent-1-background-color and any className value follow. With no attributes the wrapper carries only 'promo' and the generated wp-block-wpbp-promo class, and no style attribute. A custom background colour yields has-background plus an inline background-color declaration, and never the preset slug class. Hand-assembled class strings or a second class attribute alongside the generated one fail.",
+      "requirements": [
+        "Register the block type when the function is called so the block renders through WordPress.",
+        "Declare wide and full alignment support and background colour support on the block type.",
+        "Give the block a 'text' attribute of type string that defaults to 'Promo'.",
+        "Render exactly one div whose attributes combine the block's own support-derived attributes with the promo class and data-promo=\"1\"."
+      ],
+      "test_function": "wpbp_block_api_009(): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp\\/promo",
+            "description": "Registers the requested block name",
+            "weight": 1
+          },
+          {
+            "pattern": "get_block_wrapper_attributes",
+            "description": "Derives the wrapper attributes from block supports",
+            "weight": 1
+          },
+          {
+            "pattern": "data-promo",
+            "description": "Adds the extra wrapper attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "align",
+            "description": "Declares alignment support",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/promo' ) ) { wpbp_block_api_009(); } $render = static function ( array $attrs ): string { return render_block( array( 'blockName' => 'wpbp/promo', 'attrs' => $attrs, 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }; $classes = static function ( string $html ): array { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( 'DIV' ) ) { return array( '@none' ); } return preg_split( '/\\\\s+/', (string) $p->get_attribute( 'class' ), -1, PREG_SPLIT_NO_EMPTY ); }; $html = $render( array( 'align' => 'wide', 'backgroundColor' => 'accent-1' ) ); $list = $classes( $html ); if ( 'promo' !== ( $list[0] ?? '' ) ) { return false; } $expected = array( 'alignwide', 'has-accent-1-background-color', 'has-background', 'promo', 'wp-block-wpbp-promo' ); $actual = $list; sort( $actual ); if ( $expected !== $actual ) { return false; } $p = new WP_HTML_Tag_Processor( $html ); $p->next_tag( 'DIV' ); return '1' === $p->get_attribute( 'data-promo' ) && str_contains( $html, 'Promo' ) && ! $p->next_tag( 'DIV' );",
+            "description": "Alignment and preset background classes are merged after the promo class on one wrapper div",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/promo' ) ) { wpbp_block_api_009(); } $render = static function ( array $attrs ): string { return render_block( array( 'blockName' => 'wpbp/promo', 'attrs' => $attrs, 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }; $classes = static function ( string $html ): array { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( 'DIV' ) ) { return array( '@none' ); } return preg_split( '/\\\\s+/', (string) $p->get_attribute( 'class' ), -1, PREG_SPLIT_NO_EMPTY ); }; $html = $render( array() ); if ( array( 'promo', 'wp-block-wpbp-promo' ) !== $classes( $html ) ) { return false; } $p = new WP_HTML_Tag_Processor( $html ); $p->next_tag( 'DIV' ); return null === $p->get_attribute( 'style' ) && str_contains( $html, 'Promo' );",
+            "description": "An attribute-free block renders only the promo class and no inline style",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/promo' ) ) { wpbp_block_api_009(); } $render = static function ( array $attrs ): string { return render_block( array( 'blockName' => 'wpbp/promo', 'attrs' => $attrs, 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ) ); }; $classes = static function ( string $html ): array { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( 'DIV' ) ) { return array( '@none' ); } return preg_split( '/\\\\s+/', (string) $p->get_attribute( 'class' ), -1, PREG_SPLIT_NO_EMPTY ); }; $html = $render( array( 'className' => 'is-featured', 'text' => 'Sale', 'style' => array( 'color' => array( 'background' => '#123456' ) ) ) ); $list = $classes( $html ); if ( 'promo' !== ( $list[0] ?? '' ) ) { return false; } if ( ! in_array( 'is-featured', $list, true ) || ! in_array( 'has-background', $list, true ) ) { return false; } if ( in_array( 'has-accent-1-background-color', $list, true ) ) { return false; } $p = new WP_HTML_Tag_Processor( $html ); $p->next_tag( 'DIV' ); $style = (string) $p->get_attribute( 'style' ); return str_contains( str_replace( ' ', '', $style ), 'background-color:#123456' ) && str_contains( $html, 'Sale' );",
+            "description": "A custom class and a custom background colour reach the wrapper as class and inline style",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_block_api_009(): bool { if ( WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/promo' ) ) { return true; } return (bool) register_block_type( 'wpbp/promo', array( 'api_version' => 3, 'attributes' => array( 'text' => array( 'type' => 'string', 'default' => 'Promo' ) ), 'supports' => array( 'align' => array( 'wide', 'full' ), 'color' => array( 'background' => true, 'text' => false ) ), 'render_callback' => static function ( $attributes, $content, $block ): string { return sprintf( '<div %1$s>%2$s</div>', get_block_wrapper_attributes( array( 'class' => 'promo', 'data-promo' => '1' ) ), esc_html( (string) ( $attributes['text'] ?? 'Promo' ) ) ); } ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-supports.php",
+          "src/wp-includes/block-supports/align.php",
+          "src/wp-includes/block-supports/colors.php",
+          "src/wp-includes/block-supports/custom-classname.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_009(): bool { if ( WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/promo' ) ) { return true; } return (bool) register_block_type( 'wpbp/promo', array( 'attributes' => array( 'text' => array( 'type' => 'string', 'default' => 'Promo' ) ), 'supports' => array( 'align' => array( 'wide', 'full' ), 'color' => array( 'background' => true ) ), 'render_callback' => static function ( $attributes, $content, $block ): string { $class = 'promo'; if ( ! empty( $attributes['align'] ) ) { $class .= ' align' . $attributes['align']; } if ( ! empty( $attributes['backgroundColor'] ) ) { $class .= ' has-background has-' . $attributes['backgroundColor'] . '-background-color'; } return sprintf( '<div class=\"%1$s\" data-promo=\"1\">%2$s</div>', esc_attr( $class ), esc_html( (string) ( $attributes['text'] ?? 'Promo' ) ) ); } ) ); }",
+        "function wpbp_block_api_009(): bool { if ( WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/promo' ) ) { return true; } return (bool) register_block_type( 'wpbp/promo', array( 'attributes' => array( 'text' => array( 'type' => 'string', 'default' => 'Promo' ) ), 'supports' => array( 'align' => array( 'wide', 'full' ), 'color' => array( 'background' => true ) ), 'render_callback' => static function ( $attributes, $content, $block ): string { return sprintf( '<div class=\"promo\" data-promo=\"1\" %1$s>%2$s</div>', get_block_wrapper_attributes(), esc_html( (string) ( $attributes['text'] ?? 'Promo' ) ) ); } ) ); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-010",
+      "category": "gb-block-api",
+      "prompt": "A Query Loop block variation marks itself by putting the namespace 'wpbp/featured' into the query settings it passes down to its children. Make Query Loops carrying that namespace return only posts whose 'wpbp_featured' post meta is '1'. Query Loops without that namespace must keep their normal results, and a featured loop must still honour every other query setting the loop itself declares, such as post exclusions, ordering and paging.",
+      "expected_behavior": "Reviewer contract: a query_loop_block_query_vars filter reads $block->context['query']['namespace'] and returns the incoming $query array untouched for every other loop. For the namespaced loop it adds a meta query for wpbp_featured while preserving the arguments core already computed - notably the post__not_in that build_query_vars_from_query_block() fills in for the 7.1 excludeCurrent setting. Rebuilding the argument array from scratch, or applying the restriction to every loop, fails.",
+      "requirements": [
+        "Restrict only the loops whose query settings declare the wpbp/featured namespace.",
+        "Select posts by their wpbp_featured meta value of '1'.",
+        "Leave the arguments WordPress already derived from the loop's own query settings in place."
+      ],
+      "test_function": "wpbp_block_api_010(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "query_loop_block_query_vars",
+            "description": "Filters the Query Loop query arguments",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_featured",
+            "description": "Selects on the featured meta key",
+            "weight": 1
+          },
+          {
+            "pattern": "namespace",
+            "description": "Scopes the change to the namespaced loop",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_item', array( 'public' => true, 'label' => 'WPBP Items', 'supports' => array( 'title', 'editor', 'custom-fields' ) ) ); $GLOBALS['wpbp_133'] = array(); foreach ( array( array( 'Item One', '1' ), array( 'Item Two', '' ), array( 'Item Three', '1' ) ) as $i => $spec ) { $id = wp_insert_post( array( 'post_type' => 'wpbp_item', 'post_title' => $spec[0], 'post_status' => 'publish', 'post_date' => sprintf( '2026-01-%02d 10:00:00', $i + 1 ), 'post_date_gmt' => sprintf( '2026-01-%02d 10:00:00', $i + 1 ) ) ); if ( '' !== $spec[1] ) { update_post_meta( $id, 'wpbp_featured', $spec[1] ); } $GLOBALS['wpbp_133'][] = $id; }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_010_ran'] ) ) { $GLOBALS['wpbp_block_api_010_ran'] = true; wpbp_block_api_010(); } $run = static function ( array $query ): array { $block = new WP_Block( array( 'blockName' => 'core/post-template', 'attrs' => array(), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ), array( 'query' => $query ) ); $vars = build_query_vars_from_query_block( $block, 1 ); $found = new WP_Query( $vars ); return array_map( 'intval', wp_list_pluck( $found->posts, 'ID' ) ); }; $base = array( 'postType' => 'wpbp_item', 'perPage' => 10, 'order' => 'ASC', 'orderBy' => 'date' ); $ids = $run( array_merge( $base, array( 'namespace' => 'wpbp/featured' ) ) ); return array( (int) $GLOBALS['wpbp_133'][0], (int) $GLOBALS['wpbp_133'][2] ) === $ids;",
+            "description": "The namespaced loop returns only the two featured items in the loop's declared order",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_010_ran'] ) ) { $GLOBALS['wpbp_block_api_010_ran'] = true; wpbp_block_api_010(); } $run = static function ( array $query ): array { $block = new WP_Block( array( 'blockName' => 'core/post-template', 'attrs' => array(), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ), array( 'query' => $query ) ); $vars = build_query_vars_from_query_block( $block, 1 ); $found = new WP_Query( $vars ); return array_map( 'intval', wp_list_pluck( $found->posts, 'ID' ) ); }; $base = array( 'postType' => 'wpbp_item', 'perPage' => 10, 'order' => 'ASC', 'orderBy' => 'date' ); $ids = $run( $base ); return array_map( 'intval', $GLOBALS['wpbp_133'] ) === $ids;",
+            "description": "A loop without the namespace still returns every item",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_010_ran'] ) ) { $GLOBALS['wpbp_block_api_010_ran'] = true; wpbp_block_api_010(); } $run = static function ( array $query ): array { $block = new WP_Block( array( 'blockName' => 'core/post-template', 'attrs' => array(), 'innerBlocks' => array(), 'innerHTML' => '', 'innerContent' => array() ), array( 'query' => $query ) ); $vars = build_query_vars_from_query_block( $block, 1 ); $found = new WP_Query( $vars ); return array_map( 'intval', wp_list_pluck( $found->posts, 'ID' ) ); }; $base = array( 'postType' => 'wpbp_item', 'perPage' => 10, 'order' => 'ASC', 'orderBy' => 'date' ); $GLOBALS['post'] = get_post( (int) $GLOBALS['wpbp_133'][2] ); $ids = $run( array_merge( $base, array( 'namespace' => 'wpbp/featured', 'excludeCurrent' => true ) ) ); unset( $GLOBALS['post'] ); return array( (int) $GLOBALS['wpbp_133'][0] ) === $ids;",
+            "description": "The featured loop still drops the current post when the loop asks to exclude it",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( isset( $GLOBALS['wpbp_133'] ) ) { foreach ( $GLOBALS['wpbp_133'] as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } unset( $GLOBALS['wpbp_133'] ); } unset( $GLOBALS['post'] ); unset( $GLOBALS['wpbp_block_api_010_ran'] );"
+      },
+      "reference_solution": "function wpbp_block_api_010(): void { add_filter( 'query_loop_block_query_vars', static function ( array $query, $block, $page ): array { if ( 'wpbp/featured' !== ( $block->context['query']['namespace'] ?? '' ) ) { return $query; } $meta_query = isset( $query['meta_query'] ) && is_array( $query['meta_query'] ) ? $query['meta_query'] : array(); $meta_query[] = array( 'key' => 'wpbp_featured', 'value' => '1' ); $query['meta_query'] = $meta_query; return $query; }, 10, 3 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/blocks/post-template.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_010(): void { add_filter( 'query_loop_block_query_vars', static function ( array $query, $block, $page ): array { $query['meta_query'] = array( array( 'key' => 'wpbp_featured', 'value' => '1' ) ); return $query; }, 10, 3 ); }",
+        "function wpbp_block_api_010(): void { add_filter( 'query_loop_block_query_vars', static function ( array $query, $block, $page ): array { if ( 'wpbp/featured' !== ( $block->context['query']['namespace'] ?? '' ) ) { return $query; } return array( 'post_type' => $query['post_type'], 'order' => $query['order'], 'orderby' => $query['orderby'], 'posts_per_page' => $query['posts_per_page'] ?? 10, 'meta_query' => array( array( 'key' => 'wpbp_featured', 'value' => '1' ) ) ); }, 10, 3 ); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-011",
+      "category": "gb-block-api",
+      "prompt": "Add front-end debug instrumentation for rendered blocks. After the markup of every block that has a block type name, append the HTML comment <!--wpbp:NAME--> where NAME is that block's name. Independently, wrap the markup of paragraph blocks in <div class=\"wpbp-frame\">...</div>. For a paragraph the debug comment must end up after the frame's closing tag, never inside the frame. Classic content that has no block name gets neither the frame nor a comment.",
+      "expected_behavior": "Reviewer contract: WP_Block::render() applies the generic render_block filter first and the block-specific render_block_{name} filter afterwards, so markup added by a paragraph-specific filter always encloses whatever the generic filter produced. Placing the comment on render_block and the frame on render_block_core/paragraph therefore puts the comment inside the frame and is wrong. The working shape adds the frame on render_block at one priority and the comment on render_block at a later priority, skipping blocks whose blockName is null.",
+      "requirements": [
+        "Append the comment to every named block's rendered markup, using the block's own name.",
+        "Wrap paragraph block markup in a div carrying the class wpbp-frame.",
+        "Keep the debug comment outside the paragraph frame.",
+        "Leave classic content without a block name untouched.",
+        "Register the hooks inside the function; one call must be enough."
+      ],
+      "test_function": "wpbp_block_api_011(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "render_block",
+            "description": "Filters rendered block markup",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-frame",
+            "description": "Adds the paragraph frame",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp:",
+            "description": "Emits the debug comment",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_block_api_011(); $out = do_blocks( '<!-- wp:paragraph --><p>Hi</p><!-- /wp:paragraph -->' ); return 1 === preg_match( '~<div class=\"wpbp-frame\"><p[^>]*>Hi</p></div><!--wpbp:core/paragraph-->~', $out ) && 1 === substr_count( $out, '<!--wpbp:' );",
+            "description": "A paragraph is framed and its debug comment follows the frame",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$out = do_blocks( '<!-- wp:heading --><h2 class=\"wp-block-heading\">Title</h2><!-- /wp:heading -->' ); return 1 === preg_match( '~<h2[^>]*>Title</h2><!--wpbp:core/heading-->~', $out ) && ! str_contains( $out, 'wpbp-frame' );",
+            "description": "A heading gets only the debug comment and no frame",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$out = do_blocks( '<p>Legacy copy</p>' ); return 'Legacy copy' === wp_strip_all_tags( $out ) && ! str_contains( $out, 'wpbp:' ) && ! str_contains( $out, 'wpbp-frame' );",
+            "description": "Classic content without a block name is left alone",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_block_api_011(): void { add_filter( 'render_block', static function ( $content, $block ) { if ( 'core/paragraph' !== ( $block['blockName'] ?? '' ) ) { return $content; } return '<div class=\"wpbp-frame\">' . $content . '</div>'; }, 10, 2 ); add_filter( 'render_block', static function ( $content, $block ) { $name = $block['blockName'] ?? null; if ( ! is_string( $name ) || '' === $name ) { return $content; } return $content . '<!--wpbp:' . $name . '-->'; }, 20, 2 ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block.php",
+          "src/wp-includes/blocks.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_011(): void { add_filter( 'render_block_core/paragraph', static function ( $content ) { return '<div class=\"wpbp-frame\">' . $content . '</div>'; } ); add_filter( 'render_block', static function ( $content, $block ) { $name = $block['blockName'] ?? null; if ( ! is_string( $name ) || '' === $name ) { return $content; } return $content . '<!--wpbp:' . $name . '-->'; }, 20, 2 ); }",
+        "function wpbp_block_api_011(): void { add_filter( 'render_block', static function ( $content, $block ) { if ( 'core/paragraph' === ( $block['blockName'] ?? '' ) ) { $content = '<div class=\"wpbp-frame\">' . $content . '</div>'; } return $content . '<!--wpbp:' . ( $block['blockName'] ?? '' ) . '-->'; }, 10, 2 ); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-012",
+      "category": "gb-block-api",
+      "prompt": "This site has three custom block types: 'wpbp/note' holds a short piece of text, 'wpbp/panel' is a container that holds other blocks, and 'wpbp/aside' holds editorial side notes. Automatically generated post excerpts currently ignore all three. Make the text of note blocks, and the text of blocks placed inside a panel, contribute to automatic excerpts. Side notes must keep staying out of excerpts, and the block types WordPress already draws excerpts from must keep contributing.",
+      "expected_behavior": "Reviewer contract: excerpt_remove_blocks() keeps a private list of allowed inner blocks and a filterable list of wrapper blocks, merges them, and then applies excerpt_allowed_blocks. A container only reaches _excerpt_render_inner_blocks() when it is in the wrapper list, so wpbp/panel must be added through excerpt_allowed_wrapper_blocks; adding it to excerpt_allowed_blocks alone drops the panel because its child wpbp/note is not in the hard-coded inner-block list. wpbp/note itself needs excerpt_allowed_blocks. Core defaults must survive and wpbp/aside must stay excluded.",
+      "requirements": [
+        "Do not alter post content and do not set manual excerpts.",
+        "Preserve the block types WordPress already includes in excerpts.",
+        "Treat the panel block as a container whose children are what contribute.",
+        "Leave the side note block excluded."
+      ],
+      "test_function": "wpbp_block_api_012(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "excerpt_allowed_blocks",
+            "description": "Extends the excerpt block allow list",
+            "weight": 1
+          },
+          {
+            "pattern": "excerpt_allowed_wrapper_blocks",
+            "description": "Registers the container as an excerpt wrapper",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp\\/panel",
+            "description": "Names the container block",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "foreach ( array( 'wpbp/note', 'wpbp/panel', 'wpbp/aside' ) as $wpbp_name ) { if ( ! WP_Block_Type_Registry::get_instance()->is_registered( $wpbp_name ) ) { register_block_type( $wpbp_name, array( 'api_version' => 3 ) ); } } $GLOBALS['wpbp_135'] = wp_insert_post( array( 'post_title' => 'Excerpt Fixture', 'post_status' => 'publish', 'post_content' => '<!-- wp:paragraph --><p>Intro copy.</p><!-- /wp:paragraph --><!-- wp:wpbp/note --><p>Note copy.</p><!-- /wp:wpbp/note --><!-- wp:wpbp/panel --><div class=\"wpbp-panel\"><!-- wp:wpbp/note --><p>Panel note.</p><!-- /wp:wpbp/note --></div><!-- /wp:wpbp/panel --><!-- wp:wpbp/aside --><p>Aside copy.</p><!-- /wp:wpbp/aside --><!-- wp:image --><figure class=\"wp-block-image\"><img src=\"http://example.org/x.png\" alt=\"Alt copy\"/></figure><!-- /wp:image -->' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_block_api_012(); $excerpt = get_the_excerpt( (int) $GLOBALS['wpbp_135'] ); return str_contains( $excerpt, 'Intro copy.' ) && str_contains( $excerpt, 'Note copy.' ) && str_contains( $excerpt, 'Panel note.' );",
+            "description": "Core paragraphs, note blocks and blocks nested in a panel all reach the excerpt",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_block_api_012(); $excerpt = get_the_excerpt( (int) $GLOBALS['wpbp_135'] ); return ! str_contains( $excerpt, 'Aside copy.' ) && ! str_contains( $excerpt, 'Alt copy' );",
+            "description": "Side notes and image alt text stay out of the excerpt",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_135'] ) ) { wp_delete_post( (int) $GLOBALS['wpbp_135'], true ); } unset( $GLOBALS['wpbp_135'] );"
+      },
+      "reference_solution": "function wpbp_block_api_012(): void { add_filter( 'excerpt_allowed_wrapper_blocks', static function ( array $blocks ): array { $blocks[] = 'wpbp/panel'; return $blocks; } ); add_filter( 'excerpt_allowed_blocks', static function ( array $blocks ): array { $blocks[] = 'wpbp/note'; return $blocks; } ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_012(): void { add_filter( 'excerpt_allowed_blocks', static function ( array $blocks ): array { $blocks[] = 'wpbp/note'; $blocks[] = 'wpbp/panel'; return $blocks; } ); }",
+        "function wpbp_block_api_012(): void { add_filter( 'excerpt_allowed_blocks', static function (): array { return array( 'wpbp/note', 'wpbp/panel' ); } ); add_filter( 'excerpt_allowed_wrapper_blocks', static function (): array { return array( 'wpbp/panel' ); } ); }",
+        "function wpbp_block_api_012(): void { add_filter( 'excerpt_allowed_wrapper_blocks', static function ( array $blocks ): array { $blocks[] = 'wpbp/panel'; return $blocks; } ); add_filter( 'excerpt_allowed_blocks', static function ( array $blocks ): array { return array_merge( $blocks, array_keys( WP_Block_Type_Registry::get_instance()->get_all_registered() ) ); } ); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-013",
+      "category": "gb-block-api",
+      "prompt": "Block types registered from block.json metadata in the 'wpbp' namespace must all receive two extra capabilities without anybody editing a block.json file: the block should be given the current post ID as block context in addition to whatever context its metadata already declares, and it should declare client-side navigation support for the Interactivity API. Block types from any other namespace must end up registered exactly as their own metadata describes them.",
+      "expected_behavior": "Reviewer contract: register_block_type_from_metadata() exposes two filters. block_type_metadata sees the raw camelCase block.json array (usesContext, supports); block_type_metadata_settings sees the mapped snake_case settings (uses_context, supports). Writing usesContext into the settings array does nothing because the property mapping already ran. The result must be that WP_Block_Type::$uses_context for wpbp/alpha contains both postType and postId and its supports declare interactivity.clientNavigation === true, while other/beta keeps uses_context array( 'postType' ) and gains no interactivity support.",
+      "requirements": [
+        "Apply the change only to block types whose name is in the wpbp namespace.",
+        "Keep the context entries the block metadata already declares.",
+        "Keep any other support flags the metadata declares.",
+        "Do not modify block.json files on disk."
+      ],
+      "test_function": "wpbp_block_api_013(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "block_type_metadata",
+            "description": "Filters the block metadata during registration",
+            "weight": 1
+          },
+          {
+            "pattern": "usesContext|uses_context",
+            "description": "Adds a context entry",
+            "weight": 1
+          },
+          {
+            "pattern": "clientNavigation",
+            "description": "Declares interactivity client navigation support",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$dir = untrailingslashit( get_temp_dir() ) . '/wpbp-136-' . wp_generate_password( 8, false ); wp_mkdir_p( $dir . '/alpha' ); wp_mkdir_p( $dir . '/beta' ); file_put_contents( $dir . '/alpha/block.json', '{\"$schema\": \"https://schemas.wp.org/trunk/block.json\", \"apiVersion\": 3, \"name\": \"wpbp/alpha\", \"title\": \"Alpha\", \"category\": \"widgets\", \"usesContext\": [\"postType\"], \"supports\": {\"html\": false}}' ); file_put_contents( $dir . '/beta/block.json', '{\"$schema\": \"https://schemas.wp.org/trunk/block.json\", \"apiVersion\": 3, \"name\": \"other/beta\", \"title\": \"Beta\", \"category\": \"widgets\", \"usesContext\": [\"postType\"]}' ); $GLOBALS['wpbp_136'] = $dir;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_013_ran'] ) ) { $GLOBALS['wpbp_block_api_013_ran'] = true; wpbp_block_api_013(); } $dir = $GLOBALS['wpbp_136']; $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/alpha' ) ) { register_block_type_from_metadata( $dir . '/alpha' ); } if ( ! $registry->is_registered( 'other/beta' ) ) { register_block_type_from_metadata( $dir . '/beta' ); } $alpha = $registry->get_registered( 'wpbp/alpha' ); if ( ! $alpha instanceof WP_Block_Type ) { return false; } $context = (array) $alpha->uses_context; sort( $context ); if ( array( 'postId', 'postType' ) !== $context ) { return false; } $supports = (array) $alpha->supports; $client_navigation = true === ( $supports['interactivity'] ?? null ) || true === ( $supports['interactivity']['clientNavigation'] ?? null ); return $client_navigation && false === ( $supports['html'] ?? null );",
+            "description": "The wpbp block gains postId context and clientNavigation support while keeping its own metadata",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_013_ran'] ) ) { $GLOBALS['wpbp_block_api_013_ran'] = true; wpbp_block_api_013(); } $dir = $GLOBALS['wpbp_136']; $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/alpha' ) ) { register_block_type_from_metadata( $dir . '/alpha' ); } if ( ! $registry->is_registered( 'other/beta' ) ) { register_block_type_from_metadata( $dir . '/beta' ); } $beta = $registry->get_registered( 'other/beta' ); if ( ! $beta instanceof WP_Block_Type ) { return false; } if ( array( 'postType' ) !== (array) $beta->uses_context ) { return false; } $supports = is_array( $beta->supports ) ? $beta->supports : array(); return ! isset( $supports['interactivity'] );",
+            "description": "A block from another namespace is registered exactly as its metadata describes",
+            "weight": 1
+          }
+        ],
+        "teardown": "$registry = WP_Block_Type_Registry::get_instance(); foreach ( array( 'wpbp/alpha', 'other/beta' ) as $name ) { if ( $registry->is_registered( $name ) ) { unregister_block_type( $name ); } } if ( ! empty( $GLOBALS['wpbp_136'] ) ) { $dir = $GLOBALS['wpbp_136']; foreach ( array( 'alpha', 'beta' ) as $sub ) { $file = $dir . '/' . $sub . '/block.json'; if ( is_file( $file ) ) { unlink( $file ); } if ( is_dir( $dir . '/' . $sub ) ) { rmdir( $dir . '/' . $sub ); } } if ( is_dir( $dir ) ) { rmdir( $dir ); } unset( $GLOBALS['wpbp_136'] ); } unset( $GLOBALS['wpbp_block_api_013_ran'] );"
+      },
+      "reference_solution": "function wpbp_block_api_013(): void { add_filter( 'block_type_metadata', static function ( array $metadata ): array { $name = $metadata['name'] ?? ''; if ( ! is_string( $name ) || ! str_starts_with( $name, 'wpbp/' ) ) { return $metadata; } $uses = ( isset( $metadata['usesContext'] ) && is_array( $metadata['usesContext'] ) ) ? $metadata['usesContext'] : array(); if ( ! in_array( 'postId', $uses, true ) ) { $uses[] = 'postId'; } $metadata['usesContext'] = $uses; $supports = ( isset( $metadata['supports'] ) && is_array( $metadata['supports'] ) ) ? $metadata['supports'] : array(); $interactivity = ( isset( $supports['interactivity'] ) && is_array( $supports['interactivity'] ) ) ? $supports['interactivity'] : array(); $interactivity['clientNavigation'] = true; $supports['interactivity'] = $interactivity; $metadata['supports'] = $supports; return $metadata; } ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-type.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_013(): void { add_filter( 'block_type_metadata_settings', static function ( array $settings, array $metadata ): array { $name = $metadata['name'] ?? ''; if ( ! is_string( $name ) || ! str_starts_with( $name, 'wpbp/' ) ) { return $settings; } $uses = ( isset( $settings['usesContext'] ) && is_array( $settings['usesContext'] ) ) ? $settings['usesContext'] : array(); $uses[] = 'postId'; $settings['usesContext'] = $uses; $supports = ( isset( $settings['supports'] ) && is_array( $settings['supports'] ) ) ? $settings['supports'] : array(); $supports['interactivity'] = array( 'clientNavigation' => true ); $settings['supports'] = $supports; return $settings; }, 10, 2 ); }",
+        "function wpbp_block_api_013(): void { add_filter( 'block_type_metadata', static function ( array $metadata ): array { $uses = ( isset( $metadata['usesContext'] ) && is_array( $metadata['usesContext'] ) ) ? $metadata['usesContext'] : array(); if ( ! in_array( 'postId', $uses, true ) ) { $uses[] = 'postId'; } $metadata['usesContext'] = $uses; $supports = ( isset( $metadata['supports'] ) && is_array( $metadata['supports'] ) ) ? $metadata['supports'] : array(); $supports['interactivity'] = array( 'clientNavigation' => true ); $metadata['supports'] = $supports; return $metadata; } ); }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-014",
+      "category": "gb-block-api",
+      "prompt": "Register three block types that make up a tabs interface, with the nesting rules the editor should enforce. 'wpbp/tabs' is the container, and the only block type that may be inserted directly inside it is 'wpbp/tab'. A 'wpbp/tab' may only be inserted directly into a 'wpbp/tabs' container. 'wpbp/tab-title' may be used anywhere inside a tab, however deeply nested, and nowhere else. None of the three should restrict anything it does not need to.",
+      "expected_behavior": "Reviewer contract: the three constraints map onto three distinct WP_Block_Type properties. The container's child allow list is allowed_blocks; a direct-parent restriction is parent; an any-depth restriction is ancestor. So wpbp/tabs registers allowed_blocks array( 'wpbp/tab' ) with no parent or ancestor, wpbp/tab registers parent array( 'wpbp/tabs' ) with no ancestor, and wpbp/tab-title registers ancestor array( 'wpbp/tab' ) with no parent. Conflating parent and ancestor, or expressing the container rule as a parent on the child only, fails.",
+      "requirements": [
+        "Register all three block types when the function is called.",
+        "Express the container's child restriction on the container itself.",
+        "Distinguish a direct-parent requirement from an any-depth requirement.",
+        "Leave restrictions unset where the description does not call for one."
+      ],
+      "test_function": "wpbp_block_api_014(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp\\/tab-title",
+            "description": "Registers the title block",
+            "weight": 1
+          },
+          {
+            "pattern": "allowed_blocks|allowedBlocks",
+            "description": "Limits the container's children",
+            "weight": 1
+          },
+          {
+            "pattern": "ancestor",
+            "description": "Expresses the any-depth restriction",
+            "weight": 1
+          },
+          {
+            "pattern": "parent",
+            "description": "Expresses the direct-parent restriction",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_014_ran'] ) ) { $GLOBALS['wpbp_block_api_014_ran'] = true; wpbp_block_api_014(); } $registry = WP_Block_Type_Registry::get_instance(); $tabs = $registry->get_registered( 'wpbp/tabs' ); if ( ! $tabs instanceof WP_Block_Type ) { return false; } return array( 'wpbp/tab' ) === $tabs->allowed_blocks && null === $tabs->parent && null === $tabs->ancestor;",
+            "description": "The container limits its children and is itself unrestricted",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_014_ran'] ) ) { $GLOBALS['wpbp_block_api_014_ran'] = true; wpbp_block_api_014(); } $registry = WP_Block_Type_Registry::get_instance(); $tab = $registry->get_registered( 'wpbp/tab' ); if ( ! $tab instanceof WP_Block_Type ) { return false; } return array( 'wpbp/tabs' ) === $tab->parent && null === $tab->ancestor && null === $tab->allowed_blocks;",
+            "description": "The tab requires wpbp/tabs as its direct parent only",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_014_ran'] ) ) { $GLOBALS['wpbp_block_api_014_ran'] = true; wpbp_block_api_014(); } $registry = WP_Block_Type_Registry::get_instance(); $title = $registry->get_registered( 'wpbp/tab-title' ); if ( ! $title instanceof WP_Block_Type ) { return false; } return array( 'wpbp/tab' ) === $title->ancestor && null === $title->parent && null === $title->allowed_blocks;",
+            "description": "The title block is restricted to any depth inside a tab, not to a direct parent",
+            "weight": 1
+          }
+        ],
+        "teardown": "unset( $GLOBALS['wpbp_block_api_014_ran'] );"
+      },
+      "reference_solution": "function wpbp_block_api_014(): void { $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/tabs' ) ) { register_block_type( 'wpbp/tabs', array( 'api_version' => 3, 'title' => 'Tabs', 'allowed_blocks' => array( 'wpbp/tab' ) ) ); } if ( ! $registry->is_registered( 'wpbp/tab' ) ) { register_block_type( 'wpbp/tab', array( 'api_version' => 3, 'title' => 'Tab', 'parent' => array( 'wpbp/tabs' ) ) ); } if ( ! $registry->is_registered( 'wpbp/tab-title' ) ) { register_block_type( 'wpbp/tab-title', array( 'api_version' => 3, 'title' => 'Tab Title', 'ancestor' => array( 'wpbp/tab' ) ) ); } }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-type.php",
+          "src/wp-includes/blocks.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_014(): void { $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/tabs' ) ) { register_block_type( 'wpbp/tabs', array( 'title' => 'Tabs', 'allowed_blocks' => array( 'wpbp/tab' ) ) ); } if ( ! $registry->is_registered( 'wpbp/tab' ) ) { register_block_type( 'wpbp/tab', array( 'title' => 'Tab', 'parent' => array( 'wpbp/tabs' ) ) ); } if ( ! $registry->is_registered( 'wpbp/tab-title' ) ) { register_block_type( 'wpbp/tab-title', array( 'title' => 'Tab Title', 'parent' => array( 'wpbp/tab' ) ) ); } }",
+        "function wpbp_block_api_014(): void { $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/tabs' ) ) { register_block_type( 'wpbp/tabs', array( 'title' => 'Tabs' ) ); } if ( ! $registry->is_registered( 'wpbp/tab' ) ) { register_block_type( 'wpbp/tab', array( 'title' => 'Tab', 'parent' => array( 'wpbp/tabs' ), 'ancestor' => array( 'wpbp/tabs' ) ) ); } if ( ! $registry->is_registered( 'wpbp/tab-title' ) ) { register_block_type( 'wpbp/tab-title', array( 'title' => 'Tab Title', 'ancestor' => array( 'wpbp/tab' ) ) ); } }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-015",
+      "category": "gb-block-api",
+      "prompt": "Given a block document as a string, report the image IDs of the image blocks that sit directly inside a gallery block. An image nested deeper than that - inside a group that is inside the gallery, say - does not count, nor does an image outside any gallery, nor an image block from some other namespace that happens to be named image. Galleries may themselves be nested. Return the ids as integers in the order the blocks appear in the document.",
+      "expected_behavior": "Reviewer contract: the containment relationship is the direct parent, so the answer is the block whose enclosing block is core/gallery, at any nesting depth of that gallery. WP_Block_Processor expresses this with get_breadcrumbs(), whose last entry is the matched block itself and whose second-to-last entry is its parent. Delimiters written as wp:image and wp:core/image are the same block type, while wp:wpbp/image is not. Documents with no qualifying image return an empty list.",
+      "requirements": [
+        "Take the block document as a string argument and return a list of integers.",
+        "Include an image only when its immediate containing block is a gallery.",
+        "Treat a delimiter written with an explicit core namespace as the same block type as one without.",
+        "Preserve document order."
+      ],
+      "test_function": "wpbp_block_api_015( string $document ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "gallery",
+            "description": "Looks for the gallery container",
+            "weight": 1
+          },
+          {
+            "pattern": "image",
+            "description": "Looks for image blocks",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "return array( 12, 14 ) === wpbp_block_api_015( '<!-- wp:image {\"id\":11} /--><!-- wp:gallery --><figure class=\"wp-block-gallery\"><!-- wp:image {\"id\":12} /--><!-- wp:group --><div class=\"wp-block-group\"><!-- wp:image {\"id\":13} /--></div><!-- /wp:group --><!-- wp:core/image {\"id\":14} --><figure class=\"wp-block-image\"></figure><!-- /wp:core/image --></figure><!-- /wp:gallery --><!-- wp:wpbp/image {\"id\":15} /-->' );",
+            "description": "Only the gallery's direct image children are reported, including the explicitly namespaced one",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return array() === wpbp_block_api_015( '<!-- wp:gallery --><figure class=\"wp-block-gallery\"><!-- wp:group --><div class=\"wp-block-group\"><!-- wp:image {\"id\":21} /--></div><!-- /wp:group --></figure><!-- /wp:gallery --><!-- wp:image {\"id\":22} /-->' );",
+            "description": "An image nested one level deeper inside the gallery, and one outside it, are both ignored",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return array( 31, 32 ) === wpbp_block_api_015( '<!-- wp:gallery --><figure class=\"wp-block-gallery\"><!-- wp:gallery --><figure class=\"wp-block-gallery\"><!-- wp:image {\"id\":31} /--></figure><!-- /wp:gallery --><!-- wp:image {\"id\":32} /--></figure><!-- /wp:gallery -->' );",
+            "description": "Nested galleries each contribute their own direct image children in document order",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_block_api_015( string $document ): array { $ids = array(); $processor = new WP_Block_Processor( $document ); while ( $processor->next_block( 'core/image' ) ) { $crumbs = $processor->get_breadcrumbs(); $depth = count( $crumbs ); if ( $depth < 2 || 'core/gallery' !== $crumbs[ $depth - 2 ] ) { continue; } $attributes = $processor->allocate_and_return_parsed_attributes(); if ( isset( $attributes['id'] ) ) { $ids[] = (int) $attributes['id']; } } return $ids; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-block-processor.php"
+        ],
+        "release_focus": "6.9"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_015( string $document ): array { $ids = array(); $processor = new WP_Block_Processor( $document ); while ( $processor->next_block( 'core/image' ) ) { $crumbs = $processor->get_breadcrumbs(); if ( ! in_array( 'core/gallery', $crumbs, true ) ) { continue; } $attributes = $processor->allocate_and_return_parsed_attributes(); if ( isset( $attributes['id'] ) ) { $ids[] = (int) $attributes['id']; } } return $ids; }",
+        "function wpbp_block_api_015( string $document ): array { $ids = array(); if ( preg_match_all( '~<!--\\\\s+wp:(?:core/)?image\\\\s+(\\\\{.*?\\\\})~', $document, $matches ) ) { foreach ( $matches[1] as $json ) { $attributes = json_decode( $json, true ); if ( isset( $attributes['id'] ) ) { $ids[] = (int) $attributes['id']; } } } return $ids; }"
+      ]
+    },
+    {
+      "id": "e-gb-block-api-016",
+      "category": "gb-block-api",
+      "prompt": "Label the top-level sections of a block document. Given the document's markup as a string, return markup in which every top-level block that has a block type carries the editor block name 'Section N' in its block metadata, numbered from 1 in document order. Blocks nested inside other blocks must not be labelled or otherwise changed, metadata a top-level block already carries must survive alongside the new name, classic content that has no block type is left exactly as it was, and nothing else in the markup may change.",
+      "expected_behavior": "Reviewer contract: the label lives in the block's attrs under metadata.name, the attribute the editor's block rename feature uses. traverse_and_serialize_blocks() hands the pre-callback a reference to the block plus its parent, and the parent is null exactly for top-level blocks, which is how nested blocks are skipped while the tree is reserialized. Existing metadata keys such as categories must be merged with, not replaced by, the new name. Classic chunks have a null blockName and must round-trip byte for byte.",
+      "requirements": [
+        "Take the markup as a string and return the rewritten markup.",
+        "Number only the top-level blocks that have a block type, starting at 1.",
+        "Leave nested blocks and their attributes untouched.",
+        "Preserve metadata entries the labelled blocks already carry."
+      ],
+      "test_function": "wpbp_block_api_016( string $document ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "metadata",
+            "description": "Writes the label into block metadata",
+            "weight": 1
+          },
+          {
+            "pattern": "Section ",
+            "description": "Uses the requested label format",
+            "weight": 1
+          },
+          {
+            "pattern": "traverse_and_serialize_blocks|serialize_blocks",
+            "description": "Reserializes the block tree",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$out = wpbp_block_api_016( '<!-- wp:paragraph --><p>One</p><!-- /wp:paragraph -->Classic text<!-- wp:group {\"metadata\":{\"categories\":[\"promo\"]}} --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>Inner</p><!-- /wp:paragraph --></div><!-- /wp:group -->' ); $blocks = parse_blocks( $out ); $named = array_values( array_filter( $blocks, static function ( $b ) { return is_string( $b['blockName'] ); } ) ); if ( 2 !== count( $named ) ) { return false; } if ( 'core/paragraph' !== $named[0]['blockName'] || 'core/group' !== $named[1]['blockName'] ) { return false; } if ( 'Section 1' !== ( $named[0]['attrs']['metadata']['name'] ?? null ) ) { return false; } if ( 'Section 2' !== ( $named[1]['attrs']['metadata']['name'] ?? null ) ) { return false; } return str_contains( $out, 'Classic text' );",
+            "description": "Each named top-level block is labelled in document order and classic content survives",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$out = wpbp_block_api_016( '<!-- wp:paragraph --><p>One</p><!-- /wp:paragraph -->Classic text<!-- wp:group {\"metadata\":{\"categories\":[\"promo\"]}} --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>Inner</p><!-- /wp:paragraph --></div><!-- /wp:group -->' ); $group = null; foreach ( parse_blocks( $out ) as $block ) { if ( 'core/group' === $block['blockName'] ) { $group = $block; } } if ( null === $group ) { return false; } $meta = $group['attrs']['metadata'] ?? array(); if ( array( 'promo' ) !== ( $meta['categories'] ?? null ) ) { return false; } if ( 'Section 2' !== ( $meta['name'] ?? null ) ) { return false; } $inner = $group['innerBlocks']; if ( 1 !== count( $inner ) || 'core/paragraph' !== $inner[0]['blockName'] ) { return false; } return array() === $inner[0]['attrs'] && str_contains( $out, '<p>Inner</p>' );",
+            "description": "Existing metadata survives on the labelled block and the nested paragraph keeps empty attributes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return 'Just classic text' === wpbp_block_api_016( 'Just classic text' );",
+            "description": "A document with no blocks round-trips unchanged",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_block_api_016( string $document ): string { $index = 0; return traverse_and_serialize_blocks( parse_blocks( $document ), static function ( array &$block, ?array &$parent_block, $previous_block ) use ( &$index ): string { if ( null !== $parent_block ) { return ''; } $name = $block['blockName'] ?? null; if ( ! is_string( $name ) || '' === $name ) { return ''; } ++$index; $metadata = $block['attrs']['metadata'] ?? array(); if ( ! is_array( $metadata ) ) { $metadata = array(); } $metadata['name'] = 'Section ' . $index; $block['attrs']['metadata'] = $metadata; return ''; } ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/blocks.php",
+          "src/wp-includes/class-wp-block-parser.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_block_api_016( string $document ): string { $index = 0; $walk = static function ( array $blocks ) use ( &$walk, &$index ): array { foreach ( $blocks as $i => $block ) { if ( is_string( $block['blockName'] ) && '' !== $block['blockName'] ) { ++$index; $metadata = $block['attrs']['metadata'] ?? array(); $metadata['name'] = 'Section ' . $index; $blocks[ $i ]['attrs']['metadata'] = $metadata; } if ( ! empty( $block['innerBlocks'] ) ) { $blocks[ $i ]['innerBlocks'] = $walk( $block['innerBlocks'] ); } } return $blocks; }; return serialize_blocks( $walk( parse_blocks( $document ) ) ); }",
+        "function wpbp_block_api_016( string $document ): string { $blocks = parse_blocks( $document ); $index = 0; foreach ( $blocks as $i => $block ) { if ( ! is_string( $block['blockName'] ) || '' === $block['blockName'] ) { continue; } ++$index; $blocks[ $i ]['attrs']['metadata'] = array( 'name' => 'Section ' . $index ); } return serialize_blocks( $blocks ); }"
+      ]
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-queries",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Queries",
     "description": "Code generation tasks for WordPress Queries APIs",
@@ -592,6 +592,392 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-queries-013",
+      "category": "queries",
+      "prompt": "A curated list hands you published post IDs in the exact order an editor arranged them. Return a WP_Query holding precisely those posts in precisely that order.",
+      "expected_behavior": "Restricting a query with `post__in` does not preserve the supplied order — WordPress falls back to its date ordering unless `orderby` is `post__in`, which builds a `FIELD()` clause. Runtime validation requests two different orderings of the same three posts, whose publication dates differ from both.",
+      "requirements": [
+        "Return a WP_Query containing exactly the supplied posts",
+        "The posts must come back in the supplied order",
+        "Do not reorder the results yourself after the query runs"
+      ],
+      "test_function": "wpbp_queries_013( array $post_ids ): WP_Query",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "post__in",
+            "description": "Restricts the query to the supplied posts",
+            "weight": 1
+          },
+          {
+            "pattern": "orderby",
+            "description": "Controls the result order",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_q_013'] = array(); $dates = array( 'a' => '2024-01-05 09:00:00', 'b' => '2024-02-05 09:00:00', 'c' => '2024-03-05 09:00:00' ); foreach ( $dates as $key => $date ) { $GLOBALS['wpbp_q_013'][ $key ] = (int) wp_insert_post( array( 'post_title' => 'WPBP Q13 ' . $key, 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_q_013']; $first_order = array( $ids['b'], $ids['c'], $ids['a'] ); $second_order = array( $ids['c'], $ids['a'], $ids['b'] ); $first = wpbp_queries_013( $first_order ); $second = wpbp_queries_013( $second_order ); if ( ! $first instanceof WP_Query || ! $second instanceof WP_Query ) { return false; } $got_first = array_map( 'intval', wp_list_pluck( $first->posts, 'ID' ) ); $got_second = array_map( 'intval', wp_list_pluck( $second->posts, 'ID' ) ); return $first_order === $got_first && $second_order === $got_second;",
+            "description": "Both requested orderings come back exactly as asked",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_q_013'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_q_013'] );"
+      },
+      "reference_solution": "function wpbp_queries_013( array $post_ids ): WP_Query {\n    $post_ids = array_map( 'intval', $post_ids );\n    return new WP_Query(\n        array(\n            'post_type'      => 'post',\n            'post_status'    => 'publish',\n            'post__in'       => $post_ids,\n            'orderby'        => 'post__in',\n            'posts_per_page' => count( $post_ids ),\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_013( array $post_ids ): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'post__in' => array_map( 'intval', $post_ids ), 'posts_per_page' => count( $post_ids ) ) ); }"
+      ]
+    },
+    {
+      "id": "e-queries-014",
+      "category": "queries",
+      "prompt": "Build a leaderboard: return a WP_Query of the published posts that carry the supplied custom field, ordered by that field's value from highest to lowest. The values are numbers stored as strings, and posts without the field must not appear at all.",
+      "expected_behavior": "Ordering by `meta_value` sorts the stored strings, so 100, 10 and 9 come back as 9, 100, 10; the numeric ordering needs `orderby` `meta_value_num` together with `meta_key`, whose join also drops posts without the field. Runtime validation checks the exact order of three scored posts and the absence of an unscored one.",
+      "requirements": [
+        "Order the posts by the supplied custom field's numeric value, highest first",
+        "Exclude posts that do not have the field",
+        "Return the WP_Query"
+      ],
+      "test_function": "wpbp_queries_014( string $meta_key ): WP_Query",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "meta_key",
+            "description": "Selects posts by the custom field",
+            "weight": 1
+          },
+          {
+            "pattern": "meta_value_num",
+            "description": "Orders numerically",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_q_014'] = array(); foreach ( array( 'high' => '100', 'mid' => '10', 'low' => '9' ) as $key => $score ) { $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP Q14 ' . $key, 'post_status' => 'publish' ) ); update_post_meta( $post_id, 'wpbp_q_score', $score ); $GLOBALS['wpbp_q_014'][ $key ] = $post_id; } $GLOBALS['wpbp_q_014']['none'] = (int) wp_insert_post( array( 'post_title' => 'WPBP Q14 none', 'post_status' => 'publish' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_q_014']; $query = wpbp_queries_014( 'wpbp_q_score' ); if ( ! $query instanceof WP_Query ) { return false; } $found = array_map( 'intval', wp_list_pluck( $query->posts, 'ID' ) ); return array( $ids['high'], $ids['mid'], $ids['low'] ) === $found;",
+            "description": "Scores order numerically and the unscored post is absent",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_q_014'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_q_014'] );"
+      },
+      "reference_solution": "function wpbp_queries_014( string $meta_key ): WP_Query {\n    return new WP_Query(\n        array(\n            'post_type'      => 'post',\n            'post_status'    => 'publish',\n            'meta_key'       => $meta_key,\n            'orderby'        => 'meta_value_num',\n            'order'          => 'DESC',\n            'posts_per_page' => 10,\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_014( string $meta_key ): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'meta_key' => $meta_key, 'orderby' => 'meta_value', 'order' => 'DESC', 'posts_per_page' => 10 ) ); }",
+        "function wpbp_queries_014( string $meta_key ): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'orderby' => 'meta_value_num', 'order' => 'DESC', 'posts_per_page' => 10 ) ); }"
+      ]
+    },
+    {
+      "id": "e-queries-015",
+      "category": "queries",
+      "prompt": "Posts in the category with the slug 'wpbp-q-hidden' must never show up in the query WordPress runs for the current request, whichever template that request resolves to. Every other query on the page — widgets, related-post loops, admin listings — must still see those posts.",
+      "expected_behavior": "`pre_get_posts` fires for every `WP_Query`, so the callback must gate on `$query->is_main_query()`, which compares the instance with `$wp_the_query` rather than inspecting the template. Runtime validation installs a query as `$wp_the_query`, runs it, and runs an identical secondary query; the hidden post must be missing from the first and present in the second.",
+      "requirements": [
+        "Exclude posts in the 'wpbp-q-hidden' category from the request's main query",
+        "Leave every other query untouched",
+        "Do not filter the posts after the query has run"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "pre_get_posts",
+            "description": "Filters the query before it runs",
+            "weight": 1
+          },
+          {
+            "pattern": "is_main_query",
+            "description": "Restricts the change to the main query",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-q-hidden|category",
+            "description": "Targets the hidden category",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$term = wp_insert_term( 'WPBP Q Hidden', 'category', array( 'slug' => 'wpbp-q-hidden' ) ); $GLOBALS['wpbp_q_015'] = array( 'term' => is_wp_error( $term ) ? 0 : (int) $term['term_id'] ); $hidden = (int) wp_insert_post( array( 'post_title' => 'WPBP Q15 hidden', 'post_status' => 'publish' ) ); wp_set_post_terms( $hidden, array( $GLOBALS['wpbp_q_015']['term'] ), 'category' ); $GLOBALS['wpbp_q_015']['hidden'] = $hidden; $GLOBALS['wpbp_q_015']['plain'] = (int) wp_insert_post( array( 'post_title' => 'WPBP Q15 plain', 'post_status' => 'publish' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_q_015']; $args = array( 'post_type' => 'post', 'post_status' => 'publish', 'post__in' => array( $fixture['hidden'], $fixture['plain'] ), 'posts_per_page' => 10, 'orderby' => 'ID', 'order' => 'ASC' ); $previous_the_query = $GLOBALS['wp_the_query'] ?? null; $previous_query = $GLOBALS['wp_query'] ?? null; try { $main = new WP_Query(); $GLOBALS['wp_the_query'] = $main; $GLOBALS['wp_query'] = $main; $main->query( $args ); $main_ids = array_map( 'intval', wp_list_pluck( $main->posts, 'ID' ) ); $secondary = new WP_Query( $args ); $secondary_ids = array_map( 'intval', wp_list_pluck( $secondary->posts, 'ID' ) ); } finally { $GLOBALS['wp_the_query'] = $previous_the_query; $GLOBALS['wp_query'] = $previous_query; } sort( $secondary_ids ); $expected_secondary = array( $fixture['hidden'], $fixture['plain'] ); sort( $expected_secondary ); return array( $fixture['plain'] ) === $main_ids && $expected_secondary === $secondary_ids;",
+            "description": "The hidden post is dropped from the main query only",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_q_015'] ?? array(); foreach ( array( 'hidden', 'plain' ) as $key ) { if ( ! empty( $fixture[ $key ] ) ) { wp_delete_post( (int) $fixture[ $key ], true ); } } if ( ! empty( $fixture['term'] ) ) { wp_delete_term( (int) $fixture['term'], 'category' ); } unset( $GLOBALS['wpbp_q_015'] ); remove_all_filters( 'pre_get_posts' );"
+      },
+      "reference_solution": "add_action(\n    'pre_get_posts',\n    static function ( WP_Query $query ) {\n        if ( ! $query->is_main_query() ) {\n            return;\n        }\n        $term = get_term_by( 'slug', 'wpbp-q-hidden', 'category' );\n        if ( ! $term instanceof WP_Term ) {\n            return;\n        }\n        $excluded = (array) $query->get( 'category__not_in' );\n        $excluded[] = (int) $term->term_id;\n        $query->set( 'category__not_in', array_values( array_unique( array_filter( $excluded ) ) ) );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'pre_get_posts', static function ( $query ) { $term = get_term_by( 'slug', 'wpbp-q-hidden', 'category' ); if ( ! $term ) { return; } $query->set( 'category__not_in', array( (int) $term->term_id ) ); } );",
+        "add_action( 'pre_get_posts', static function ( $query ) { if ( is_admin() || ! $query->is_home() ) { return; } $term = get_term_by( 'slug', 'wpbp-q-hidden', 'category' ); if ( ! $term ) { return; } $query->set( 'category__not_in', array( (int) $term->term_id ) ); } );"
+      ]
+    },
+    {
+      "id": "e-queries-016",
+      "category": "queries",
+      "prompt": "Page through the published 'wpbp_q_note' posts three at a time. For the requested page number return a WP_Query whose results are that page's posts and whose pagination totals describe the whole set, so a pager can be rendered from it.",
+      "expected_behavior": "`found_posts` and `max_num_pages` are only populated when the found-rows count runs, so `no_found_rows` must stay off, and paging must use `paged` rather than a manual `offset`. Runtime validation asks for pages 1, 2 and 3 of seven notes and checks the post counts, the totals and that the pages do not overlap.",
+      "requirements": [
+        "Return three posts per page for the requested page",
+        "found_posts must report the total number of matching posts",
+        "max_num_pages must report the number of pages",
+        "Query only published wpbp_q_note posts"
+      ],
+      "test_function": "wpbp_queries_016( int $page ): WP_Query",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          },
+          {
+            "pattern": "posts_per_page",
+            "description": "Sets the page size",
+            "weight": 1
+          },
+          {
+            "pattern": "paged",
+            "description": "Requests the page",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_q_note",
+            "description": "Queries the note post type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_q_note', array( 'public' => false, 'show_ui' => false, 'supports' => array( 'title', 'editor' ) ) ); $GLOBALS['wpbp_q_016'] = array(); for ( $i = 1; $i <= 7; $i++ ) { $GLOBALS['wpbp_q_016'][] = (int) wp_insert_post( array( 'post_type' => 'wpbp_q_note', 'post_title' => 'WPBP Q16 note ' . $i, 'post_status' => 'publish', 'post_date' => sprintf( '2024-04-%02d 09:00:00', $i ), 'post_date_gmt' => sprintf( '2024-04-%02d 09:00:00', $i ) ) ); } wp_insert_post( array( 'post_type' => 'wpbp_q_note', 'post_title' => 'WPBP Q16 draft', 'post_status' => 'draft' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$first = wpbp_queries_016( 1 ); $second = wpbp_queries_016( 2 ); $third = wpbp_queries_016( 3 ); if ( ! $first instanceof WP_Query || ! $second instanceof WP_Query || ! $third instanceof WP_Query ) { return false; } $page_one = array_map( 'intval', wp_list_pluck( $first->posts, 'ID' ) ); $page_two = array_map( 'intval', wp_list_pluck( $second->posts, 'ID' ) ); $page_three = array_map( 'intval', wp_list_pluck( $third->posts, 'ID' ) ); if ( 3 !== count( $page_one ) || 3 !== count( $page_two ) || 1 !== count( $page_three ) ) { return false; } if ( array_intersect( $page_one, $page_two ) || array_intersect( $page_one, $page_three ) || array_intersect( $page_two, $page_three ) ) { return false; } if ( 7 !== (int) $first->found_posts || 7 !== (int) $third->found_posts ) { return false; } $all = array_merge( $page_one, $page_two, $page_three ); sort( $all ); $expected = array_map( 'intval', $GLOBALS['wpbp_q_016'] ); sort( $expected ); return 3 === (int) $first->max_num_pages && 3 === (int) $second->max_num_pages && $all === $expected;",
+            "description": "Three distinct pages cover all seven notes with correct totals",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) get_posts( array( 'post_type' => 'wpbp_q_note', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids' ) ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_q_016'] );"
+      },
+      "reference_solution": "function wpbp_queries_016( int $page ): WP_Query {\n    return new WP_Query(\n        array(\n            'post_type'      => 'wpbp_q_note',\n            'post_status'    => 'publish',\n            'posts_per_page' => 3,\n            'paged'          => max( 1, $page ),\n            'orderby'        => 'date',\n            'order'          => 'DESC',\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_016( int $page ): WP_Query { return new WP_Query( array( 'post_type' => 'wpbp_q_note', 'post_status' => 'publish', 'posts_per_page' => 3, 'offset' => ( max( 1, $page ) - 1 ) * 3, 'no_found_rows' => true ) ); }"
+      ]
+    },
+    {
+      "id": "e-queries-017",
+      "category": "queries",
+      "prompt": "Filter a catalogue: return a WP_Query of published posts whose 'wpbp_q_price' custom field is numerically between the supplied minimum and maximum, and that were published between the supplied dates. Both the price range and the date range include their end points, and the dates arrive as 'Y-m-d' strings in the site's timezone.",
+      "expected_behavior": "Prices are stored as strings, so the meta comparison needs `'compare' => 'BETWEEN'` with `'type' => 'NUMERIC'`; a string BETWEEN of '90' and '250' matches nothing. `date_query`'s `after`/`before` are exclusive and resolve to midnight unless `inclusive` is set, so boundary posts drop out. Runtime validation uses posts sitting on both boundaries plus out-of-range prices and dates.",
+      "requirements": [
+        "Match posts whose wpbp_q_price value is numerically within the supplied range, end points included",
+        "Match posts published within the supplied date range, end points included",
+        "Exclude posts without the price field",
+        "Return the WP_Query"
+      ],
+      "test_function": "wpbp_queries_017( int $min_price, int $max_price, string $after, string $before ): WP_Query",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "meta_query",
+            "description": "Filters on the price field",
+            "weight": 1
+          },
+          {
+            "pattern": "NUMERIC",
+            "description": "Compares the price numerically",
+            "weight": 1
+          },
+          {
+            "pattern": "date_query",
+            "description": "Filters on the publication date",
+            "weight": 1
+          },
+          {
+            "pattern": "inclusive",
+            "description": "Includes the date boundaries",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_q_017'] = array(); $make = static function ( $key, $price, $date ) { $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP Q17 ' . $key, 'post_status' => 'publish', 'post_date' => $date, 'post_date_gmt' => $date ) ); update_post_meta( $post_id, 'wpbp_q_price', $price ); $GLOBALS['wpbp_q_017'][ $key ] = $post_id; }; $make( 'floor', '90', '2023-01-01 00:00:00' ); $make( 'middle', '100', '2023-02-15 12:00:00' ); $make( 'ceiling', '250', '2023-03-31 10:00:00' ); $make( 'pricey', '400', '2023-02-20 12:00:00' ); $make( 'early', '90', '2022-12-31 23:00:00' ); $GLOBALS['wpbp_q_017']['unpriced'] = (int) wp_insert_post( array( 'post_title' => 'WPBP Q17 unpriced', 'post_status' => 'publish', 'post_date' => '2023-02-10 12:00:00', 'post_date_gmt' => '2023-02-10 12:00:00' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_q_017']; $query = wpbp_queries_017( 90, 250, '2023-01-01', '2023-03-31' ); if ( ! $query instanceof WP_Query ) { return false; } $found = array_map( 'intval', wp_list_pluck( $query->posts, 'ID' ) ); sort( $found ); $expected = array( $ids['floor'], $ids['middle'], $ids['ceiling'] ); sort( $expected ); if ( $expected !== $found ) { return false; } $narrow = wpbp_queries_017( 100, 250, '2023-02-01', '2023-02-28' ); $narrow_ids = array_map( 'intval', wp_list_pluck( $narrow->posts, 'ID' ) ); return array( $ids['middle'] ) === $narrow_ids;",
+            "description": "Boundary posts are included and out-of-range prices and dates excluded",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_q_017'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_q_017'] );"
+      },
+      "reference_solution": "function wpbp_queries_017( int $min_price, int $max_price, string $after, string $before ): WP_Query {\n    return new WP_Query(\n        array(\n            'post_type'      => 'post',\n            'post_status'    => 'publish',\n            'posts_per_page' => 20,\n            'meta_query'     => array(\n                array(\n                    'key'     => 'wpbp_q_price',\n                    'value'   => array( $min_price, $max_price ),\n                    'compare' => 'BETWEEN',\n                    'type'    => 'NUMERIC',\n                ),\n            ),\n            'date_query'     => array(\n                array(\n                    'after'     => $after,\n                    'before'    => $before,\n                    'inclusive' => true,\n                ),\n            ),\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-date-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_017( int $min_price, int $max_price, string $after, string $before ): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => 20, 'meta_query' => array( array( 'key' => 'wpbp_q_price', 'value' => array( $min_price, $max_price ), 'compare' => 'BETWEEN' ) ), 'date_query' => array( array( 'after' => $after, 'before' => $before, 'inclusive' => true ) ) ) ); }",
+        "function wpbp_queries_017( int $min_price, int $max_price, string $after, string $before ): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => 20, 'meta_query' => array( array( 'key' => 'wpbp_q_price', 'value' => array( $min_price, $max_price ), 'compare' => 'BETWEEN', 'type' => 'NUMERIC' ) ), 'date_query' => array( array( 'after' => $after, 'before' => $before ) ) ) ); }"
+      ]
+    },
+    {
+      "id": "e-queries-018",
+      "category": "queries",
+      "prompt": "Return a WP_Query of the published posts written by the supplied authors, restricted to either the password-protected posts or the freely readable ones depending on the supplied flag. Posts by other authors must never appear.",
+      "expected_behavior": "Several authors need `author__in` (the scalar `author` argument takes one ID), and the split between protected and open posts is `has_password`, which compares `post_password` against the empty string; `post_password => ''` only matches the open ones and cannot express the protected set. Runtime validation checks both flag values against four posts by three authors.",
+      "requirements": [
+        "Restrict the query to the supplied author IDs",
+        "Return only password-protected posts when the flag is true",
+        "Return only posts without a password when the flag is false",
+        "Return the WP_Query"
+      ],
+      "test_function": "wpbp_queries_018( array $author_ids, bool $password_protected ): WP_Query",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "author__in",
+            "description": "Filters by the supplied authors",
+            "weight": 1
+          },
+          {
+            "pattern": "has_password",
+            "description": "Splits protected from open posts",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_Query",
+            "description": "Uses WP_Query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_q_018'] = array( 'users' => array(), 'posts' => array() ); foreach ( array( 'one', 'two', 'three' ) as $key ) { $user_id = wp_insert_user( array( 'user_login' => 'wpbp_q018_' . $key, 'user_pass' => wp_generate_password( 20 ), 'user_email' => 'wpbp-q018-' . $key . '@example.com', 'role' => 'author' ) ); $GLOBALS['wpbp_q_018']['users'][ $key ] = is_wp_error( $user_id ) ? 0 : (int) $user_id; } $users = $GLOBALS['wpbp_q_018']['users']; $make = static function ( $key, $author, $password ) { $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP Q18 ' . $key, 'post_status' => 'publish', 'post_author' => $author, 'post_password' => $password ) ); $GLOBALS['wpbp_q_018']['posts'][ $key ] = $post_id; }; $make( 'open_one', $users['one'], '' ); $make( 'locked_one', $users['one'], 'secret1' ); $make( 'locked_two', $users['two'], 'secret2' ); $make( 'open_three', $users['three'], '' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_q_018']; $users = $fixture['users']; $posts = $fixture['posts']; if ( in_array( 0, $users, true ) ) { return false; } $authors = array( $users['one'], $users['two'] ); $open = wpbp_queries_018( $authors, false ); $locked = wpbp_queries_018( $authors, true ); if ( ! $open instanceof WP_Query || ! $locked instanceof WP_Query ) { return false; } $open_ids = array_map( 'intval', wp_list_pluck( $open->posts, 'ID' ) ); sort( $open_ids ); $locked_ids = array_map( 'intval', wp_list_pluck( $locked->posts, 'ID' ) ); sort( $locked_ids ); $expected_locked = array( $posts['locked_one'], $posts['locked_two'] ); sort( $expected_locked ); return array( $posts['open_one'] ) === $open_ids && $expected_locked === $locked_ids;",
+            "description": "Both flag values return the right authors' posts and password split",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixture = $GLOBALS['wpbp_q_018'] ?? array(); foreach ( ( $fixture['posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( ( $fixture['users'] ?? array() ) as $user_id ) { if ( $user_id ) { wp_delete_user( (int) $user_id ); } } unset( $GLOBALS['wpbp_q_018'] );"
+      },
+      "reference_solution": "function wpbp_queries_018( array $author_ids, bool $password_protected ): WP_Query {\n    return new WP_Query(\n        array(\n            'post_type'      => 'post',\n            'post_status'    => 'publish',\n            'author__in'     => array_map( 'intval', $author_ids ),\n            'has_password'   => $password_protected,\n            'posts_per_page' => 20,\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_018( array $author_ids, bool $password_protected ): WP_Query { return new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'author__in' => array_map( 'intval', $author_ids ), 'posts_per_page' => 20 ) ); }",
+        "function wpbp_queries_018( array $author_ids, bool $password_protected ): WP_Query { $args = array( 'post_type' => 'post', 'post_status' => 'publish', 'author' => (int) reset( $author_ids ), 'posts_per_page' => 20 ); if ( ! $password_protected ) { $args['post_password'] = ''; } return new WP_Query( $args ); }"
+      ]
+    },
+    {
+      "id": "e-queries-019",
+      "category": "queries",
+      "prompt": "Report how many posts of a given post type currently sit in a given status, including statuses a plugin registered such as 'wpbp_q_archived'. Return 0 for a status nothing uses.",
+      "expected_behavior": "`WP_Query` defaults to the 'publish' status (plus private ones for permitted users), so counting a custom status through it silently returns 0 unless `post_status` is passed explicitly; `wp_count_posts()` reports every status found for the post type. Runtime validation counts three statuses of a custom post type plus an unused one.",
+      "requirements": [
+        "Return the number of posts of that post type in that status",
+        "Custom statuses must be counted, not just the built-in ones",
+        "Return 0 when no post uses the status"
+      ],
+      "test_function": "wpbp_queries_019( string $post_type, string $post_status ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_count_posts|post_status",
+            "description": "Counts posts per status",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_q_doc|\\$post_type",
+            "description": "Works for the supplied post type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_q_doc', array( 'public' => false, 'show_ui' => false, 'supports' => array( 'title' ) ) ); register_post_status( 'wpbp_q_archived', array( 'label' => 'WPBP Archived', 'public' => false, 'internal' => false, 'show_in_admin_all_list' => true ) ); $GLOBALS['wpbp_q_019'] = array(); $make = static function ( $title, $status ) { $GLOBALS['wpbp_q_019'][] = (int) wp_insert_post( array( 'post_type' => 'wpbp_q_doc', 'post_title' => $title, 'post_status' => $status ) ); }; $make( 'WPBP Q19 live one', 'publish' ); $make( 'WPBP Q19 live two', 'publish' ); $make( 'WPBP Q19 live three', 'publish' ); $make( 'WPBP Q19 archived one', 'wpbp_q_archived' ); $make( 'WPBP Q19 archived two', 'wpbp_q_archived' ); $make( 'WPBP Q19 draft', 'draft' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( 2 !== wpbp_queries_019( 'wpbp_q_doc', 'wpbp_q_archived' ) ) { return false; } if ( 3 !== wpbp_queries_019( 'wpbp_q_doc', 'publish' ) ) { return false; } if ( 1 !== wpbp_queries_019( 'wpbp_q_doc', 'draft' ) ) { return false; } return 0 === wpbp_queries_019( 'wpbp_q_doc', 'pending' );",
+            "description": "Counts cover the custom status, built-in statuses and an unused one",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_q_019'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } unset( $GLOBALS['wpbp_q_019'] );"
+      },
+      "reference_solution": "function wpbp_queries_019( string $post_type, string $post_status ): int {\n    $counts = wp_count_posts( $post_type );\n    if ( ! is_object( $counts ) || ! isset( $counts->{$post_status} ) ) {\n        return 0;\n    }\n    return (int) $counts->{$post_status};\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_019( string $post_type, string $post_status ): int { $query = new WP_Query( array( 'post_type' => $post_type, 'posts_per_page' => 1 ) ); return (int) $query->found_posts; }"
+      ]
     }
   ]
 }

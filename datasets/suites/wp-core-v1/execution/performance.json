@@ -1,0 +1,425 @@
+{
+  "id": "wp-core-execution-v1-performance",
+  "version": "1.0.1",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Performance",
+    "description": "Code generation tasks for WordPress asset loading, script modules, speculative loading, and media performance APIs",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-performance-001",
+      "category": "performance",
+      "prompt": "Ship a front-end ES module bundle. The entry module wpbp/entry lives at /wp-content/wpbp/entry.js and is the one the page loads. It imports wpbp/helper from /wp-content/wpbp/helper.js at load time, and it also imports wpbp/chart from /wp-content/wpbp/chart.js, but only later on, when the visitor actually asks for a chart. Declare all three to WordPress and put the entry module on the page so that WordPress can resolve the bare specifiers and warm up only the module the page needs immediately.",
+      "expected_behavior": "Reviewer contract: all three modules are registered with the Script Modules API and the entry module is enqueued, with the chart declared as a dynamic dependency and the helper as a static one. WordPress then lists both dependencies in the import map (the enqueued entry is excluded because it is printed as a script tag) but only issues a modulepreload for the statically imported helper. Review focus: declaring the chart as an ordinary dependency makes WordPress preload it too, which defeats the point. Runtime validation buffers the import map, the preload links, and the printed module tags.",
+      "requirements": [
+        "Register all three modules with the Script Modules API and enqueue only the entry module",
+        "Declare the helper as a load-time import of the entry module",
+        "Declare the chart as an import the entry module only performs on demand"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_register_script_module",
+            "description": "Registers the script modules",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script_module",
+            "description": "Enqueues the entry module",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/entry",
+            "description": "Declares the entry module",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/helper",
+            "description": "Declares the helper module",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/chart",
+            "description": "Declares the chart module",
+            "weight": 1
+          },
+          {
+            "pattern": "dynamic",
+            "description": "Marks the on-demand import",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "do_action( 'wp_enqueue_scripts' ); ob_start(); wp_script_modules()->print_import_map(); $import_map = (string) ob_get_clean(); ob_start(); wp_script_modules()->print_script_module_preloads(); $preloads = (string) ob_get_clean(); ob_start(); wp_script_modules()->print_enqueued_script_modules(); $printed = (string) ob_get_clean(); if ( ! str_contains( $import_map, 'wpbp/helper' ) || ! str_contains( $import_map, 'wpbp/chart' ) ) { return false; } if ( str_contains( $import_map, 'wpbp/entry' ) ) { return false; } if ( ! str_contains( $preloads, 'helper.js' ) ) { return false; } if ( str_contains( $preloads, 'chart.js' ) || str_contains( $preloads, 'entry.js' ) ) { return false; } if ( ! str_contains( $preloads, 'rel=\"modulepreload\"' ) ) { return false; } if ( ! str_contains( $printed, 'entry.js' ) || ! str_contains( $printed, 'type=\"module\"' ) ) { return false; } return ! str_contains( $printed, 'helper.js' ) && ! str_contains( $printed, 'chart.js' );",
+            "description": "Both dependencies reach the import map while only the static one is preloaded and only the entry module is printed",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "add_action( 'wp_enqueue_scripts', static function () {\n    wp_register_script_module( 'wpbp/helper', '/wp-content/wpbp/helper.js', array(), '1.0' );\n    wp_register_script_module( 'wpbp/chart', '/wp-content/wpbp/chart.js', array(), '1.0' );\n    wp_register_script_module(\n        'wpbp/entry',\n        '/wp-content/wpbp/entry.js',\n        array(\n            'wpbp/helper',\n            array(\n                'id'     => 'wpbp/chart',\n                'import' => 'dynamic',\n            ),\n        ),\n        '1.0'\n    );\n    wp_enqueue_script_module( 'wpbp/entry' );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-script-modules.php",
+          "src/wp-includes/script-modules.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_enqueue_scripts', static function () { wp_register_script_module( 'wpbp/helper', '/wp-content/wpbp/helper.js', array(), '1.0' ); wp_register_script_module( 'wpbp/chart', '/wp-content/wpbp/chart.js', array(), '1.0' ); wp_register_script_module( 'wpbp/entry', '/wp-content/wpbp/entry.js', array( 'wpbp/helper', 'wpbp/chart' ), '1.0' ); wp_enqueue_script_module( 'wpbp/entry' ); } );",
+        "add_action( 'wp_enqueue_scripts', static function () { wp_register_script_module( 'wpbp/helper', '/wp-content/wpbp/helper.js', array(), '1.0' ); wp_register_script_module( 'wpbp/chart', '/wp-content/wpbp/chart.js', array(), '1.0' ); wp_register_script_module( 'wpbp/entry', '/wp-content/wpbp/entry.js', array( array( 'id' => 'wpbp/helper', 'import' => 'dynamic' ), array( 'id' => 'wpbp/chart', 'import' => 'dynamic' ) ), '1.0' ); wp_enqueue_script_module( 'wpbp/entry' ); } );"
+      ]
+    },
+    {
+      "id": "e-performance-002",
+      "category": "performance",
+      "prompt": "Load a three-step front-end script chain without blocking the parser: wpbp-base at /wp-content/wpbp/base.js, wpbp-mid at /wp-content/wpbp/mid.js which needs the base, and wpbp-leaf at /wp-content/wpbp/leaf.js which needs the middle one. All three must end up on the page with the defer attribute. The leaf script also needs a configuration object available to it before it runs: a global named wpbpLeafConfig whose token property is the string wpbp-token-42.",
+      "expected_behavior": "Reviewer contract: the three scripts are enqueued with the defer loading strategy and the configuration is attached in a position that does not disqualify the chain from being deferred. Review focus: WordPress refuses to delay any script that has inline JavaScript attached after it, and that disqualification propagates to everything the script depends on, so attaching the configuration after the leaf silently makes all three render-blocking. Runtime validation prints the queue and checks every tag for the defer attribute and the configuration's position.",
+      "requirements": [
+        "Enqueue the three scripts with the dependency chain base to middle to leaf",
+        "Request the defer loading strategy for the whole chain",
+        "Make the wpbpLeafConfig object exist before the leaf script executes"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_enqueue_script",
+            "description": "Enqueues the scripts",
+            "weight": 1
+          },
+          {
+            "pattern": "defer",
+            "description": "Requests the defer strategy",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-leaf",
+            "description": "Declares the leaf handle",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbpLeafConfig",
+            "description": "Exposes the configuration object",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-token-42",
+            "description": "Uses the requested token value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "do_action( 'wp_enqueue_scripts' ); ob_start(); wp_scripts()->do_items(); $out = (string) ob_get_clean(); foreach ( array( 'wpbp-base', 'wpbp-mid', 'wpbp-leaf' ) as $handle ) { if ( ! preg_match( '/<script[^>]*\\sid=\"' . $handle . '-js\"[^>]*>/', $out, $matches ) ) { return false; } if ( ! preg_match( '/\\sdefer[\\s>]/', $matches[0] ) ) { return false; } } $token_at = strpos( $out, 'wpbp-token-42' ); $leaf_at = strpos( $out, 'id=\"wpbp-leaf-js\"' ); if ( false === $token_at || false === $leaf_at ) { return false; } if ( ! str_contains( $out, 'wpbpLeafConfig' ) ) { return false; } $base_at = strpos( $out, 'id=\"wpbp-base-js\"' ); $mid_at = strpos( $out, 'id=\"wpbp-mid-js\"' ); return $token_at < $leaf_at && false !== $base_at && false !== $mid_at && $base_at < $mid_at && $mid_at < $leaf_at;",
+            "description": "All three chained scripts keep the defer attribute and the configuration is printed before the leaf script",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "add_action( 'wp_enqueue_scripts', static function () {\n    wp_enqueue_script( 'wpbp-base', '/wp-content/wpbp/base.js', array(), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) );\n    wp_enqueue_script( 'wpbp-mid', '/wp-content/wpbp/mid.js', array( 'wpbp-base' ), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) );\n    wp_enqueue_script( 'wpbp-leaf', '/wp-content/wpbp/leaf.js', array( 'wpbp-mid' ), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) );\n    wp_add_inline_script( 'wpbp-leaf', 'var wpbpLeafConfig = ' . wp_json_encode( array( 'token' => 'wpbp-token-42' ) ) . ';', 'before' );\n} );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-scripts.php",
+          "src/wp-includes/functions.wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_enqueue_scripts', static function () { wp_enqueue_script( 'wpbp-base', '/wp-content/wpbp/base.js', array(), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-mid', '/wp-content/wpbp/mid.js', array( 'wpbp-base' ), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-leaf', '/wp-content/wpbp/leaf.js', array( 'wpbp-mid' ), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) ); wp_add_inline_script( 'wpbp-leaf', 'var wpbpLeafConfig = ' . wp_json_encode( array( 'token' => 'wpbp-token-42' ) ) . ';', 'after' ); } );",
+        "add_action( 'wp_enqueue_scripts', static function () { wp_enqueue_script( 'wpbp-base', '/wp-content/wpbp/base.js', array(), '1.0', array( 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-mid', '/wp-content/wpbp/mid.js', array( 'wpbp-base' ), '1.0', array( 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-leaf', '/wp-content/wpbp/leaf.js', array( 'wpbp-mid' ), '1.0', array( 'in_footer' => true ) ); wp_add_inline_script( 'wpbp-leaf', 'var wpbpLeafConfig = ' . wp_json_encode( array( 'token' => 'wpbp-token-42' ) ) . ';', 'before' ); } );"
+      ]
+    },
+    {
+      "id": "e-performance-003",
+      "category": "performance",
+      "prompt": "Provide a routine that sets up a dynamic block named wpbp/notice whose rendered output is the string <p class=\"wpbp-notice\">Heads up</p>, and gives it a stylesheet registered under the handle wpbp-notice-style with the source /wp-content/wpbp/notice.css. On a site that loads block assets only for the blocks it actually renders, that stylesheet must stay off a page that never renders the block, and must be enqueued as soon as the block is rendered.",
+      "expected_behavior": "Reviewer contract: the block is registered with a render callback and its stylesheet is attached with the block-style enqueue helper, which on a site that loads assets on demand defers the register-and-enqueue work to the moment the block renders. Review focus: enqueueing the stylesheet directly loads it on every page, and hooking it to the general script enqueue action ties it to page load rather than to the block. Runtime validation checks the style before any block renders, after rendering an unrelated block, and after rendering the block itself.",
+      "requirements": [
+        "Register the wpbp/notice block with a render callback producing the given markup",
+        "Attach the stylesheet to the block rather than to the page",
+        "Use the handle wpbp-notice-style and the source /wp-content/wpbp/notice.css",
+        "Do the registration when the routine is called: WordPress has already fired init by then, so deferring the work to that action would never run"
+      ],
+      "test_function": "wpbp_performance_003(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_block_type",
+            "description": "Registers the block",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/notice",
+            "description": "Uses the requested block name",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_block_style",
+            "description": "Attaches the stylesheet to the block",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-notice-style",
+            "description": "Uses the requested style handle",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_filter( 'should_load_separate_core_block_assets', '__return_true' ); add_filter( 'should_load_block_assets_on_demand', '__return_true' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wpbp_performance_003(); if ( ! WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/notice' ) ) { return false; } if ( wp_style_is( 'wpbp-notice-style', 'enqueued' ) ) { return false; } $other = do_blocks( '<!-- wp:paragraph --><p>Nothing to see</p><!-- /wp:paragraph -->' ); if ( wp_style_is( 'wpbp-notice-style', 'enqueued' ) ) { return false; } if ( ! str_contains( $other, 'Nothing to see' ) ) { return false; } $rendered = do_blocks( '<!-- wp:wpbp/notice /-->' ); if ( ! str_contains( $rendered, '<p class=\"wpbp-notice\">Heads up</p>' ) ) { return false; } return wp_style_is( 'wpbp-notice-style', 'enqueued' );",
+            "description": "The block stylesheet stays out of the page until the block is rendered",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( WP_Block_Type_Registry::get_instance()->is_registered( 'wpbp/notice' ) ) { unregister_block_type( 'wpbp/notice' ); } remove_all_filters( 'should_load_separate_core_block_assets' ); remove_all_filters( 'should_load_block_assets_on_demand' );"
+      },
+      "reference_solution": "function wpbp_performance_003(): void {\n    register_block_type(\n        'wpbp/notice',\n        array(\n            'api_version'     => 3,\n            'render_callback' => static fn(): string => '<p class=\"wpbp-notice\">Heads up</p>',\n        )\n    );\n    wp_enqueue_block_style(\n        'wpbp/notice',\n        array(\n            'handle' => 'wpbp-notice-style',\n            'src'    => '/wp-content/wpbp/notice.css',\n            'ver'    => '1.0',\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/blocks.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_performance_003(): void { register_block_type( 'wpbp/notice', array( 'api_version' => 3, 'render_callback' => static fn(): string => '<p class=\"wpbp-notice\">Heads up</p>' ) ); wp_register_style( 'wpbp-notice-style', '/wp-content/wpbp/notice.css', array(), '1.0' ); wp_enqueue_style( 'wpbp-notice-style' ); }",
+        "function wpbp_performance_003(): void { register_block_type( 'wpbp/notice', array( 'api_version' => 3, 'render_callback' => static fn(): string => '<p class=\"wpbp-notice\">Heads up</p>' ) ); add_action( 'wp_enqueue_scripts', static function () { wp_enqueue_style( 'wpbp-notice-style', '/wp-content/wpbp/notice.css', array(), '1.0' ); } ); }"
+      ]
+    },
+    {
+      "id": "e-performance-004",
+      "category": "performance",
+      "prompt": "Two front-end script modules, wpbp/dashboard and wpbp/quiet, are already registered and enqueued. Hand the dashboard module the start-up data it needs so WordPress embeds it in the page for that module to pick up: the site's home URL under the key home, and the current value of the wpbp_module_label option under the key label. The label is author-supplied text that may contain anything at all, and it must not be able to break out of the embedded payload. The quiet module must receive nothing and must not produce an embedded payload at all.",
+      "expected_behavior": "Reviewer contract: the module-specific script module data filter is used for the dashboard module only, returning an array with the two keys; WordPress serializes it into a JSON script tag and escapes angle brackets so a closing script tag in the data cannot terminate the payload. Review focus: printing a script tag by hand, or attaching the data to a classic script handle, does not produce the payload WordPress' module data reader expects, and hand-rolled JSON does not get the escaping. Returning an empty array for a module means nothing is embedded. Runtime validation buffers the module data output and inspects both modules.",
+      "requirements": [
+        "Attach the data through WordPress' per-module script module data filter",
+        "Provide the keys home and label with the site's home URL and the option value",
+        "Leave the wpbp/quiet module without any embedded data"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "script_module_data_",
+            "description": "Uses the per-module data filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp/dashboard",
+            "description": "Targets the dashboard module",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_module_label",
+            "description": "Reads the label option",
+            "weight": 1
+          },
+          {
+            "pattern": "home",
+            "description": "Provides the home key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_module_label', 'Team </script> Dashboard' ); wp_register_script_module( 'wpbp/dashboard', '/wp-content/wpbp/dashboard.js', array(), '1.0' ); wp_register_script_module( 'wpbp/quiet', '/wp-content/wpbp/quiet.js', array(), '1.0' ); wp_enqueue_script_module( 'wpbp/dashboard' ); wp_enqueue_script_module( 'wpbp/quiet' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "ob_start(); wp_script_modules()->print_script_module_data(); $out = (string) ob_get_clean(); if ( ! str_contains( $out, 'id=\"wp-script-module-data-wpbp/dashboard\"' ) ) { return false; } if ( str_contains( $out, 'wp-script-module-data-wpbp/quiet' ) ) { return false; } if ( ! str_contains( $out, 'type=\"application/json\"' ) ) { return false; } $home_ok = str_contains( $out, '\"home\":\"' . home_url() . '\"' ) || str_contains( $out, '\"home\":\"' . home_url( '/' ) . '\"' ); if ( ! $home_ok ) { return false; } if ( ! str_contains( $out, '\\u003C/script\\u003E' ) ) { return false; } if ( str_contains( $out, 'Team </script> Dashboard' ) ) { return false; } update_option( 'wpbp_module_label', 'Second Label' ); ob_start(); wp_script_modules()->print_script_module_data(); $again = (string) ob_get_clean(); return str_contains( $again, 'Second Label' ) && ! str_contains( $again, 'wp-script-module-data-wpbp/quiet' );",
+            "description": "Only the dashboard module gets an escaped JSON payload, and it reflects the current option value",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_module_label' ); remove_all_filters( 'script_module_data_wpbp/dashboard' ); remove_all_filters( 'script_module_data_wpbp/quiet' );"
+      },
+      "reference_solution": "add_filter(\n    'script_module_data_wpbp/dashboard',\n    static function ( array $data ): array {\n        $data['home']  = home_url();\n        $data['label'] = (string) get_option( 'wpbp_module_label', '' );\n        return $data;\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-script-modules.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_footer', static function () { printf( '<script type=\"application/json\" id=\"wp-script-module-data-wpbp/dashboard\">%s</script>', wp_json_encode( array( 'home' => home_url(), 'label' => (string) get_option( 'wpbp_module_label', '' ) ) ) ); } );",
+        "add_filter( 'script_module_data_wpbp/dashboard', static function ( array $data ): array { $data['home'] = home_url(); $data['label'] = (string) get_option( 'wpbp_module_label', '' ); return $data; } );\nadd_filter( 'script_module_data_wpbp/quiet', static function ( array $data ): array { $data['home'] = home_url(); return $data; } );"
+      ]
+    },
+    {
+      "id": "e-performance-005",
+      "category": "performance",
+      "prompt": "A shop runs on this site. Keep the paths /wpbp-cart/ and /wpbp-checkout/ and everything under them out of WordPress' speculative loading, because visiting them speculatively has side effects. The path /wpbp-preview/ is only dangerous when the browser would fully render the page ahead of time, so exclude it only in that case and leave it speculatively loadable otherwise. Do not change the site's speculation mode or eagerness, and leave the exclusions WordPress applies by itself in place.",
+      "expected_behavior": "Reviewer contract: the href exclude paths filter is used, appending path patterns to the array it receives; the second argument of that filter carries the mode currently in use, which is the only way to make the preview exclusion conditional. Review focus: replacing the incoming array is harmless because WordPress re-merges its own base paths, but ignoring the mode argument, or forcing a mode through the configuration filter, is not. Runtime validation prints the rules once with WordPress' own defaults and once with the mode forced to prerender.",
+      "requirements": [
+        "Add /wpbp-cart/* and /wpbp-checkout/* to the speculative loading exclusions",
+        "Add /wpbp-preview/* only when WordPress would prerender rather than prefetch",
+        "Leave the site's speculation mode and eagerness alone"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_speculation_rules_href_exclude_paths",
+            "description": "Filters the speculative loading exclusions",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-cart",
+            "description": "Excludes the cart path",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-checkout",
+            "description": "Excludes the checkout path",
+            "weight": 1
+          },
+          {
+            "pattern": "prerender",
+            "description": "Reacts to the prerender mode",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_perf_005_permalink'] = (string) get_option( 'permalink_structure' ); update_option( 'permalink_structure', '/%postname%/' ); $GLOBALS['wp_rewrite']->init(); wp_set_current_user( 0 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$defaults = wp_get_speculation_rules_default_configuration(); if ( 'prefetch' !== ( $defaults['mode'] ?? '' ) || 'conservative' !== ( $defaults['eagerness'] ?? '' ) ) { return false; } ob_start(); wp_print_speculation_rules(); $prefetch_out = (string) ob_get_clean(); if ( '' === trim( $prefetch_out ) ) { return false; } if ( ! str_contains( $prefetch_out, '\"prefetch\"' ) || ! str_contains( $prefetch_out, '\"eagerness\":\"conservative\"' ) ) { return false; } foreach ( array( '/wpbp-cart/*', '/wpbp-checkout/*', '/wp-admin/*' ) as $path ) { if ( ! str_contains( $prefetch_out, '\"' . $path . '\"' ) ) { return false; } } if ( str_contains( $prefetch_out, '/wpbp-preview/*' ) ) { return false; } $force = static function () { return array( 'mode' => 'prerender', 'eagerness' => 'moderate' ); }; add_filter( 'wp_speculation_rules_configuration', $force ); ob_start(); wp_print_speculation_rules(); $prerender_out = (string) ob_get_clean(); remove_filter( 'wp_speculation_rules_configuration', $force ); if ( ! str_contains( $prerender_out, '\"prerender\"' ) ) { return false; } foreach ( array( '/wpbp-cart/*', '/wpbp-checkout/*', '/wpbp-preview/*', '/wp-admin/*' ) as $path ) { if ( ! str_contains( $prerender_out, '\"' . $path . '\"' ) ) { return false; } } return true;",
+            "description": "Cart and checkout are always excluded while preview is excluded only under prerender, with WordPress' own defaults intact",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'wp_speculation_rules_href_exclude_paths' ); remove_all_filters( 'wp_speculation_rules_configuration' ); update_option( 'permalink_structure', (string) ( $GLOBALS['wpbp_perf_005_permalink'] ?? '' ) ); $GLOBALS['wp_rewrite']->init(); delete_option( 'rewrite_rules' ); wp_set_current_user( 0 );"
+      },
+      "reference_solution": "add_filter(\n    'wp_speculation_rules_href_exclude_paths',\n    static function ( array $paths, string $mode ): array {\n        $paths[] = '/wpbp-cart/*';\n        $paths[] = '/wpbp-checkout/*';\n        if ( 'prerender' === $mode ) {\n            $paths[] = '/wpbp-preview/*';\n        }\n        return $paths;\n    },\n    10,\n    2\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/speculative-loading.php",
+          "src/wp-includes/class-wp-speculation-rules.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "add_filter( 'wp_speculation_rules_href_exclude_paths', static function ( array $paths ): array { $paths[] = '/wpbp-cart/*'; $paths[] = '/wpbp-checkout/*'; $paths[] = '/wpbp-preview/*'; return $paths; } );",
+        "add_filter( 'wp_speculation_rules_href_exclude_paths', static function ( array $paths ): array { $paths[] = '/wpbp-cart/*'; $paths[] = '/wpbp-checkout/*'; return $paths; } );"
+      ]
+    },
+    {
+      "id": "e-performance-006",
+      "category": "performance",
+      "prompt": "This site serves a Content-Security-Policy that only trusts inline scripts carrying the request's nonce. Make every inline script tag WordPress builds carry a nonce attribute whose value is the current contents of the wpbp_csp_nonce option, read afresh each time a tag is built. Attributes the caller already supplied must survive untouched.",
+      "expected_behavior": "Reviewer contract: the inline script attributes filter is used to add the nonce, leaving the incoming attribute array otherwise intact and reading the option at call time rather than capturing it once. Review focus: replacing the attribute array drops the caller's id; rebuilding the tag by hand loses WordPress' own escaping of script data. Runtime validation changes the option between calls, and includes a payload that would otherwise close the script element.",
+      "requirements": [
+        "Add a nonce attribute to inline script tags through the appropriate attributes filter",
+        "Read the nonce from the wpbp_csp_nonce option each time a tag is built",
+        "Preserve the attributes the caller passed in"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_inline_script_attributes",
+            "description": "Filters the inline script attributes",
+            "weight": 1
+          },
+          {
+            "pattern": "nonce",
+            "description": "Adds the nonce attribute",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_csp_nonce",
+            "description": "Reads the nonce option",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_csp_nonce', 'seed-value' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "update_option( 'wpbp_csp_nonce', 'abc123' ); $first = wp_get_inline_script_tag( 'console.log(1);', array( 'id' => 'wpbp-one-js' ) ); if ( ! str_contains( $first, 'nonce=\"abc123\"' ) ) { return false; } if ( ! str_contains( $first, 'id=\"wpbp-one-js\"' ) ) { return false; } if ( ! str_contains( $first, 'console.log(1);' ) ) { return false; } update_option( 'wpbp_csp_nonce', 'zzz999' ); $second = wp_get_inline_script_tag( 'console.log(2);' ); if ( ! str_contains( $second, 'nonce=\"zzz999\"' ) || str_contains( $second, 'abc123' ) ) { return false; } $unsafe = wp_get_inline_script_tag( 'var wpbpData = \"</script>\";' ); if ( '' === $unsafe ) { return false; } if ( ! str_contains( $unsafe, 'nonce=\"zzz999\"' ) ) { return false; } return ! str_contains( $unsafe, 'var wpbpData = \"</script>\";' );",
+            "description": "Every inline script tag carries the current nonce, keeps caller attributes, and keeps WordPress' script data escaping",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_csp_nonce' ); remove_all_filters( 'wp_inline_script_attributes' );"
+      },
+      "reference_solution": "add_filter(\n    'wp_inline_script_attributes',\n    static function ( array $attributes ): array {\n        $nonce = (string) get_option( 'wpbp_csp_nonce', '' );\n        if ( '' !== $nonce ) {\n            $attributes['nonce'] = $nonce;\n        }\n        return $attributes;\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/script-loader.php",
+          "src/wp-includes/html-api/class-wp-html-tag-processor.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "$wpbp_nonce = (string) get_option( 'wpbp_csp_nonce', '' );\nadd_filter( 'wp_inline_script_attributes', static function ( array $attributes ) use ( $wpbp_nonce ): array { $attributes['nonce'] = $wpbp_nonce; return $attributes; } );",
+        "add_filter( 'wp_inline_script_attributes', static function (): array { return array( 'nonce' => (string) get_option( 'wpbp_csp_nonce', '' ) ); } );"
+      ]
+    },
+    {
+      "id": "e-performance-007",
+      "category": "performance",
+      "prompt": "Stop WordPress adding browser-level lazy loading to images inside post content, because this site's own viewer script handles those images. Images WordPress renders in any other place, such as widget text, must keep lazy loading, iframes must keep it everywhere, and the asynchronous decoding hint must keep being applied to post content images.",
+      "expected_behavior": "Reviewer contract: the lazy loading toggle filter is used and must discriminate on both the tag name and the context string, returning the incoming default for everything it does not target. Review focus: returning false unconditionally kills lazy loading for iframes and for every other rendering context, and dropping the attribute afterwards with string surgery would also strip the decoding hint. Runtime validation filters the same markup through two contexts and checks the toggle directly for a third case.",
+      "requirements": [
+        "Disable the lazy loading attribute only for images rendered in post content",
+        "Leave iframes and every other context untouched",
+        "Do not interfere with the decoding attribute"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_lazy_loading_enabled",
+            "description": "Filters the lazy loading toggle",
+            "weight": 1
+          },
+          {
+            "pattern": "img",
+            "description": "Discriminates on the image tag",
+            "weight": 1
+          },
+          {
+            "pattern": "the_content",
+            "description": "Targets the post content context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$img = '<img src=\"' . home_url( '/wp-content/uploads/wpbp-sample.png' ) . '\" alt=\"\" width=\"600\" height=\"400\" />'; $markup = str_repeat( $img . \"\\n\", 6 ); $widget_out = wp_filter_content_tags( $markup, 'widget_text_content' ); if ( ! str_contains( $widget_out, 'loading=\"lazy\"' ) ) { return false; } if ( ! str_contains( $widget_out, 'decoding=\"async\"' ) ) { return false; } $content_out = wp_filter_content_tags( $markup, 'the_content' ); if ( str_contains( $content_out, 'loading=\"lazy\"' ) ) { return false; } if ( ! str_contains( $content_out, 'decoding=\"async\"' ) ) { return false; } if ( ! wp_lazy_loading_enabled( 'iframe', 'the_content' ) ) { return false; } if ( ! wp_lazy_loading_enabled( 'img', 'widget_text_content' ) ) { return false; } return ! wp_lazy_loading_enabled( 'img', 'the_content' );",
+            "description": "Post content images lose lazy loading while other contexts, iframes and the decoding hint are unaffected",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'wp_lazy_loading_enabled' );"
+      },
+      "reference_solution": "add_filter(\n    'wp_lazy_loading_enabled',\n    static function ( $default_value, $tag_name, $context ) {\n        if ( 'img' === $tag_name && 'the_content' === $context ) {\n            return false;\n        }\n        return $default_value;\n    },\n    10,\n    3\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/media.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'wp_lazy_loading_enabled', '__return_false' );",
+        "add_filter( 'wp_lazy_loading_enabled', static function ( $default_value, $tag_name ) { if ( 'img' === $tag_name ) { return false; } return $default_value; }, 10, 2 );"
+      ]
+    }
+  ]
+}

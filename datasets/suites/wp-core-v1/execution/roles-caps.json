@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-roles_caps",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Roles and Capabilities",
     "description": "Code generation tasks for WordPress Roles and Capabilities APIs",
@@ -398,6 +398,116 @@
         ],
         "release_focus": "classic"
       }
+    },
+    {
+      "id": "e-roles-caps-009",
+      "category": "roles-caps",
+      "prompt": "Implement a function that returns the IDs of every user who holds a given capability, whether the capability comes from a role that includes it or was granted to the user individually. Users without the capability must not be returned.",
+      "expected_behavior": "The function runs a `WP_User_Query` with `capability__in` (or `capability`), which expands to the roles that include the capability and also matches capabilities stored directly on a user, so both a custom-role holder and an individually granted Subscriber are found. Runtime validation seeds a custom role holder, a directly granted user, a user holding a different custom capability, and a plain Subscriber, then queries two different capabilities and an unused one.",
+      "requirements": [
+        "Return an array of user IDs (integers)",
+        "Match users whose role includes the capability and users the capability was added to directly",
+        "Return an empty array when nobody holds the capability"
+      ],
+      "test_function": "wpbp_roles_caps_009( string $capability ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_User_Query|get_users",
+            "description": "Queries users through the user query API",
+            "weight": 1
+          },
+          {
+            "pattern": "capability",
+            "description": "Queries by capability rather than by role name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_role( 'wpbp_reviewer', 'WPBP Reviewer', array( 'read' => true, 'wpbp_moderate_reports' => true ) ); $role_user = wp_insert_user( array( 'user_login' => 'wpbp_rc_009_role', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-rc-009-role@example.com', 'role' => 'wpbp_reviewer' ) ); $direct_user = wp_insert_user( array( 'user_login' => 'wpbp_rc_009_direct', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-rc-009-direct@example.com', 'role' => 'subscriber' ) ); $publisher = wp_insert_user( array( 'user_login' => 'wpbp_rc_009_publisher', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-rc-009-publisher@example.com', 'role' => 'subscriber' ) ); $plain = wp_insert_user( array( 'user_login' => 'wpbp_rc_009_plain', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-rc-009-plain@example.com', 'role' => 'subscriber' ) ); $direct = new WP_User( (int) $direct_user ); $direct->add_cap( 'wpbp_moderate_reports' ); $pub = new WP_User( (int) $publisher ); $pub->add_cap( 'wpbp_publish_reports' ); $GLOBALS['wpbp_rc_009_users'] = array( 'role' => (int) $role_user, 'direct' => (int) $direct_user, 'publisher' => (int) $publisher, 'plain' => (int) $plain );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_roles_caps_009' ) ) { return false; } $users = (array) ( $GLOBALS['wpbp_rc_009_users'] ?? array() ); if ( 4 !== count( $users ) ) { return false; } $normalize = static function ( $value ) { if ( ! is_array( $value ) ) { return null; } $ids = array_map( 'intval', $value ); sort( $ids ); return $ids; }; $moderators = $normalize( wpbp_roles_caps_009( 'wpbp_moderate_reports' ) ); $expected = array( (int) $users['role'], (int) $users['direct'] ); sort( $expected ); if ( $moderators !== $expected ) { return false; } $publishers = $normalize( wpbp_roles_caps_009( 'wpbp_publish_reports' ) ); if ( $publishers !== array( (int) $users['publisher'] ) ) { return false; } return array() === $normalize( wpbp_roles_caps_009( 'wpbp_unused_capability' ) );",
+            "description": "Role-derived and directly granted capability holders are found, and an unused capability returns nobody",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $GLOBALS['wpbp_rc_009_users'] ?? array() ) as $user_id ) { if ( (int) $user_id > 0 ) { wp_delete_user( (int) $user_id ); } } unset( $GLOBALS['wpbp_rc_009_users'] ); remove_role( 'wpbp_reviewer' );"
+      },
+      "reference_solution": "function wpbp_roles_caps_009( string $capability ): array { $query = new WP_User_Query( array( 'capability__in' => array( $capability ), 'fields' => 'ID', 'orderby' => 'ID', 'order' => 'ASC' ) ); return array_map( 'intval', (array) $query->get_results() ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-user-query.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_roles_caps_009( string $capability ): array { $roles = wp_roles()->roles; $matching = array(); foreach ( $roles as $slug => $role ) { if ( ! empty( $role['capabilities'][ $capability ] ) ) { $matching[] = $slug; } } if ( ! $matching ) { return array(); } $query = new WP_User_Query( array( 'role__in' => $matching, 'fields' => 'ID' ) ); return array_map( 'intval', (array) $query->get_results() ); }"
+      ]
+    },
+    {
+      "id": "e-roles-caps-010",
+      "category": "roles-caps",
+      "prompt": "A site delegates single reports to individual people: a report post of the 'wpbp_report' post type may name one user ID in its 'wpbp_delegate' post meta, and that user must be able to edit that one report. Write the code that grants this. The delegate must gain no general editing ability and no other permission on the report, other reports must stay closed to them, and every other user's permissions must be unchanged.",
+      "expected_behavior": "The code filters `map_meta_cap` (or `user_has_cap`) for the `edit_post` meta capability only, checks that the target post is a `wpbp_report` whose `wpbp_delegate` meta matches the user being tested, and returns a primitive the user already holds (for example `read`). Runtime validation checks the delegate can edit their report but not a second report, cannot `edit_posts`, cannot `delete_post` the delegated report, that another Subscriber cannot edit it, and that the administrator is unaffected.",
+      "requirements": [
+        "Grant the edit capability only for the specific report whose 'wpbp_delegate' meta names the user",
+        "Do not grant any site-wide editing capability and do not change any other capability check",
+        "Leave the permissions of other users and other posts unchanged"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "map_meta_cap|user_has_cap",
+            "description": "Filters WordPress capability mapping",
+            "weight": 1
+          },
+          {
+            "pattern": "edit_post",
+            "description": "Targets the edit_post meta capability",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_delegate",
+            "description": "Reads the delegate post meta",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_report",
+            "description": "Restricts the grant to the report post type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_report', array( 'label' => 'WPBP Reports', 'public' => true, 'capability_type' => 'post', 'map_meta_cap' => true, 'supports' => array( 'title', 'editor', 'custom-fields' ) ) ); $delegate = wp_insert_user( array( 'user_login' => 'wpbp_rc_010_delegate', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-rc-010-delegate@example.com', 'role' => 'subscriber' ) ); $bystander = wp_insert_user( array( 'user_login' => 'wpbp_rc_010_bystander', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-rc-010-bystander@example.com', 'role' => 'subscriber' ) ); $allowed = wp_insert_post( array( 'post_type' => 'wpbp_report', 'post_title' => 'Delegated report', 'post_status' => 'publish', 'post_author' => 1 ) ); $closed = wp_insert_post( array( 'post_type' => 'wpbp_report', 'post_title' => 'Closed report', 'post_status' => 'publish', 'post_author' => 1 ) ); update_post_meta( (int) $allowed, 'wpbp_delegate', (int) $delegate ); $GLOBALS['wpbp_rc_010'] = array( 'delegate' => (int) $delegate, 'bystander' => (int) $bystander, 'allowed' => (int) $allowed, 'closed' => (int) $closed );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixtures = (array) ( $GLOBALS['wpbp_rc_010'] ?? array() ); if ( 4 !== count( $fixtures ) ) { return false; } $delegate = get_userdata( (int) $fixtures['delegate'] ); $bystander = get_userdata( (int) $fixtures['bystander'] ); $admin = get_userdata( 1 ); if ( ! $delegate instanceof WP_User || ! $bystander instanceof WP_User || ! $admin instanceof WP_User ) { return false; } $allowed = (int) $fixtures['allowed']; $closed = (int) $fixtures['closed']; if ( ! user_can( $delegate, 'edit_post', $allowed ) ) { return false; } if ( user_can( $delegate, 'edit_post', $closed ) ) { return false; } if ( user_can( $delegate, 'edit_posts' ) || user_can( $delegate, 'edit_others_posts' ) ) { return false; } if ( user_can( $delegate, 'delete_post', $allowed ) || user_can( $delegate, 'publish_posts' ) ) { return false; } if ( user_can( $bystander, 'edit_post', $allowed ) ) { return false; } return user_can( $admin, 'edit_post', $allowed ) && user_can( $admin, 'edit_post', $closed );",
+            "description": "Only the delegated user gains edit access, and only to their own report",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fixtures = (array) ( $GLOBALS['wpbp_rc_010'] ?? array() ); require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( array( 'delegate', 'bystander' ) as $key ) { $user_id = (int) ( $fixtures[ $key ] ?? 0 ); if ( $user_id > 0 ) { wp_delete_user( $user_id ); } } foreach ( array( 'allowed', 'closed' ) as $key ) { $post_id = (int) ( $fixtures[ $key ] ?? 0 ); if ( $post_id > 0 ) { wp_delete_post( $post_id, true ); } } unset( $GLOBALS['wpbp_rc_010'] ); remove_all_filters( 'map_meta_cap' ); remove_all_filters( 'user_has_cap' ); unregister_post_type( 'wpbp_report' );"
+      },
+      "reference_solution": "add_filter( 'map_meta_cap', static function ( $caps, $cap, $user_id, $args ) { if ( 'edit_post' !== $cap || empty( $args[0] ) ) { return $caps; } $post = get_post( $args[0] ); if ( ! $post instanceof WP_Post || 'wpbp_report' !== $post->post_type ) { return $caps; } $delegate = (int) get_post_meta( $post->ID, 'wpbp_delegate', true ); if ( $delegate > 0 && $delegate === (int) $user_id ) { return array( 'read' ); } return $caps; }, 10, 4 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-user.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'user_has_cap', static function ( $allcaps ) { $allcaps['edit_posts'] = true; $allcaps['edit_others_posts'] = true; $allcaps['edit_published_posts'] = true; return $allcaps; }, 10, 1 );",
+        "add_filter( 'map_meta_cap', static function ( $caps, $cap, $user_id, $args ) { if ( 'edit_post' !== $cap || empty( $args[0] ) ) { return $caps; } $post = get_post( $args[0] ); if ( $post instanceof WP_Post && 'wpbp_report' === $post->post_type ) { return array( 'read' ); } return $caps; }, 10, 4 );",
+        "add_filter( 'map_meta_cap', static function ( $caps, $cap, $user_id, $args ) { if ( empty( $args[0] ) ) { return $caps; } $post = get_post( $args[0] ); if ( ! $post instanceof WP_Post || 'wpbp_report' !== $post->post_type ) { return $caps; } $delegate = (int) get_post_meta( $post->ID, 'wpbp_delegate', true ); if ( $delegate > 0 && $delegate === (int) $user_id ) { return array( 'read' ); } return $caps; }, 10, 4 );"
+      ]
     }
   ]
 }
