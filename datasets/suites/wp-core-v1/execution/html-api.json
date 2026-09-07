@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-html_api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - HTML API",
     "description": "Code generation tasks for the WordPress HTML API (Tag Processor, HTML Processor, and decoder)",
@@ -93,8 +93,8 @@
             "weight": 1
           },
           {
-            "pattern": "create_fragment",
-            "description": "Creates a fragment parser",
+            "pattern": "create_fragment|create_full_parser",
+            "description": "Creates an HTML processor",
             "weight": 1
           },
           {
@@ -550,7 +550,7 @@
       "id": "e-html-api-010",
       "category": "html-api",
       "prompt": "Implement a function that screens link targets for script URLs. It is given the raw text of an href attribute exactly as it appears in an HTML source document, before any decoding, and must report whether a browser would read that value as a javascript: URL. The scheme comparison ignores ASCII case, and the value may hide the scheme behind HTML character references, including ones written without a trailing semicolon. Use the WordPress HTML API's decoding support so the attribute-context rules are applied rather than generic entity decoding.",
-      "expected_behavior": "The function calls `WP_HTML_Decoder::attribute_starts_with( $raw, 'javascript:', 'ascii-case-insensitive' )`, which compares the decoded prefix without allocating the whole decoded string and applies the attribute-context rules: numeric references decode even without a semicolon (`&#106avascript:`), while a named reference without a semicolon followed by `=` or an ASCII alphanumeric stays literal (`&colon=`), which `html_entity_decode()` and a plain prefix test both get wrong.",
+      "expected_behavior": "The function calls `WP_HTML_Decoder::attribute_starts_with( $raw, 'javascript:', 'ascii-case-insensitive' )`, which compares the decoded prefix without allocating the whole decoded string and applies the attribute-context rules: numeric references decode even without a semicolon (`&#106avascript:`), while a named reference without a semicolon followed by `=` or an ASCII alphanumeric stays literal (`&colon=`). A plain prefix test gets both cases wrong. `html_entity_decode()` also leaves `&colon=` literal, so the semicolon-less numeric reference is the fixture that separates it from the reference.",
       "requirements": [
         "Use the WordPress HTML API's attribute decoding support",
         "Compare the scheme without regard to ASCII case",

@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_interactivity_api",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Interactivity API",
     "description": "Code generation tasks for WordPress Interactivity API APIs",
@@ -297,6 +297,7 @@
       "expected_behavior": "The function stores the list under the supplied namespace and processes markup shaped as `<ul data-wp-interactive=\"NS\"><template data-wp-each=\"state.items\"><li data-wp-text=\"context.item\"></li></template></ul>`. WordPress appends one copy of the template's inner markup per item after the template's closer, tagging each top-level element with `data-wp-each-child` set to `NS::state.items`. An associative array is skipped because the client would receive it as an object, so the template is emitted unchanged with no generated children.",
       "requirements": [
         "Register the items as Interactivity API state under the supplied store namespace",
+        "Store the list under the state key `items`",
         "Let WordPress expand the list during server-side directive processing instead of looping in PHP",
         "Render each entry's own string value as the text of its list item",
         "Return the processed markup"
@@ -586,7 +587,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_010' ) ) { return false; } $read = static function ( string $html ) { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'DIV' ) ) ) { return null; } $style = $p->get_attribute( 'style' ); $declarations = array(); if ( is_string( $style ) ) { foreach ( explode( ';', $style ) as $piece ) { if ( '' === trim( $piece ) ) { continue; } $parts = explode( ':', $piece, 2 ); if ( 2 !== count( $parts ) ) { continue; } $declarations[ trim( $parts[0] ) ] = trim( $parts[1] ); } } return array( 'class' => $p->has_class( 'wpbp-bar' ), 'declarations' => $declarations, 'd_width' => $p->get_attribute( 'data-wp-style--width' ), 'd_color' => $p->get_attribute( 'data-wp-style--background-color' ) ); }; $one = $read( wpbp_gb_interactivity_api_010( '40%', '#ff0000' ) ); $two = $read( wpbp_gb_interactivity_api_010( '75px', null ) ); if ( ! is_array( $one ) || ! is_array( $two ) ) { return false; } if ( true !== $one['class'] || true !== $two['class'] ) { return false; } if ( null === $one['d_width'] || null === $one['d_color'] || null === $two['d_width'] || null === $two['d_color'] ) { return false; } return 'relative' === ( $one['declarations']['position'] ?? null ) && '40%' === ( $one['declarations']['width'] ?? null ) && '#ff0000' === ( $one['declarations']['background-color'] ?? null ) && 'relative' === ( $two['declarations']['position'] ?? null ) && '75px' === ( $two['declarations']['width'] ?? null ) && ! array_key_exists( 'background-color', $two['declarations'] );",
+            "code": "if ( ! function_exists( 'wpbp_gb_interactivity_api_010' ) ) { return false; } $read = static function ( string $html ) { $p = new WP_HTML_Tag_Processor( $html ); if ( ! $p->next_tag( array( 'tag_name' => 'DIV', 'class_name' => 'wpbp-bar' ) ) ) { return null; } $style = $p->get_attribute( 'style' ); $declarations = array(); if ( is_string( $style ) ) { foreach ( explode( ';', $style ) as $piece ) { if ( '' === trim( $piece ) ) { continue; } $parts = explode( ':', $piece, 2 ); if ( 2 !== count( $parts ) ) { continue; } $declarations[ trim( $parts[0] ) ] = trim( $parts[1] ); } } return array( 'class' => $p->has_class( 'wpbp-bar' ), 'declarations' => $declarations, 'd_width' => $p->get_attribute( 'data-wp-style--width' ), 'd_color' => $p->get_attribute( 'data-wp-style--background-color' ) ); }; $one = $read( wpbp_gb_interactivity_api_010( '40%', '#ff0000' ) ); $two = $read( wpbp_gb_interactivity_api_010( '75px', null ) ); if ( ! is_array( $one ) || ! is_array( $two ) ) { return false; } if ( true !== $one['class'] || true !== $two['class'] ) { return false; } if ( null === $one['d_width'] || null === $one['d_color'] || null === $two['d_width'] || null === $two['d_color'] ) { return false; } return 'relative' === ( $one['declarations']['position'] ?? null ) && '40%' === ( $one['declarations']['width'] ?? null ) && '#ff0000' === ( $one['declarations']['background-color'] ?? null ) && 'relative' === ( $two['declarations']['position'] ?? null ) && '75px' === ( $two['declarations']['width'] ?? null ) && ! array_key_exists( 'background-color', $two['declarations'] );",
             "description": "Style directives merge into the existing declarations and a null colour removes its declaration",
             "weight": 1
           }

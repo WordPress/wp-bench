@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-admin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Admin",
     "description": "Code generation tasks for the WordPress admin: menus, list tables, settings, AJAX and notices",
@@ -524,7 +524,7 @@
           "src/wp-admin/includes/class-wp-list-table.php",
           "src/wp-admin/edit.php"
         ],
-        "release_focus": "4.7"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "add_filter( 'bulk_actions-edit-wpbp_book', static function ( $actions ) { $actions['wpbp_archive'] = 'Archive'; return $actions; } ); add_filter( 'handle_bulk_actions-edit-wpbp_book', static function ( $redirect_to, $doaction, $post_ids ) { $archived = 0; foreach ( (array) $post_ids as $post_id ) { update_post_meta( $post_id, 'wpbp_archived', 1 ); ++$archived; } return add_query_arg( 'wpbp_archived', $archived, $redirect_to ); }, 10, 3 );",
@@ -684,7 +684,7 @@
         "source_refs": [
           "src/wp-admin/includes/class-wp-site-health.php"
         ],
-        "release_focus": "5.2"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "add_filter( 'site_status_tests', static function ( $tests ) { return array( 'direct' => array( 'wpbp_backup_freshness' => array( 'label' => 'Backup freshness', 'test' => static function () { $last = (int) get_option( 'wpbp_last_backup', 0 ); $recent = $last > 0 && ( time() - $last ) < WEEK_IN_SECONDS; return array( 'label' => 'Backups', 'status' => $recent ? 'good' : 'recommended', 'badge' => array( 'label' => 'Security', 'color' => 'blue' ), 'description' => '<p>Backup status.</p>', 'test' => 'wpbp_backup_freshness' ); } ) ) ); } );",
@@ -755,7 +755,7 @@
         "source_refs": [
           "src/wp-includes/functions.php"
         ],
-        "release_focus": "6.4"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_admin_009( array $notice ): string { return wp_get_admin_notice( esc_html( (string) $notice['text'] ), array( 'type' => 'notice-' . $notice['level'], 'dismissible' => empty( $notice['sticky'] ), 'id' => 'wpbp-notice-' . $notice['slug'], 'additional_classes' => array( 'wpbp-notice' ) ) ); }",

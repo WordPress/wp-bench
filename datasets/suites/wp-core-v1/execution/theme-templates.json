@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-theme_templates",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Theme Templates",
     "description": "Code generation tasks for WordPress theme, block template, global styles, and template rendering APIs",
@@ -116,7 +116,7 @@
           "src/wp-includes/block-template-utils.php",
           "src/wp-includes/template.php"
         ],
-        "release_focus": "6.1"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_theme_templates_002( string $template_slug ): string { $map = array( 'single-wpbp_guide-getting-started' => 'single', 'category-news' => 'archive', 'page-about' => 'page', 'front-page' => 'home', '404' => '404' ); return $map[ $template_slug ] ?? 'index'; }",
@@ -391,7 +391,7 @@
           "src/wp-includes/style-engine.php",
           "src/wp-includes/style-engine/class-wp-style-engine.php"
         ],
-        "release_focus": "6.1"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_theme_templates_007( array $block_styles ): array { $css = ''; $classnames = array(); foreach ( $block_styles as $group => $values ) { foreach ( (array) $values as $property => $value ) { if ( is_array( $value ) ) { foreach ( $value as $side => $side_value ) { $css .= $property . '-' . $side . ':' . $side_value . ';'; } continue; } if ( 'text' === $property ) { $classnames[] = 'has-text-color'; $css .= 'color:' . $value . ';'; } elseif ( 'background' === $property ) { $classnames[] = 'has-background'; $css .= 'background-color:' . $value . ';'; } else { $css .= $property . ':' . $value . ';'; } } } return array( 'css' => $css, 'classnames' => implode( ' ', $classnames ) ); }",

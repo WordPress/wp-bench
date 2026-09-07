@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-comments_users",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Comments and Users",
     "description": "Code generation tasks for WordPress Comments and Users APIs",
@@ -232,7 +232,7 @@
             "weight": 1
           },
           {
-            "pattern": "wp_new_comment\\s*\\([^)]*,\\s*true",
+            "pattern": "wp_new_comment\\s*\\((?:[^()]|\\([^()]*\\))*,\\s*true",
             "description": "Requests error objects instead of wp_die()",
             "weight": 1
           }

@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-gb_block_api",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block API",
     "description": "Code generation tasks for WordPress Block API APIs",
@@ -783,7 +783,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( empty( $GLOBALS['wpbp_block_api_013_ran'] ) ) { $GLOBALS['wpbp_block_api_013_ran'] = true; wpbp_block_api_013(); } $dir = $GLOBALS['wpbp_136']; $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/alpha' ) ) { register_block_type_from_metadata( $dir . '/alpha' ); } if ( ! $registry->is_registered( 'other/beta' ) ) { register_block_type_from_metadata( $dir . '/beta' ); } $alpha = $registry->get_registered( 'wpbp/alpha' ); if ( ! $alpha instanceof WP_Block_Type ) { return false; } $context = (array) $alpha->uses_context; sort( $context ); if ( array( 'postId', 'postType' ) !== $context ) { return false; } $supports = (array) $alpha->supports; return true === ( $supports['interactivity']['clientNavigation'] ?? null ) && false === ( $supports['html'] ?? null );",
+            "code": "if ( empty( $GLOBALS['wpbp_block_api_013_ran'] ) ) { $GLOBALS['wpbp_block_api_013_ran'] = true; wpbp_block_api_013(); } $dir = $GLOBALS['wpbp_136']; $registry = WP_Block_Type_Registry::get_instance(); if ( ! $registry->is_registered( 'wpbp/alpha' ) ) { register_block_type_from_metadata( $dir . '/alpha' ); } if ( ! $registry->is_registered( 'other/beta' ) ) { register_block_type_from_metadata( $dir . '/beta' ); } $alpha = $registry->get_registered( 'wpbp/alpha' ); if ( ! $alpha instanceof WP_Block_Type ) { return false; } $context = (array) $alpha->uses_context; sort( $context ); if ( array( 'postId', 'postType' ) !== $context ) { return false; } $supports = (array) $alpha->supports; $client_navigation = true === ( $supports['interactivity'] ?? null ) || true === ( $supports['interactivity']['clientNavigation'] ?? null ); return $client_navigation && false === ( $supports['html'] ?? null );",
             "description": "The wpbp block gains postId context and clientNavigation support while keeping its own metadata",
             "weight": 1
           },

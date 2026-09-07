@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-block_patterns_styles",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Patterns and Styles",
     "description": "Code generation tasks for WordPress block pattern, block style and block template registration APIs",
@@ -85,7 +85,7 @@
           "src/wp-includes/block-patterns.php",
           "src/wp-includes/blocks/pattern.php"
         ],
-        "release_focus": "6.5"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "register_block_pattern( 'wpbp/hero', array( 'title' => 'WPBP Hero', 'description' => 'Hero.', 'categories' => array( 'featured' ), 'content' => '<!-- wp:heading --><h2 class=\"wp-block-heading\">' . esc_html( get_bloginfo( 'name' ) ) . '</h2><!-- /wp:heading --><!-- wp:paragraph --><p>Welcome aboard.</p><!-- /wp:paragraph -->' ) );",
@@ -150,7 +150,7 @@
           "src/wp-includes/class-wp-block-patterns-registry.php",
           "src/wp-includes/block-patterns.php"
         ],
-        "release_focus": "6.2"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_patterns_002(): void { $content = '<!-- wp:paragraph --><p>Callout copy.</p><!-- /wp:paragraph -->'; register_block_pattern( 'wpbp/product-callout', array( 'title' => 'WPBP Product Callout', 'content' => $content, 'blockTypes' => array( 'core/media-text' ), 'postTypes' => array( 'wpbp_product', 'page' ), 'inserter' => false ) ); register_block_pattern( 'wpbp/plain-callout', array( 'title' => 'WPBP Plain Callout', 'content' => $content ) ); }",
@@ -217,7 +217,7 @@
           "src/wp-includes/class-wp-theme-json-resolver.php",
           "src/wp-includes/global-styles-and-settings.php"
         ],
-        "release_focus": "6.6"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_patterns_003(): void { register_block_style( array( 'core/paragraph', 'core/heading' ), array( 'name' => 'wpbp-highlight', 'label' => 'WPBP Highlight', 'inline_style' => '.is-style-wpbp-highlight{color:#102030;background-color:#f0e0d0;}' ) ); }",
@@ -279,7 +279,7 @@
           "src/wp-includes/class-wp-block-templates-registry.php",
           "src/wp-includes/block-template-utils.php"
         ],
-        "release_focus": "6.7"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_patterns_004(): void { if ( WP_Block_Templates_Registry::get_instance()->is_registered( 'wpbp-books//book-showcase' ) ) { return; } register_block_template( 'wpbp-books//book-showcase', array( 'title' => 'Book Showcase', 'description' => 'Full-width showcase for a single book.', 'content' => '<!-- wp:group --><div class=\"wp-block-group\"><!-- wp:paragraph --><p>Showcase content.</p><!-- /wp:paragraph --></div><!-- /wp:group -->' ) ); }",

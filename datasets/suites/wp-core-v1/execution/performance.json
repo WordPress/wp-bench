@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-performance",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Performance",
     "description": "Code generation tasks for WordPress asset loading, script modules, speculative loading, and media performance APIs",
@@ -68,7 +68,7 @@
           "src/wp-includes/class-wp-script-modules.php",
           "src/wp-includes/script-modules.php"
         ],
-        "release_focus": "6.5"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "add_action( 'wp_enqueue_scripts', static function () { wp_register_script_module( 'wpbp/helper', '/wp-content/wpbp/helper.js', array(), '1.0' ); wp_register_script_module( 'wpbp/chart', '/wp-content/wpbp/chart.js', array(), '1.0' ); wp_register_script_module( 'wpbp/entry', '/wp-content/wpbp/entry.js', array( 'wpbp/helper', 'wpbp/chart' ), '1.0' ); wp_enqueue_script_module( 'wpbp/entry' ); } );",
@@ -130,7 +130,7 @@
           "src/wp-includes/class-wp-scripts.php",
           "src/wp-includes/functions.wp-scripts.php"
         ],
-        "release_focus": "6.3"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "add_action( 'wp_enqueue_scripts', static function () { wp_enqueue_script( 'wpbp-base', '/wp-content/wpbp/base.js', array(), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-mid', '/wp-content/wpbp/mid.js', array( 'wpbp-base' ), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) ); wp_enqueue_script( 'wpbp-leaf', '/wp-content/wpbp/leaf.js', array( 'wpbp-mid' ), '1.0', array( 'strategy' => 'defer', 'in_footer' => true ) ); wp_add_inline_script( 'wpbp-leaf', 'var wpbpLeafConfig = ' . wp_json_encode( array( 'token' => 'wpbp-token-42' ) ) . ';', 'after' ); } );",
@@ -191,7 +191,7 @@
           "src/wp-includes/script-loader.php",
           "src/wp-includes/blocks.php"
         ],
-        "release_focus": "6.8"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "function wpbp_performance_003(): void { register_block_type( 'wpbp/notice', array( 'api_version' => 3, 'render_callback' => static fn(): string => '<p class=\"wpbp-notice\">Heads up</p>' ) ); wp_register_style( 'wpbp-notice-style', '/wp-content/wpbp/notice.css', array(), '1.0' ); wp_enqueue_style( 'wpbp-notice-style' ); }",
@@ -249,7 +249,7 @@
         "source_refs": [
           "src/wp-includes/class-wp-script-modules.php"
         ],
-        "release_focus": "6.7"
+        "release_focus": "classic"
       },
       "exploit_solutions": [
         "add_action( 'wp_footer', static function () { printf( '<script type=\"application/json\" id=\"wp-script-module-data-wpbp/dashboard\">%s</script>', wp_json_encode( array( 'home' => home_url(), 'label' => (string) get_option( 'wpbp_module_label', '' ) ) ) ); } );",
