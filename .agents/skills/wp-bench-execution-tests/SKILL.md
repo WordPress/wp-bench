@@ -148,7 +148,7 @@ For each changed test, run:
 .venv/bin/wp-bench run --config wp-bench.yaml --check-exploits --test-id <test-id>
 ```
 
-`--test-id` may be repeated or comma-separated. With `--test-id` set, the dry run prints only the selected count (`Execution tests: 1`), not the IDs. Never combine `--dry-run` with an audit flag, and never combine `--check-reference-solution` with `--check-exploits`: the CLI applies flags after config validation, so such runs silently do only one of the things. The reference-solution run must execute the selected tests through the real WordPress verifier, without model calls, and pass every selected test; the exploit audit must report the tests as not exploitable.
+`--test-id` may be repeated or comma-separated. With `--test-id` set, the dry run prints only the selected count (`Execution tests: 1`), not the IDs. `--dry-run`, `--check-reference-solution` and `--check-exploits` are mutually exclusive; the CLI rejects any combination. The reference-solution run must execute the selected tests through the real WordPress verifier, without model calls, and pass every selected test; the exploit audit must report the tests as not exploitable.
 
 For broad suite changes, also run:
 
@@ -160,7 +160,7 @@ For broad suite changes, also run:
 git diff --check
 ```
 
-The exploit audit resets WordPress before every cheat candidate, so it costs several times a reference-solution pass; scope it with `--test-id` while iterating.
+Under `reset_per_test` (the default) the exploit audit resets WordPress before every cheat candidate, so it costs several times a reference-solution pass; scope it with `--test-id` while iterating. Under `execution_isolation: none` no reset happens and state left behind by one candidate can make the next one fail for the wrong reason, so run the final `--check-exploits` before merging on `reset_per_test`.
 
 When a model fails a test, treat the failure as a suspected test bug first: compare the model's output against the WordPress source cited in `source_refs`, re-run the reference solution, and rule out over-tight assertions, 7.2-only APIs, hidden fixture knowledge, and environment artifacts before counting it as a model mistake.
 

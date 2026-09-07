@@ -15,6 +15,7 @@ from .config import ModelConfig
 #: 2.0: the "knowledge" score key and the knowledge-only "output.answer"
 #: field were removed (knowledge track removed).
 #: 2.1: added the "variant" block for skill-injection A/B runs.
+#: 2.2: dropped the "difficulty" field from every record.
 RESULT_SCHEMA_VERSION = "2.2"
 
 

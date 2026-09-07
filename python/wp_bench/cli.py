@@ -130,36 +130,34 @@ def run(
 ) -> None:
     """Run the benchmark end-to-end."""
     harness_config = HarnessConfig.from_file(config) if config else HarnessConfig()
-    if suite:
-        harness_config.run.suite = suite
-        harness_config.dataset.name = suite
-    if limit is not None:
-        harness_config.run.limit = limit
-    if seed is not None:
-        harness_config.run.seed = seed
-    if dry_run:
-        harness_config.run.dry_run = True
-    if check_reference_solution:
-        harness_config.run.check_reference_solution = True
-    if check_exploits:
-        harness_config.run.check_exploits = True
-    normalized_test_ids = _normalize_test_ids(test_id)
-    if normalized_test_ids:
-        harness_config.run.test_ids = normalized_test_ids
-    if skill:
-        harness_config.skills.paths = list(skill)
-    if skills_include_references is not None:
-        harness_config.skills.include_references = skills_include_references
-    if skills_only:
-        harness_config.skills.only = True
 
-    if harness_config.run.dry_run and harness_config.run.check_reference_solution:
-        console.print("[red]--dry-run and --check-reference-solution cannot be used together.[/red]")
-        raise typer.Exit(1)
+    def _apply_cli_overrides() -> None:
+        # run.* and skills.* re-validate on assignment, so a bad flag or a
+        # bad combination surfaces here as the red message + exit 1.
+        if suite:
+            harness_config.run.suite = suite
+            harness_config.dataset.name = suite
+        if limit is not None:
+            harness_config.run.limit = limit
+        if seed is not None:
+            harness_config.run.seed = seed
+        if dry_run:
+            harness_config.run.dry_run = True
+        if check_reference_solution:
+            harness_config.run.check_reference_solution = True
+        if check_exploits:
+            harness_config.run.check_exploits = True
+        normalized_test_ids = _normalize_test_ids(test_id)
+        if normalized_test_ids:
+            harness_config.run.test_ids = normalized_test_ids
+        if skill:
+            harness_config.skills.paths = list(skill)
+        if skills_include_references is not None:
+            harness_config.skills.include_references = skills_include_references
+        if skills_only:
+            harness_config.skills.only = True
 
-    if harness_config.skills.only and not harness_config.skills.paths:
-        console.print("[red]--skills-only requires at least one --skill (or skills.paths).[/red]")
-        raise typer.Exit(1)
+    _run_or_fail(_apply_cli_overrides)
 
     skills_active = bool(harness_config.skills.paths)
     if skills_active and (
