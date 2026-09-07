@@ -1,4 +1,5 @@
 """Tests for seeded, stratified test selection on limited runs."""
+
 from __future__ import annotations
 
 import pytest
@@ -196,3 +197,14 @@ def test_unknown_category_raises_value_error_naming_category() -> None:
 
     with pytest.raises(ValueError, match="not-a-category"):
         select_run_tests(_fixture(), config)
+
+
+def test_unknown_category_mixed_with_a_valid_one_still_raises() -> None:
+    with pytest.raises(ValueError, match="not-a-category"):
+        select_tests(
+            _fixture(),
+            limit=None,
+            test_ids=[],
+            seed=1337,
+            categories=["bbb", "not-a-category"],
+        )

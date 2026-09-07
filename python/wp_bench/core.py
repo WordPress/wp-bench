@@ -123,12 +123,8 @@ def select_run_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
         categories=config.run.categories,
     )
     if not selected:
-        category_context = ""
-        if config.run.categories and not config.run.test_ids:
-            category_context = f" matching categories {config.run.categories!r}"
-
         raise ValueError(
-            f"No execution tests selected{category_context} from dataset "
+            f"No execution tests selected from dataset "
             f"'{config.dataset.name}' (suite {config.run.suite!r}). "
             "Check the dataset source, suite name, and selection filters."
         )
@@ -479,7 +475,7 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "scoring_version": SCORING_VERSION,
                 "seed": self.config.run.seed,
                 "limit": self.config.run.limit,
-                "categories": self.config.run.categories,
+                "categories": [] if self.config.run.test_ids else self.config.run.categories,
                 "selected_test_ids": sorted(
                     {record["test_id"] for record in self.records}
                 ),

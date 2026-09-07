@@ -46,6 +46,9 @@ def select_tests(
 
     if categories:
         requested_categories = set(categories)
+        unknown = requested_categories - {getattr(test, "category", "") for test in tests}
+        if unknown:
+            raise ValueError(f"Unknown categories: {', '.join(sorted(unknown))}.")
         tests = [
             test
             for test in tests
