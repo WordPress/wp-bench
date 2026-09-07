@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-gb_block_markup",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Markup Authoring",
     "description": "Code generation tasks that require authoring serialized Gutenberg block markup as stored in post_content",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-07-17"
   },
   "tests": [
     {
       "id": "e-gb-block-markup-001",
       "category": "gb-block-markup",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the serialized WordPress block markup (as stored in post_content) for two sibling blocks: a paragraph reading 'Hello from WP-Bench' followed by a level 3 heading reading 'Getting Started'. The markup must match what the current block editor saves, including block comment delimiters, wrapper classes, and attributes.",
       "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/paragraph block and one core/heading block with no invalid fragments. The paragraph serializes with no attributes and an unclassed <p> element; the heading carries the non-default level attribute in its comment JSON and renders an <h3> with the wp-block-heading class. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -73,7 +72,6 @@
     {
       "id": "e-gb-block-markup-002",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for an image block referencing media attachment ID 123, source URL https://example.com/wp-content/uploads/2026/07/team.jpg, the 'large' size slug, and alt text 'Team photo'. The markup must match what the current block editor saves for an attached image, with each attribute stored where the editor stores it: in the block comment JSON or in the saved HTML.",
       "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/image block. The attachment ID and size slug live in the comment JSON; the source URL and alt text live only in the HTML. The wrapper is a <figure> carrying the wp-block-image and size-large classes, and the <img> carries the wp-image-123 class alongside the correct src and alt.",
       "requirements": [
@@ -133,7 +131,6 @@
     {
       "id": "e-gb-block-markup-003",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for an unordered list with exactly three items reading 'Alpha', 'Beta', and 'Gamma', in that order. The markup must match what the current block editor saves, including the inner block structure the editor uses for individual list items.",
       "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/list block with no attributes whose inner blocks are three core/list-item blocks in the requested order. The wrapper is a <ul> with the wp-block-list class and each item serializes its own <li> element inside its own block delimiters. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -194,7 +191,6 @@
     {
       "id": "e-gb-block-markup-004",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a quote block whose quoted content is the single paragraph 'Code is poetry.' and whose citation reads 'WordPress'. The markup must match what the current block editor saves, including where the quoted content and the citation each live in the saved structure.",
       "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/quote block with no attributes. The quoted text is an inner core/paragraph block, while the citation is a <cite> element in the quote's own wrapper HTML rather than a nested block or comment attribute. The blockquote wrapper carries the wp-block-quote class and the markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -255,7 +251,6 @@
     {
       "id": "e-gb-block-markup-005",
       "category": "gb-block-markup",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a minimal template section containing, in order: a Site Title block, a default Separator block, and a Post Content block, exactly as the site editor saves them.",
       "expected_behavior": "Reviewer contract: the returned string parses into exactly three blocks in order: core/site-title, core/separator, core/post-content. The site title and post content serialize in the self-closing void form with no inner HTML, while the separator wraps an hr element carrying the editor's default classes. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -317,7 +312,6 @@
     {
       "id": "e-gb-block-markup-006",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a two-column layout where the first column contains a paragraph reading 'Left' and the second column contains a paragraph reading 'Right'. The markup must match what the current block editor saves, including its nesting structure and wrapper classes.",
       "expected_behavior": "Reviewer contract: the returned string parses into one attribute-free core/columns block containing exactly two attribute-free core/column blocks, each wrapping one paragraph inner block. Every level uses the current editor's wrapper element and class, with no legacy column-count attribute or class. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -378,7 +372,6 @@
     {
       "id": "e-gb-block-markup-007",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a buttons row with two link buttons: 'Download' linking to https://example.com/download and 'Learn More' linking to https://example.com/learn-more. The markup must match what the current block editor saves, including where the link URL is stored.",
       "expected_behavior": "Reviewer contract: the returned string parses into one core/buttons block containing two core/button inner blocks. Link URLs and button text live only in the saved HTML anchor, never in the block comment JSON. Each button wraps an anchor carrying both the wp-block-button__link and wp-element-button classes inside a div.wp-block-button wrapper. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -439,7 +432,6 @@
     {
       "id": "e-gb-block-markup-008",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a table with a header row of 'Plan' and 'Price' and two body rows: 'Basic' with '$10' and 'Pro' with '$20'. The markup must match what the current block editor saves for a default table, including its wrapper structure and default-attribute handling.",
       "expected_behavior": "Reviewer contract: the returned string parses into one attribute-free core/table block. Because fixed layout is the block's default it is expressed only as the has-fixed-layout class on the table element, never as a comment attribute. The table lives inside a figure.wp-block-table wrapper with a thead of th cells and a tbody of td cells holding the requested values. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -499,7 +491,6 @@
     {
       "id": "e-gb-block-markup-009",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a cover block using the background image https://example.com/wp-content/uploads/2026/07/hero.jpg with a 40% dim overlay, containing a single paragraph reading 'Stargazing'. The markup must match what the current block editor saves, including the overlay and inner container structure.",
       "expected_behavior": "Reviewer contract: the returned string parses into one core/cover block whose comment JSON carries the background url and the non-default dimRatio of 40, wrapping exactly one paragraph inner block. The saved HTML contains the wp-block-cover wrapper, an img with the wp-block-cover__image-background class and the background src, an aria-hidden overlay span carrying wp-block-cover__background with the dim classes, and a wp-block-cover__inner-container div around the content. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -559,7 +550,6 @@
     {
       "id": "e-gb-block-markup-010",
       "category": "gb-block-markup",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a gallery of two images that link to nothing: attachment ID 201 at https://example.com/wp-content/uploads/2026/07/a.jpg with alt text 'First' and attachment ID 202 at https://example.com/wp-content/uploads/2026/07/b.jpg with alt text 'Second', both using the 'large' size slug. The markup must match what the current block editor saves, including how the gallery nests its images.",
       "expected_behavior": "Reviewer contract: the returned string parses into one core/gallery block whose comment JSON sets linkTo to none, wrapping exactly two core/image inner blocks in the modern nested-images structure. The gallery figure carries the wp-block-gallery and has-nested-images classes, and each nested image serializes like a standalone attached image: id and sizeSlug in its comment JSON, src and alt only in its HTML, with the size and attachment classes on its own figure and img. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -620,7 +610,6 @@
     {
       "id": "e-gb-block-markup-011",
       "category": "gb-block-markup",
-      "difficulty": "hard",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a Query Loop that lists the titles of 3 published posts ordered by title ascending, not inheriting the main query. Post titles should render through the block that displays each post's title inside the loop. The markup must match what the current block editor saves, including its wrapper and nesting structure.",
       "expected_behavior": "Reviewer contract: the returned string parses into one core/query block whose comment JSON carries a queryId and a query object with perPage 3, postType post, ascending title ordering, and inherit false. The saved HTML wraps a div.wp-block-query containing a core/post-template inner block that nests a void core/post-title block. Rendering the markup through WordPress lists exactly the first three posts by title and omits the rest.",
       "requirements": [
@@ -682,7 +671,6 @@
     {
       "id": "e-gb-block-markup-012",
       "category": "gb-block-markup",
-      "difficulty": "hard",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a navigation menu containing a top-level custom link 'Home' pointing to '/', followed by a submenu labeled 'About' that contains two custom links: 'Team' pointing to '/team' and 'History' pointing to '/history'. The markup must match what the current block editor saves for menu items defined inline.",
       "expected_behavior": "Reviewer contract: the returned string parses into one core/navigation block with two inner blocks: a void core/navigation-link for Home and a core/navigation-submenu labeled About wrapping two void core/navigation-link blocks for Team and History. Navigation links serialize in the self-closing form with label and url in the comment JSON and no inner HTML. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -744,7 +732,6 @@
     {
       "id": "e-gb-block-markup-013",
       "category": "gb-block-markup",
-      "difficulty": "hard",
       "prompt": "Implement a function that returns the serialized WordPress block markup for a paragraph reading 'Escape check' whose block metadata name (the custom name shown in the editor's List View, stored under the metadata attribute) is exactly: A --> B & \"C\". The comment JSON must use the escaping WordPress applies when serializing block attributes so the delimiter survives inside an HTML comment.",
       "expected_behavior": "Reviewer contract: the returned string parses into exactly one core/paragraph block whose metadata.name attribute decodes to the literal text A --> B & \"C\". Serializing that value requires the character escapes WordPress applies to block attribute JSON: double hyphens become \\u002d\\u002d so the comment cannot terminate early, and >, &, and double quotes are hex-escaped. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [
@@ -804,7 +791,6 @@
     {
       "id": "e-gb-block-markup-014",
       "category": "gb-block-markup",
-      "difficulty": "hard",
       "prompt": "Implement a function that returns the serialized WordPress block markup equivalent of this plain HTML, exactly as the current block editor would save it after conversion: <h2>Features</h2><ul><li>Fast</li><li>Secure</li></ul><p>Get started today.</p>",
       "expected_behavior": "Reviewer contract: the returned string parses into three sibling blocks with no invalid fragments: a core/heading with no attributes (level 2 is the default) rendering an h2 with the wp-block-heading class, a core/list whose two core/list-item inner blocks wrap the li elements inside a ul with the wp-block-list class, and an attribute-free core/paragraph with an unclassed p element. The markup survives a parse/serialize round trip unchanged.",
       "requirements": [

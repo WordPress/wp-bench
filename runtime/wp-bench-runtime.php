@@ -3,7 +3,7 @@
  * Plugin Name: WP-Bench Runtime
  * Description: Minimal WordPress runtime for executing WP-Bench verification commands.
  * Version: 0.1.0
- * Requires at least: 6.9
+ * Requires at least: 7.1
  * Requires PHP: 8.1
  * Author: WordPress Community
  * License: GPL-2.0-or-later

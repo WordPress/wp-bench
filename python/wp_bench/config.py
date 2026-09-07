@@ -108,6 +108,10 @@ ExecutionIsolation = Literal["reset_per_test", "none"]
 
 
 class RunConfig(StrictModel):
+    #: Re-validated on assignment so CLI flag overrides go through the same
+    #: exclusive-mode rules as a config file.
+    model_config = ConfigDict(validate_assignment=True)
+
     suite: str = "wp-core-v1"
     limit: int | None = Field(default=None, gt=0)
     test_ids: list[str] = Field(default_factory=list)
@@ -168,13 +172,10 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _validate_exclusive_modes(self) -> RunConfig:
-        if self.check_exploits and self.check_reference_solution:
-            raise ValueError(
-                "run.check_exploits and run.check_reference_solution are "
-                "separate audit modes and cannot both be enabled."
-            )
-        if self.check_exploits and self.dry_run:
-            raise ValueError("run.check_exploits cannot be combined with run.dry_run.")
+        modes = ("dry_run", "check_reference_solution", "check_exploits")
+        enabled = [f"run.{name}" for name in modes if getattr(self, name)]
+        if len(enabled) > 1:
+            raise ValueError(f"{' and '.join(enabled)} cannot be combined: pick one mode.")
         return self
 
 
@@ -200,6 +201,8 @@ class SkillsConfig(StrictModel):
     #: Skip the baseline (no-skills) variant. Diagnostic escape hatch: the
     #: default in-run A/B is what makes results comparable.
     only: bool = False
+
+    model_config = ConfigDict(validate_assignment=True)
 
     @model_validator(mode="after")
     def _validate_only_requires_paths(self) -> SkillsConfig:

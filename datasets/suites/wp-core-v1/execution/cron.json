@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-cron",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Cron",
     "description": "Code generation tasks for WordPress Cron APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-cron-001",
       "category": "cron",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that schedules a one-time event at the supplied timestamp for the hook 'wpbp_single_event' only when that hook is not already scheduled.",
       "expected_behavior": "`wpbp_cron_001()` uses `wp_next_scheduled()` to avoid enqueueing another `wpbp_single_event`, schedules exactly one one-time event with `wp_schedule_single_event()` when none exists, and returns false without changing the existing timestamp on later calls.",
       "requirements": [
@@ -61,7 +60,6 @@
     {
       "id": "e-cron-002",
       "category": "cron",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that schedules the hook 'wpbp_hourly_event' as an hourly recurring event starting at the supplied timestamp and using the provided argument array.",
       "expected_behavior": "`wpbp_cron_002()` schedules `wpbp_hourly_event` with `wp_schedule_event()` using the `hourly` recurrence and the provided argument array. Runtime validation inspects the scheduled event object for the timestamp, recurrence name, interval, and stored arguments.",
       "requirements": [
@@ -111,7 +109,6 @@
     {
       "id": "e-cron-003",
       "category": "cron",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that unschedules only the next event for the hook 'wpbp_unschedule' that matches the provided argument array.",
       "expected_behavior": "`wpbp_cron_003()` finds the next scheduled `wpbp_unschedule` event for the provided arguments with `wp_next_scheduled()` and removes that timestamp with `wp_unschedule_event()`. Runtime validation schedules two matching events and verifies only the earlier event is removed.",
       "requirements": [
@@ -161,7 +158,6 @@
     {
       "id": "e-cron-004",
       "category": "cron",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that adds a custom recurrence named 'wpbp_five_minutes' to WordPress cron schedules with a 300-second interval and display text 'Every five minutes'.",
       "expected_behavior": "`wpbp_cron_004()` attaches a `cron_schedules` filter that adds `wpbp_five_minutes` while preserving existing schedules. Runtime validation retrieves the schedules through WordPress and verifies the custom interval and display label.",
       "requirements": [
@@ -209,7 +205,6 @@
     {
       "id": "e-cron-005",
       "category": "cron",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that attempts scheduling the hook 'wpbp_invalid_event' with the invalid recurrence slug 'wpbp_missing_schedule' and returns the WP_Error object produced by WordPress.",
       "expected_behavior": "`wpbp_cron_005()` calls `wp_schedule_event()` with WordPress error returns enabled for a recurrence that is not registered. Runtime validation expects the returned object to be a `WP_Error` with the `invalid_schedule` code and no scheduled `wpbp_invalid_event` event.",
       "requirements": [

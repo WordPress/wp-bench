@@ -33,7 +33,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={"required_patterns": [{"pattern": "code", "weight": 1}]},

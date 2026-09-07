@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-ai_client",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - AI Client",
     "description": "Code generation tasks for WordPress AI Client APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-ai-client-001",
       "category": "ai-client",
-      "difficulty": "basic",
       "prompt": "Implement a function that temporarily disables WordPress AI support for its own check, returns the disabled support result, and leaves AI support enabled afterward.",
       "expected_behavior": "`wpbp_ai_client_001()` uses the `wp_supports_ai` filter only around a call to `wp_supports_ai()`, returns `false` for that temporary check, and removes the filter before returning. The runtime attaches a counting spy to the `wp_supports_ai` filter, so a hard-coded `return false` fails: the support state must actually be read through `wp_supports_ai()` during the call, and support must be enabled again afterward.",
       "requirements": [
@@ -60,7 +59,6 @@
     {
       "id": "e-ai-client-002",
       "category": "ai-client",
-      "difficulty": "basic",
       "prompt": "Implement a function that creates a text prompt builder with a concise system instruction, temperature 0.2, and a model preference order of 'gpt-4o-mini' then 'gpt-4o'. Return the builder without generating content.",
       "expected_behavior": "`wpbp_ai_client_002()` returns a `WP_AI_Client_Prompt_Builder` from `wp_ai_client_prompt()` after configuring text-generation options with snake_case AI Client methods. It must not call a generating method; runtime validation later prevents generation and confirms the returned builder is not already in an error state.",
       "requirements": [
@@ -123,7 +121,6 @@
     {
       "id": "e-ai-client-003",
       "category": "ai-client",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that prevents a single AI text generation attempt and returns the resulting WP_Error code.",
       "expected_behavior": "`wpbp_ai_client_003()` temporarily enables `wp_ai_client_prevent_prompt`, calls `generate_text()` on an AI Client prompt, returns the resulting `WP_Error` code, and removes the prevention filter. The expected code is `prompt_prevented`, with no live provider call.",
       "requirements": [
@@ -178,7 +175,6 @@
     {
       "id": "e-ai-client-004",
       "category": "ai-client",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the AI Client function-call name for a supplied ability name and the ability name obtained by converting it back.",
       "expected_behavior": "`wpbp_ai_client_004()` uses `WP_AI_Client_Ability_Function_Resolver` conversion helpers to return `array( $function_name, $round_trip_ability_name )` for any supplied ability name. Runtime validation checks multiple ability names so hard-coded output does not pass.",
       "requirements": [
@@ -227,7 +223,6 @@
     {
       "id": "e-ai-client-005",
       "category": "ai-client",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the text-generation support check result while AI prompt execution is temporarily prevented.",
       "expected_behavior": "`wpbp_ai_client_005()` forces the `wp_ai_client_prevent_prompt` filter on around a text-generation support check and removes it before returning. The runtime attaches a late spy to that filter, so a hard-coded `return false` fails: prevention must be observed active during the call, and the filter must be gone afterward.",
       "requirements": [
@@ -289,7 +284,6 @@
     {
       "id": "e-ai-client-006",
       "category": "ai-client",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that makes the default AI client request timeout the supplied number of seconds for all subsequently created prompt builders, using the core filter.",
       "expected_behavior": "`wpbp_ai_client_006()` filters `wp_ai_client_default_request_timeout`, which fires on every builder construction. The runtime probes two different values by constructing its own builders after each call with a late spy on the filter, so hardcoding one value or removing the filter after construction fails.",
       "requirements": [
@@ -340,7 +334,6 @@
     {
       "id": "e-ai-client-007",
       "category": "ai-client",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the error message produced when text generation is attempted while WordPress AI support is disabled through the core support filter. Disable support only around the attempt and re-enable it before returning.",
       "expected_behavior": "`wpbp_ai_client_007()` forces `wp_supports_ai` off, attempts `generate_text()` (which short-circuits into the disabled-environment `prompt_prevented` error before any provider call), removes the filter, and returns the error message. The runtime spies on the support filter to prove support was observed disabled during the call, verifies a real builder was constructed for the attempt, and checks support is restored.",
       "requirements": [
@@ -390,7 +383,6 @@
     {
       "id": "e-ai-client-010",
       "category": "ai-client",
-      "difficulty": "advanced",
       "prompt": "Implement a function that executes the supplied AI function call through a WP_AI_Client_Ability_Function_Resolver that allows only the existing 'wpbp/echo-upper' ability, returning the resulting function response payload.",
       "expected_behavior": "`wpbp_ai_client_010()` constructs the resolver with the single allowed ability and calls `execute_ability()`. The runtime sends an allowed call (executes the real ability), a prefixed-but-disallowed call (payload code `ability_not_allowed`), and a non-ability call (payload code `invalid_ability_call`).",
       "requirements": [
@@ -435,7 +427,6 @@
     {
       "id": "e-ai-client-011",
       "category": "ai-client",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that calls the supplied nonexistent method name on a fresh AI prompt builder and returns that same builder.",
       "expected_behavior": "Unknown builder methods store a sticky `prompt_builder_error` on the builder while keeping it fluent. The runtime verifies the returned builder was really constructed (construction spy), then generates under an active prevention filter: a poisoned builder surfaces its stored `prompt_builder_error` (the sticky error is checked before the prevention gate), while a clean builder would surface `prompt_prevented`.",
       "requirements": [
@@ -475,7 +466,6 @@
     {
       "id": "e-ai-client-015",
       "category": "ai-client",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that runs a text-generation support check on a fresh AI prompt builder while prevention is active via the core prevention filter, removes the filter, and returns the builder only when the check reported unsupported (null otherwise).",
       "expected_behavior": "Prevention makes support checks return false without storing an error on the builder, unlike generating calls. `wpbp_ai_client_015()` returns the builder that ran the prevented check; the runtime proves it is unpoisoned by generating under prevention and expecting `prompt_prevented` (a stored error would surface first as `prompt_builder_error`), and verifies the model's filter is gone.",
       "requirements": [

@@ -391,6 +391,29 @@ def _run_concurrent_loop(
     policy.finish()
 
 
+#: Told to the model with every execution prompt. The grader loads the
+#: submission into an already-booted WordPress (after ``init``), so code that
+#: defers its registrations to the ``init`` action -- idiomatic in a plugin --
+#: would silently never run. Saying so keeps the benchmark about WordPress
+#: knowledge rather than about guessing the harness's load order.
+PLUGIN_EXECUTION_CONTEXT_NOTE = (
+    "Execution context: the plugin is installed and its main file is included into a "
+    "WordPress site that has already finished booting (plugins_loaded and init have "
+    "already fired). Write it as a normal plugin anyway: attach behavior to hooks with "
+    "add_action and add_filter exactly as you would in production, because the grader "
+    "fires the relevant actions itself. Do not skip hook registration behind "
+    "did_action() checks."
+)
+
+EXECUTION_CONTEXT_NOTE = (
+    "Execution context: this code is loaded into a WordPress site that has already "
+    "finished booting (the init action has already fired, as have plugins_loaded, "
+    "after_setup_theme and wp_loaded), so perform any registrations or hook "
+    "attachments directly when the code runs instead of deferring them to those "
+    "boot-time actions."
+)
+
+
 class BenchmarkRunner(_ResultBookkeeping):
     """Primary benchmark orchestrator for single-model evaluation.
 
@@ -670,10 +693,18 @@ class BenchmarkRunner(_ResultBookkeeping):
         The verification spec is identical across a test's candidates, so it
         is built once here rather than per candidate. Returns None when no
         cheat passes — the test's assertions rejected every zero-effort stub.
+
+        Honors ``run.execution_isolation`` like a normal run: under
+        ``reset_per_test`` WordPress is reset before every candidate (each
+        candidate is its own execution of the test's setup/assertions);
+        under ``none`` no reset happens and the test's teardown is relied on,
+        which makes author iteration on a single test several times faster.
         """
         verification_spec = _build_verification_spec(test, self.config)
+        isolate = self.config.run.execution_isolation == "reset_per_test"
         for label, code in candidates:
-            self.environment.reset()
+            if isolate:
+                self.environment.reset()
             env_result = self.environment.execute_artifact(
                 Artifact(kind="php_snippet", code=code),
                 verification_spec,
@@ -704,9 +735,14 @@ class BenchmarkRunner(_ResultBookkeeping):
         if test.test_function:
             lines.append("")
             lines.append(f"Define this function: {test.test_function}")
+        artifact_kind = getattr(test, "artifact_kind", "php_snippet")
+        lines.append("")
         lines.append(
-            render_artifact_instructions(getattr(test, "artifact_kind", "php_snippet"))
+            PLUGIN_EXECUTION_CONTEXT_NOTE
+            if artifact_kind == "wp_plugin_files"
+            else EXECUTION_CONTEXT_NOTE
         )
+        lines.append(render_artifact_instructions(artifact_kind))
         return "\n".join(lines)
 
     @staticmethod

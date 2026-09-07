@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-gb_block_api",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block API",
     "description": "Code generation tasks for WordPress Block API APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-gb-block-api-001",
       "category": "gb-block-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that registers a dynamic block type named 'wpbp/dynamic' that renders '<p>Dynamic</p>' on the server.",
       "expected_behavior": "`wpbp_gb_block_api_001()` uses `register_block_type()` to register `wpbp/dynamic` with a server-side render callback. Runtime validation invokes the function, checks the block registry, verifies the block is dynamic, and renders the block through WordPress.",
       "requirements": [
@@ -62,7 +61,6 @@
     {
       "id": "e-gb-block-api-002",
       "category": "gb-block-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a PHP-only block named 'wpbp/auto' that auto-registers for the editor, has a string 'message' attribute defaulting to 'Hi', and renders the message on the server.",
       "expected_behavior": "`wpbp_gb_block_api_002()` registers `wpbp/auto` with the WordPress 7.0 PHP-only block auto-registration support, defines the requested message attribute, and provides a render callback. Runtime validation checks the registered block type, support flag, attribute default, dynamic status, and rendered output.",
       "requirements": [
@@ -124,7 +122,6 @@
     {
       "id": "e-gb-block-api-003",
       "category": "gb-block-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that counts each explicit block type in the supplied block markup with WP_Block_Processor.",
       "expected_behavior": "`wpbp_gb_block_api_003()` streams through the supplied block markup with `WP_Block_Processor`, counts every explicit block opening including nested blocks, and returns counts keyed by fully qualified block names. Runtime validation includes freeform HTML, nested blocks, and repeated block types.",
       "requirements": [
@@ -175,7 +172,6 @@
     {
       "id": "e-gb-block-api-004",
       "category": "gb-block-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that serializes a supplied parsed block array back to WordPress block markup.",
       "expected_behavior": "`wpbp_gb_block_api_004()` delegates parsed block serialization to WordPress. Runtime validation checks that core block names are serialized with the expected shorthand, inner HTML is preserved, and comment-sensitive attribute characters are escaped by WordPress.",
       "requirements": [
@@ -215,7 +211,6 @@
     {
       "id": "e-gb-block-api-005",
       "category": "gb-block-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that registers a 'wpbp-muted' block style for 'core/paragraph' labeled 'Muted'.",
       "expected_behavior": "`wpbp_gb_block_api_005()` uses the server-side block style API to register the `wpbp-muted` style for `core/paragraph`. Runtime validation inspects `WP_Block_Styles_Registry` to confirm the style name and label WordPress registered.",
       "requirements": [
@@ -265,7 +260,6 @@
     {
       "id": "e-gb-block-api-006",
       "category": "gb-block-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the first image block found in the supplied block markup while scanning only the first ten block openings with WP_Block_Processor.",
       "expected_behavior": "`wpbp_gb_block_api_006()` streams through block markup with `WP_Block_Processor`, matches image blocks through the processor, and returns the parsed block array from `extract_full_block_and_advance()`. Runtime validation checks both the extracted image attributes and that an image after the first ten block openings is ignored.",
       "requirements": [

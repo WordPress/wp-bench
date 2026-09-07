@@ -125,7 +125,6 @@ def _run_multi_model(monkeypatch, tmp_path: Path, names: list[str]):
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={},

@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-database",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Database",
     "description": "Code generation tasks for WordPress Database APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-database-001",
       "category": "database",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that adds a row to a WordPress-prefixed custom table and returns the new auto-increment ID.",
       "expected_behavior": "`wpbp_database_001()` inserts into the fixture-owned custom table with `$wpdb->insert()`, writes `item_key`, `item_value`, and `status` as `active`, and returns `$wpdb->insert_id` rather than the rows-affected result. Runtime validation pre-seeds the table so returning `1` from `$wpdb->insert()` cannot pass.",
       "requirements": [
@@ -72,7 +71,6 @@
     {
       "id": "e-database-002",
       "category": "database",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns a SQL query for a WordPress-prefixed custom table. Select that table's `id` column, require its `visibility` column to equal 'public', and require its `title` column to contain the supplied literal term.",
       "expected_behavior": "`wpbp_database_002()` returns a SQL string prepared with `$wpdb->prepare()`, uses `%i` placeholders for the custom table plus its `id`, `visibility`, and `title` column identifiers, and escapes LIKE wildcards before adding surrounding `%` characters. Runtime validation executes the returned SQL against fixture rows, including a wildcard-looking distractor.",
       "requirements": [
@@ -129,7 +127,6 @@
     {
       "id": "e-database-003",
       "category": "database",
-      "difficulty": "basic",
       "prompt": "Implement a function that reads one `lookup_value` from a WordPress-prefixed custom table for the supplied `lookup_key`.",
       "expected_behavior": "`wpbp_database_003()` uses `$wpdb->get_var()` with a prepared query against the fixture-owned custom table, returning the matching `lookup_value` for the supplied `lookup_key` and `null` when no row exists.",
       "requirements": [
@@ -185,7 +182,6 @@
     {
       "id": "e-database-004",
       "category": "database",
-      "difficulty": "basic",
       "prompt": "Implement a function that updates `lookup_value` in a WordPress-prefixed custom table for the supplied `lookup_key`.",
       "expected_behavior": "`wpbp_database_004()` calls `$wpdb->update()` on the fixture-owned custom table, identifies rows by `lookup_key`, writes the supplied `lookup_value`, and returns the method's row-count result. Runtime validation checks the target row, an unrelated row, and the zero-row result for a missing key.",
       "requirements": [
@@ -236,7 +232,6 @@
     {
       "id": "e-database-005",
       "category": "database",
-      "difficulty": "basic",
       "prompt": "Implement a function that deletes exactly the row matching the supplied `lookup_key` from a WordPress-prefixed custom table.",
       "expected_behavior": "`wpbp_database_005()` calls `$wpdb->delete()` on the fixture-owned custom table, matches only the supplied `lookup_key`, and returns the method's row-count result. Runtime validation checks that the target row is removed, an unrelated row remains, and a missing key returns zero affected rows.",
       "requirements": [
@@ -282,7 +277,6 @@
     {
       "id": "e-database-006",
       "category": "database",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that creates or updates a WordPress-prefixed custom table using WordPress's schema-upgrade path, then returns the upgrade result array.",
       "expected_behavior": "`wpbp_database_006()` loads WordPress's upgrade functions, builds a schema for the fixture-owned custom table with `$wpdb->get_charset_collate()`, and passes it to `dbDelta()`. Runtime validation checks that the table exists with the expected columns, auto-increment primary key, default score value, and slug index.",
       "requirements": [

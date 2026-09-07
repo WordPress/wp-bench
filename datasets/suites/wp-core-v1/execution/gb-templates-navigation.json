@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-gb_templates_navigation",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Templates and Navigation",
     "description": "Code generation tasks for WordPress Templates and Navigation APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-gb-templates-navigation-001",
       "category": "gb-templates-navigation",
-      "difficulty": "intermediate",
       "prompt": "Register a plugin-provided block template named `wpbp//landing-special` for posts. The template should have the title `Landing Special`, the description `Landing page for benchmark products`, and paragraph block content containing `Landing Special Template`.",
       "expected_behavior": "Reviewer contract: the submitted code registers the `wpbp//landing-special` block template with WordPress so it is available for the `post` post type and preserves the requested title, description, and block markup in the registered `WP_Block_Template` object.",
       "requirements": [
@@ -59,7 +58,6 @@
     {
       "id": "e-gb-templates-navigation-002",
       "category": "gb-templates-navigation",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that renders a `core/navigation-link` block for a supplied URL and label using WordPress server-side block rendering.",
       "expected_behavior": "Reviewer contract: `wpbp_gb_templates_navigation_002()` returns the markup produced by rendering a `core/navigation-link` block with the supplied `url` and `label` attributes. Review focus is that WordPress block rendering handles the navigation item markup and escaping.",
       "requirements": [
@@ -113,7 +111,6 @@
     {
       "id": "e-gb-templates-navigation-003",
       "category": "gb-templates-navigation",
-      "difficulty": "intermediate",
       "prompt": "Register a block pattern named `wpbp/navigation-footer` for the Navigation block. Its content should be a `core/navigation` block with two custom links: `Docs` to `/docs` and `Support` to `/support`.",
       "expected_behavior": "Reviewer contract: the submitted code registers the `wpbp/navigation-footer` block pattern with title `Navigation Footer`, marks it as relevant to `core/navigation`, and stores block markup containing a Navigation block with the requested custom links.",
       "requirements": [
