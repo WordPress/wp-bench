@@ -97,6 +97,7 @@ run:
   limit: 10                  # limit tests (null = all); seeded stratified selection
   seed: 1337                 # selection seed (same seed = same subset)
   test_ids: []               # optional explicit test IDs to run
+  categories: []             # optional category filter; ignored when test_ids is set
   dry_run: false             # load/filter tests without calling models
   execution_isolation: reset_per_test  # reset WordPress before each execution test
   execution_concurrency: 1   # must stay 1 under reset_per_test isolation
@@ -108,6 +109,9 @@ output:
   jsonl_path: output/results.jsonl
 ```
 
+`run.categories` optionally filters execution tests by category. Explicit
+`test_ids` take precedence over categories.
+
 ### CLI Options
 
 ```bash
@@ -117,6 +121,7 @@ wp-bench run --model-name gpt-4o --limit 5   # quick single-model test (stratifi
 wp-bench run --limit 5 --seed 42             # different deterministic subset
 wp-bench run --test-id e-abilities-api-001
 wp-bench run --test-id e-abilities-api-001 --test-id e-rest-api-001
+wp-bench run --category hooks,rest-api
 wp-bench run --config wp-bench.yaml --dry-run # validate config without calling models
 wp-bench run --check-reference-solution      # verify reference solutions pass
 wp-bench run --check-exploits                # adversarial assertion audit (see below)

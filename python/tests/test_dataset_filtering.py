@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
-from wp_bench.cli import _normalize_test_ids
+from wp_bench.cli import _normalize_list_option
 from wp_bench.config import HarnessConfig
 from wp_bench.core import select_run_tests
 from wp_bench.datasets import ExecutionTest, filter_tests_by_ids
 
 
-def _execution_test(test_id: str) -> ExecutionTest:
+def _execution_test(test_id: str, category: str = "general") -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
         suite="wp-core-v1",
         prompt="Prompt",
         expected_behavior="expected",
-        category="general",
+        category=category,
         requirements=[],
         test_function=None,
         static_checks={},
@@ -24,8 +26,8 @@ def _execution_test(test_id: str) -> ExecutionTest:
     )
 
 
-def test_normalize_test_ids_accepts_repeated_and_comma_separated_values() -> None:
-    assert _normalize_test_ids(["e-one,e-two", "e-two", " e-three "]) == [
+def test_normalize_list_option_accepts_repeated_and_comma_separated_values() -> None:
+    assert _normalize_list_option(["e-one,e-two", "e-two", " e-three "]) == [
         "e-one",
         "e-two",
         "e-three",
@@ -105,3 +107,41 @@ def test_limit_zero_fails_with_the_config_message() -> None:
     result = CliRunner().invoke(app, ["run", "--dry-run", "--limit", "0"])
     assert result.exit_code == 1
     assert "greater than 0" in result.output
+
+
+def test_dry_run_category_filters_selected_test_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    from typer.testing import CliRunner
+
+    from wp_bench import cli
+
+    monkeypatch.setattr(
+        cli,
+        "load_tests",
+        lambda _config: [
+            _execution_test("e-hooks-one", "hooks"),
+            _execution_test("e-hooks-two", "hooks"),
+            _execution_test("e-rest-api-one", "rest-api"),
+        ],
+    )
+
+    result = CliRunner().invoke(cli.app, ["run", "--dry-run", "--category", "hooks"])
+
+    assert result.exit_code == 0
+    assert "Categories: hooks" in result.output
+    selected_output = result.output.split("Selected test ids:", maxsplit=1)[1]
+    selected_ids = re.findall(r"\be-[a-z0-9-]+", selected_output)
+    assert selected_ids == ["e-hooks-one", "e-hooks-two"]
+    assert all(test_id.startswith("e-hooks-") for test_id in selected_ids)
+
+
+def test_category_filter_rejects_mixed_known_and_unknown_categories() -> None:
+    config = HarnessConfig.model_validate(
+        {
+            "dataset": {"source": "local", "name": "wp-core-v1"},
+            "run": {"categories": ["hooks", "not-a-category"]},
+        }
+    )
+    tests = [_execution_test("e-hooks-one", "hooks")]
+
+    with pytest.raises(ValueError, match="Unknown categories: not-a-category"):
+        select_run_tests(tests, config)
