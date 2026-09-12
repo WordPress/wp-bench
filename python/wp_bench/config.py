@@ -40,7 +40,6 @@ class ModelConfig(StrictModel):
     #: Routing itself is driven by ``name`` (a LiteLLM model string).
     kind: Literal["openai", "anthropic", "ollama", "openai-compatible"] = "openai"
     name: str = "gpt-4o-mini"
-    temperature: float = 0.0
     max_tokens: int | None = None
     top_p: float | None = None
     request_timeout: float = Field(default=300.0, gt=0)
@@ -51,13 +50,6 @@ class ModelConfig(StrictModel):
     retry_max_seconds: float = 30.0
     retry_on_rate_limit: bool = True
     retry_on_timeout: bool = True
-
-    @field_validator("temperature")
-    @classmethod
-    def _clamp_temperature(cls, value: float) -> float:
-        if value < 0 or value > 2:
-            raise ValueError("temperature must be between 0 and 2")
-        return value
 
     @field_validator("top_p")
     @classmethod

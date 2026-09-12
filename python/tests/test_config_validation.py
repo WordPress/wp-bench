@@ -16,19 +16,10 @@ from wp_bench.config import (
 )
 
 
-def test_model_config_rejects_temperature_below_zero() -> None:
-    with pytest.raises(ValidationError, match="between 0 and 2"):
-        ModelConfig(temperature=-0.1)
-
-
-def test_model_config_rejects_temperature_above_two() -> None:
-    with pytest.raises(ValidationError, match="between 0 and 2"):
-        ModelConfig(temperature=2.1)
-
-
-def test_model_config_accepts_temperature_bounds() -> None:
-    assert ModelConfig(temperature=0.0).temperature == 0.0
-    assert ModelConfig(temperature=2.0).temperature == 2.0
+def test_model_config_rejects_temperature() -> None:
+    """Removed outright -- see test_sampling_param_fallback for the rationale."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        ModelConfig(temperature=0.0)  # type: ignore[call-arg]
 
 
 def test_model_config_rejects_invalid_top_p() -> None:
@@ -98,6 +89,6 @@ def test_config_construction_emits_no_deprecation_warnings() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         HarnessConfig()
-        ModelConfig(temperature=1.0, top_p=0.5)
+        ModelConfig(top_p=0.5)
         RunConfig(limit=5)
         GraderConfig(kind="cli")
