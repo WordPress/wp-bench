@@ -165,3 +165,56 @@ def test_render_skills_system_prompt_contains_preamble_and_all_skills(tmp_path: 
     prompt = render_skills_system_prompt([first, second])
     assert prompt.index("skill documents") < prompt.index("# Skill: wp-example")
     assert "# Skill: other" in prompt
+
+def _write_second_skill(root: Path, name: str = "wp-second", body: str = "Second body.") -> Path:
+    skill_dir = root / name
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Second skill.\n---\n\n{body}",
+        encoding="utf-8",
+    )
+    return skill_dir
+
+
+def test_build_variants_with_two_skills(tmp_path: Path) -> None:
+    first = load_skill(_write_skill(tmp_path))
+    second = load_skill(_write_second_skill(tmp_path))
+
+    both = build_variants([first, second])
+    assert [variant.key for variant in both] == ["baseline", "skills"]
+
+    skills_variant = both[1]
+    # Variant.skills is tuple[LoadedSkill, ...], stored in input order.
+    assert skills_variant.skills == (first, second)
+
+    # render_skills_system_prompt is called with the full list, so both
+    # skills' rendered bodies must appear, in input order.
+    prompt = skills_variant.system_prompt
+    assert prompt is not None
+    assert first.rendered in prompt
+    assert second.rendered in prompt
+    assert prompt.index(first.rendered) < prompt.index(second.rendered)
+
+
+def test_variant_payload_info_with_two_skills(tmp_path: Path) -> None:
+    first = load_skill(_write_skill(tmp_path))
+    second = load_skill(_write_second_skill(tmp_path))
+    variant = build_variants([first, second])[1]
+
+    payload = variant.payload_info()
+    assert payload["skills"] == ["wp-example", "wp-second"]
+    assert payload["system_prompt_sha256"] == variant.record_info()["system_prompt_hash"]
+
+
+def test_render_skills_system_prompt_two_skills_preserve_input_order(tmp_path: Path) -> None:
+    """Regression guard: render_skills_system_prompt joins skill.rendered via
+    blocks.extend(...) over the input list, so order must follow the caller's
+    list order, not any internal sort."""
+    first = load_skill(_write_skill(tmp_path))
+    second = load_skill(_write_second_skill(tmp_path))
+
+    forward = render_skills_system_prompt([first, second])
+    assert forward.index("# Skill: wp-example") < forward.index("# Skill: wp-second")
+
+    backward = render_skills_system_prompt([second, first])
+    assert backward.index("# Skill: wp-second") < backward.index("# Skill: wp-example")
