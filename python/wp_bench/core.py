@@ -441,35 +441,29 @@ def _run_concurrent_loop(
     with create_progress() as progress:
         task = progress.add_task(progress_label, total=len(tests_to_run))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(process_test, test): test for test in tests_to_run}
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                except TestError as error:
-                    if policy.register_error(error):
-                        _cancel_pending(futures)
-                        raise
-                    print_test_warning(error)
-                    result = on_error(futures[future], error)
-                except BaseException:
-                    # Not a test result: a reset that failed or timed out
-                    # means the runtime is no longer known-clean, and
-                    # continue_on_error does not cover harness failures.
-                    # Drain the queue rather than grade the rest against it.
-                    #
-                    # BaseException, not Exception, because KeyboardInterrupt
-                    # is the case that matters most: without this the executor
-                    # exits through shutdown(wait=True), which does not cancel
-                    # queued futures, so Ctrl-C would run the rest of the suite
-                    # to completion — burning model spend behind a progress bar
-                    # frozen at the interrupt. The serial loop stops after the
-                    # current test; pooled runs must not be worse.
-                    _cancel_pending(futures)
-                    raise
-                else:
-                    policy.record_success()
-                on_result(result)
-                progress.update(task, advance=1)
+            futures = {}
+            try:
+                for test in tests_to_run:
+                    futures[executor.submit(process_test, test)] = test
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                    except TestError as error:
+                        if policy.register_error(error):
+                            raise
+                        print_test_warning(error)
+                        result = on_error(futures[future], error)
+                    else:
+                        policy.record_success()
+                    on_result(result)
+                    progress.update(task, advance=1)
+            except BaseException:
+                # Ctrl-C usually interrupts as_completed() while it waits,
+                # before future.result() is reached. Cancel queued work on
+                # any escaping failure before executor shutdown waits for
+                # running tests, including failures while recording results.
+                _cancel_pending(futures)
+                raise
     policy.finish()
 
 

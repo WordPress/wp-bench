@@ -9,7 +9,9 @@ exercised against real threads rather than asserted by inspection.
 from __future__ import annotations
 
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import TracebackType
 from typing import Any
 
 import pytest
@@ -22,7 +24,7 @@ from wp_bench.config import (
     OutputConfig,
     RunConfig,
 )
-from wp_bench.core import BenchmarkRunner
+from wp_bench.core import BenchmarkRunner, _ContinueOnErrorPolicy, _run_concurrent_loop
 from wp_bench.datasets import ExecutionTest
 from wp_bench.environment import ExecutionResult
 
@@ -289,6 +291,54 @@ def test_serial_runs_stay_serial(
 
 
 # Failure handling ------------------------------------------------------
+
+
+def test_interrupt_while_waiting_cancels_queued_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A main-thread interrupt must cancel work before executor shutdown."""
+    started: list[int] = []
+    running = threading.Barrier(3)
+    release = threading.Event()
+
+    class BlockingExecutor(ThreadPoolExecutor):
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            # Keep the two running jobs blocked until the result loop has
+            # exited. This makes queued-job cancellation deterministic.
+            release.set()
+            super().__exit__(exc_type, exc_value, traceback)
+
+    def process_test(test: int) -> dict[str, Any]:
+        started.append(test)
+        if test < 2:
+            running.wait(timeout=BARRIER_TIMEOUT_SECONDS)
+        assert release.wait(timeout=BARRIER_TIMEOUT_SECONDS)
+        return {}
+
+    def interrupted_wait(futures: Any) -> Any:
+        running.wait(timeout=BARRIER_TIMEOUT_SECONDS)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("wp_bench.core.ThreadPoolExecutor", BlockingExecutor)
+    monkeypatch.setattr("wp_bench.core.as_completed", interrupted_wait)
+
+    with pytest.raises(KeyboardInterrupt):
+        _run_concurrent_loop(
+            tests_to_run=list(range(8)),
+            max_workers=2,
+            progress_label="Interrupted run",
+            process_test=process_test,
+            on_result=lambda result: None,
+            on_error=lambda test, error: {},
+            policy=_ContinueOnErrorPolicy(False),
+        )
+
+    assert sorted(started) == [0, 1]
 
 
 class ExplodingResetSpy(PoolSpy):
