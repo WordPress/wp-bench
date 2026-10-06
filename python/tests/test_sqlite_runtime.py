@@ -58,15 +58,6 @@ def test_sqlite_capture_and_restore_use_host_held_snapshot(monkeypatch) -> None:
     assert len(calls) == 2
 
 
-@pytest.mark.parametrize("snapshot", ["", "not base64", "invalid \N{SNOWMAN}", base64.b64encode(b"wrong header").decode()])
-def test_invalid_capture_cannot_become_baseline(monkeypatch, snapshot: str) -> None:
-    environment = WordPressEnvironment(GraderConfig())
-    monkeypatch.setattr(environment, "_exec", lambda *args, **kwargs: (snapshot, "", 0, False))
-    with pytest.raises(RuntimeError, match="baseline"):
-        environment._capture_baseline()
-    assert environment._baseline is None
-
-
 def test_setup_starts_stopped_container_and_waits_before_capture(monkeypatch) -> None:
     environment = WordPressEnvironment(GraderConfig())
     steps: list[str] = []

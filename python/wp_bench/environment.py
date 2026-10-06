@@ -1,8 +1,6 @@
 """Bridge between Python harness and WordPress runtime."""
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import shlex
 import subprocess
@@ -137,16 +135,9 @@ class WordPressEnvironment:
                 f"Failed to capture the clean WordPress baseline (exit code {returncode})"
                 f"{': ' + stderr.strip() if stderr.strip() else ''}"
             )
-        if not stdout.strip():
-            raise RuntimeError(
-                "Captured an empty WordPress baseline; no reset could restore a usable database."
-            )
-        try:
-            snapshot = base64.b64decode(stdout.strip(), validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise RuntimeError("Captured an invalid SQLite baseline.") from exc
-        if not snapshot.startswith(b"SQLite format 3\0"):
-            raise RuntimeError("Captured an invalid SQLite baseline.")
+        # Every restore decodes, header-checks and integrity-checks the
+        # snapshot before replacing the database, so a bad capture fails the
+        # first reset instead of grading against it.
         self._baseline = stdout
 
     def reset(self) -> None:

@@ -41,8 +41,7 @@ docker compose up -d --build --renew-anon-volumes --wait
 Runtime 2.0 runs WordPress 7.1 with SQLite in one container. It uses the official
 [SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration/releases/tag/v3.0.2)
 3.0.2 drop-in, pinned by version and archive checksum. No database server is
-started. `npm start` runs the same Compose command. `docker compose stop` stops
-the runtime; `docker compose down --volumes` removes it and its disposable data.
+started. `docker compose stop` stops the runtime; `docker compose down --volumes` removes it and its disposable data.
 Renewing anonymous volumes when Compose recreates a container ensures rebuilt
 WordPress, verifier, and SQLite adapter files are used.
 The grader runs through WP-CLI; `grader.base_url` sets the installed site's URL

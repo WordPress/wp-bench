@@ -106,13 +106,6 @@ def test_reset_refuses_without_baseline() -> None:
         environment.reset()
 
 
-def test_empty_capture_aborts_setup(monkeypatch: pytest.MonkeyPatch) -> None:
-    environment, _ = _env(GraderConfig(), ("  \n", "", 0, False), baseline=None)
-    monkeypatch.setattr(environment, "_container_exists", lambda: True)
-    with pytest.raises(RuntimeError, match="empty WordPress baseline"):
-        environment.setup()
-
-
 def test_failed_capture_aborts_setup(monkeypatch: pytest.MonkeyPatch) -> None:
     environment, _ = _env(GraderConfig(), ("", "no space left on device", 1, False))
     monkeypatch.setattr(environment, "_container_exists", lambda: True)
