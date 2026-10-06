@@ -27,6 +27,9 @@ def _docker_env(monkeypatch: pytest.MonkeyPatch, result: tuple[str, str, int, bo
     # Stand in for what setup() would have captured; these tests exercise
     # reset() in isolation.
     environment._baseline = "host-held-snapshot"
+    environment._site_config = "<?php // clean configuration"
+    environment._isolated = True
+    monkeypatch.setattr(environment, "_start_isolated_container", lambda **kwargs: None)
     return environment, calls
 
 
@@ -71,4 +74,4 @@ def test_docker_reset_replaces_database_then_verifies_installation(
     environment, calls = _docker_env(monkeypatch, ("ok", "", 0, False))
     environment.reset()
     assert len(calls) == 1
-    assert calls[0][2].endswith("sqlite-snapshot.php import && wp core is-installed")
+    assert calls[0][2].endswith("sqlite-snapshot.php prepare && wp core is-installed")

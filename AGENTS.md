@@ -19,6 +19,8 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 - Unit tests: `pytest python` (use `-k <pattern>` to scope).
 - Start SQLite WordPress runtime (local): `cd runtime && docker compose up -d --build --renew-anon-volumes --wait`.
 - Build Docker grader: `cd runtime && docker build -t wp-bench-grader:dev .`.
+- Verify private runtime isolation: `WP_BENCH_TEST_IMAGE=wp-bench-grader:dev pytest python/tests/test_container_runtime_integration.py -q`.
+- Run isolated tests concurrently: `wp-bench run --config wp-bench.example.yaml --execution-concurrency 4`. Every candidate uses a fresh container; allocate host capacity for each worker's limits.
 
 ## Coding Style & Naming
 - Python: 4-space indent, type hints on public functions, prefer dataclasses/pydantic for payloads. Keep Typer commands in `wp_bench/cli.py` thin and delegate to `core.py`. Use `snake_case`; CLI flags mirror config keys.

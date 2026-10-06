@@ -58,6 +58,10 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
 class QuietEnvironment:
     """Environment stub that always passes."""
 
+    image_id = "sha256:test"
+    def release(self) -> None: ...
+    def close(self) -> None: ...
+
     def setup(self, *, capture_baseline: bool = True) -> None:
         pass
 

@@ -46,6 +46,9 @@ def test_sqlite_capture_and_restore_use_host_held_snapshot(monkeypatch) -> None:
         return FAKE_SNAPSHOT, "", 0, False
 
     monkeypatch.setattr(environment, "_exec", fake_exec)
+    environment._isolated = True
+    environment._site_config = "<?php // clean configuration"
+    monkeypatch.setattr(environment, "_start_isolated_container", lambda **kwargs: None)
     environment._capture_baseline()
     environment.reset()
 
@@ -53,8 +56,8 @@ def test_sqlite_capture_and_restore_use_host_held_snapshot(monkeypatch) -> None:
     restore = calls[1][0][2]
     assert capture.index("clear") < capture.index("wp core install") < capture.index("export")
     assert "wp db" not in capture + restore
-    assert restore.endswith("import && wp core is-installed")
-    assert calls[1][1]["stdin"] == FAKE_SNAPSHOT
+    assert restore.endswith("prepare && wp core is-installed")
+    assert json.loads(calls[1][1]["stdin"])["database"] == FAKE_SNAPSHOT
     assert len(calls) == 2
 
 
@@ -72,8 +75,8 @@ def test_setup_starts_stopped_container_and_waits_before_capture(monkeypatch) ->
     monkeypatch.setattr(environment, "_wait_for_container", lambda: steps.append("ready"))
     monkeypatch.setattr(environment, "_require_sqlite", lambda: steps.append("sqlite"))
     monkeypatch.setattr(environment, "_capture_baseline", lambda: steps.append("capture"))
-    environment.setup()
-    assert steps == ["start", "ready", "sqlite", "capture"]
+    environment.setup(capture_baseline=False)
+    assert steps == ["start", "ready", "sqlite"]
 
 
 @pytest.mark.parametrize("kind", ["cli", "docker"])
@@ -84,7 +87,7 @@ def test_wrong_backend_aborts_setup(monkeypatch, kind) -> None:
     monkeypatch.setattr(environment, "_wait_for_container", lambda: None)
     monkeypatch.setattr(environment, "_exec", lambda *args, **kwargs: ("", "SQLite drop-in required", 1, False))
     with pytest.raises(RuntimeError, match="SQLite database backend"):
-        environment.setup()
+        environment.setup(capture_baseline=False)
 
 
 @pytest.mark.parametrize(

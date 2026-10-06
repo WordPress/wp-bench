@@ -3,6 +3,9 @@ set -euo pipefail
 
 cd /var/www/html
 rm -f /tmp/wp-bench-ready
+if [ ! -f wp-load.php ]; then
+  cp -R /opt/wp-bench-wordpress/. /var/www/html/
+fi
 
 : "${WP_BENCH_SQLITE_PATH:=/var/www/html/wp-content/database/.ht.sqlite}"
 : "${WORDPRESS_SITE_URL:=http://localhost}"

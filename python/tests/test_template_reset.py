@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from typing import Any
 
 import pytest
@@ -26,11 +27,17 @@ def _env(
     calls: list[tuple[list[str], str | None]] = []
 
     def fake_exec(command: list[str], *, stdin: str | None = None, **kwargs: Any):
+        if command == ["cat", "wp-config.php"]:
+            return "<?php // clean configuration", "", 0, False
         calls.append((command, stdin))
         return result
 
     environment._exec = fake_exec  # type: ignore[method-assign]
     environment._baseline = baseline
+    environment._isolated = config.kind == "docker"
+    environment._site_config = "<?php // clean configuration"
+    environment._resolve_image = lambda: None  # type: ignore[method-assign]
+    environment._start_isolated_container = lambda **kwargs: None  # type: ignore[method-assign]
     environment._run_process = lambda *args, **kwargs: ProcessResult("", "", 0, False)  # type: ignore[method-assign]
     environment._wait_for_container = lambda: None  # type: ignore[method-assign]
     environment._require_sqlite = lambda: None  # type: ignore[method-assign]
@@ -48,18 +55,18 @@ def test_reset_restores_without_reinstalling_in_one_round_trip() -> None:
     environment.reset()
     assert len(calls) == 1
     script = _script(calls[0])
-    assert "sqlite-snapshot.php import" in script
+    assert "sqlite-snapshot.php prepare" in script
     assert "wp core install" not in script
     assert "wp db" not in script
-    assert script.endswith("import && wp core is-installed")
-    assert calls[0][1] == FAKE_BASELINE
+    assert script.endswith("prepare && wp core is-installed")
+    assert json.loads(calls[0][1])["database"] == FAKE_BASELINE
 
 
 def test_reset_error_renders_a_safe_command_string() -> None:
     environment, _ = _env(GraderConfig(), ("", "boom", 1, False))
     with pytest.raises(RuntimeError) as excinfo:
         environment.reset()
-    assert "sh -c 'php " in str(excinfo.value)
+    assert "sh -c 'cp " in str(excinfo.value)
 
 
 def _captured_script(monkeypatch: pytest.MonkeyPatch, config: GraderConfig) -> str:
@@ -87,7 +94,7 @@ def test_capture_feeds_exactly_what_restore_replays(monkeypatch: pytest.MonkeyPa
     environment.setup()
     environment.reset()
     assert environment._baseline == FAKE_BASELINE
-    assert calls[1][1] == FAKE_BASELINE
+    assert json.loads(calls[1][1])["database"] == FAKE_BASELINE
 
 
 def test_baseline_is_not_left_in_the_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -134,7 +141,9 @@ def test_restore_timeout_raises() -> None:
 
 def test_cli_grader_refuses_reset_and_captures_no_baseline() -> None:
     environment, calls = _env(GraderConfig(kind="cli"), ("ok", "", 0, False), baseline=None)
-    environment.setup()
+    with pytest.raises(RuntimeError, match="no reset implementation"):
+        environment.setup()
+    environment.setup(capture_baseline=False)
     assert calls == []
     assert environment._baseline is None
     with pytest.raises(RuntimeError, match="no reset implementation"):
