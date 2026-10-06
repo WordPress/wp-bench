@@ -74,6 +74,8 @@ jobs:
   docker:
     name: SQLite runtime integration
     runs-on: ubuntu-latest
+    env:
+      SQLITE_TESTS: e-database-001,e-database-002,e-database-003,e-database-004,e-database-005,e-database-006,e-database-007,e-database-008,e-security-009
     steps:
       - uses: actions/checkout@v4
 
@@ -91,12 +93,12 @@ jobs:
       - name: SQLite database reference solutions
         run: >-
           wp-bench run --config wp-bench.example.yaml --check-reference-solution
-          --test-id e-database-001,e-database-002,e-database-003,e-database-004,e-database-005,e-database-006,e-database-007,e-database-008,e-security-009
+          --test-id "$SQLITE_TESTS"
 
       - name: SQLite database exploit audit
         run: >-
           wp-bench run --config wp-bench.example.yaml --check-exploits
-          --test-id e-database-001,e-database-002,e-database-003,e-database-004,e-database-005,e-database-006,e-database-007,e-database-008,e-security-009
+          --test-id "$SQLITE_TESTS"
 
       - name: Runtime logs
         if: always()
