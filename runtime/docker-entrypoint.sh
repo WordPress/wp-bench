@@ -3,7 +3,6 @@ set -euo pipefail
 
 cd /var/www/html
 
-: "${WORDPRESS_DB_NAME:=wordpress}"
 : "${WORDPRESS_DB_USER:=root}"
 : "${WORDPRESS_DB_PASSWORD:=password}"
 : "${WORDPRESS_DB_HOST:=mysql}"
@@ -19,6 +18,7 @@ until mysql -h "$WORDPRESS_DB_HOST" -u "$WORDPRESS_DB_USER" -p"$WORDPRESS_DB_PAS
 done
 
 if [ ! -f wp-config.php ]; then
+  : "${WORDPRESS_DB_NAME:=wordpress}"
   wp config create \
     --dbname="$WORDPRESS_DB_NAME" \
     --dbuser="$WORDPRESS_DB_USER" \
@@ -34,15 +34,17 @@ fi
 # this container through `docker exec`, which never re-runs this entrypoint --
 # so a literal here can never be revised and the override would be silently
 # inert, leaving every worker on one shared database. `docker exec` does
-# inherit the container's environment, so the unset case falls back to the
-# name this container was started with and single-runtime behavior is
-# unchanged. Runs on every start, not just creation, so a wp-config.php left
+# inherit the container's environment, so the unset case must fall back to
+# the database the existing config resolves to. Read it before rewriting,
+# including when a volume carries a custom name from an older image.
+# Runs on every start, not just creation, so a wp-config.php left
 # in a volume by an older image is upgraded too.
 # --raw writes the argument into wp-config.php verbatim, so the fallback has
 # to be escaped for a PHP single-quoted string. Unescaped, a name containing
 # a quote breaks the file, and a crafted one closes the literal and continues
 # as code that runs on every WordPress bootstrap.
-escaped_db_name=$(printf '%s' "$WORDPRESS_DB_NAME" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g")
+configured_db_name=$(wp config get DB_NAME --allow-root)
+escaped_db_name=$(printf '%s' "$configured_db_name" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g")
 wp config set DB_NAME "getenv('WORDPRESS_DB_NAME') ?: '$escaped_db_name'" \
   --raw \
   --allow-root
