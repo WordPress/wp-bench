@@ -9,7 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 ArtifactKind = Literal[
     "php_snippet",
@@ -81,12 +88,17 @@ class ModelConfig(StrictModel):
 
 class GraderConfig(StrictModel):
     kind: Literal["docker", "cli"] = "docker"
-    image: str = "ghcr.io/wordpress/wp-bench-grader:latest"
+    image: str = "wp-bench-grader:dev"
     container_name: str = "wp-bench-grader"
     base_url: str = "http://localhost:8888"
     timeout_seconds: int = Field(default=90, gt=0)
     setup_timeout_seconds: int = Field(default=600, gt=0)
-    wp_env_dir: Path | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def database(self) -> Literal["sqlite"]:
+        """Record the sole supported backend in result metadata."""
+        return "sqlite"
 
     @model_validator(mode="before")
     @classmethod
@@ -266,11 +278,6 @@ class HarnessConfig(StrictModel):
             cache_dir = data["dataset"].get("cache_dir")
             if cache_dir:
                 data["dataset"]["cache_dir"] = resolve_path(cache_dir)
-
-        if "grader" in data and isinstance(data["grader"], dict):
-            wp_env_dir = data["grader"].get("wp_env_dir")
-            if wp_env_dir:
-                data["grader"]["wp_env_dir"] = resolve_path(wp_env_dir)
 
         if "output" in data and isinstance(data["output"], dict):
             for key in ("path", "jsonl_path"):

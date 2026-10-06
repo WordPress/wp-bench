@@ -1,9 +1,12 @@
 """Bridge between Python harness and WordPress runtime."""
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,7 +17,7 @@ CONTAINER_QUERY_TIMEOUT_SECONDS = 30
 
 
 class EnvironmentSetupTimeout(RuntimeError):
-    """Raised when environment setup (wp-env/Docker) exceeds its timeout.
+    """Raised when Docker environment setup exceeds its timeout.
 
     Setup timeouts are harness/environment failures, not per-test results,
     so they fail fast with a clear message instead of being recorded as a
@@ -42,11 +45,12 @@ class ProcessResult:
 
 
 class WordPressEnvironment:
-    """Shells out to wp-env/docker runtime to execute verification."""
+    """Shells out to Docker or WP-CLI to execute verification on SQLite."""
 
     def __init__(self, config: GraderConfig):
         self.config = config
-        #: Clean-baseline SQL dump, held on the host between setup and reset.
+        #: Clean baseline (base64 SQLite snapshot), held on
+        #: the host between setup and reset.
         #: Deliberately not written into the runtime: candidate code is
         #: eval'd there with root, so an on-disk dump would be a file the
         #: graded code could truncate or seed to defeat isolation.
@@ -57,22 +61,33 @@ class WordPressEnvironment:
 
         Args:
             capture_baseline: Whether to capture the clean baseline. Capturing
-                runs ``wp db reset``, which destroys whatever is in the
+                clears the database, which destroys whatever is in the
                 database, so a run that never calls :meth:`reset` (isolation
                 ``none``) must pass False: it would pay for an install it
                 cannot use and wipe state the caller deliberately kept.
                 Defaults to True so any caller that does reset is safe by
                 omission.
         """
-        if self.config.wp_env_dir:
-            self._run_wp_env(["npx", "wp-env", "start"])
-        elif self.config.kind == "docker":
+        if self.config.kind == "docker":
             if not self._container_exists():
                 self._start_container()
+            else:
+                # docker start also succeeds for an already-running container.
+                result = self._run_process(
+                    ["docker", "start", self.config.container_name],
+                    timeout=self.config.setup_timeout_seconds,
+                )
+                if result.timed_out:
+                    raise EnvironmentSetupTimeout("Timed out starting the existing grader container.")
+                if result.returncode != 0:
+                    raise RuntimeError(f"Failed to start grader container: {result.stderr.strip()}")
+            self._wait_for_container()
+            self._require_sqlite()
         else:
             # A cli grader drives a runtime the harness does not own, so there
-            # is nothing to install and nothing to capture. reset() refuses
-            # rather than pretending it isolated anything.
+            # is nothing to install and nothing to capture. Verify the backend
+            # before recording it in result metadata.
+            self._require_sqlite()
             return
         if capture_baseline:
             self._capture_baseline()
@@ -94,31 +109,18 @@ class WordPressEnvironment:
     def _capture_baseline(self) -> None:
         """Record the clean baseline that every later reset restores.
 
-        Reinstalling WordPress before every test rebuilds a state the harness
-        already knows, because it is the same state every time. So the run
-        pays for one install here and replays its dump per test instead.
-
-        The dump is taken from exactly what ``wp db reset`` + ``wp core
-        install`` produce, so restoring it is state-equivalent to reinstalling.
-        The one difference is that install-time timestamps (cron schedules,
-        ``user_registered``, ``post_date``) freeze at run start rather than
-        advancing per test, which removes a source of run-to-run drift.
-
-        The dump comes back on stdout and stays on the host. Writing it into
-        the runtime would put the harness's isolation source inside the blast
-        radius of the code it grades: candidates are eval'd in that container
-        with root, so any test could truncate the dump (silently emptying
-        every later reset) or append rows to it (silently pre-seeding every
-        later test). The reset feeds it back over stdin instead.
-
-        The install and drop are silenced because their WP-CLI success lines
-        would otherwise land on stdout ahead of the SQL and corrupt the dump.
+        Install once and replay a snapshot per test. The snapshot travels on
+        stdout/stdin and stays on the host, outside candidate code's reach.
+        Install-time timestamps freeze at run start. SQLite snapshots include
+        the adapter's schema metadata and committed WAL contents.
         """
+        clear = shlex.join(self._sqlite_snapshot_command("clear"))
+        export = shlex.join(self._sqlite_snapshot_command("export"))
         script = " && ".join(
             [
-                "wp db reset --yes >/dev/null",
+                f"{clear} >/dev/null",
                 f"{shlex.join(self._install_command())} >/dev/null",
-                "wp db export -",
+                export,
             ]
         )
         stdout, stderr, returncode, timed_out = self._exec(
@@ -136,32 +138,30 @@ class WordPressEnvironment:
                 f"{': ' + stderr.strip() if stderr.strip() else ''}"
             )
         if not stdout.strip():
-            # An empty dump imports cleanly and exits 0, so catching it here is
-            # the difference between failing setup and grading every test in
-            # the run against an empty database.
             raise RuntimeError(
-                "Captured an empty WordPress baseline: 'wp db export -' returned "
-                "no SQL, so no reset could restore a usable database."
+                "Captured an empty WordPress baseline; no reset could restore a usable database."
             )
+        try:
+            snapshot = base64.b64decode(stdout.strip(), validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise RuntimeError("Captured an invalid SQLite baseline.") from exc
+        if not snapshot.startswith(b"SQLite format 3\0"):
+            raise RuntimeError("Captured an invalid SQLite baseline.")
         self._baseline = stdout
 
     def reset(self) -> None:
         """Restore the WordPress runtime to the captured clean baseline.
 
-        ``wp db reset`` drops every table, then the baseline dump recorded by
-        :meth:`setup` is imported to return to a deterministic just-installed
-        state. Called before every execution test when
+        Replace the entire SQLite database to return
+        to a deterministic just-installed state. Called before every test when
         ``run.execution_isolation`` is ``reset_per_test`` so no test can
         observe database state (options, posts, roles, transients, cron
         events, etc.) left behind by an earlier test or model run.
 
-        Both steps travel in one invocation: a round trip into the runtime
-        costs ~0.9s through ``npx wp-env run cli`` (~0.24s through ``docker
-        exec``), so a second trip costs more than the restore itself. ``&&``
-        chains them so a failed drop can never import the baseline over
-        surviving state.
+        Restore and verify in one invocation. A failed restore aborts grading
+        instead of attributing an environment failure to the next candidate.
         """
-        if not self.config.wp_env_dir and self.config.kind != "docker":
+        if self.config.kind != "docker":
             # Nothing rejects this pairing at config load, so it reaches here
             # on a real run. Refuse rather than let the run stamp an isolation
             # guarantee it never delivered.
@@ -174,12 +174,34 @@ class WordPressEnvironment:
                 "No clean baseline was captured, so reset() cannot restore one. "
                 "Call setup(capture_baseline=True) before grading."
             )
-        # `wp db import` exits 0 on an empty or truncated dump, which would
-        # drop every table, import nothing, and report success. Every later
-        # test would then fail against an empty database and be blamed on the
-        # model, so `wp core is-installed` confirms the restore landed.
-        script = "wp db reset --yes && wp db import - && wp core is-installed"
+        restore = shlex.join(self._sqlite_snapshot_command("import"))
+        script = f"{restore} && wp core is-installed"
         self._reset_step(["sh", "-c", script], stdin=self._baseline)
+
+    def _require_sqlite(self) -> None:
+        """Fail setup if an external CLI or old image loads another backend."""
+        _, stderr, returncode, timed_out = self._exec(
+            [
+                "wp",
+                "eval",
+                (
+                    "global $wpdb; if ( ! $wpdb instanceof WP_SQLite_DB ) { "
+                    "WP_CLI::error( 'WP-Bench requires the SQLite database drop-in.' ); }"
+                ),
+            ],
+            timeout=self.config.setup_timeout_seconds,
+        )
+        if timed_out:
+            raise EnvironmentSetupTimeout("Timed out verifying the SQLite database backend.")
+        if returncode != 0:
+            raise RuntimeError(f"Could not verify the SQLite database backend: {stderr.strip()}")
+
+    def _sqlite_snapshot_command(self, action: str) -> list[str]:
+        return [
+            "php",
+            "/var/www/html/wp-content/plugins/wp-bench-runtime/sqlite-snapshot.php",
+            action,
+        ]
 
     def _reset_step(self, command: list[str], *, stdin: str | None = None) -> None:
         """Run one reset command, failing loudly.
@@ -287,8 +309,6 @@ class WordPressEnvironment:
         }
 
     def _runtime_verifier_path(self) -> str:
-        if self.config.wp_env_dir:
-            return "/var/www/html/wp-content/plugins/runtime/verify-runtime.php"
         return "/var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php"
 
     def _run_process(
@@ -303,7 +323,7 @@ class WordPressEnvironment:
         """Run a subprocess with a hard timeout.
 
         Central chokepoint for every external command the environment runs:
-        no call path that shells out to Docker, wp-env, or WP-CLI may hang
+        no call path that shells out to Docker or WP-CLI may hang
         indefinitely. On ``subprocess.TimeoutExpired`` any partial output
         captured by the exception is preserved.
         """
@@ -364,21 +384,57 @@ class WordPressEnvironment:
                 "docker",
                 "run",
                 "-d",
+                "--init",
                 "--name",
                 self.config.container_name,
                 self.config.image,
             ],
-            timeout=self.config.timeout_seconds,
+            timeout=self.config.setup_timeout_seconds,
         )
         if result.timed_out:
             raise EnvironmentSetupTimeout(
                 f"Timed out starting container '{self.config.container_name}' after "
-                f"{self.config.timeout_seconds}s (grader.timeout_seconds)."
+                f"{self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
             )
         if result.returncode != 0:
             raise RuntimeError(
                 f"Failed to start container '{self.config.container_name}': {result.stderr.strip()}"
             )
+
+    def _wait_for_container(self) -> None:
+        """Wait for the entrypoint's install before attempting isolation.
+
+        The healthcheck marks completion of the entrypoint's install.
+        """
+        deadline = time.monotonic() + self.config.setup_timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise EnvironmentSetupTimeout("Timed out waiting for the SQLite grader to be ready.")
+            result = self._run_process(
+                ["docker", "inspect", "--format", "{{json .State}}", self.config.container_name],
+                timeout=min(remaining, CONTAINER_QUERY_TIMEOUT_SECONDS),
+            )
+            if result.timed_out:
+                raise EnvironmentSetupTimeout("Timed out querying the SQLite grader's readiness.")
+            if result.returncode != 0:
+                raise RuntimeError(f"Could not inspect grader container: {result.stderr.strip()}")
+            state = json.loads(result.stdout)
+            if not state.get("Running"):
+                logs = self._run_process(
+                    ["docker", "logs", "--tail", "30", self.config.container_name],
+                    timeout=CONTAINER_QUERY_TIMEOUT_SECONDS,
+                )
+                raise RuntimeError(f"SQLite grader exited during setup: {logs.stdout}{logs.stderr}")
+            health = state.get("Health", {}).get("Status")
+            if health == "healthy":
+                return
+            if health is None:
+                raise RuntimeError(
+                    "Grader image has no SQLite readiness healthcheck. Rebuild ./runtime "
+                    "and recreate the container."
+                )
+            time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
     def _exec(
         self,
@@ -405,14 +461,7 @@ class WordPressEnvironment:
         """
         if timeout is None:
             timeout = self.config.timeout_seconds
-        if self.config.wp_env_dir:
-            result = self._run_process(
-                ["npx", "wp-env", "run", "cli", *command],
-                cwd=str(self.config.wp_env_dir),
-                timeout=timeout,
-                stdin=stdin,
-            )
-        elif self.config.kind == "cli":
+        if self.config.kind == "cli":
             result = self._run_process(command, timeout=timeout, stdin=stdin)
         else:
             docker_cmd = [
@@ -424,28 +473,3 @@ class WordPressEnvironment:
             ]
             result = self._run_process(docker_cmd, timeout=timeout, stdin=stdin)
         return result.stdout, result.stderr, result.returncode, result.timed_out
-
-    def _run_wp_env(self, command: list[str]) -> None:
-        """Run a wp-env management command (setup/reset path).
-
-        Raises:
-            EnvironmentSetupTimeout: If the command exceeds the configured
-                timeout. Setup problems must fail fast and loudly rather
-                than being recorded as test results.
-            RuntimeError: If the command exits nonzero.
-        """
-        result = self._run_process(
-            command,
-            cwd=str(self.config.wp_env_dir),
-            timeout=self.config.setup_timeout_seconds,
-            capture_output=False,
-        )
-        if result.timed_out:
-            raise EnvironmentSetupTimeout(
-                f"Timed out running {' '.join(command)} after "
-                f"{self.config.setup_timeout_seconds}s (grader.setup_timeout_seconds)."
-            )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Command failed with exit code {result.returncode}: {' '.join(command)}"
-            )

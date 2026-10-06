@@ -26,7 +26,7 @@ def _docker_env(monkeypatch: pytest.MonkeyPatch, result: tuple[str, str, int, bo
     monkeypatch.setattr(environment, "_exec", fake_exec)
     # Stand in for what setup() would have captured; these tests exercise
     # reset() in isolation.
-    environment._baseline = "-- MariaDB dump\n"
+    environment._baseline = "host-held-snapshot"
     return environment, calls
 
 
@@ -43,7 +43,7 @@ def test_cli_grader_refuses_to_pretend_it_reset(monkeypatch: pytest.MonkeyPatch)
 def test_docker_reset_raises_when_a_step_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed reset leaves the next test on dirty or uninstalled WordPress,
     and its assertion failures get blamed on the model."""
-    environment, _ = _docker_env(monkeypatch, ("", "MySQL server has gone away", 1, False))
+    environment, _ = _docker_env(monkeypatch, ("", "database is locked", 1, False))
 
     with pytest.raises(RuntimeError, match="exit code 1"):
         environment.reset()
@@ -65,19 +65,10 @@ def test_docker_reset_raises_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None
         environment.reset()
 
 
-def test_docker_reset_restores_a_baseline_after_dropping(
+def test_docker_reset_replaces_database_then_verifies_installation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """db reset drops every table, so a restore must follow to get back to a
-    deterministic just-installed state.
-
-    The restore replays the baseline dump captured at setup rather than
-    reinstalling; see test_template_reset.py for the mechanism.
-    """
     environment, calls = _docker_env(monkeypatch, ("ok", "", 0, False))
-
     environment.reset()
-
-    script = calls[0][2]
-    assert "wp db reset --yes" in script
-    assert "wp db import -" in script
+    assert len(calls) == 1
+    assert calls[0][2].endswith("sqlite-snapshot.php import && wp core is-installed")
