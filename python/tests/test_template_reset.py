@@ -146,7 +146,7 @@ def test_cli_grader_refuses_reset_and_captures_no_baseline() -> None:
     environment.setup(capture_baseline=False)
     assert calls == []
     assert environment._baseline is None
-    with pytest.raises(RuntimeError, match="no reset implementation"):
+    with pytest.raises(RuntimeError, match="No clean baseline"):
         environment.reset()
 
 

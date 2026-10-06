@@ -176,21 +176,13 @@ class WordPressEnvironment:
         removed. Each thread owns a distinct container; even serial executions
         use a fresh filesystem, process namespace, and network namespace.
         """
-        if self.config.kind != "docker":
-            # Nothing rejects this pairing at config load, so it reaches here
-            # on a real run. Refuse rather than let the run stamp an isolation
-            # guarantee it never delivered.
-            raise RuntimeError(
-                f"grader.kind {self.config.kind!r} has no reset implementation, so "
-                "run.execution_isolation 'reset_per_test' cannot be honored."
-            )
-        if self._baseline is None:
+        # setup() refuses to capture for a cli grader, so this also stops a
+        # cli run from stamping an isolation guarantee it never delivered.
+        if self._baseline is None or self._site_config is None:
             raise RuntimeError(
                 "No clean baseline was captured, so reset() cannot restore one. "
                 "Call setup(capture_baseline=True) before grading."
             )
-        if not self._isolated or self._site_config is None:
-            raise RuntimeError("No isolated runtime baseline was prepared. Call setup() first.")
         self.release()
         try:
             self._start_isolated_container(install=False)

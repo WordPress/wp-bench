@@ -39,7 +39,7 @@ def test_cli_grader_refuses_to_pretend_it_reset(monkeypatch: pytest.MonkeyPatch)
     that it had not."""
     environment = WordPressEnvironment(GraderConfig(kind="cli"))
 
-    with pytest.raises(RuntimeError, match="no reset implementation"):
+    with pytest.raises(RuntimeError, match="No clean baseline"):
         environment.reset()
 
 

@@ -689,8 +689,6 @@ class BenchmarkRunner(_ResultBookkeeping):
                 hit = self._first_passing_exploit(test, candidates)
             except Exception as e:
                 raise TestError(test.id, e) from e
-            finally:
-                self.environment.release()
             return build_exploit_audit_record(
                 test=test,
                 candidates_tried=len(candidates),
