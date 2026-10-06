@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-shortcodes",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Shortcodes",
     "description": "Code generation tasks for WordPress Shortcodes APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-shortcodes-001",
       "category": "shortcodes",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a wpbp_greeting shortcode that returns a safe greeting for an optional name attribute.",
       "expected_behavior": "`wpbp_shortcodes_001()` registers `wpbp_greeting`. The shortcode merges the optional `name` attribute with a `World` default via WordPress shortcode attribute handling and returns `Hello, <name>!` with the name escaped for HTML. Runtime validation renders the shortcode with omitted, plain, and HTML-containing names.",
       "requirements": [
@@ -65,7 +64,6 @@
     {
       "id": "e-shortcodes-002",
       "category": "shortcodes",
-      "difficulty": "basic",
       "prompt": "Implement a function that parses a supplied shortcode attribute string into WordPress's attribute array without running shortcode callbacks.",
       "expected_behavior": "`wpbp_shortcodes_002()` delegates parsing to WordPress's shortcode attribute parser, returning lowercase named keys and string values from the supplied attribute text. It must not run shortcode callbacks while parsing. Runtime validation registers a probe shortcode, parses mixed-case attributes plus probe-looking text, and verifies the probe was not executed.",
       "requirements": [
@@ -111,7 +109,6 @@
     {
       "id": "e-shortcodes-003",
       "category": "shortcodes",
-      "difficulty": "basic",
       "prompt": "Implement a function that removes registered shortcode occurrences from supplied content while leaving unknown shortcode-like text intact.",
       "expected_behavior": "`wpbp_shortcodes_003()` uses WordPress shortcode stripping so only currently registered shortcode tags are removed. Enclosing shortcode matches are removed by WordPress, while unregistered bracketed content is preserved. Runtime validation registers one tag and compares the filtered content against an unknown tag.",
       "requirements": [
@@ -150,7 +147,6 @@
     {
       "id": "e-shortcodes-004",
       "category": "shortcodes",
-      "difficulty": "basic",
       "prompt": "Implement a function that reports whether supplied content contains a supplied registered shortcode tag, including nested shortcode content.",
       "expected_behavior": "`wpbp_shortcodes_004()` delegates shortcode detection to WordPress, so it only reports true for shortcode tags that are registered and can find a tag nested inside another shortcode's enclosed content. Runtime validation registers outer/inner fixture shortcodes, checks nested detection, then verifies an unregistered tag is not reported.",
       "requirements": [
@@ -196,7 +192,6 @@
     {
       "id": "e-shortcodes-005",
       "category": "shortcodes",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a wpbp_wrap enclosing shortcode that returns its enclosed content inside a span with the content escaped for HTML.",
       "expected_behavior": "`wpbp_shortcodes_005()` registers `wpbp_wrap` as an enclosing shortcode. The callback receives enclosed content, returns `<span>...escaped content...</span>`, and does not echo output. Runtime validation renders plain and HTML-containing enclosed content through `do_shortcode()`.",
       "requirements": [

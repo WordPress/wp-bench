@@ -27,7 +27,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={},

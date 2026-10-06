@@ -1,0 +1,631 @@
+{
+  "id": "wp-core-execution-v1-posts_lifecycle",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Posts Lifecycle",
+    "description": "Code generation tasks for the WordPress post creation, publication, revision and deletion lifecycle",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-posts-lifecycle-001",
+      "category": "posts-lifecycle",
+      "prompt": "The site keeps a publication audit trail in an option named 'wpbp_pl_first_publish_log', an array of post IDs in the order the posts went live. Append a post's ID at the moment its status changes to publish from any other status, including when a post is created directly as published. Saving a post that is already published must not append anything, and revisions must never be logged.",
+      "expected_behavior": "Listens on `transition_post_status` and appends only when `$new_status` is 'publish' and differs from `$old_status`, skipping revisions. Runtime validation drafts a post and publishes it (one entry), re-saves the published post (still one entry), inserts a post already published (second entry), creates a pending post (no entry) and publishes it (third entry). A `publish_post` or `save_post` listener duplicates the first entry on the re-save and fails.",
+      "requirements": [
+        "Store the log in the 'wpbp_pl_first_publish_log' option as an array of post IDs in publication order",
+        "Append exactly one entry each time a post's status changes to publish from a different status",
+        "Do not append anything when an already published post is saved again",
+        "Do not log revisions"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "transition_post_status",
+            "description": "Uses the status transition hook",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_pl_first_publish_log",
+            "description": "Writes the audit trail option",
+            "weight": 1
+          },
+          {
+            "pattern": "update_option",
+            "description": "Persists the log",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "delete_option( 'wpbp_pl_first_publish_log' ); $GLOBALS['wpbp_pl_001_posts'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$read = static function () { $v = get_option( 'wpbp_pl_first_publish_log', array() ); return is_array( $v ) ? array_map( 'intval', $v ) : array(); }; $a = wp_insert_post( array( 'post_title' => 'WPBP PL1 A', 'post_content' => 'a', 'post_status' => 'draft' ), true ); if ( is_wp_error( $a ) ) { return false; } $GLOBALS['wpbp_pl_001_posts'][] = (int) $a; if ( array() !== $read() ) { return false; } wp_update_post( array( 'ID' => $a, 'post_status' => 'publish' ) ); if ( array( (int) $a ) !== $read() ) { return false; } wp_update_post( array( 'ID' => $a, 'post_title' => 'WPBP PL1 A updated' ) ); if ( array( (int) $a ) !== $read() ) { return false; } $b = wp_insert_post( array( 'post_title' => 'WPBP PL1 B', 'post_content' => 'b', 'post_status' => 'publish' ), true ); if ( is_wp_error( $b ) ) { return false; } $GLOBALS['wpbp_pl_001_posts'][] = (int) $b; if ( array( (int) $a, (int) $b ) !== $read() ) { return false; } $c = wp_insert_post( array( 'post_title' => 'WPBP PL1 C', 'post_content' => 'c', 'post_status' => 'pending' ), true ); if ( is_wp_error( $c ) ) { return false; } $GLOBALS['wpbp_pl_001_posts'][] = (int) $c; if ( array( (int) $a, (int) $b ) !== $read() ) { return false; } wp_update_post( array( 'ID' => $c, 'post_status' => 'publish' ) ); return array( (int) $a, (int) $b, (int) $c ) === $read();",
+            "description": "Only genuine transitions into publish are logged, in order",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_001_posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } delete_option( 'wpbp_pl_first_publish_log' ); unset( $GLOBALS['wpbp_pl_001_posts'] ); remove_all_filters( 'transition_post_status' );"
+      },
+      "reference_solution": "add_action( 'transition_post_status', static function ( $new_status, $old_status, $post ) {\n    if ( 'publish' !== $new_status || $new_status === $old_status || 'revision' === $post->post_type ) {\n        return;\n    }\n    $log = get_option( 'wpbp_pl_first_publish_log', array() );\n    if ( ! is_array( $log ) ) {\n        $log = array();\n    }\n    $log[] = (int) $post->ID;\n    update_option( 'wpbp_pl_first_publish_log', $log );\n}, 10, 3 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'publish_post', static function ( $post_id ) { $log = (array) get_option( 'wpbp_pl_first_publish_log', array() ); $log[] = (int) $post_id; update_option( 'wpbp_pl_first_publish_log', $log ); } );",
+        "add_action( 'save_post', static function ( $post_id, $post ) { if ( 'publish' !== $post->post_status || 'revision' === $post->post_type ) { return; } $log = (array) get_option( 'wpbp_pl_first_publish_log', array() ); $log[] = (int) $post_id; update_option( 'wpbp_pl_first_publish_log', $log ); }, 10, 2 );"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-002",
+      "category": "posts-lifecycle",
+      "prompt": "A command-line importer runs with no logged-in user. Publish a post with the supplied title and assign it exactly the supplied term IDs of the existing 'wpbp_pl_genre' taxonomy, then return the new post ID. Every supplied term must end up on the post, and no new terms may be created.",
+      "expected_behavior": "`wp_insert_post()`'s `tax_input` is silently dropped when the current user cannot `assign_terms` for the taxonomy, which is the case for user 0, so the terms must be attached with `wp_set_post_terms()`/`wp_set_object_terms()` after the insert. Runtime validation imports two posts with different term sets as user 0 and checks both term assignments plus an unchanged term count.",
+      "requirements": [
+        "Create the post with the publish status",
+        "Assign exactly the supplied wpbp_pl_genre term IDs to the new post",
+        "Work with no logged-in user (do not switch users)",
+        "Return the new post ID"
+      ],
+      "test_function": "wpbp_posts_lifecycle_002( string $title, array $genre_term_ids ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_insert_post",
+            "description": "Creates the post",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_pl_genre",
+            "description": "Targets the genre taxonomy",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_set_post_terms|wp_set_object_terms",
+            "description": "Assigns the terms explicitly",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_set_current_user( 0 ); register_taxonomy( 'wpbp_pl_genre', 'post', array( 'hierarchical' => true, 'public' => false, 'show_ui' => false ) ); $GLOBALS['wpbp_pl_002_terms'] = array(); foreach ( array( 'alpha', 'beta', 'gamma' ) as $name ) { $term = wp_insert_term( 'WPBP ' . $name, 'wpbp_pl_genre' ); if ( ! is_wp_error( $term ) ) { $GLOBALS['wpbp_pl_002_terms'][ $name ] = (int) $term['term_id']; } } $GLOBALS['wpbp_pl_002_posts'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$terms = $GLOBALS['wpbp_pl_002_terms']; if ( 3 !== count( $terms ) ) { return false; } $before = (int) wp_count_terms( array( 'taxonomy' => 'wpbp_pl_genre', 'hide_empty' => false ) ); $p1 = wpbp_posts_lifecycle_002( 'WPBP PL2 One', array( $terms['alpha'], $terms['beta'] ) ); $p2 = wpbp_posts_lifecycle_002( 'WPBP PL2 Two', array( $terms['gamma'] ) ); $GLOBALS['wpbp_pl_002_posts'] = array( (int) $p1, (int) $p2 ); if ( $p1 < 1 || $p2 < 1 ) { return false; } if ( 'publish' !== get_post_status( $p1 ) || 'publish' !== get_post_status( $p2 ) ) { return false; } $g1 = array_map( 'intval', wp_get_object_terms( $p1, 'wpbp_pl_genre', array( 'fields' => 'ids' ) ) ); $g2 = array_map( 'intval', wp_get_object_terms( $p2, 'wpbp_pl_genre', array( 'fields' => 'ids' ) ) ); sort( $g1 ); sort( $g2 ); $e1 = array( $terms['alpha'], $terms['beta'] ); sort( $e1 ); $after = (int) wp_count_terms( array( 'taxonomy' => 'wpbp_pl_genre', 'hide_empty' => false ) ); return $g1 === $e1 && $g2 === array( $terms['gamma'] ) && $after === $before;",
+            "description": "Both imports carry their exact terms and create no new ones",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_002_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } foreach ( ( $GLOBALS['wpbp_pl_002_terms'] ?? array() ) as $term_id ) { wp_delete_term( (int) $term_id, 'wpbp_pl_genre' ); } unset( $GLOBALS['wpbp_pl_002_posts'], $GLOBALS['wpbp_pl_002_terms'] ); wp_set_current_user( 0 );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_002( string $title, array $genre_term_ids ): int {\n    $post_id = wp_insert_post(\n        array(\n            'post_title'   => wp_slash( $title ),\n            'post_status'  => 'publish',\n            'post_content' => '',\n        )\n    );\n    if ( is_wp_error( $post_id ) || ! $post_id ) {\n        return 0;\n    }\n    wp_set_post_terms( (int) $post_id, array_map( 'intval', $genre_term_ids ), 'wpbp_pl_genre' );\n    return (int) $post_id;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/taxonomy.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_002( string $title, array $genre_term_ids ): int { $post_id = wp_insert_post( array( 'post_title' => wp_slash( $title ), 'post_status' => 'publish', 'tax_input' => array( 'wpbp_pl_genre' => array_map( 'intval', $genre_term_ids ) ) ) ); return is_wp_error( $post_id ) ? 0 : (int) $post_id; }",
+        "function wpbp_posts_lifecycle_002( string $title, array $genre_term_ids ): int { $post_id = wp_insert_post( array( 'post_title' => wp_slash( $title ), 'post_status' => 'publish' ) ); return is_wp_error( $post_id ) ? 0 : (int) $post_id; }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-003",
+      "category": "posts-lifecycle",
+      "prompt": "A trusted import routine must store supplied markup as a published post's content byte for byte — embeds, stray backslashes and ampersands included — while acting as the supplied user, who is an Author and therefore cannot post unfiltered HTML. Return the new post ID. When the routine returns, the supplied user must still be the current user and WordPress's normal content sanitisation must be back in place for them.",
+      "expected_behavior": "KSES state follows the current user: `wp_set_current_user()` runs `kses_init()`, which adds `wp_filter_post_kses` to `content_save_pre` for users without `unfiltered_html`. A trusted import must switch user, drop the KSES filters (`kses_remove_filters()`), pass slashed content to `wp_insert_post()` and restore the filters. Runtime validation stores two markup fixtures and compares the raw column byte for byte, then confirms a plain insert afterwards is still filtered.",
+      "requirements": [
+        "Create the post with the publish status and the supplied markup as its content",
+        "The stored content must be byte identical to the supplied markup",
+        "Act as the supplied user, and leave that user as the current user when the function returns",
+        "Leave WordPress's normal content sanitisation in place afterwards",
+        "Return the new post ID"
+      ],
+      "test_function": "wpbp_posts_lifecycle_003( int $acting_user_id, string $html ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_set_current_user",
+            "description": "Switches to the acting user",
+            "weight": 1
+          },
+          {
+            "pattern": "kses_remove_filters|kses_init_filters",
+            "description": "Controls the KSES content filters",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_slash",
+            "description": "Passes slashed data to the insert API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_insert_post",
+            "description": "Creates the post",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "wp_set_current_user( 0 ); $GLOBALS['wpbp_pl_003_posts'] = array(); $user_id = wp_insert_user( array( 'user_login' => 'wpbp_pl_003_author', 'user_pass' => wp_generate_password( 20 ), 'user_email' => 'wpbp-pl-003@example.com', 'role' => 'author' ) ); $GLOBALS['wpbp_pl_003_user'] = is_wp_error( $user_id ) ? 0 : (int) $user_id;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$user = (int) $GLOBALS['wpbp_pl_003_user']; if ( $user < 1 ) { return false; } $html1 = '<iframe src=\"https://example.com/embed\" width=\"560\"></iframe><p>a\\b \"quoted\" & more</p>'; $html2 = '<p>Ünicode <em>emphasis</em> C:\\path\\to</p><iframe src=\"https://example.org/v\"></iframe>'; $p1 = wpbp_posts_lifecycle_003( $user, $html1 ); $p2 = wpbp_posts_lifecycle_003( $user, $html2 ); $GLOBALS['wpbp_pl_003_posts'] = array( (int) $p1, (int) $p2 ); if ( $p1 < 1 || $p2 < 1 ) { return false; } if ( $html1 !== get_post_field( 'post_content', $p1, 'raw' ) ) { return false; } if ( $html2 !== get_post_field( 'post_content', $p2, 'raw' ) ) { return false; } if ( 'publish' !== get_post_status( $p1 ) || 'publish' !== get_post_status( $p2 ) ) { return false; } if ( $user !== (int) get_current_user_id() ) { return false; } $p3 = wp_insert_post( array( 'post_title' => 'WPBP PL3 control', 'post_status' => 'publish', 'post_content' => wp_slash( $html1 ) ) ); if ( is_wp_error( $p3 ) || ! $p3 ) { return false; } $GLOBALS['wpbp_pl_003_posts'][] = (int) $p3; $control = get_post_field( 'post_content', $p3, 'raw' ); return $control !== $html1 && ! str_contains( $control, '<iframe' );",
+            "description": "Both fixtures round-trip byte for byte and normal filtering is restored",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_003_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } wp_set_current_user( 0 ); kses_init(); if ( ! empty( $GLOBALS['wpbp_pl_003_user'] ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; wp_delete_user( (int) $GLOBALS['wpbp_pl_003_user'] ); } unset( $GLOBALS['wpbp_pl_003_posts'], $GLOBALS['wpbp_pl_003_user'] );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_003( int $acting_user_id, string $html ): int {\n    wp_set_current_user( $acting_user_id );\n    kses_remove_filters();\n    $post_id = wp_insert_post(\n        array(\n            'post_title'   => 'WPBP import',\n            'post_status'  => 'publish',\n            'post_content' => wp_slash( $html ),\n        )\n    );\n    kses_init_filters();\n    return is_wp_error( $post_id ) ? 0 : (int) $post_id;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/kses.php",
+          "src/wp-includes/default-filters.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_003( int $acting_user_id, string $html ): int { wp_set_current_user( $acting_user_id ); $post_id = wp_insert_post( array( 'post_title' => 'WPBP import', 'post_status' => 'publish', 'post_content' => wp_slash( $html ) ) ); return is_wp_error( $post_id ) ? 0 : (int) $post_id; }",
+        "function wpbp_posts_lifecycle_003( int $acting_user_id, string $html ): int { wp_set_current_user( $acting_user_id ); kses_remove_filters(); $post_id = wp_insert_post( array( 'post_title' => 'WPBP import', 'post_status' => 'publish', 'post_content' => $html ) ); kses_init_filters(); return is_wp_error( $post_id ) ? 0 : (int) $post_id; }",
+        "function wpbp_posts_lifecycle_003( int $acting_user_id, string $html ): int { wp_set_current_user( $acting_user_id ); kses_remove_filters(); $post_id = wp_insert_post( array( 'post_title' => 'WPBP import', 'post_status' => 'publish', 'post_content' => wp_slash( $html ) ) ); return is_wp_error( $post_id ) ? 0 : (int) $post_id; }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-004",
+      "category": "posts-lifecycle",
+      "prompt": "Restore a trashed post to the status it held at the moment it was trashed, and return the post's status once the restore has finished. Restores triggered by any other code on the site must keep WordPress's default behaviour.",
+      "expected_behavior": "Since 5.6 `wp_untrash_post()` restores posts as drafts; the previous status is only used when the `wp_untrash_post_status` filter returns it (core ships `wp_untrash_post_set_previous_status()` for this), or by reading `_wp_trash_meta_status` before restoring. The filter must not stay attached. Runtime validation restores a formerly published and a formerly private post, then untrashes a third post directly and expects the default 'draft'.",
+      "requirements": [
+        "Restore the supplied trashed post",
+        "The post must regain the status it had when it was trashed",
+        "Return the post's status after the restore",
+        "Do not change how restores performed elsewhere on the site behave"
+      ],
+      "test_function": "wpbp_posts_lifecycle_004( int $post_id ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_untrash_post",
+            "description": "Uses the untrash API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_untrash_post_status|_wp_trash_meta_status",
+            "description": "Recovers the previous status",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_004_posts'] = array(); foreach ( array( 'published' => 'publish', 'secret' => 'private', 'control' => 'publish' ) as $key => $status ) { $post_id = wp_insert_post( array( 'post_title' => 'WPBP PL4 ' . $key, 'post_content' => 'body', 'post_status' => $status ) ); wp_trash_post( $post_id ); $GLOBALS['wpbp_pl_004_posts'][ $key ] = (int) $post_id; }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_pl_004_posts']; if ( 'trash' !== get_post_status( $ids['published'] ) ) { return false; } $first = wpbp_posts_lifecycle_004( $ids['published'] ); $second = wpbp_posts_lifecycle_004( $ids['secret'] ); if ( 'publish' !== $first || 'private' !== $second ) { return false; } if ( 'publish' !== get_post_status( $ids['published'] ) || 'private' !== get_post_status( $ids['secret'] ) ) { return false; } wp_untrash_post( $ids['control'] ); return 'draft' === get_post_status( $ids['control'] );",
+            "description": "Both restores recover their previous status and the default is left untouched",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_004_posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_pl_004_posts'] ); remove_all_filters( 'wp_untrash_post_status' );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_004( int $post_id ): string {\n    add_filter( 'wp_untrash_post_status', 'wp_untrash_post_set_previous_status', 10, 3 );\n    wp_untrash_post( $post_id );\n    remove_filter( 'wp_untrash_post_status', 'wp_untrash_post_set_previous_status', 10 );\n    return (string) get_post_status( $post_id );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_004( int $post_id ): string { $previous = get_post_meta( $post_id, '_wp_trash_meta_status', true ); wp_untrash_post( $post_id ); return (string) $previous; }",
+        "function wpbp_posts_lifecycle_004( int $post_id ): string { wp_untrash_post( $post_id ); return (string) get_post_status( $post_id ); }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-005",
+      "category": "posts-lifecycle",
+      "prompt": "The site's timezone is not UTC. Given a title and a moment expressed in UTC as 'Y-m-d H:i:s', create a post that WordPress will publish automatically at exactly that moment, and return its ID. The stored post must be scheduled rather than published, both of its date columns must describe that same moment, and WordPress's automatic publication must be queued for it.",
+      "expected_behavior": "`post_date` is site-local and `post_date_gmt` is UTC; passing the UTC string as `post_date` stores the wrong local time. Supplying `post_date_gmt` (with `post_date` derived via `get_date_from_gmt()`) and a future/publish status makes `wp_insert_post()` settle on the 'future' status and schedules `publish_future_post`. Runtime validation schedules across a DST boundary in Australia/Sydney and checks both columns and the cron timestamp.",
+      "requirements": [
+        "The stored post must end up with the 'future' status",
+        "post_date must express the supplied moment in the site's timezone",
+        "post_date_gmt must be the supplied UTC moment",
+        "WordPress's scheduled publication event must be queued for that moment",
+        "Return the new post ID"
+      ],
+      "test_function": "wpbp_posts_lifecycle_005( string $title, string $utc_datetime ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "post_date_gmt",
+            "description": "Sets the UTC date column",
+            "weight": 1
+          },
+          {
+            "pattern": "get_date_from_gmt|wp_date|DateTime",
+            "description": "Converts the UTC moment to site time",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_insert_post",
+            "description": "Creates the post",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_005_tz'] = get_option( 'timezone_string' ); $GLOBALS['wpbp_pl_005_offset'] = get_option( 'gmt_offset' ); update_option( 'timezone_string', 'Australia/Sydney' ); update_option( 'gmt_offset', '' ); $GLOBALS['wpbp_pl_005_posts'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$p1 = wpbp_posts_lifecycle_005( 'WPBP PL5 summer', '2030-01-15 03:00:00' ); $p2 = wpbp_posts_lifecycle_005( 'WPBP PL5 winter', '2030-07-15 03:00:00' ); $GLOBALS['wpbp_pl_005_posts'] = array( (int) $p1, (int) $p2 ); $first = get_post( $p1 ); $second = get_post( $p2 ); if ( ! $first || ! $second ) { return false; } if ( 'future' !== $first->post_status || 'future' !== $second->post_status ) { return false; } if ( '2030-01-15 14:00:00' !== $first->post_date || '2030-01-15 03:00:00' !== $first->post_date_gmt ) { return false; } if ( '2030-07-15 13:00:00' !== $second->post_date || '2030-07-15 03:00:00' !== $second->post_date_gmt ) { return false; } $e1 = wp_next_scheduled( 'publish_future_post', array( (int) $p1 ) ); $e2 = wp_next_scheduled( 'publish_future_post', array( (int) $p2 ) ); return strtotime( '2030-01-15 03:00:00 GMT' ) === $e1 && strtotime( '2030-07-15 03:00:00 GMT' ) === $e2;",
+            "description": "Both scheduled posts carry matching local/UTC dates and a queued publication",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_005_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_clear_scheduled_hook( 'publish_future_post', array( (int) $post_id ) ); wp_delete_post( (int) $post_id, true ); } } update_option( 'timezone_string', $GLOBALS['wpbp_pl_005_tz'] ?? '' ); update_option( 'gmt_offset', $GLOBALS['wpbp_pl_005_offset'] ?? 0 ); unset( $GLOBALS['wpbp_pl_005_posts'], $GLOBALS['wpbp_pl_005_tz'], $GLOBALS['wpbp_pl_005_offset'] );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_005( string $title, string $utc_datetime ): int {\n    $post_id = wp_insert_post(\n        array(\n            'post_title'    => wp_slash( $title ),\n            'post_content'  => 'scheduled',\n            'post_status'   => 'future',\n            'post_date'     => get_date_from_gmt( $utc_datetime ),\n            'post_date_gmt' => $utc_datetime,\n        )\n    );\n    return is_wp_error( $post_id ) ? 0 : (int) $post_id;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_005( string $title, string $utc_datetime ): int { $post_id = wp_insert_post( array( 'post_title' => wp_slash( $title ), 'post_content' => 'scheduled', 'post_status' => 'future', 'post_date' => $utc_datetime ) ); return is_wp_error( $post_id ) ? 0 : (int) $post_id; }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-006",
+      "category": "posts-lifecycle",
+      "prompt": "Back-date an existing draft: set its publication date to the supplied site-local 'Y-m-d H:i:s' value, leave it a draft, and return the date WordPress ended up storing for it.",
+      "expected_behavior": "`wp_update_post()` discards a supplied `post_date` for drafts whose `post_date_gmt` is still '0000-00-00 00:00:00' and replaces it with the current time unless `edit_date` is set, so the update must pass `'edit_date' => true`. Runtime validation back-dates two drafts to different dates and compares both the returned value and the stored column.",
+      "requirements": [
+        "Set the draft's publication date to the supplied value",
+        "The post must still be a draft afterwards",
+        "Return the post's stored publication date"
+      ],
+      "test_function": "wpbp_posts_lifecycle_006( int $post_id, string $post_date ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_update_post|wp_insert_post",
+            "description": "Updates the post",
+            "weight": 1
+          },
+          {
+            "pattern": "edit_date",
+            "description": "Opts into editing the date",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_006_posts'] = array(); foreach ( array( 'one', 'two' ) as $key ) { $GLOBALS['wpbp_pl_006_posts'][ $key ] = (int) wp_insert_post( array( 'post_title' => 'WPBP PL6 ' . $key, 'post_content' => 'body', 'post_status' => 'draft' ) ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_pl_006_posts']; $first = wpbp_posts_lifecycle_006( $ids['one'], '2022-03-04 09:30:00' ); $second = wpbp_posts_lifecycle_006( $ids['two'], '2019-11-20 18:45:00' ); if ( '2022-03-04 09:30:00' !== $first || '2019-11-20 18:45:00' !== $second ) { return false; } $one = get_post( $ids['one'] ); $two = get_post( $ids['two'] ); if ( ! $one || ! $two ) { return false; } return '2022-03-04 09:30:00' === $one->post_date && '2019-11-20 18:45:00' === $two->post_date && 'draft' === $one->post_status && 'draft' === $two->post_status;",
+            "description": "Both drafts keep the requested publication dates",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_006_posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_pl_006_posts'] );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_006( int $post_id, string $post_date ): string {\n    wp_update_post(\n        array(\n            'ID'        => $post_id,\n            'post_date' => $post_date,\n            'edit_date' => true,\n        )\n    );\n    return (string) get_post_field( 'post_date', $post_id, 'raw' );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_006( int $post_id, string $post_date ): string { wp_update_post( array( 'ID' => $post_id, 'post_date' => $post_date ) ); return $post_date; }",
+        "function wpbp_posts_lifecycle_006( int $post_id, string $post_date ): string { wp_update_post( array( 'ID' => $post_id, 'post_date' => $post_date ) ); return (string) get_post_field( 'post_date', $post_id, 'raw' ); }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-007",
+      "category": "posts-lifecycle",
+      "prompt": "The 'wpbp_pl_doc' post type generates far too much revision history. Configure WordPress so that documents of that post type keep only their three most recent revisions, while every other post type keeps all of its revisions. Let WordPress prune the surplus revisions itself.",
+      "expected_behavior": "Revision retention is only configurable through the `wp_revisions_to_keep` filter or its per-type variant `wp_{$post_type}_revisions_to_keep`; WP_POST_REVISIONS is a constant and cannot be redefined at runtime. A filter that ignores the post type also caps ordinary posts. Runtime validation edits a document and a post six times each and expects 3 (newest three) and 6 revisions respectively.",
+      "requirements": [
+        "Cap stored revisions for the wpbp_pl_doc post type at three",
+        "Leave revision retention for all other post types unchanged",
+        "Do not delete revisions yourself; let WordPress prune them"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "revisions_to_keep",
+            "description": "Uses the revision retention filter",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_pl_doc",
+            "description": "Scopes the change to the document post type",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_pl_doc', array( 'public' => false, 'show_ui' => false, 'supports' => array( 'title', 'editor', 'revisions' ) ) ); $GLOBALS['wpbp_pl_007_posts'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$doc = wp_insert_post( array( 'post_type' => 'wpbp_pl_doc', 'post_title' => 'WPBP PL7 doc', 'post_content' => 'doc v0', 'post_status' => 'publish' ) ); $post = wp_insert_post( array( 'post_title' => 'WPBP PL7 post', 'post_content' => 'post v0', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_pl_007_posts'] = array( (int) $doc, (int) $post ); if ( is_wp_error( $doc ) || is_wp_error( $post ) ) { return false; } for ( $i = 1; $i <= 6; $i++ ) { wp_update_post( array( 'ID' => $doc, 'post_content' => 'doc v' . $i ) ); wp_update_post( array( 'ID' => $post, 'post_content' => 'post v' . $i ) ); } $doc_revisions = array_values( wp_get_post_revisions( $doc ) ); $post_revisions = array_values( wp_get_post_revisions( $post ) ); if ( 3 !== count( $doc_revisions ) || 6 !== count( $post_revisions ) ) { return false; } $kept = array(); foreach ( $doc_revisions as $revision ) { $kept[] = $revision->post_content; } return array( 'doc v6', 'doc v5', 'doc v4' ) === $kept;",
+            "description": "Documents keep their newest three revisions while posts keep all six",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_007_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } unset( $GLOBALS['wpbp_pl_007_posts'] ); remove_all_filters( 'wp_revisions_to_keep' ); remove_all_filters( 'wp_wpbp_pl_doc_revisions_to_keep' );"
+      },
+      "reference_solution": "add_filter(\n    'wp_wpbp_pl_doc_revisions_to_keep',\n    static function ( $num ) {\n        return 3;\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/revision.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'wp_revisions_to_keep', static function ( $num ) { return 3; } );",
+        "add_filter( 'wp_revisions_to_keep', static function ( $num, $post ) { return 'wpbp_pl_doc' === $post->post_type ? 3 : 0; }, 10, 2 );"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-008",
+      "category": "posts-lifecycle",
+      "prompt": "Posts carry a subtitle in the 'wpbp_pl_subtitle' custom field, stored as a single string. Make that field part of a post's revision history: saving a post whose subtitle changed must create a revision even when the post's own columns are untouched, the revision must carry the subtitle it was saved with, and restoring a revision must bring that subtitle back.",
+      "expected_behavior": "`register_post_meta()` accepts `revisions_enabled`; core then copies the key onto each revision (`wp_save_revisioned_meta_fields`), counts a meta change as a post change (`wp_check_revisioned_meta_fields_have_changed`) and restores it (`wp_restore_post_revision_meta`). Runtime validation checks the meta stored on the first revision, that a meta-only edit produces a second revision, and that restoring the first revision restores its subtitle.",
+      "requirements": [
+        "Register 'wpbp_pl_subtitle' for posts as a single string meta key",
+        "Changes to the field must be captured in the post's revisions",
+        "Restoring a revision must restore the field's value"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_post_meta|register_meta",
+            "description": "Registers the meta key",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_pl_subtitle",
+            "description": "Registers the subtitle field",
+            "weight": 1
+          },
+          {
+            "pattern": "revisions_enabled",
+            "description": "Enables revision support for the field",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_008_post'] = 0;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$post_id = wp_insert_post( array( 'post_title' => 'WPBP PL8', 'post_content' => 'body one', 'post_status' => 'publish' ) ); if ( is_wp_error( $post_id ) || ! $post_id ) { return false; } $GLOBALS['wpbp_pl_008_post'] = (int) $post_id; update_post_meta( $post_id, 'wpbp_pl_subtitle', 'sub one' ); wp_update_post( array( 'ID' => $post_id, 'post_content' => 'body two' ) ); $revisions = array_values( wp_get_post_revisions( $post_id ) ); if ( 1 !== count( $revisions ) ) { return false; } $first = $revisions[0]; if ( 'sub one' !== get_post_meta( $first->ID, 'wpbp_pl_subtitle', true ) ) { return false; } update_post_meta( $post_id, 'wpbp_pl_subtitle', 'sub two' ); wp_update_post( array( 'ID' => $post_id ) ); $revisions = array_values( wp_get_post_revisions( $post_id ) ); if ( 2 !== count( $revisions ) ) { return false; } wp_restore_post_revision( $first->ID ); return 'sub one' === get_post_meta( $post_id, 'wpbp_pl_subtitle', true );",
+            "description": "The subtitle is revisioned, drives revision creation and is restored",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! empty( $GLOBALS['wpbp_pl_008_post'] ) ) { wp_delete_post( (int) $GLOBALS['wpbp_pl_008_post'], true ); } unset( $GLOBALS['wpbp_pl_008_post'] ); remove_all_filters( 'wp_post_revision_meta_keys' );"
+      },
+      "reference_solution": "register_post_meta(\n    'post',\n    'wpbp_pl_subtitle',\n    array(\n        'type'              => 'string',\n        'single'            => true,\n        'show_in_rest'      => true,\n        'revisions_enabled' => true,\n    )\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/revision.php",
+          "src/wp-includes/meta.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_post_meta( 'post', 'wpbp_pl_subtitle', array( 'type' => 'string', 'single' => true, 'show_in_rest' => true ) );"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-009",
+      "category": "posts-lifecycle",
+      "prompt": "Implement the removal step of a content clean-up tool. When asked to remove a post permanently the post and all of its metadata must be gone from the database; otherwise the post must only go to the Trash, keeping its metadata so an editor can restore it. Return whether WordPress reported the removal succeeded.",
+      "expected_behavior": "`wp_delete_post( $id )` only trashes a post while the Trash is enabled; permanent removal needs `wp_delete_post( $id, true )`, and the recoverable path is `wp_trash_post()`. Runtime validation trashes one post (status 'trash', `_wp_trash_meta_status` recorded, custom meta intact) and permanently deletes another (row gone, postmeta rows gone).",
+      "requirements": [
+        "Permanent removal must delete the post row and its metadata",
+        "Non-permanent removal must leave the post in the Trash with its metadata intact",
+        "Return whether the removal succeeded"
+      ],
+      "test_function": "wpbp_posts_lifecycle_009( int $post_id, bool $permanently ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_delete_post",
+            "description": "Deletes posts through the post API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_trash_post|wp_delete_post",
+            "description": "Distinguishes trashing from deletion",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_009_posts'] = array(); foreach ( array( 'soft', 'hard' ) as $key ) { $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP PL9 ' . $key, 'post_content' => 'body', 'post_status' => 'publish' ) ); update_post_meta( $post_id, 'wpbp_pl_note', 'keep ' . $key ); $GLOBALS['wpbp_pl_009_posts'][ $key ] = $post_id; }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "global $wpdb; $ids = $GLOBALS['wpbp_pl_009_posts']; if ( true !== wpbp_posts_lifecycle_009( $ids['soft'], false ) ) { return false; } if ( 'trash' !== get_post_status( $ids['soft'] ) ) { return false; } if ( 'publish' !== get_post_meta( $ids['soft'], '_wp_trash_meta_status', true ) ) { return false; } if ( 'keep soft' !== get_post_meta( $ids['soft'], 'wpbp_pl_note', true ) ) { return false; } if ( true !== wpbp_posts_lifecycle_009( $ids['hard'], true ) ) { return false; } if ( null !== get_post( $ids['hard'] ) ) { return false; } $rows = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT COUNT(*) FROM $wpdb->postmeta WHERE post_id = %d\", $ids['hard'] ) ); return 0 === $rows;",
+            "description": "Trashing keeps the post and its meta; permanent deletion removes both",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_009_posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_pl_009_posts'] );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_009( int $post_id, bool $permanently ): bool {\n    if ( $permanently ) {\n        return (bool) wp_delete_post( $post_id, true );\n    }\n    return (bool) wp_trash_post( $post_id );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_009( int $post_id, bool $permanently ): bool { return (bool) wp_delete_post( $post_id ); }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-010",
+      "category": "posts-lifecycle",
+      "prompt": "Resolve a hierarchical path such as 'handbook/team' to the ID of the matching post of the supplied post type, returning 0 when nothing matches. Child slugs are only unique within their parent, so two different parents may both own a child called 'team', and a path only matches when every one of its segments matches the post's ancestry.",
+      "expected_behavior": "`get_page_by_path()` walks the ancestry of the candidate posts, which is what distinguishes 'parent-a/team' from 'parent-b/team' and rejects a bare 'team'. Slug or title lookups (`get_page_by_title()`, `WP_Query` with `name`) cannot tell the two children apart. Runtime validation resolves both page paths, a hierarchical custom post type path, and two paths that must return 0.",
+      "requirements": [
+        "Resolve the path against the supplied post type",
+        "Match every segment of the path against the post's ancestry",
+        "Return 0 when no post matches"
+      ],
+      "test_function": "wpbp_posts_lifecycle_010( string $path, string $post_type ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_page_by_path",
+            "description": "Resolves the path through the hierarchical lookup",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_pl_guide', array( 'public' => false, 'show_ui' => false, 'hierarchical' => true, 'supports' => array( 'title', 'editor', 'page-attributes' ) ) ); $GLOBALS['wpbp_pl_010_posts'] = array(); $make = static function ( $title, $slug, $parent, $type ) { return (int) wp_insert_post( array( 'post_title' => $title, 'post_name' => $slug, 'post_status' => 'publish', 'post_type' => $type, 'post_parent' => $parent ) ); }; $a = $make( 'WPBP PL10 A', 'wpbp-parent-a', 0, 'page' ); $b = $make( 'WPBP PL10 B', 'wpbp-parent-b', 0, 'page' ); $GLOBALS['wpbp_pl_010_posts']['parent_a'] = $a; $GLOBALS['wpbp_pl_010_posts']['parent_b'] = $b; $GLOBALS['wpbp_pl_010_posts']['team_a'] = $make( 'WPBP PL10 A team', 'wpbp-team', $a, 'page' ); $GLOBALS['wpbp_pl_010_posts']['team_b'] = $make( 'WPBP PL10 B team', 'wpbp-team', $b, 'page' ); $manual = $make( 'WPBP PL10 manual', 'wpbp-manual', 0, 'wpbp_pl_guide' ); $GLOBALS['wpbp_pl_010_posts']['manual'] = $manual; $GLOBALS['wpbp_pl_010_posts']['team_guide'] = $make( 'WPBP PL10 guide team', 'wpbp-team', $manual, 'wpbp_pl_guide' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = $GLOBALS['wpbp_pl_010_posts']; foreach ( $ids as $id ) { if ( $id < 1 ) { return false; } } if ( $ids['team_a'] !== wpbp_posts_lifecycle_010( 'wpbp-parent-a/wpbp-team', 'page' ) ) { return false; } if ( $ids['team_b'] !== wpbp_posts_lifecycle_010( 'wpbp-parent-b/wpbp-team', 'page' ) ) { return false; } if ( $ids['team_guide'] !== wpbp_posts_lifecycle_010( 'wpbp-manual/wpbp-team', 'wpbp_pl_guide' ) ) { return false; } if ( $ids['parent_b'] !== wpbp_posts_lifecycle_010( 'wpbp-parent-b', 'page' ) ) { return false; } if ( 0 !== wpbp_posts_lifecycle_010( 'wpbp-team', 'page' ) ) { return false; } return 0 === wpbp_posts_lifecycle_010( 'wpbp-parent-a/wpbp-missing', 'page' );",
+            "description": "Same-named children resolve by ancestry and unmatched paths return 0",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_010_posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_pl_010_posts'] );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_010( string $path, string $post_type ): int {\n    $post = get_page_by_path( $path, OBJECT, $post_type );\n    return $post instanceof WP_Post ? (int) $post->ID : 0;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_010( string $path, string $post_type ): int { $parts = explode( '/', trim( $path, '/' ) ); $slug = end( $parts ); $posts = get_posts( array( 'name' => $slug, 'post_type' => $post_type, 'post_status' => 'publish', 'numberposts' => 1 ) ); return $posts ? (int) $posts[0]->ID : 0; }"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-011",
+      "category": "posts-lifecycle",
+      "prompt": "Whenever a post is saved with an empty excerpt, fill the excerpt in from the post's content: take the content up to and including the first '.' character, with HTML removed and surrounding whitespace trimmed, or the whole plain-text content when it contains no '.'. Posts saved with an excerpt of their own must keep it, and saving a post must not set off an unbounded chain of further saves.",
+      "expected_behavior": "Writing the derived excerpt back with `wp_update_post()` from inside a `save_post` listener re-enters the same hook, so the implementation needs a re-entry guard (or must compute the excerpt before the row is written, e.g. on `wp_insert_post_data`). Runtime validation checks a two-sentence post, a post with no '.', a post with a manual excerpt, and a later edit that clears the excerpt; a setup-registered counter aborts the run if a single post is saved more than six times.",
+      "requirements": [
+        "Derive the excerpt only when the post is saved without one",
+        "Use the content up to and including the first '.', with HTML stripped and whitespace trimmed",
+        "Use the whole plain-text content when there is no '.'",
+        "Do not let a save trigger unbounded further saves"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "save_post|wp_insert_post_data",
+            "description": "Hooks the post save",
+            "weight": 1
+          },
+          {
+            "pattern": "post_excerpt",
+            "description": "Writes the excerpt",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_011_saves'] = array(); $GLOBALS['wpbp_pl_011_posts'] = array(); add_action( 'save_post', static function ( $post_id, $post ) { if ( 'revision' === $post->post_type ) { return; } $key = (int) $post->ID; $GLOBALS['wpbp_pl_011_saves'][ $key ] = ( $GLOBALS['wpbp_pl_011_saves'][ $key ] ?? 0 ) + 1; if ( $GLOBALS['wpbp_pl_011_saves'][ $key ] > 6 ) { throw new RuntimeException( 'save_post recursion guard tripped' ); } }, 1, 2 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "try { $one = wp_insert_post( array( 'post_title' => 'WPBP PL11 one', 'post_status' => 'publish', 'post_content' => '<p>First sentence. Second sentence.</p>' ) ); $two = wp_insert_post( array( 'post_title' => 'WPBP PL11 two', 'post_status' => 'publish', 'post_content' => '<p>No terminator here</p>' ) ); $three = wp_insert_post( array( 'post_title' => 'WPBP PL11 three', 'post_status' => 'publish', 'post_content' => '<p>Body text. More.</p>', 'post_excerpt' => 'Editor wrote this' ) ); $GLOBALS['wpbp_pl_011_posts'] = array( (int) $one, (int) $two, (int) $three ); if ( is_wp_error( $one ) || is_wp_error( $two ) || is_wp_error( $three ) ) { return false; } if ( 'First sentence.' !== get_post_field( 'post_excerpt', $one, 'raw' ) ) { return false; } if ( 'No terminator here' !== get_post_field( 'post_excerpt', $two, 'raw' ) ) { return false; } if ( 'Editor wrote this' !== get_post_field( 'post_excerpt', $three, 'raw' ) ) { return false; } wp_update_post( array( 'ID' => $one, 'post_content' => '<p>Rewritten opener. Tail.</p>', 'post_excerpt' => '' ) ); return 'Rewritten opener.' === get_post_field( 'post_excerpt', $one, 'raw' ); } catch ( Throwable $e ) { return false; }",
+            "description": "Excerpts are derived only when missing, and saving does not recurse",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_pl_011_posts'] ?? array() ) as $post_id ) { if ( $post_id ) { wp_delete_post( (int) $post_id, true ); } } unset( $GLOBALS['wpbp_pl_011_posts'], $GLOBALS['wpbp_pl_011_saves'] ); remove_all_filters( 'save_post' ); remove_all_filters( 'wp_insert_post_data' );"
+      },
+      "reference_solution": "function wpbp_pl_011_first_sentence( string $content ): string {\n    $text = trim( wp_strip_all_tags( $content ) );\n    if ( '' === $text ) {\n        return '';\n    }\n    $stop = strpos( $text, '.' );\n    return false === $stop ? $text : trim( substr( $text, 0, $stop + 1 ) );\n}\n\nfunction wpbp_pl_011_sync_excerpt( $post_id, $post ) {\n    static $running = false;\n    if ( $running || 'revision' === $post->post_type || wp_is_post_autosave( $post_id ) ) {\n        return;\n    }\n    if ( '' !== trim( (string) $post->post_excerpt ) ) {\n        return;\n    }\n    $excerpt = wpbp_pl_011_first_sentence( (string) $post->post_content );\n    if ( '' === $excerpt ) {\n        return;\n    }\n    $running = true;\n    wp_update_post(\n        array(\n            'ID'           => $post_id,\n            'post_excerpt' => wp_slash( $excerpt ),\n        )\n    );\n    $running = false;\n}\nadd_action( 'save_post', 'wpbp_pl_011_sync_excerpt', 10, 2 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'save_post', static function ( $post_id, $post ) { if ( 'revision' === $post->post_type ) { return; } wp_update_post( array( 'ID' => $post_id, 'post_excerpt' => wp_slash( trim( wp_strip_all_tags( (string) $post->post_content ) ) ) ) ); }, 10, 2 );"
+      ]
+    },
+    {
+      "id": "e-posts-lifecycle-012",
+      "category": "posts-lifecycle",
+      "prompt": "Publish a post built from the supplied title and return the slug WordPress actually stored for it. Titles repeat on this site, so the slug you return has to be the one that ended up in the database rather than a slug you derived yourself.",
+      "expected_behavior": "`wp_insert_post()` sanitises the title into a slug and passes it through `wp_unique_post_slug()`, which appends -2, -3 ... for published posts of the same type, and `sanitize_title()` strips accents. Runtime validation publishes the same title twice against an existing 'wpbp-report' post and then an accented title, expecting 'wpbp-report-2', 'wpbp-report-3' and 'cafe-deja-vu'.",
+      "requirements": [
+        "Create the post with the publish status",
+        "Return the post's stored slug",
+        "Do not invent your own uniqueness scheme"
+      ],
+      "test_function": "wpbp_posts_lifecycle_012( string $title ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_insert_post",
+            "description": "Creates the post",
+            "weight": 1
+          },
+          {
+            "pattern": "post_name|get_post_field|get_post",
+            "description": "Reads back the stored slug",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_012_seed'] = (int) wp_insert_post( array( 'post_title' => 'WPBP Report', 'post_content' => 'seed', 'post_status' => 'publish' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( 'wpbp-report' !== get_post_field( 'post_name', $GLOBALS['wpbp_pl_012_seed'], 'raw' ) ) { return false; } $first = wpbp_posts_lifecycle_012( 'WPBP Report' ); $second = wpbp_posts_lifecycle_012( 'WPBP Report' ); $third = wpbp_posts_lifecycle_012( 'Café Déjà Vu' ); return 'wpbp-report-2' === $first && 'wpbp-report-3' === $second && 'cafe-deja-vu' === $third;",
+            "description": "Repeated titles receive incrementing suffixes and accents are transliterated",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; $ids = $wpdb->get_col( \"SELECT ID FROM $wpdb->posts WHERE post_title IN ( 'WPBP Report', 'Café Déjà Vu' )\" ); foreach ( (array) $ids as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_pl_012_seed'] );"
+      },
+      "reference_solution": "function wpbp_posts_lifecycle_012( string $title ): string {\n    $post_id = wp_insert_post(\n        array(\n            'post_title'   => wp_slash( $title ),\n            'post_content' => '',\n            'post_status'  => 'publish',\n        )\n    );\n    if ( is_wp_error( $post_id ) || ! $post_id ) {\n        return '';\n    }\n    return (string) get_post_field( 'post_name', $post_id, 'raw' );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_posts_lifecycle_012( string $title ): string { $slug = sanitize_title( $title ); wp_insert_post( array( 'post_title' => wp_slash( $title ), 'post_content' => '', 'post_status' => 'publish' ) ); return $slug; }"
+      ]
+    }
+  ]
+}

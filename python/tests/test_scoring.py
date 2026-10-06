@@ -18,7 +18,6 @@ def _make_test(
         prompt="Do something.",
         expected_behavior="Reviewer contract: does something observable.",
         category="hooks",
-        difficulty="intermediate",
         requirements=[],
         test_function=None,
         static_checks=static_checks or {},

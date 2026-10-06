@@ -38,8 +38,8 @@ def _execution_tests() -> list[dict[str, Any]]:
     return tests
 
 
-def test_execution_suite_has_exactly_185_tests() -> None:
-    assert len(_execution_tests()) == 185
+def test_execution_suite_has_exactly_350_tests() -> None:
+    assert len(_execution_tests()) == 350
 
 
 def test_execution_test_ids_are_unique() -> None:
@@ -50,7 +50,6 @@ def test_execution_test_ids_are_unique() -> None:
 def test_execution_tests_have_required_fields() -> None:
     required = {
         "category",
-        "difficulty",
         "expected_behavior",
         "id",
         "metadata",
@@ -146,6 +145,6 @@ def test_execution_suite_includes_modern_wordpress_coverage() -> None:
     modern_tests = [
         test
         for test in _execution_tests()
-        if test.get("metadata", {}).get("release_focus") in {"6.9", "7.0"}
+        if test.get("metadata", {}).get("release_focus") in {"6.9", "7.0", "7.1"}
     ]
     assert len(modern_tests) >= 35

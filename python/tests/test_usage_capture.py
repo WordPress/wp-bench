@@ -139,7 +139,6 @@ def test_result_record_contains_usage_and_model_call(
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
-        difficulty="basic",
         requirements=[],
         test_function=None,
         static_checks={},

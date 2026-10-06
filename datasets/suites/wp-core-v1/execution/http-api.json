@@ -1,0 +1,492 @@
+{
+  "id": "wp-core-execution-v1-http_api",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - HTTP API",
+    "description": "Code generation tasks for the WordPress HTTP API",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-http-api-001",
+      "category": "http-api",
+      "prompt": "Implement a function that fetches JSON from a URL over HTTP and normalises the result into an array with the keys outcome, code and data. A 200 response gives outcome 'ok', the status code, and the decoded JSON body as an associative array. Any other status gives outcome 'http_error', that status code as an integer, and a null data. A request that fails before a response exists gives outcome 'transport_error', the failure's error code as a string, and a null data.",
+      "expected_behavior": "The response of `wp_remote_get()` is either a `WP_Error` or an array, so `is_wp_error()` has to be checked before any array access or status lookup — `wp_remote_retrieve_response_code()` returns an empty string for a `WP_Error`, which silently becomes 0 and misclassifies a transport failure as an HTTP error. Runtime validation mocks three URLs (a 200 with a JSON body, a 500, and a `WP_Error`) and requires all three normalised shapes exactly, plus confirmation that all three requests actually reached the HTTP layer.",
+      "requirements": [
+        "Fetch the URL with the WordPress HTTP API",
+        "Detect a failed request before treating the response as a response",
+        "Decode the JSON body into an associative array only for a 200",
+        "Return the outcome, code and data keys described above"
+      ],
+      "test_function": "wpbp_http_api_001( string $url ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_remote_get|wp_remote_request",
+            "description": "Uses the HTTP API",
+            "weight": 1
+          },
+          {
+            "pattern": "is_wp_error",
+            "description": "Checks for a failed request",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_response_code",
+            "description": "Reads the status code",
+            "weight": 1
+          },
+          {
+            "pattern": "json_decode",
+            "description": "Decodes the JSON body",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_http_001_hits'] = 0;\nadd_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    $responses = array(\n        'http://93.184.216.34/ok.json'   => array( 'code' => 200, 'message' => 'OK', 'body' => '{\"name\":\"beta\",\"count\":3}' ),\n        'http://93.184.216.34/boom.json' => array( 'code' => 500, 'message' => 'Internal Server Error', 'body' => 'oops' ),\n    );\n    if ( 'http://93.184.216.34/down.json' === $url ) {\n        ++$GLOBALS['wpbp_http_001_hits'];\n        return new WP_Error( 'http_request_failed', 'Connection refused.' );\n    }\n    if ( ! isset( $responses[ $url ] ) ) {\n        return $preempt;\n    }\n    ++$GLOBALS['wpbp_http_001_hits'];\n    $spec = $responses[ $url ];\n    return array(\n        'headers'  => array(),\n        'body'     => $spec['body'],\n        'response' => array( 'code' => $spec['code'], 'message' => $spec['message'] ),\n        'cookies'  => array(),\n        'filename' => null,\n    );\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_001' ) ) { return false; }\n$ok = wpbp_http_api_001( 'http://93.184.216.34/ok.json' );\nif ( array( 'outcome' => 'ok', 'code' => 200, 'data' => array( 'name' => 'beta', 'count' => 3 ) ) !== $ok ) { return false; }\n$server_error = wpbp_http_api_001( 'http://93.184.216.34/boom.json' );\nif ( array( 'outcome' => 'http_error', 'code' => 500, 'data' => null ) !== $server_error ) { return false; }\n$transport = wpbp_http_api_001( 'http://93.184.216.34/down.json' );\nif ( array( 'outcome' => 'transport_error', 'code' => 'http_request_failed', 'data' => null ) !== $transport ) { return false; }\nreturn 3 === (int) $GLOBALS['wpbp_http_001_hits'];",
+            "description": "Success, HTTP error and transport error are told apart",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );\nunset( $GLOBALS['wpbp_http_001_hits'] );"
+      },
+      "reference_solution": "function wpbp_http_api_001( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'outcome' => 'transport_error', 'code' => $response->get_error_code(), 'data' => null );\n    }\n    $code = (int) wp_remote_retrieve_response_code( $response );\n    if ( 200 !== $code ) {\n        return array( 'outcome' => 'http_error', 'code' => $code, 'data' => null );\n    }\n    $decoded = json_decode( wp_remote_retrieve_body( $response ), true );\n    return array( 'outcome' => 'ok', 'code' => $code, 'data' => is_array( $decoded ) ? $decoded : null );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-http.php",
+          "src/wp-includes/http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_001( string $url ): array {\n    $response = wp_remote_get( $url );\n    $code     = (int) wp_remote_retrieve_response_code( $response );\n    if ( 200 !== $code ) {\n        return array( 'outcome' => 'http_error', 'code' => $code, 'data' => null );\n    }\n    $decoded = json_decode( wp_remote_retrieve_body( $response ), true );\n    return array( 'outcome' => 'ok', 'code' => $code, 'data' => is_array( $decoded ) ? $decoded : null );\n}",
+        "function wpbp_http_api_001( string $url ): array {\n    if ( str_contains( $url, 'ok.json' ) ) {\n        return array( 'outcome' => 'ok', 'code' => 200, 'data' => array( 'name' => 'beta', 'count' => 3 ) );\n    }\n    if ( str_contains( $url, 'boom.json' ) ) {\n        return array( 'outcome' => 'http_error', 'code' => 500, 'data' => null );\n    }\n    return array( 'outcome' => 'transport_error', 'code' => 'http_request_failed', 'data' => null );\n}"
+      ]
+    },
+    {
+      "id": "e-http-api-002",
+      "category": "http-api",
+      "prompt": "Implement a function that decides whether a URL is safe for this site to fetch and, only if it is, fetches it. Return an array with a boolean 'safe' key and a 'body' key holding the response body for a 200 and an empty string otherwise. Rely on WordPress's own judgement of which hosts a site may reach — it refuses private, loopback, link-local, carrier-grade NAT, multicast and reserved address ranges — and send no HTTP request at all for a URL it considers unsafe. When the URL is safe, fetch it with the request helper that keeps applying that validation.",
+      "expected_behavior": "`wp_http_validate_url()` is called first and short-circuits before any request is attempted; the fetch then goes through `wp_safe_remote_get()`. Note that `pre_http_request` fires before validation, so a mocked transport cannot stand in for the check. WordPress 7.1 widened the refused ranges beyond the classic private blocks to include 169.254.0.0/16, 100.64.0.0/10, 224.0.0.0/4 and other reserved space. Runtime validation checks one reachable dotted-quad URL (body returned) and four addresses in 192.168/16, 169.254/16, 100.64/10 and 224/4 that must all report unsafe with an empty body, then confirms exactly one request reached the HTTP layer.",
+      "requirements": [
+        "Ask WordPress whether the URL is safe to request before doing anything else",
+        "Perform no HTTP request when the URL is not safe",
+        "Fetch safe URLs with the validating GET helper",
+        "Return the response body only for a 200 response"
+      ],
+      "test_function": "wpbp_http_api_002( string $url ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_http_validate_url",
+            "description": "Validates the URL with core",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_safe_remote_get",
+            "description": "Uses the validating GET helper",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_response_code",
+            "description": "Checks the status code",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_http_002_hits'] = 0;\nadd_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    ++$GLOBALS['wpbp_http_002_hits'];\n    if ( 'http://93.184.216.34/data.json' === $url ) {\n        return array(\n            'headers'  => array(),\n            'body'     => '{\"ok\":true}',\n            'response' => array( 'code' => 200, 'message' => 'OK' ),\n            'cookies'  => array(),\n            'filename' => null,\n        );\n    }\n    return new WP_Error( 'wpbp_offline', 'No network in this environment.' );\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_002' ) ) { return false; }\n$allowed = wpbp_http_api_002( 'http://93.184.216.34/data.json' );\nif ( array( 'safe' => true, 'body' => '{\"ok\":true}' ) !== $allowed ) { return false; }\nforeach ( array( 'http://192.168.1.1/status', 'http://169.254.169.254/latest/meta-data/', 'http://100.64.0.5/status', 'http://224.0.0.1/status' ) as $blocked_url ) {\n    if ( array( 'safe' => false, 'body' => '' ) !== wpbp_http_api_002( $blocked_url ) ) { return false; }\n}\nreturn 1 === (int) $GLOBALS['wpbp_http_002_hits'];",
+            "description": "Unsafe hosts are refused without a request and the safe one is fetched",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );\nunset( $GLOBALS['wpbp_http_002_hits'] );"
+      },
+      "reference_solution": "function wpbp_http_api_002( string $url ): array {\n    if ( ! wp_http_validate_url( $url ) ) {\n        return array( 'safe' => false, 'body' => '' );\n    }\n    $response = wp_safe_remote_get( $url );\n    if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {\n        return array( 'safe' => true, 'body' => '' );\n    }\n    return array( 'safe' => true, 'body' => (string) wp_remote_retrieve_body( $response ) );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/http.php",
+          "src/wp-includes/class-wp-http.php"
+        ],
+        "release_focus": "7.1"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_002( string $url ): array {\n    $response = wp_safe_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'safe' => false, 'body' => '' );\n    }\n    if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {\n        return array( 'safe' => true, 'body' => '' );\n    }\n    return array( 'safe' => true, 'body' => (string) wp_remote_retrieve_body( $response ) );\n}",
+        "function wpbp_http_api_002( string $url ): array {\n    $host  = (string) wp_parse_url( $url, PHP_URL_HOST );\n    $parts = array_map( 'intval', explode( '.', $host ) );\n    $blocked = 4 === count( $parts ) && (\n        127 === $parts[0]\n        || 10 === $parts[0]\n        || 0 === $parts[0]\n        || ( 172 === $parts[0] && 16 <= $parts[1] && 31 >= $parts[1] )\n        || ( 192 === $parts[0] && 168 === $parts[1] )\n    );\n    if ( $blocked ) {\n        return array( 'safe' => false, 'body' => '' );\n    }\n    $response = wp_safe_remote_get( $url );\n    if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {\n        return array( 'safe' => true, 'body' => '' );\n    }\n    return array( 'safe' => true, 'body' => (string) wp_remote_retrieve_body( $response ) );\n}"
+      ]
+    },
+    {
+      "id": "e-http-api-003",
+      "category": "http-api",
+      "prompt": "Outgoing HTTP requests to the host api.partner.test must carry an X-WPBP-Token header whose value is the current wpbp_partner_token option, and must use a 20 second timeout. Requests to every other host must be left exactly as they were, including their default timeout, and any headers the caller already set on a partner request must survive alongside the token. The rule applies to every request method and to both http and https.",
+      "expected_behavior": "The `http_request_args` filter runs for every request with the parsed arguments and the URL, so the host is taken from the URL and the token is merged into the existing `headers` array rather than replacing it; the option is read on each request so a change takes effect immediately. Runtime validation captures the arguments that reach the transport for four calls: a partner GET with an Accept header (both headers present, timeout 20), a partner POST over https (token present, timeout 20), a request to another host (no token, caller's Accept intact, default timeout 5) and a partner GET after the option changed (new token).",
+      "requirements": [
+        "Add the X-WPBP-Token header only to requests whose host is api.partner.test",
+        "Take the value from the wpbp_partner_token option at request time",
+        "Set the timeout for those requests to 20 seconds",
+        "Preserve headers the caller already supplied and leave other hosts untouched"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "http_request_args",
+            "description": "Filters outgoing request arguments",
+            "weight": 1
+          },
+          {
+            "pattern": "X-WPBP-Token",
+            "description": "Adds the token header",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_partner_token",
+            "description": "Reads the configured token",
+            "weight": 1
+          },
+          {
+            "pattern": "api.partner.test",
+            "description": "Scopes the change to the partner host",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "update_option( 'wpbp_partner_token', 'tok-alpha' );\n$GLOBALS['wpbp_http_003_calls'] = array();\nadd_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    $GLOBALS['wpbp_http_003_calls'][] = array( 'url' => $url, 'args' => $parsed_args );\n    return array(\n        'headers'  => array(),\n        'body'     => 'ok',\n        'response' => array( 'code' => 200, 'message' => 'OK' ),\n        'cookies'  => array(),\n        'filename' => null,\n    );\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$last = static function () {\n    $calls = $GLOBALS['wpbp_http_003_calls'];\n    $call  = end( $calls );\n    return array( array_change_key_case( (array) ( $call['args']['headers'] ?? array() ) ), $call['args'] );\n};\nwp_remote_get( 'http://api.partner.test/v1/ping', array( 'headers' => array( 'Accept' => 'application/json' ) ) );\nlist( $headers, $args ) = $last();\nif ( 'application/json' !== ( $headers['accept'] ?? null ) ) { return false; }\nif ( 'tok-alpha' !== ( $headers['x-wpbp-token'] ?? null ) ) { return false; }\nif ( 20 !== (int) ( $args['timeout'] ?? 0 ) ) { return false; }\nwp_remote_post( 'https://api.partner.test/v1/events', array( 'body' => 'x' ) );\nlist( $headers, $args ) = $last();\nif ( 'tok-alpha' !== ( $headers['x-wpbp-token'] ?? null ) ) { return false; }\nif ( 20 !== (int) ( $args['timeout'] ?? 0 ) ) { return false; }\nwp_remote_get( 'http://other.test/v1/ping', array( 'headers' => array( 'Accept' => 'text/plain' ) ) );\nlist( $headers, $args ) = $last();\nif ( array_key_exists( 'x-wpbp-token', $headers ) ) { return false; }\nif ( 'text/plain' !== ( $headers['accept'] ?? null ) ) { return false; }\nif ( 5 !== (int) ( $args['timeout'] ?? 0 ) ) { return false; }\nupdate_option( 'wpbp_partner_token', 'tok-beta' );\nwp_remote_get( 'http://api.partner.test/v1/ping' );\nlist( $headers, $args ) = $last();\nreturn 'tok-beta' === ( $headers['x-wpbp-token'] ?? null ) && 20 === (int) ( $args['timeout'] ?? 0 ) && 4 === count( $GLOBALS['wpbp_http_003_calls'] );",
+            "description": "Only partner requests gain the token and timeout, and caller headers survive",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );\nremove_all_filters( 'http_request_args' );\ndelete_option( 'wpbp_partner_token' );\nunset( $GLOBALS['wpbp_http_003_calls'] );"
+      },
+      "reference_solution": "add_filter( 'http_request_args', function ( $parsed_args, $url ) {\n    if ( 'api.partner.test' !== wp_parse_url( $url, PHP_URL_HOST ) ) {\n        return $parsed_args;\n    }\n    if ( ! isset( $parsed_args['headers'] ) || ! is_array( $parsed_args['headers'] ) ) {\n        $parsed_args['headers'] = array();\n    }\n    $parsed_args['headers']['X-WPBP-Token'] = (string) get_option( 'wpbp_partner_token', '' );\n    $parsed_args['timeout']                 = 20;\n    return $parsed_args;\n}, 10, 2 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'http_request_args', function ( $parsed_args ) {\n    if ( ! isset( $parsed_args['headers'] ) || ! is_array( $parsed_args['headers'] ) ) {\n        $parsed_args['headers'] = array();\n    }\n    $parsed_args['headers']['X-WPBP-Token'] = (string) get_option( 'wpbp_partner_token', '' );\n    $parsed_args['timeout']                 = 20;\n    return $parsed_args;\n} );",
+        "add_filter( 'http_request_args', function ( $parsed_args, $url ) {\n    if ( 'api.partner.test' !== wp_parse_url( $url, PHP_URL_HOST ) ) {\n        return $parsed_args;\n    }\n    $parsed_args['headers'] = array( 'X-WPBP-Token' => (string) get_option( 'wpbp_partner_token', '' ) );\n    $parsed_args['timeout'] = 20;\n    return $parsed_args;\n}, 10, 2 );"
+      ]
+    },
+    {
+      "id": "e-http-api-004",
+      "category": "http-api",
+      "prompt": "Implement a function that fetches a URL and summarises the response as an array with four keys: 'type' is the Content-Type header as a string (empty when the server did not send one), 'rate' is the X-Wpbp-Rate header as an integer (0 when missing), 'links' is a list of every Link header value the server sent (an empty list when there is none, and a one element list when there is exactly one), and 'code' is the HTTP status code as an integer (0 when the request itself failed). Header names must match no matter what casing the server used.",
+      "expected_behavior": "Header lookups go through `wp_remote_retrieve_header()`, which reads a case-insensitive dictionary, so the mixed-case names in the response resolve regardless of the case used in the lookup. A header sent once comes back as a string and a header sent several times comes back as an array, so the Link values must be normalised into a list either way, and a missing header comes back as `''` rather than null. A `WP_Error` response has to be detected so all four keys fall back to their defaults. Runtime validation uses three fixtures: a 200 with a Content-Type, a rate header and two Link values; a 404 with a single Link value and neither of the other two headers; and a transport failure.",
+      "requirements": [
+        "Read headers through the HTTP API's own header accessor so the casing the server used does not matter",
+        "Return the Link values as a list whether the server sent one or several",
+        "Fall back to an empty string, 0, an empty list and 0 when a header is missing or the request failed",
+        "Return the status code and rate as integers"
+      ],
+      "test_function": "wpbp_http_api_004( string $url ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_remote_retrieve_header",
+            "description": "Reads headers through the HTTP API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_response_code",
+            "description": "Reads the status code",
+            "weight": 1
+          },
+          {
+            "pattern": "is_wp_error",
+            "description": "Handles a failed request",
+            "weight": 1
+          },
+          {
+            "pattern": "is_array",
+            "description": "Normalises repeated header values",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    if ( 'http://93.184.216.34/rich' === $url ) {\n        $headers = new \\WpOrg\\Requests\\Utility\\CaseInsensitiveDictionary( array(\n            'content-TYPE' => 'application/json; charset=utf-8',\n            'X-Wpbp-Rate'  => '42',\n            'Link'         => array( '<https://a.test/next>; rel=\"next\"', '<https://a.test/prev>; rel=\"prev\"' ),\n        ) );\n        return array( 'headers' => $headers, 'body' => '{}', 'response' => array( 'code' => 200, 'message' => 'OK' ), 'cookies' => array(), 'filename' => null );\n    }\n    if ( 'http://93.184.216.34/bare' === $url ) {\n        $headers = new \\WpOrg\\Requests\\Utility\\CaseInsensitiveDictionary( array(\n            'Server' => 'nginx',\n            'LINK'   => '<https://c.test/next>; rel=\"next\"',\n        ) );\n        return array( 'headers' => $headers, 'body' => '', 'response' => array( 'code' => 404, 'message' => 'Not Found' ), 'cookies' => array(), 'filename' => null );\n    }\n    if ( 'http://93.184.216.34/dead' === $url ) {\n        return new WP_Error( 'http_request_failed', 'Connection refused.' );\n    }\n    return $preempt;\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_004' ) ) { return false; }\n$rich = wpbp_http_api_004( 'http://93.184.216.34/rich' );\n$expected_rich = array(\n    'type'  => 'application/json; charset=utf-8',\n    'rate'  => 42,\n    'links' => array( '<https://a.test/next>; rel=\"next\"', '<https://a.test/prev>; rel=\"prev\"' ),\n    'code'  => 200,\n);\nif ( $expected_rich !== $rich ) { return false; }\n$bare = wpbp_http_api_004( 'http://93.184.216.34/bare' );\nif ( array( 'type' => '', 'rate' => 0, 'links' => array( '<https://c.test/next>; rel=\"next\"' ), 'code' => 404 ) !== $bare ) { return false; }\n$dead = wpbp_http_api_004( 'http://93.184.216.34/dead' );\nreturn array( 'type' => '', 'rate' => 0, 'links' => array(), 'code' => 0 ) === $dead;",
+            "description": "Headers resolve case-insensitively and repeated, missing and failed cases normalise",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );"
+      },
+      "reference_solution": "function wpbp_http_api_004( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'type' => '', 'rate' => 0, 'links' => array(), 'code' => 0 );\n    }\n    $links = wp_remote_retrieve_header( $response, 'link' );\n    if ( '' === $links ) {\n        $links = array();\n    } elseif ( ! is_array( $links ) ) {\n        $links = array( $links );\n    }\n    return array(\n        'type'  => (string) wp_remote_retrieve_header( $response, 'content-type' ),\n        'rate'  => (int) wp_remote_retrieve_header( $response, 'x-wpbp-rate' ),\n        'links' => array_values( $links ),\n        'code'  => (int) wp_remote_retrieve_response_code( $response ),\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_004( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'type' => '', 'rate' => 0, 'links' => array(), 'code' => 0 );\n    }\n    $links = wp_remote_retrieve_header( $response, 'link' );\n    return array(\n        'type'  => (string) wp_remote_retrieve_header( $response, 'content-type' ),\n        'rate'  => (int) wp_remote_retrieve_header( $response, 'x-wpbp-rate' ),\n        'links' => is_array( $links ) ? $links : array(),\n        'code'  => (int) wp_remote_retrieve_response_code( $response ),\n    );\n}",
+        "function wpbp_http_api_004( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'type' => '', 'rate' => 0, 'links' => array(), 'code' => 0 );\n    }\n    $links = wp_remote_retrieve_header( $response, 'link' );\n    if ( '' === $links ) {\n        $links = array();\n    } elseif ( ! is_array( $links ) ) {\n        $links = array( $links );\n    }\n    return array(\n        'type'  => wp_remote_retrieve_header( $response, 'content-type' ),\n        'rate'  => wp_remote_retrieve_header( $response, 'x-wpbp-rate' ),\n        'links' => array_values( $links ),\n        'code'  => (int) wp_remote_retrieve_response_code( $response ),\n    );\n}"
+      ]
+    },
+    {
+      "id": "e-http-api-005",
+      "category": "http-api",
+      "prompt": "Implement a function that sends a payload array to https://api.partner.test/v1/events as an HTTP POST whose request body is the payload encoded as JSON, with the JSON content type declared on the request. The endpoint replies with a JSON object containing an id; return that id as an integer, or 0 when the request fails or no id comes back.",
+      "expected_behavior": "The payload must be encoded with `wp_json_encode()` and passed as the raw string `body` — handing the array straight to `body` makes the HTTP API form-encode it, so the receiving endpoint never sees JSON — and a Content-Type of application/json must be set in the request headers. Runtime validation captures what reaches the transport for two different payloads: the method must be POST, the content type must name application/json, and the decoded body must equal the original payload (including its integer values). The mocked endpoint derives its id from the payload it received, so both returned ids must differ and match.",
+      "requirements": [
+        "POST to the events endpoint through the WordPress HTTP API",
+        "Encode the payload with WordPress's JSON encoder and send it as the raw request body",
+        "Declare the JSON content type on the request",
+        "Return the id from the JSON response as an integer, or 0 when it is unavailable"
+      ],
+      "test_function": "wpbp_http_api_005( array $payload ): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_remote_post|wp_remote_request",
+            "description": "Sends a POST through the HTTP API",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_json_encode",
+            "description": "Encodes the payload as JSON",
+            "weight": 1
+          },
+          {
+            "pattern": "application/json",
+            "description": "Declares the JSON content type",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_body",
+            "description": "Reads the response body",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_http_005_calls'] = array();\nadd_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    if ( 'https://api.partner.test/v1/events' !== $url ) { return $preempt; }\n    $body    = $parsed_args['body'] ?? null;\n    $decoded = is_string( $body ) ? json_decode( $body, true ) : null;\n    $headers = array_change_key_case( (array) ( $parsed_args['headers'] ?? array() ) );\n    $GLOBALS['wpbp_http_005_calls'][] = array(\n        'method'       => (string) ( $parsed_args['method'] ?? '' ),\n        'decoded'      => $decoded,\n        'content_type' => (string) ( $headers['content-type'] ?? '' ),\n    );\n    $id = is_array( $decoded ) ? strlen( (string) ( $decoded['name'] ?? '' ) ) : 0;\n    return array(\n        'headers'  => array(),\n        'body'     => wp_json_encode( array( 'id' => $id ) ),\n        'response' => array( 'code' => 201, 'message' => 'Created' ),\n        'cookies'  => array(),\n        'filename' => null,\n    );\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_005' ) ) { return false; }\n$payloads = array(\n    array( 'name' => 'alpha', 'count' => 2 ),\n    array( 'name' => 'delta ray', 'count' => 7 ),\n);\n$expected_ids = array( 5, 9 );\nforeach ( $payloads as $index => $payload ) {\n    if ( $expected_ids[ $index ] !== wpbp_http_api_005( $payload ) ) { return false; }\n}\n$calls = $GLOBALS['wpbp_http_005_calls'];\nif ( 2 !== count( $calls ) ) { return false; }\nforeach ( $calls as $index => $call ) {\n    if ( 'POST' !== strtoupper( $call['method'] ) ) { return false; }\n    if ( ! str_contains( strtolower( $call['content_type'] ), 'application/json' ) ) { return false; }\n    if ( $payloads[ $index ] !== $call['decoded'] ) { return false; }\n}\nreturn true;",
+            "description": "The payload arrives as a JSON body with the right method and content type",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );\nunset( $GLOBALS['wpbp_http_005_calls'] );"
+      },
+      "reference_solution": "function wpbp_http_api_005( array $payload ): int {\n    $response = wp_remote_post(\n        'https://api.partner.test/v1/events',\n        array(\n            'headers' => array( 'Content-Type' => 'application/json; charset=utf-8' ),\n            'body'    => wp_json_encode( $payload ),\n        )\n    );\n    if ( is_wp_error( $response ) ) {\n        return 0;\n    }\n    $decoded = json_decode( wp_remote_retrieve_body( $response ), true );\n    return isset( $decoded['id'] ) ? (int) $decoded['id'] : 0;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/http.php",
+          "src/wp-includes/class-wp-http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_005( array $payload ): int {\n    $response = wp_remote_post(\n        'https://api.partner.test/v1/events',\n        array(\n            'headers' => array( 'Content-Type' => 'application/json; charset=utf-8' ),\n            'body'    => $payload,\n        )\n    );\n    if ( is_wp_error( $response ) ) {\n        return 0;\n    }\n    $decoded = json_decode( wp_remote_retrieve_body( $response ), true );\n    return isset( $decoded['id'] ) ? (int) $decoded['id'] : 0;\n}",
+        "function wpbp_http_api_005( array $payload ): int {\n    $response = wp_remote_post(\n        'https://api.partner.test/v1/events',\n        array( 'body' => wp_json_encode( $payload ) )\n    );\n    if ( is_wp_error( $response ) ) {\n        return 0;\n    }\n    $decoded = json_decode( wp_remote_retrieve_body( $response ), true );\n    return isset( $decoded['id'] ) ? (int) $decoded['id'] : 0;\n}"
+      ]
+    },
+    {
+      "id": "e-http-api-006",
+      "category": "http-api",
+      "prompt": "Implement a function that fetches a URL over HTTP and retries exactly once when the attempt comes back as a server error (a status of 500 or above) or when the request fails outright. A client error such as 404 must not be retried, and no URL may ever be requested more than twice. Return an array whose 'code' key is the final status code as an integer — 0 when the last attempt failed outright — and whose 'body' key is the response body only for a 200 and an empty string otherwise.",
+      "expected_behavior": "Both the `WP_Error` case and the 5xx case trigger the single retry, while a 4xx is final; the total attempts per URL are therefore 2, 2, 1, 2 and 2 for the five fixtures. Runtime validation counts the attempts inside the mocked transport (`http_api_debug` never fires when `pre_http_request` short-circuits, so the counter has to live in the mock) and checks the returned code and body: a flaky endpoint that recovers on the second try, an endpoint that stays at 500, a 404 that is requested once, a connection failure that recovers, and one that never does.",
+      "requirements": [
+        "Fetch the URL with the WordPress HTTP API",
+        "Retry once, and only once, on a status of 500 or above or on a failed request",
+        "Never retry a client error status",
+        "Return the final status code as an integer, using 0 when the request failed, and the body only for a 200"
+      ],
+      "test_function": "wpbp_http_api_006( string $url ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_remote_get|wp_remote_request",
+            "description": "Uses the HTTP API",
+            "weight": 1
+          },
+          {
+            "pattern": "is_wp_error",
+            "description": "Detects a failed request",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_response_code",
+            "description": "Reads the status code",
+            "weight": 1
+          },
+          {
+            "pattern": "500",
+            "description": "Distinguishes server errors",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_http_006_hits'] = array();\nadd_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    $slug = basename( (string) wp_parse_url( $url, PHP_URL_PATH ) );\n    if ( ! in_array( $slug, array( 'flaky', 'always-500', 'not-found', 'dead', 'always-dead' ), true ) ) { return $preempt; }\n    $GLOBALS['wpbp_http_006_hits'][ $slug ] = ( $GLOBALS['wpbp_http_006_hits'][ $slug ] ?? 0 ) + 1;\n    $attempt = $GLOBALS['wpbp_http_006_hits'][ $slug ];\n    $make = static function ( $code, $message, $body ) {\n        return array( 'headers' => array(), 'body' => $body, 'response' => array( 'code' => $code, 'message' => $message ), 'cookies' => array(), 'filename' => null );\n    };\n    if ( 'flaky' === $slug ) { return 1 === $attempt ? $make( 503, 'Service Unavailable', 'busy' ) : $make( 200, 'OK', 'recovered' ); }\n    if ( 'always-500' === $slug ) { return $make( 500, 'Internal Server Error', 'still broken' ); }\n    if ( 'not-found' === $slug ) { return $make( 404, 'Not Found', 'missing' ); }\n    if ( 'dead' === $slug ) { return 1 === $attempt ? new WP_Error( 'http_request_failed', 'Connection refused.' ) : $make( 200, 'OK', 'revived' ); }\n    return new WP_Error( 'http_request_failed', 'Connection refused.' );\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_006' ) ) { return false; }\n$base = 'http://93.184.216.34/';\n$cases = array(\n    'flaky'       => array( 'code' => 200, 'body' => 'recovered' ),\n    'always-500'  => array( 'code' => 500, 'body' => '' ),\n    'not-found'   => array( 'code' => 404, 'body' => '' ),\n    'dead'        => array( 'code' => 200, 'body' => 'revived' ),\n    'always-dead' => array( 'code' => 0, 'body' => '' ),\n);\nforeach ( $cases as $slug => $expected ) {\n    if ( $expected !== wpbp_http_api_006( $base . $slug ) ) { return false; }\n}\n$expected_hits = array( 'flaky' => 2, 'always-500' => 2, 'not-found' => 1, 'dead' => 2, 'always-dead' => 2 );\n$hits = $GLOBALS['wpbp_http_006_hits'];\nksort( $hits );\nksort( $expected_hits );\nreturn $expected_hits === $hits;",
+            "description": "Server errors and transport failures are retried once, client errors are not",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );\nunset( $GLOBALS['wpbp_http_006_hits'] );"
+      },
+      "reference_solution": "function wpbp_http_api_006( string $url ): array {\n    $response = null;\n    for ( $attempt = 0; $attempt < 2; $attempt++ ) {\n        $response = wp_remote_get( $url );\n        if ( is_wp_error( $response ) ) {\n            continue;\n        }\n        if ( (int) wp_remote_retrieve_response_code( $response ) >= 500 ) {\n            continue;\n        }\n        break;\n    }\n    if ( is_wp_error( $response ) ) {\n        return array( 'code' => 0, 'body' => '' );\n    }\n    $code = (int) wp_remote_retrieve_response_code( $response );\n    return array( 'code' => $code, 'body' => 200 === $code ? (string) wp_remote_retrieve_body( $response ) : '' );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-http.php",
+          "src/wp-includes/http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_006( string $url ): array {\n    $response = null;\n    for ( $attempt = 0; $attempt < 2; $attempt++ ) {\n        $response = wp_remote_get( $url );\n        if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {\n            break;\n        }\n    }\n    if ( is_wp_error( $response ) ) {\n        return array( 'code' => 0, 'body' => '' );\n    }\n    $code = (int) wp_remote_retrieve_response_code( $response );\n    return array( 'code' => $code, 'body' => 200 === $code ? (string) wp_remote_retrieve_body( $response ) : '' );\n}",
+        "function wpbp_http_api_006( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'code' => 0, 'body' => '' );\n    }\n    $code = (int) wp_remote_retrieve_response_code( $response );\n    return array( 'code' => $code, 'body' => 200 === $code ? (string) wp_remote_retrieve_body( $response ) : '' );\n}"
+      ]
+    },
+    {
+      "id": "e-http-api-007",
+      "category": "http-api",
+      "prompt": "Implement a function that fetches a URL and reports three things about the response: 'message' is the HTTP status message the server sent (an empty string when the request failed), 'session' is the value of the wpbp_session cookie the response set (an empty string when it did not set one), and 'cookies' is an alphabetically sorted list of the names of every cookie the response set (an empty list when there are none or the request failed).",
+      "expected_behavior": "The status message comes from `wp_remote_retrieve_response_message()`, not from mapping the status code by hand. The cookies in a response are a numerically indexed list of `WP_Http_Cookie` objects, not a name-keyed map, so the names have to be read from each object's `name` property and a single cookie's value from `wp_remote_retrieve_cookie_value()` (which returns `''` when the cookie is absent). Runtime validation uses a 200 that sets two cookies, a 503 with a non-obvious status message and no cookies, and a transport failure.",
+      "requirements": [
+        "Fetch the URL with the WordPress HTTP API and handle a failed request",
+        "Report the status message the server actually sent",
+        "Read the wpbp_session cookie's value from the response cookies",
+        "List every cookie name the response set, sorted alphabetically"
+      ],
+      "test_function": "wpbp_http_api_007( string $url ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_remote_retrieve_response_message",
+            "description": "Reads the status message",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_cookie",
+            "description": "Reads the response cookies",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_session",
+            "description": "Looks up the session cookie",
+            "weight": 1
+          },
+          {
+            "pattern": "is_wp_error",
+            "description": "Handles a failed request",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "add_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    if ( 'http://93.184.216.34/login' === $url ) {\n        return array(\n            'headers'  => array(),\n            'body'     => 'signed in',\n            'response' => array( 'code' => 200, 'message' => 'OK' ),\n            'cookies'  => array(\n                new WP_Http_Cookie( array( 'name' => 'wpbp_session', 'value' => 'abc123', 'path' => '/' ) ),\n                new WP_Http_Cookie( array( 'name' => 'wpbp_tracker', 'value' => 't-9', 'path' => '/' ) ),\n            ),\n            'filename' => null,\n        );\n    }\n    if ( 'http://93.184.216.34/maintenance' === $url ) {\n        return array(\n            'headers'  => array(),\n            'body'     => 'later',\n            'response' => array( 'code' => 503, 'message' => 'Service Unavailable' ),\n            'cookies'  => array(),\n            'filename' => null,\n        );\n    }\n    if ( 'http://93.184.216.34/dead' === $url ) {\n        return new WP_Error( 'http_request_failed', 'Connection refused.' );\n    }\n    return $preempt;\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_007' ) ) { return false; }\n$login = wpbp_http_api_007( 'http://93.184.216.34/login' );\nif ( array( 'message' => 'OK', 'session' => 'abc123', 'cookies' => array( 'wpbp_session', 'wpbp_tracker' ) ) !== $login ) { return false; }\n$maintenance = wpbp_http_api_007( 'http://93.184.216.34/maintenance' );\nif ( array( 'message' => 'Service Unavailable', 'session' => '', 'cookies' => array() ) !== $maintenance ) { return false; }\n$dead = wpbp_http_api_007( 'http://93.184.216.34/dead' );\nreturn array( 'message' => '', 'session' => '', 'cookies' => array() ) === $dead;",
+            "description": "Status message and WP_Http_Cookie objects are read correctly",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );"
+      },
+      "reference_solution": "function wpbp_http_api_007( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'message' => '', 'session' => '', 'cookies' => array() );\n    }\n    $names = array();\n    foreach ( (array) wp_remote_retrieve_cookies( $response ) as $cookie ) {\n        if ( $cookie instanceof WP_Http_Cookie ) {\n            $names[] = $cookie->name;\n        }\n    }\n    sort( $names );\n    return array(\n        'message' => (string) wp_remote_retrieve_response_message( $response ),\n        'session' => (string) wp_remote_retrieve_cookie_value( $response, 'wpbp_session' ),\n        'cookies' => $names,\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/http.php",
+          "src/wp-includes/class-wp-http-cookie.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_007( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'message' => '', 'session' => '', 'cookies' => array() );\n    }\n    $cookies = (array) wp_remote_retrieve_cookies( $response );\n    $names   = array_keys( $cookies );\n    sort( $names );\n    return array(\n        'message' => (string) wp_remote_retrieve_response_message( $response ),\n        'session' => (string) ( $cookies['wpbp_session'] ?? '' ),\n        'cookies' => $names,\n    );\n}",
+        "function wpbp_http_api_007( string $url ): array {\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) ) {\n        return array( 'message' => '', 'session' => '', 'cookies' => array() );\n    }\n    $names = array();\n    foreach ( (array) wp_remote_retrieve_cookies( $response ) as $cookie ) {\n        if ( $cookie instanceof WP_Http_Cookie ) {\n            $names[] = $cookie->name;\n        }\n    }\n    sort( $names );\n    $code = (int) wp_remote_retrieve_response_code( $response );\n    return array(\n        'message' => 200 === $code ? 'OK' : 'Error',\n        'session' => (string) wp_remote_retrieve_cookie_value( $response, 'wpbp_session' ),\n        'cookies' => $names,\n    );\n}"
+      ]
+    },
+    {
+      "id": "e-http-api-008",
+      "category": "http-api",
+      "prompt": "Implement a function that fetches a URL over HTTP and caches the successful response body in a transient named 'wpbp_http_' followed by the md5 hash of the URL, for five minutes. A later call for the same URL must be answered from that transient without sending another request, while a different URL must be fetched and cached on its own. A failed request or any status other than 200 must return an empty string and must not be cached, so a repeat call for a broken URL tries again.",
+      "expected_behavior": "The cache is checked before the request and only a 200 response is stored, with `set_transient( 'wpbp_http_' . md5( $url ), $body, 5 * MINUTE_IN_SECONDS )`. Caching the empty fallback would poison the cache and silence the retry. Runtime validation counts requests inside the mocked transport: two calls for each of two distinct successful URLs must produce one request each and two correctly keyed transients, while the 500 URL and the failing URL must each be requested twice and leave no transient behind. The stored expiry is also checked to be within five minutes.",
+      "requirements": [
+        "Serve a cached body without making a request when the transient is present",
+        "Key the transient on the md5 hash of the URL as described",
+        "Store only successful 200 bodies, for five minutes",
+        "Return an empty string, and cache nothing, for a failed request or a non-200 response"
+      ],
+      "test_function": "wpbp_http_api_008( string $url ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_transient",
+            "description": "Reads the cache first",
+            "weight": 1
+          },
+          {
+            "pattern": "set_transient",
+            "description": "Stores the cached body",
+            "weight": 1
+          },
+          {
+            "pattern": "md5",
+            "description": "Keys the cache on the URL hash",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_remote_retrieve_response_code",
+            "description": "Only caches successful responses",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_http_008_hits'] = array();\nadd_filter( 'pre_http_request', static function ( $preempt, $parsed_args, $url ) {\n    $bodies = array(\n        'http://93.184.216.34/alpha' => 'alpha payload',\n        'http://93.184.216.34/beta'  => 'beta payload',\n    );\n    $known = array_merge( array_keys( $bodies ), array( 'http://93.184.216.34/broken', 'http://93.184.216.34/dead' ) );\n    if ( ! in_array( $url, $known, true ) ) { return $preempt; }\n    $GLOBALS['wpbp_http_008_hits'][ $url ] = ( $GLOBALS['wpbp_http_008_hits'][ $url ] ?? 0 ) + 1;\n    if ( 'http://93.184.216.34/dead' === $url ) { return new WP_Error( 'http_request_failed', 'Connection refused.' ); }\n    if ( 'http://93.184.216.34/broken' === $url ) {\n        return array( 'headers' => array(), 'body' => 'oops', 'response' => array( 'code' => 500, 'message' => 'Internal Server Error' ), 'cookies' => array(), 'filename' => null );\n    }\n    return array( 'headers' => array(), 'body' => $bodies[ $url ], 'response' => array( 'code' => 200, 'message' => 'OK' ), 'cookies' => array(), 'filename' => null );\n}, 10, 3 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_http_api_008' ) ) { return false; }\n$alpha = 'http://93.184.216.34/alpha';\n$beta = 'http://93.184.216.34/beta';\n$broken = 'http://93.184.216.34/broken';\n$dead = 'http://93.184.216.34/dead';\nif ( 'alpha payload' !== wpbp_http_api_008( $alpha ) ) { return false; }\nif ( 'alpha payload' !== wpbp_http_api_008( $alpha ) ) { return false; }\nif ( 'beta payload' !== wpbp_http_api_008( $beta ) ) { return false; }\nif ( 'beta payload' !== wpbp_http_api_008( $beta ) ) { return false; }\nif ( '' !== wpbp_http_api_008( $broken ) || '' !== wpbp_http_api_008( $broken ) ) { return false; }\nif ( '' !== wpbp_http_api_008( $dead ) || '' !== wpbp_http_api_008( $dead ) ) { return false; }\n$hits = $GLOBALS['wpbp_http_008_hits'];\nif ( 1 !== ( $hits[ $alpha ] ?? 0 ) || 1 !== ( $hits[ $beta ] ?? 0 ) ) { return false; }\nif ( 2 !== ( $hits[ $broken ] ?? 0 ) || 2 !== ( $hits[ $dead ] ?? 0 ) ) { return false; }\nif ( 'alpha payload' !== get_transient( 'wpbp_http_' . md5( $alpha ) ) ) { return false; }\nif ( 'beta payload' !== get_transient( 'wpbp_http_' . md5( $beta ) ) ) { return false; }\nif ( false !== get_transient( 'wpbp_http_' . md5( $broken ) ) ) { return false; }\nif ( false !== get_transient( 'wpbp_http_' . md5( $dead ) ) ) { return false; }\nif ( ! wp_using_ext_object_cache() ) {\n    $expiry = (int) get_option( '_transient_timeout_wpbp_http_' . md5( $alpha ) );\n    if ( $expiry <= time() || $expiry > time() + 300 ) { return false; }\n}\nreturn true;",
+            "description": "Successful bodies are cached per URL and failures are not",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'pre_http_request' );\nforeach ( array( 'http://93.184.216.34/alpha', 'http://93.184.216.34/beta', 'http://93.184.216.34/broken', 'http://93.184.216.34/dead' ) as $url ) {\n    delete_transient( 'wpbp_http_' . md5( $url ) );\n}\nunset( $GLOBALS['wpbp_http_008_hits'] );"
+      },
+      "reference_solution": "function wpbp_http_api_008( string $url ): string {\n    $key    = 'wpbp_http_' . md5( $url );\n    $cached = get_transient( $key );\n    if ( is_string( $cached ) ) {\n        return $cached;\n    }\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {\n        return '';\n    }\n    $body = (string) wp_remote_retrieve_body( $response );\n    set_transient( $key, $body, 5 * MINUTE_IN_SECONDS );\n    return $body;\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-includes/http.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_http_api_008( string $url ): string {\n    $key    = 'wpbp_http_' . md5( $url );\n    $cached = get_transient( $key );\n    if ( is_string( $cached ) ) {\n        return $cached;\n    }\n    $response = wp_remote_get( $url );\n    $body     = '';\n    if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {\n        $body = (string) wp_remote_retrieve_body( $response );\n    }\n    set_transient( $key, $body, 5 * MINUTE_IN_SECONDS );\n    return $body;\n}",
+        "function wpbp_http_api_008( string $url ): string {\n    $key    = 'wpbp_http_cache';\n    $cached = get_transient( $key );\n    if ( is_string( $cached ) ) {\n        return $cached;\n    }\n    $response = wp_remote_get( $url );\n    if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {\n        return '';\n    }\n    $body = (string) wp_remote_retrieve_body( $response );\n    set_transient( $key, $body, 5 * MINUTE_IN_SECONDS );\n    return $body;\n}"
+      ]
+    }
+  ]
+}

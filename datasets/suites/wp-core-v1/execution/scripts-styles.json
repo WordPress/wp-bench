@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-scripts_styles",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Scripts and Styles",
     "description": "Code generation tasks for WordPress Scripts and Styles APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-scripts-styles-001",
       "category": "scripts-styles",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers the script handle 'wpbp-script' at 'https://example.test/script.js' with 'jquery' as its dependency, version '1.0.0', and enqueues it for footer output.",
       "expected_behavior": "`wpbp_scripts_styles_001()` registers `wpbp-script` through WordPress's script API, preserves the requested source, dependency, version, and footer placement, then queues the handle. Runtime validation calls the function and inspects the `WP_Scripts` registration and queue state.",
       "requirements": [
@@ -78,7 +77,6 @@
     {
       "id": "e-scripts-styles-002",
       "category": "scripts-styles",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers and enqueues the script handle 'wpbp-inline', then attaches the inline JavaScript `window.wpbpInline = true;` after that handle.",
       "expected_behavior": "`wpbp_scripts_styles_002()` prepares a queued WordPress script handle and attaches the requested inline code in the `after` position with `wp_add_inline_script()`. Runtime validation checks the queued handle and the inline data stored on `WP_Scripts`.",
       "requirements": [
@@ -150,7 +148,6 @@
     {
       "id": "e-scripts-styles-003",
       "category": "scripts-styles",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers the script module ID 'wpbp/module' at 'https://example.test/module.js' with version '1.0.0', then enqueues that module.",
       "expected_behavior": "`wpbp_scripts_styles_003()` uses the Script Modules API to register `wpbp/module` with the requested source and version, then marks the module for enqueue. Runtime validation inspects the `WP_Script_Modules` registry and queue.",
       "requirements": [
@@ -212,7 +209,6 @@
     {
       "id": "e-scripts-styles-004",
       "category": "scripts-styles",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers the script module ID 'wpbp/dep-module' at 'https://example.test/dep.js', then registers the classic script handle 'wpbp-script-with-module' at 'https://example.test/app.js' with that module listed in its module dependencies and footer output enabled.",
       "expected_behavior": "`wpbp_scripts_styles_004()` registers a script module and a classic script whose `module_dependencies` data points at that module. Because classic scripts with module dependencies need the import map available first, runtime validation also checks that the classic script is registered for footer output.",
       "requirements": [
@@ -286,7 +282,6 @@
     {
       "id": "e-scripts-styles-005",
       "category": "scripts-styles",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns the HTML custom data attribute name WordPress would use for the given JavaScript dataset property name.",
       "expected_behavior": "`wpbp_scripts_styles_005()` delegates dataset-property conversion to WordPress and returns `null` when the supplied property name cannot be represented as an HTML custom data attribute. Runtime validation checks camelCase, uppercase-leading, empty-string, and invalid-name cases from the core helper's contract.",
       "requirements": [

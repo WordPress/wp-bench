@@ -133,7 +133,6 @@ def test_result_record_includes_task_metadata(
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=[],
         test_function=None,
         static_checks={},

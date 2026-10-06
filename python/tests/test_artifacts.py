@@ -43,7 +43,6 @@ def _plugin_test(test_id: str = "e-plugin-001") -> ExecutionTest:
         prompt="Build a plugin.",
         expected_behavior="expected",
         category="plugins",
-        difficulty="intermediate",
         requirements=[],
         test_function=None,
         static_checks={},
