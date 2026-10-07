@@ -403,7 +403,10 @@ class WordPressEnvironment:
             except json.JSONDecodeError:
                 data = {"success": False, "fatal_error": "Invalid JSON"}
         success = data.get("success", False) and rc == 0
-        return ExecutionResult(success=success, raw=data, stdout=stdout, stderr=stderr)
+        return ExecutionResult(
+            success=success, raw=data, stdout=stdout, stderr=stderr,
+            timed_out=bool(data.get("timeout", False)),
+        )
 
     # Internal helpers --------------------------------------------------
     def _timeout_raw_result(self) -> dict[str, Any]:

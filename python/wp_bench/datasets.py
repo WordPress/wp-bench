@@ -28,7 +28,8 @@ class ExecutionTest:
     reference_solution: str | None
     metadata: dict[str, Any]
     #: What the model must produce: 'php_snippet' (default) or
-    #: 'wp_plugin_files' (JSON files map installed as a plugin).
+    #: 'wp_plugin_files' (JSON files map installed as a plugin), or
+    #: 'wp_cli_shell' (plain Bash command/script string).
     artifact_kind: str = "php_snippet"
     #: Reference files for wp_plugin_files reference-solution runs.
     reference_files: dict[str, str] | None = None
@@ -78,6 +79,8 @@ def _load_from_huggingface(config: DatasetConfig) -> list[ExecutionTest]:
 
     for row in dataset:
         if row.get("test_kind") != "execution":
+            continue
+        if config.suite and row.get("suite") != config.suite:
             continue
         # Parse JSON-encoded fields from Parquet format
         requirements = _parse_json_field(row.get("requirements", "[]"))

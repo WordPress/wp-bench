@@ -168,10 +168,13 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> dict[str, Any]
             }
             existing = runtime_checks.get("assertions", [])
             runtime_checks["assertions"] = [derived, *existing]
-    return {
+    spec: dict[str, Any] = {
         "static_checks": static_checks,
         "runtime_checks": runtime_checks,
     }
+    if getattr(test, "artifact_kind", "php_snippet") == "wp_cli_shell":
+        spec["timeout_seconds"] = config.grader.timeout_seconds
+    return spec
 
 
 def _artifact_failure_scores() -> dict[str, Any]:
@@ -436,6 +439,18 @@ EXECUTION_CONTEXT_NOTE = (
     "boot-time actions."
 )
 
+CLI_EXECUTION_CONTEXT_NOTE = (
+    "Execution context: your Bash command or script runs from the WordPress root "
+    "in a fresh WordPress 7.1 installation with WP-CLI, SQLite, and no network. "
+    "Normal quoting, pipes, loops, redirection, and command substitution work. "
+    "Bash does not enable errexit or pipefail automatically. Use native WP-CLI "
+    "commands for WordPress operations, without PHP evaluation (including "
+    "--exec/--require), direct SQL, or "
+    "editing the database or WordPress implementation files. Standard Bash, awk, "
+    "sed, grep, sort, and jq are available. Discover IDs from the site; do not "
+    "assume IDs. Each wp invocation boots WordPress separately."
+)
+
 
 class BenchmarkRunner(_ResultBookkeeping):
     """Primary benchmark orchestrator for single-model evaluation.
@@ -607,7 +622,7 @@ class BenchmarkRunner(_ResultBookkeeping):
                 else:
                     if not test.reference_solution:
                         raise ValueError("Missing reference_solution")
-                    artifact = Artifact(kind="php_snippet", code=test.reference_solution)
+                    artifact = parse_artifact(test.reference_solution, artifact_kind)
                 verification_spec = _build_verification_spec(test, self.config)
                 env_result = self.environment.execute_artifact(artifact, verification_spec)
                 scores = self._score_execution(
@@ -748,7 +763,7 @@ class BenchmarkRunner(_ResultBookkeeping):
             if isolate:
                 self.environment.reset()
             env_result = self.environment.execute_artifact(
-                Artifact(kind="php_snippet", code=code),
+                parse_artifact(code, "wp_cli_shell" if test.artifact_kind == "wp_cli_shell" else "php_snippet"),
                 verification_spec,
             )
             scores = self._score_execution(
@@ -769,7 +784,7 @@ class BenchmarkRunner(_ResultBookkeeping):
             test: Execution test with task description and requirements.
 
         Returns:
-            Formatted prompt requesting PHP code in fenced blocks.
+            Formatted prompt requesting the test's artifact kind.
         """
         lines = [test.prompt, "", "Requirements:"]
         for req in test.requirements:
@@ -780,7 +795,9 @@ class BenchmarkRunner(_ResultBookkeeping):
         artifact_kind = getattr(test, "artifact_kind", "php_snippet")
         lines.append("")
         lines.append(
-            PLUGIN_EXECUTION_CONTEXT_NOTE
+            CLI_EXECUTION_CONTEXT_NOTE
+            if artifact_kind == "wp_cli_shell"
+            else PLUGIN_EXECUTION_CONTEXT_NOTE
             if artifact_kind == "wp_plugin_files"
             else EXECUTION_CONTEXT_NOTE
         )

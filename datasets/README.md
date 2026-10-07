@@ -7,11 +7,13 @@ This directory contains the benchmark test suites and tooling for publishing to 
 ```
 datasets/
 ├── suites/                    # Source of truth (human-editable JSON)
-│   └── wp-core-v1/
-│       └── execution/         # Code generation tests (one file per category)
-│           ├── hooks.json
-│           ├── rest-api.json
-│           └── ...
+│   ├── wp-core-v1/
+│   │   └── execution/         # Code generation tests (one file per category)
+│   │       ├── hooks.json
+│   │       ├── rest-api.json
+│   │       └── ...
+│   └── wp-cli-v1/
+│       └── execution/         # 24 WP-CLI workflows, six categories
 ├── data/                      # Generated Parquet for HF (gitignored)
 │   └── test.parquet
 ├── export_dataset.py          # Converts suites → Parquet
@@ -67,7 +69,7 @@ dataset:
 | `static_checks` | object | Regex patterns to check in generated code |
 | `runtime_checks` | object | Assertions to run in WordPress environment |
 | `reference_solution` | string | Example correct solution |
-| `artifact_kind` | string | What the model must produce: `php_snippet` (default) or `wp_plugin_files` |
+| `artifact_kind` | string | What the model must produce: `php_snippet` (default), `wp_plugin_files`, or `wp_cli_shell` |
 | `reference_files` | object | For `wp_plugin_files` tests: reference plugin files (relative path → contents) |
 
 For `wp_plugin_files` tasks the model must return a JSON object with a
@@ -76,6 +78,34 @@ top-level PHP file with a `Plugin Name:` header. The runtime installs
 the files as a plugin, loads it, runs the task's assertions, and removes
 it. Artifacts are validated before install: no absolute paths, no `..`
 traversal, limited file count and total size.
+
+For `wp_cli_shell`, `reference_solution` and model completions are plain Bash
+command/script strings, optionally fenced. No JSON command array is used.
+`runtime_checks.setup`, `assertions`, and `teardown` remain trusted PHP.
+Assertions read the final stdout/stderr/exit status from
+`$GLOBALS['wpbp_shell_result']` and inspect WordPress state after its object
+cache and roles have been refreshed. Each CLI invocation is a separate process;
+PHP hooks installed only in setup do not carry into the CLI process. Put fixture
+callbacks in a temporary plugin or mu-plugin when a command must execute them.
+
+`runtime_checks.exit_code` defaults to `0`. A mismatch, timeout, or output overflow
+fails execution without awarding exit-status points. `runtime_checks.repeat`
+defaults to `1`; `2` runs the script twice on the same fixtures, checks every
+exit status, and asserts the final state. Only the last run's output is exposed
+to assertions; all runs are retained in the result. The script gets the remaining
+execution timeout after fixture setup, shared across repeats.
+
+`exploit_solutions` contains Bash strings for CLI tasks, PHP snippets for other
+tasks. The CLI audit also runs a no-op, a nonzero exit, and empty JSON output.
+Author incomplete or overly broad workflows that must fail, alongside a passing
+reference. Grading checks outcomes and preservation rather than requiring one
+exact command spelling. Forbidden static patterns are coarse policy checks,
+not a shell security boundary; Docker provides containment.
+
+The local loader selects `dataset.name`; the Hub loader uses `dataset.name` as
+the repository and optional `dataset.suite` to filter the combined export.
+`--suite` handles both sources. Exports include both suites, and omit authored
+exploit candidates. CLI scores should be reported separately from core scores.
 
 
 ### Per-Test Metadata

@@ -38,7 +38,7 @@ cd runtime
 docker build -t wp-bench-grader:dev .
 ```
 
-Runtime 2.1 runs WordPress 7.1 with SQLite. It uses the official
+Runtime 2.2 runs WordPress 7.1 with SQLite. It uses the official
 [SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration/releases/tag/v3.0.2)
 3.0.2 drop-in, pinned by version and archive checksum. No database server is
 started. For a persistent diagnostic runtime, run
@@ -255,7 +255,48 @@ Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 
-The default suite `wp-core-v1` covers WordPress core APIs, hooks, database operations, and security patterns.
+The default suite `wp-core-v1` contains 350 tasks covering WordPress core APIs,
+hooks, database operations, and security patterns.
+
+### WP-CLI workflows
+
+`wp-cli-v1` adds 24 operational tasks across content, taxonomy and metadata,
+users and capabilities, options and transients, reporting, and maintenance.
+Tasks combine selection, changes, and preservation: examples include retiring
+an author while reassigning content, consolidating categories, repairing a
+plugin that crashes bootstrap, producing scoped JSON/CSV reports, and provisioning
+content without duplicates when the script runs again.
+
+```bash
+wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --execution-concurrency 4
+# Maintainer validation without model calls:
+wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --check-reference-solution
+wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --check-exploits
+```
+
+The model returns a **plain command or Bash script string**, optionally inside
+a Bash code fence. Bash executes it from the WordPress root, with ordinary
+quoting, pipelines, loops, command substitution, heredocs, and redirection.
+`jq` and standard shell utilities are available; `errexit` and `pipefail` are
+not enabled automatically. Each `wp` command boots WordPress separately.
+These tasks require native WP-CLI operations and exclude PHP evaluation,
+PHP preloading, direct SQL, and edits to WordPress implementation files.
+Network downloads, MySQL-only database operations, and multisite are outside
+this initial SQLite suite.
+
+Trusted PHP creates fixtures before Bash runs and checks the resulting
+WordPress state and report output afterward. IDs and some fixture values vary
+to reject fixed answers. Several tasks run the same script twice on the same
+site to check convergence and empty selections. The expected script exit status
+is a pass gate (default `0`); intermediate nonzero statuses can be handled with
+normal shell branches. Results retain stdout, stderr, exit status, elapsed time,
+and repeat runs under `grader.raw.command`. Each output stream is capped at
+1 MiB. The existing timeout and private container limits apply to the script
+and its descendants, and timeouts or output overflow score zero.
+
+The WP-CLI suite is scored separately from `wp-core-v1`; existing PHP task
+contracts and scoring remain unchanged. Compare scores only within the same
+suite and execution profile.
 
 ### Loading from Hugging Face
 
@@ -263,7 +304,12 @@ The default suite `wp-core-v1` covers WordPress core APIs, hooks, database opera
 dataset:
   source: huggingface
   name: WordPress/wp-bench-v1
+  suite: wp-core-v1       # filter a multi-suite export; omit to load all suites
 ```
+
+`--suite wp-cli-v1` selects CLI rows without changing the Hugging Face repository
+name. The new suite is available locally immediately; Hub users need an export
+that includes it.
 
 ## Results & Reporting
 

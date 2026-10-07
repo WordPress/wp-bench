@@ -1,0 +1,243 @@
+{
+  "id": "wp-cli-v1",
+  "name": "WP-CLI operational workflows: cli-maintenance",
+  "metadata": {
+    "wp_version": "7.1",
+    "database": "sqlite",
+    "artifact_kind": "wp_cli_shell"
+  },
+  "tests": [
+    {
+      "id": "e-cli-maintenance-001",
+      "category": "cli-maintenance",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "Run every currently due cron event except hook 'cli_hold'. Leave future events and the excluded due event scheduled. The site has two due 'cli_job' events with different arguments, an excluded due event, and a future event. Execute the callbacks, not merely remove their schedules.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The script satisfies these observable contracts: Both due callbacks execute and excluded/future events remain untouched. Unrelated fixtures remain intact.",
+      "reference_solution": "wp cron event run --due-now --exclude=cli_hold",
+      "exploit_solutions": [
+        "wp cron event run --all",
+        "wp cron event delete cli_job"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n    foreach(_get_cron_array() as $timestamp=>$events) { foreach($events as $hook=>$instances) { foreach($instances as $event) { wp_unschedule_event($timestamp,$hook,$event['args']); } } }\n    $mu=WP_CONTENT_DIR.'/mu-plugins'; if(!is_dir($mu)) { mkdir($mu); }\n    file_put_contents($mu.'/cli-cron.php', '<?php add_action(\"cli_job\", static function($arg) { $log=get_option(\"cli_job_log\",array()); $log[]=$arg; update_option(\"cli_job_log\",$log); }); add_action(\"cli_hold\", static function() { update_option(\"cli_hold_ran\",\"bad\"); }); add_action(\"cli_future\", static function() { update_option(\"cli_future_ran\",\"bad\"); });');\n    wp_schedule_single_event(time()-60,'cli_job',array('a')); wp_schedule_single_event(time()-30,'cli_job',array('b'));\n    wp_schedule_single_event(time()-20,'cli_hold'); wp_schedule_single_event(time()+86400,'cli_future');\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Both due callbacks execute and excluded/future events remain untouched",
+            "code": "$log=get_option('cli_job_log',array()); sort($log);\nreturn $log===array('a','b') && !wp_next_scheduled('cli_job',array('a')) && !wp_next_scheduled('cli_job',array('b'))\n    && (bool)wp_next_scheduled('cli_hold') && (bool)wp_next_scheduled('cli_future')\n    && false===get_option('cli_hold_ran') && false===get_option('cli_future_ran');",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing content, metadata, and relationships change only within the requested scope",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array(),true)) {\n        if(in_array('delete',array(),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array() as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array(),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array() as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array(),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cron.php",
+          "https://developer.wordpress.org/cli/commands/cron/event/run/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "multi-command operational workflow"
+      }
+    },
+    {
+      "id": "e-cli-maintenance-002",
+      "category": "cli-maintenance",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "Recover from active plugin 'cli-broken', which crashes WordPress during bootstrap: deactivate that plugin, activate installed 'cli-good', and preserve every other active plugin. Use WP-CLI's bootstrap controls to perform the repair; do not edit plugin files or WordPress configuration.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The script satisfies these observable contracts: Broken plugin is deactivated, good plugin activated, and healthy plugins retained. Unrelated fixtures remain intact.",
+      "reference_solution": "set -e\nwp plugin deactivate cli-broken --skip-plugins=cli-broken\nwp plugin activate cli-good",
+      "exploit_solutions": [
+        "wp plugin deactivate --all --skip-plugins; wp plugin activate cli-good",
+        "wp plugin deactivate cli-broken; wp plugin activate cli-good"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n    foreach(array('cli-broken'=>'throw new Exception(\"CLI broken bootstrap\");','cli-good'=>'','cli-healthy'=>'') as $slug=>$body) {\n        $path=WP_PLUGIN_DIR.'/'.$slug; mkdir($path); file_put_contents($path.'/'.$slug.'.php',\"<?php\n/* Plugin Name: \".$slug.\" */\n\".$body);\n        $GLOBALS['cli_fixture']['files'][$slug]=file_get_contents($path.'/'.$slug.'.php');\n    }\n    $plugins=get_option('active_plugins'); $plugins[]='cli-broken/cli-broken.php'; $plugins[]='cli-healthy/cli-healthy.php'; update_option('active_plugins',$plugins);\n    $GLOBALS['cli_fixture']['active']=$plugins;\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Broken plugin is deactivated, good plugin activated, and healthy plugins retained",
+            "code": "$f = $GLOBALS['cli_fixture'];\n\n    $wanted=array_values(array_diff($f['active'],array('cli-broken/cli-broken.php'))); $wanted[]='cli-good/cli-good.php'; sort($wanted);\n    $actual=get_option('active_plugins'); sort($actual); if($actual!==$wanted) { return false; }\n    foreach($f['files'] as $slug=>$body) { if(file_get_contents(WP_PLUGIN_DIR.'/'.$slug.'/'.$slug.'.php')!==$body) { return false; } } return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing content, metadata, and relationships change only within the requested scope",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array(),true)) {\n        if(in_array('delete',array(),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array() as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array(),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array() as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array(),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/plugin.php",
+          "https://make.wordpress.org/cli/handbook/references/config/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "multi-command operational workflow"
+      }
+    },
+    {
+      "id": "e-cli-maintenance-003",
+      "category": "cli-maintenance",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "Provision category 'cli-launch' and three draft posts: slugs 'cli-alpha', 'cli-beta', 'cli-gamma', titles 'Alpha & Omega', 'Beta: a \"quoted\" title', and 'Gamma, revised'. Each post must have that category and '_cli_synced=yes'. Update matching existing posts while preserving their other metadata and categories. Preserve unrelated content. The script runs twice; create no duplicates.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The script satisfies these observable contracts: Provisioning converges on exactly three correctly configured posts without duplicates. Unrelated fixtures remain intact.",
+      "reference_solution": "set -e\nif ! wp term get category cli-launch --by=slug >/dev/null 2>&1; then wp term create category cli-launch --slug=cli-launch; fi\nwhile IFS='|' read -r slug title; do\n  id=$(wp post list --post_type=post --post_status=any --fields=ID,post_name --format=json | jq -r --arg slug \"$slug\" ' .[] | select(.post_name==$slug) | .ID')\n  if [ -z \"$id\" ]; then id=$(wp post create --post_type=post --post_name=\"$slug\" --post_status=draft --post_title=\"$title\" --porcelain); else wp post update \"$id\" --post_status=draft --post_title=\"$title\" >/dev/null; fi\n  wp post term add \"$id\" category cli-launch --by=slug\n  wp post meta update \"$id\" _cli_synced yes\ndone <<'POSTS'\ncli-alpha|Alpha & Omega\ncli-beta|Beta: a \"quoted\" title\ncli-gamma|Gamma, revised\nPOSTS",
+      "exploit_solutions": [
+        "wp term create category cli-launch; wp post create --post_name=cli-alpha --post_title='Alpha & Omega' --post_status=draft"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n    $keep=$make_term('cli-provision-keep');\n    $id=$make_post('cli-beta','draft','post',array('_tracking'=>'keep')); wp_set_post_categories($id,array($keep));\n    $make_post('cli-provision-outside','publish','post',array('_tracking'=>'outside'));\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Provisioning converges on exactly three correctly configured posts without duplicates",
+            "code": "$f = $GLOBALS['cli_fixture'];\n\n    $titles=array('cli-alpha'=>'Alpha & Omega','cli-beta'=>'Beta: a \"quoted\" title','cli-gamma'=>'Gamma, revised');\n    $cat=get_term_by('slug','cli-launch','category'); if(!$cat) { return false; }\n    foreach($titles as $slug=>$title) {\n        $posts=get_posts(array('post_name__in'=>array($slug),'post_type'=>'post','post_status'=>'any','numberposts'=>-1));\n        if(count($posts)!==1 || $posts[0]->post_title!==$title || $posts[0]->post_status!=='draft' || get_post_meta($posts[0]->ID,'_cli_synced',true)!=='yes' || !has_category($cat->term_id,$posts[0])) { return false; }\n    }\n    return get_post_meta($f['posts']['cli-beta'],'_tracking',true)==='keep' && has_category($f['terms']['cli-provision-keep'],$f['posts']['cli-beta']) && get_post_status($f['posts']['cli-provision-outside'])==='publish';",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing content, metadata, and relationships change only within the requested scope",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array('cli-beta'),true)) {\n        if(in_array('delete',array('post_title','post_status','post_date','post_date_gmt','post_modified','post_modified_gmt'),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array('post_title','post_status','post_date','post_date_gmt','post_modified','post_modified_gmt') as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array('cli-beta'),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array('_cli_synced') as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array('cli-beta'),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0,
+        "repeat": 2
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "https://developer.wordpress.org/cli/commands/post/",
+          "src/wp-includes/taxonomy.php",
+          "https://developer.wordpress.org/cli/commands/post/term/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "multi-command operational workflow"
+      }
+    },
+    {
+      "id": "e-cli-maintenance-004",
+      "category": "cli-maintenance",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "Prepare a deletion preview without changing data. Select trashed posts marked '_cli_cleanup=yes' dated before 2020-01-01, excluding posts whose '_legal_hold' is 'yes'. Print only CSV with header 'ID,post_title', actual numeric IDs in ascending order, and correctly escaped titles. Include no pages, recent trash, or unmarked posts.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The script satisfies these observable contracts: The CSV preview contains only eligible records with correct escaping and order; Preview leaves all posts and pages unchanged. Unrelated fixtures remain intact.",
+      "reference_solution": "set -e\ncandidates=$(wp post list --post_type=post --post_status=trash --meta_key=_cli_cleanup --meta_value=yes --fields=ID,post_date --format=json | jq -r '.[] | select(.post_date < \"2020-01-01\") | .ID')\nids=''\nfor id in $candidates; do\n  hold=$(wp post meta get \"$id\" _legal_hold 2>/dev/null || true)\n  if [ \"$hold\" != yes ]; then ids=\"${ids:+$ids,}$id\"; fi\ndone\nif [ -n \"$ids\" ]; then wp post list --post_type=post --post_status=trash --post__in=\"$ids\" --orderby=ID --order=ASC --fields=ID,post_title --format=csv; else printf 'ID,post_title\\n'; fi",
+      "exploit_solutions": [
+        "wp post list --post_status=trash --meta_key=_cli_cleanup --meta_value=yes --fields=ID,post_title --format=csv",
+        "printf 'ID,post_title\\n'"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n    foreach(array('cli-preview-a'=>'A comma, here','cli-preview-b'=>'A \"quote\" here','cli-preview-held'=>'Held','cli-preview-recent'=>'Recent','cli-preview-unmarked'=>'Unmarked') as $slug=>$title) {\n        $id=$make_post($slug,'trash','post',array('_cli_cleanup'=>$slug==='cli-preview-unmarked'?'no':'yes','_legal_hold'=>$slug==='cli-preview-held'?'yes':'no'),array('post_title'=>$title,'post_date'=>$slug==='cli-preview-recent'?'2026-01-01 12:00:00':'2019-01-01 12:00:00','post_date_gmt'=>$slug==='cli-preview-recent'?'2026-01-01 12:00:00':'2019-01-01 12:00:00'));\n    }\n    $make_post('cli-preview-page','trash','page',array('_cli_cleanup'=>'yes'),array('post_date'=>'2019-01-01 12:00:00','post_date_gmt'=>'2019-01-01 12:00:00'));\n    foreach($GLOBALS['cli_fixture']['posts'] as $id) { $GLOBALS['cli_fixture']['before'][$id]=get_post($id,ARRAY_A); }\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "The CSV preview contains only eligible records with correct escaping and order",
+            "code": "$f = $GLOBALS['cli_fixture'];\n\n    $lines=explode(\"\n\",trim($GLOBALS['wpbp_shell_result']['stdout'])); if(count($lines)!==3 || str_getcsv($lines[0])!==array('ID','post_title')) { return false; }\n    $wanted=array(array((string)$f['posts']['cli-preview-a'],'A comma, here'),array((string)$f['posts']['cli-preview-b'],'A \"quote\" here'));\n    return array(str_getcsv($lines[1]),str_getcsv($lines[2]))===$wanted;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Preview leaves all posts and pages unchanged",
+            "code": "$f = $GLOBALS['cli_fixture'];\nforeach($f['before'] as $id=>$post) { if(get_post($id,ARRAY_A)!==$post) { return false; } } return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing content, metadata, and relationships change only within the requested scope",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array(),true)) {\n        if(in_array('delete',array(),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array() as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array(),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array() as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array(),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "https://developer.wordpress.org/cli/commands/post/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "multi-command operational workflow"
+      }
+    }
+  ]
+}
