@@ -87,8 +87,9 @@ def test_execute_code_timeout_preserves_partial_output(
 def test_setup_timeout_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(subprocess, "run", _raise_timeout)
     environment = WordPressEnvironment(GraderConfig(setup_timeout_seconds=5))
-    monkeypatch.setattr(environment, "_container_exists", lambda: False)
-    with pytest.raises(EnvironmentSetupTimeout, match="Timed out starting container"):
+    monkeypatch.setattr(environment, "_resolve_image", lambda: None)
+    monkeypatch.setattr(environment, "release", lambda: None)
+    with pytest.raises(EnvironmentSetupTimeout, match="Timed out starting isolated container"):
         environment.setup()
 
 

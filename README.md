@@ -31,17 +31,20 @@ ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...
 ```
 
-### 3. Start the WordPress Runtime
+### 3. Build the WordPress Runtime
 
 ```bash
 cd runtime
-docker compose up -d --build --renew-anon-volumes --wait
+docker build -t wp-bench-grader:dev .
 ```
 
-Runtime 2.0 runs WordPress 7.1 with SQLite in one container. It uses the official
+Runtime 2.1 runs WordPress 7.1 with SQLite. It uses the official
 [SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration/releases/tag/v3.0.2)
 3.0.2 drop-in, pinned by version and archive checksum. No database server is
-started. `docker compose stop` stops the runtime; `docker compose down --volumes` removes it and its disposable data.
+started. For a persistent diagnostic runtime, run
+`docker compose up -d --build --renew-anon-volumes --wait`. `docker compose stop`
+stops it; `docker compose down --volumes` removes it and
+its disposable data.
 Renewing anonymous volumes when Compose recreates a container ensures rebuilt
 WordPress, verifier, and SQLite adapter files are used.
 The grader runs through WP-CLI; `grader.base_url` sets the installed site's URL
@@ -50,10 +53,52 @@ and no HTTP port is exposed.
 For an existing local config, remove `grader.wp_env_dir` and use
 `grader.image: wp-bench-grader:dev` as below. SQLite is the sole supported
 database backend; there is no backend selection setting.
-Existing MySQL databases are not migrated: benchmark isolation installs a fresh
-site and restores a host-held SQLite snapshot before each test, including
-custom tables and adapter schema metadata. Snapshots include committed WAL data
-and are validated before restore; `wp core is-installed` checks each restore.
+Existing MySQL databases are not migrated. With the default
+`run.execution_isolation: reset_per_test`, the harness creates a fresh trusted
+site from `grader.image` and captures its SQLite database and configuration on
+the host. Every candidate then receives a new container, pristine WordPress
+files, and a copy of that database. Existing Compose containers and their data
+are never used or reset by isolated runs. Building the image is sufficient;
+starting Compose is optional for diagnostic runs with isolation `none`.
+
+Each candidate has private plugins, uploads, logs, temporary files, and process
+and network namespaces. Networking is disabled, the image filesystem is read-only,
+and execution uses an unprivileged user with no Linux capabilities. WordPress
+files live in a private bounded tmpfs. The container and all its child processes
+are removed after verification, crashes, timeouts, and Ctrl-C. Baseline snapshots
+include committed WAL data and are validated before restore;
+`wp core is-installed` checks each restore.
+The verifier disables WordPress's automatic update-check hooks so admin and
+maintenance actions do not depend on WordPress.org availability in this offline site.
+
+`run.execution_concurrency` bounds simultaneous tests (default `1`). For example:
+
+```bash
+wp-bench run --config wp-bench.example.yaml --execution-concurrency 4
+```
+
+Serial and concurrent runs use the same container-per-candidate isolation.
+Reference checks, exploit audits, and model/skill variants use this path too.
+Each runtime defaults to 1 CPU, 512 MiB memory with swap disabled, 256 MiB for
+WordPress files, 64 MiB for `/tmp`, and 64 processes; the configurable limits are
+shown in the example YAML. Filesystem usage counts toward the memory limit.
+
+Official runs must use `reset_per_test`, grade every selected test and dimension,
+and publish a fixed execution profile: concurrency, image ID, limits, and host
+capacity. Results record `metadata.runtime_isolation_boundary: container_per_test`,
+`metadata.execution_concurrency`, `metadata.runtime_image_id`, and grader limits.
+Containers share the host kernel and physical resources; CPU limits are caps,
+not reserved cores. Select concurrency that fits available CPU and memory,
+allowing headroom for the host. Wall-clock timeouts can still depend on host
+load, so verify score parity before comparing different execution profiles.
+Isolation `none` and the external CLI grader are diagnostic modes with shared
+state, unsuitable for published scores.
+
+After a forced termination such as SIGKILL or a host crash, automatic cleanup
+cannot run. Disposable containers are labeled `org.wordpress.wp-bench.run` with
+a unique run ID. Inspect remaining labeled containers with
+`docker ps -a --filter label=org.wordpress.wp-bench.run` and remove that run's
+containers with `docker rm -f -v <container-name>` before another measured run.
 
 The MySQL fixtures and assertions remain in place to exercise the adapter's
 WordPress SQL compatibility, including `dbDelta()`, `SHOW COLUMNS`, `SHOW INDEX`,
@@ -121,7 +166,7 @@ run:
   test_ids: []               # optional explicit test IDs to run
   dry_run: false             # load/filter tests without calling models
   execution_isolation: reset_per_test  # reset WordPress before each execution test
-  execution_concurrency: 1   # must stay 1 under reset_per_test isolation
+  execution_concurrency: 1   # increase for concurrent private runtimes
   continue_on_error: false   # record per-test errors and keep going (diagnostic
                              # only; errored tests are excluded from aggregates)
 

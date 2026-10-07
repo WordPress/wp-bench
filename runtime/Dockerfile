@@ -30,6 +30,12 @@ COPY src /var/www/html/wp-content/plugins/wp-bench-runtime/src
 COPY sqlite-snapshot.php /var/www/html/wp-content/plugins/wp-bench-runtime/sqlite-snapshot.php
 COPY docker-entrypoint.sh /usr/local/bin/wp-bench-entrypoint
 RUN chmod +x /usr/local/bin/wp-bench-entrypoint
+RUN chown -R www-data:www-data /var/www/html
+# Keep pristine files outside WordPress's writable mount. Disposable graders
+# copy these into a bounded private tmpfs; Compose uses its private volume.
+RUN mkdir -p /opt/wp-bench-wordpress && \
+    cp -a /var/www/html/. /opt/wp-bench-wordpress/ && \
+    rm -rf /var/www/html/*
 
 HEALTHCHECK --interval=1s --timeout=2s --start-period=120s \
     CMD test -f /tmp/wp-bench-ready || exit 1

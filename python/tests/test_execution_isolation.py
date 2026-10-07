@@ -58,6 +58,10 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
 class SpyEnvironment:
     """Records the interleaving of reset and execute calls."""
 
+    image_id = "sha256:test"
+    def release(self) -> None: ...
+    def close(self) -> None: ...
+
     def __init__(self) -> None:
         self.calls: list[str] = []
 
@@ -156,10 +160,9 @@ def test_multi_model_runner_resets_between_models(
     assert spy.calls == ["setup", "reset", "execute", "reset", "execute"]
 
 
-def test_concurrency_above_one_rejected_for_reset_per_test() -> None:
-    """reset_per_test isolation cannot support concurrent execution tests."""
-    with pytest.raises(ValueError, match="execution_concurrency must be 1"):
-        RunConfig(execution_isolation="reset_per_test", execution_concurrency=4)
+def test_reset_per_test_allows_concurrency() -> None:
+    config = RunConfig(execution_isolation="reset_per_test", execution_concurrency=4)
+    assert config.execution_concurrency == 4
 
 
 def test_isolation_none_allows_concurrency() -> None:

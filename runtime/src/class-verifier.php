@@ -8,7 +8,7 @@ declare(strict_types=1);
 namespace WPBench\Runtime;
 
 class Verifier {
-	public const VERSION = '2.0.0';
+	public const VERSION = '2.1.0';
 
 	private Static_Analysis $static_analysis;
 	private Sandbox $sandbox;

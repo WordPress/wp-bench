@@ -93,6 +93,11 @@ class GraderConfig(StrictModel):
     base_url: str = "http://localhost:8888"
     timeout_seconds: int = Field(default=90, gt=0)
     setup_timeout_seconds: int = Field(default=600, gt=0)
+    #: Limits apply to each disposable runtime, including its child processes.
+    container_cpus: float = Field(default=1.0, gt=0)
+    container_memory_mb: int = Field(default=512, gt=0)
+    container_filesystem_mb: int = Field(default=256, gt=0)
+    container_pids_limit: int = Field(default=64, gt=0)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -154,23 +159,9 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _validate_execution_concurrency(self) -> RunConfig:
-        """Reject concurrency the isolation strategy cannot support.
-
-        ``reset_per_test`` isolation resets one shared WordPress runtime
-        before every execution test, which is only sound when execution
-        tests run serially. Fail loudly instead of silently sharing mutable
-        WordPress state across concurrent tests.
-        """
+        """Bound the number of simultaneous candidate executions."""
         if self.execution_concurrency < 1:
             raise ValueError("run.execution_concurrency must be >= 1")
-        if self.execution_isolation == "reset_per_test" and self.execution_concurrency > 1:
-            raise ValueError(
-                "run.execution_concurrency must be 1 when "
-                "run.execution_isolation is 'reset_per_test': concurrent tests "
-                "would share one mutable WordPress runtime. Set "
-                "run.execution_isolation to 'none' to opt out of isolation "
-                "(not valid for official benchmark runs)."
-            )
         return self
 
     @model_validator(mode="after")

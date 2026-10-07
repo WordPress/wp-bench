@@ -15,6 +15,22 @@ $temporary = null;
 $exit_code = 0;
 
 try {
+	$snapshot = null;
+	if ( 'prepare' === $action ) {
+		// Trusted host-held configuration and database for a brand-new container.
+		$state = json_decode( file_get_contents( 'php://stdin' ), true, 512, JSON_THROW_ON_ERROR );
+		if ( ! is_string( $state['config'] ?? null ) || ! is_string( $state['database'] ?? null ) ) {
+			throw new RuntimeException( 'Invalid isolated runtime baseline.' );
+		}
+		if ( ! is_dir( dirname( $database ) ) && ! mkdir( dirname( $database ), 0755, true ) ) {
+			throw new RuntimeException( 'Could not create SQLite database directory.' );
+		}
+		if ( strlen( $state['config'] ) !== file_put_contents( '/var/www/html/wp-config.php', $state['config'] ) ) {
+			throw new RuntimeException( 'Could not restore WordPress configuration.' );
+		}
+		$snapshot = $state['database'];
+		$action = 'import';
+	}
 	if ( 'clear' === $action ) {
 		foreach ( array( $database, $database . '-wal', $database . '-shm', $database . '-journal' ) as $file ) {
 			if ( file_exists( $file ) && ! unlink( $file ) ) {
@@ -40,7 +56,7 @@ try {
 			}
 			echo base64_encode( $contents );
 		} else {
-			$contents = base64_decode( trim( file_get_contents( 'php://stdin' ) ), true );
+			$contents = base64_decode( trim( $snapshot ?? file_get_contents( 'php://stdin' ) ), true );
 			if ( false === $contents || ! str_starts_with( $contents, "SQLite format 3\0" ) ) {
 				throw new RuntimeException( 'Invalid SQLite snapshot.' );
 			}
@@ -65,7 +81,7 @@ try {
 			}
 		}
 	} else {
-		throw new RuntimeException( 'Expected clear, export, or import.' );
+		throw new RuntimeException( 'Expected clear, export, import, or prepare.' );
 	}
 } catch ( Throwable $error ) {
 	fwrite( STDERR, $error->getMessage() . PHP_EOL );

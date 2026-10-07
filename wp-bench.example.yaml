@@ -32,6 +32,11 @@ models:
 grader:
   kind: docker
   image: wp-bench-grader:dev # docker build -t wp-bench-grader:dev ./runtime
+  # Limits per isolated candidate; choose concurrency to fit host capacity.
+  # container_cpus: 1.0
+  # container_memory_mb: 512
+  # container_filesystem_mb: 256  # WordPress tmpfs; counts toward memory
+  # container_pids_limit: 64
   # timeout_seconds: 90        # hard cap per runtime execution; a timed-out
   #                            # test scores 0.0 and is marked timeout: true
   # setup_timeout_seconds: 600 # hard cap for environment setup;
@@ -45,10 +50,9 @@ run:
   # seed: 1337           # selection seed (same seed = same subset)
   # test_ids: []         # optional explicit test IDs to run
   # dry_run: false       # load/filter tests without calling models
-  # Execution-test isolation. 'reset_per_test' (default) resets WordPress
-  # to a clean baseline before every execution test and runs them serially.
-  # 'none' opts out and allows execution_concurrency > 1, but tests then
-  # share mutable WordPress state (not valid for official benchmark runs).
+  # 'reset_per_test' gives every candidate a fresh private container and SQLite
+  # baseline, in serial or concurrent runs. 'none' shares a mutable runtime
+  # and is diagnostic only (not valid for official benchmark runs).
   # execution_isolation: reset_per_test
   # execution_concurrency: 1
   # Diagnostic-only switches. Official leaderboard runs must grade every

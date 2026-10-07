@@ -4,9 +4,11 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 from .config import GraderConfig
 
@@ -53,19 +55,48 @@ class WordPressEnvironment:
         #: eval'd there with root, so an on-disk dump would be a file the
         #: graded code could truncate or seed to defeat isolation.
         self._baseline: str | None = None
+        self._site_config: str | None = None
+        self._image: str = config.image
+        self._isolated = False
+        self._local = threading.local()
+        self._lock = threading.Lock()
+        self._owned: dict[str, threading.Lock] = {}
+        self._stopping = False
+        self._run_id = uuid4().hex
+
+    @property
+    def image_id(self) -> str | None:
+        """Immutable image used by the isolated run, for result provenance."""
+        return self._image if self._isolated else None
 
     def setup(self, *, capture_baseline: bool = True) -> None:
-        """Bring the runtime up, and record the baseline reset() restores.
+        """Prepare a pristine private baseline, or start the diagnostic runtime.
 
-        Args:
-            capture_baseline: Whether to capture the clean baseline. Capturing
-                clears the database, which destroys whatever is in the
-                database, so a run that never calls :meth:`reset` (isolation
-                ``none``) must pass False: it would pay for an install it
-                cannot use and wipe state the caller deliberately kept.
-                Defaults to True so any caller that does reset is safe by
-                omission.
+        capture_baseline creates a fresh trusted install from the image and
+        retains its database/configuration on the host. Existing containers
+        are never used for this baseline. False selects the existing shared
+        runtime for diagnostic isolation ``none``.
         """
+        if capture_baseline:
+            if self.config.kind != "docker":
+                raise RuntimeError(
+                    "grader.kind='cli' has no reset implementation. Use the Docker grader "
+                    "for reset_per_test, or execution_isolation='none' for diagnostic runs."
+                )
+            self._isolated = True
+            self._resolve_image()
+            try:
+                self._start_isolated_container(install=True)
+                self._wait_for_container()
+                self._require_sqlite()
+                self._capture_baseline()
+                stdout, stderr, rc, timed_out = self._exec(["cat", "wp-config.php"])
+                if timed_out or rc != 0 or not stdout.startswith("<?php"):
+                    raise RuntimeError(f"Could not capture clean WordPress configuration: {stderr}")
+                self._site_config = stdout
+            finally:
+                self.release()
+            return
         if self.config.kind == "docker":
             if not self._container_exists():
                 self._start_container()
@@ -87,8 +118,6 @@ class WordPressEnvironment:
             # before recording it in result metadata.
             self._require_sqlite()
             return
-        if capture_baseline:
-            self._capture_baseline()
 
     def _install_command(self) -> list[str]:
         """The canonical clean install every reset restores the site to."""
@@ -141,33 +170,130 @@ class WordPressEnvironment:
         self._baseline = stdout
 
     def reset(self) -> None:
-        """Restore the WordPress runtime to the captured clean baseline.
+        """Create a private runtime from the image and host-held SQLite baseline.
 
-        Replace the entire SQLite database to return
-        to a deterministic just-installed state. Called before every test when
-        ``run.execution_isolation`` is ``reset_per_test`` so no test can
-        observe database state (options, posts, roles, transients, cron
-        events, etc.) left behind by an earlier test or model run.
-
-        Restore and verify in one invocation. A failed restore aborts grading
-        instead of attributing an environment failure to the next candidate.
+        The old container, its private filesystems, and all its processes are
+        removed. Each thread owns a distinct container; even serial executions
+        use a fresh filesystem, process namespace, and network namespace.
         """
-        if self.config.kind != "docker":
-            # Nothing rejects this pairing at config load, so it reaches here
-            # on a real run. Refuse rather than let the run stamp an isolation
-            # guarantee it never delivered.
-            raise RuntimeError(
-                f"grader.kind {self.config.kind!r} has no reset implementation, so "
-                "run.execution_isolation 'reset_per_test' cannot be honored."
-            )
-        if self._baseline is None:
+        # setup() refuses to capture for a cli grader, so this also stops a
+        # cli run from stamping an isolation guarantee it never delivered.
+        if self._baseline is None or self._site_config is None:
             raise RuntimeError(
                 "No clean baseline was captured, so reset() cannot restore one. "
                 "Call setup(capture_baseline=True) before grading."
             )
-        restore = shlex.join(self._sqlite_snapshot_command("import"))
-        script = f"{restore} && wp core is-installed"
-        self._reset_step(["sh", "-c", script], stdin=self._baseline)
+        self.release()
+        try:
+            self._start_isolated_container(install=False)
+            restore = shlex.join(self._sqlite_snapshot_command("prepare"))
+            script = (
+                "cp -R /opt/wp-bench-wordpress/. /var/www/html/ && "
+                f"{restore} && wp core is-installed"
+            )
+            self._reset_step(
+                ["sh", "-c", script],
+                stdin=json.dumps({"config": self._site_config, "database": self._baseline}),
+            )
+        except BaseException:
+            self.release()
+            raise
+
+    def release(self) -> None:
+        """Discard this thread's candidate runtime, including timeout survivors."""
+        name = getattr(self._local, "container", None)
+        if name is not None:
+            self._remove_owned_container(name)
+            del self._local.container
+
+    def close(self) -> None:
+        """Stop accepting work and remove every container owned by this run."""
+        with self._lock:
+            self._stopping = True
+            names = list(self._owned)
+        failures = []
+        for name in names:
+            try:
+                self._remove_owned_container(name)
+            except (OSError, RuntimeError) as error:
+                failures.append(error)
+        if failures:
+            raise RuntimeError(f"Could not clean up isolated runtimes: {failures}") from failures[0]
+
+    def _remove_owned_container(self, name: str) -> None:
+        with self._lock:
+            lifecycle = self._owned.get(name)
+        if lifecycle is None:
+            return
+        # A concurrent abort must wait for docker run to finish before removing
+        # its container; otherwise creation could finish after cleanup.
+        with lifecycle:
+            with self._lock:
+                if name not in self._owned:
+                    return
+            result = self._run_process(
+                ["docker", "rm", "-f", "-v", name], timeout=CONTAINER_QUERY_TIMEOUT_SECONDS,
+            )
+            # --rm containers that exit on their own are already being removed.
+            gone = "No such container" in result.stderr or "already in progress" in result.stderr
+            if result.timed_out or (result.returncode != 0 and not gone):
+                raise RuntimeError(f"Failed to remove isolated container {name}: {result.stderr}")
+            with self._lock:
+                self._owned.pop(name, None)
+
+    def _resolve_image(self) -> None:
+        result = self._run_process(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", self.config.image],
+            timeout=CONTAINER_QUERY_TIMEOUT_SECONDS,
+        )
+        if result.timed_out:
+            raise EnvironmentSetupTimeout("Timed out resolving the grader image.")
+        if result.returncode != 0 or not result.stdout.strip():
+            raise RuntimeError(f"Could not resolve grader image {self.config.image}: {result.stderr}")
+        # A tag may be rebuilt during a long run. All candidates use one image.
+        self._image = result.stdout.strip()
+
+    def _runtime_container(self) -> str:
+        if not self._isolated:
+            return self.config.container_name
+        name = getattr(self._local, "container", None)
+        if name is None:
+            raise RuntimeError("No private candidate runtime exists. Call reset() before execution.")
+        return str(name)
+
+    def _start_isolated_container(self, *, install: bool) -> None:
+        name = f"wp-bench-{self._run_id}-{uuid4().hex[:12]}"
+        lifecycle = threading.Lock()
+        with lifecycle:
+            with self._lock:
+                if self._stopping:
+                    raise RuntimeError("The isolated run has been stopped.")
+                self._owned[name] = lifecycle
+            self._local.container = name
+            command = [
+                "docker", "run", "-d", "--init", "--rm", "--name", name,
+                "--label", f"org.wordpress.wp-bench.run={self._run_id}",
+                "--network", "none", "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges", "--user", "www-data",
+                "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=64m",
+                "--tmpfs", (
+                    "/var/www/html:rw,nosuid,nodev,mode=1777,"
+                    f"size={self.config.container_filesystem_mb}m"
+                ),
+                "--cpus", str(self.config.container_cpus),
+                "--memory", f"{self.config.container_memory_mb}m",
+                "--memory-swap", f"{self.config.container_memory_mb}m",
+                "--pids-limit", str(self.config.container_pids_limit),
+                "--env", "WP_CLI_CACHE_DIR=/tmp/wp-cli-cache", "--no-healthcheck",
+            ]
+            if not install:
+                command.extend(["--entrypoint", "sleep"])
+            command.extend([self._image, "infinity"] if not install else [self._image])
+            result = self._run_process(command, timeout=self.config.setup_timeout_seconds)
+            if result.timed_out:
+                raise EnvironmentSetupTimeout(f"Timed out starting isolated container {name}.")
+            if result.returncode != 0:
+                raise RuntimeError(f"Failed to start isolated container {name}: {result.stderr}")
 
     def _require_sqlite(self) -> None:
         """Fail setup if an external CLI or old image loads another backend."""
@@ -257,7 +383,11 @@ class WordPressEnvironment:
             "eval-file",
             verifier_path,
         ]
-        stdout, stderr, rc, timed_out = self._exec(cmd, stdin=json.dumps(payload))
+        try:
+            stdout, stderr, rc, timed_out = self._exec(cmd, stdin=json.dumps(payload))
+        finally:
+            if self._isolated:
+                self.release()
         if timed_out:
             return ExecutionResult(
                 success=False,
@@ -403,7 +533,7 @@ class WordPressEnvironment:
             if remaining <= 0:
                 raise EnvironmentSetupTimeout("Timed out waiting for the SQLite grader to be ready.")
             result = self._run_process(
-                ["docker", "inspect", "--format", "{{json .State}}", self.config.container_name],
+                ["docker", "inspect", "--format", "{{json .State}}", self._runtime_container()],
                 timeout=min(remaining, CONTAINER_QUERY_TIMEOUT_SECONDS),
             )
             if result.timed_out:
@@ -413,11 +543,22 @@ class WordPressEnvironment:
             state = json.loads(result.stdout)
             if not state.get("Running"):
                 logs = self._run_process(
-                    ["docker", "logs", "--tail", "30", self.config.container_name],
+                    ["docker", "logs", "--tail", "30", self._runtime_container()],
                     timeout=CONTAINER_QUERY_TIMEOUT_SECONDS,
                 )
                 raise RuntimeError(f"SQLite grader exited during setup: {logs.stdout}{logs.stderr}")
             health = state.get("Health", {}).get("Status")
+            if self._isolated:
+                ready = self._run_process(
+                    ["docker", "exec", self._runtime_container(), "test", "-f", "/tmp/wp-bench-ready"],
+                    timeout=min(remaining, CONTAINER_QUERY_TIMEOUT_SECONDS),
+                )
+                if ready.timed_out:
+                    raise EnvironmentSetupTimeout("Timed out querying baseline readiness.")
+                if ready.returncode == 0:
+                    return
+                time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+                continue
             if health == "healthy":
                 return
             if health is None:
@@ -459,7 +600,7 @@ class WordPressEnvironment:
                 "docker",
                 "exec",
                 "-i",
-                self.config.container_name,
+                self._runtime_container(),
                 *command,
             ]
             result = self._run_process(docker_cmd, timeout=timeout, stdin=stdin)

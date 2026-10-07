@@ -95,6 +95,9 @@ def run(
     model_name: str | None = typer.Option(None, help="Override model name (single model mode)"),
     limit: int | None = typer.Option(None, help="Limit number of tests (seeded stratified selection)"),
     seed: int | None = typer.Option(None, help="Seed for deterministic limited-test selection"),
+    execution_concurrency: int | None = typer.Option(
+        None, help="Maximum simultaneous executions (each isolated test gets a private container)",
+    ),
     dry_run: bool = typer.Option(False, help="Load and filter tests without calling models"),
     check_reference_solution: bool = typer.Option(
         False,
@@ -141,6 +144,8 @@ def run(
             harness_config.run.limit = limit
         if seed is not None:
             harness_config.run.seed = seed
+        if execution_concurrency is not None:
+            harness_config.run.execution_concurrency = execution_concurrency
         if dry_run:
             harness_config.run.dry_run = True
         if check_reference_solution:
