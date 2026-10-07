@@ -8,7 +8,7 @@ declare(strict_types=1);
 namespace WPBench\Runtime;
 
 class Verifier {
-	public const VERSION = '2.1.0';
+	public const VERSION = '2.2.0';
 
 	private Static_Analysis $static_analysis;
 	private Sandbox $sandbox;
@@ -25,6 +25,7 @@ class Verifier {
 	 * - php_snippet (default): `code` string executed via the sandbox.
 	 * - wp_plugin_files: `files` map installed as a plugin before the
 	 *   assertions run; static analysis covers the concatenated files.
+	 * - wp_cli_shell: a plain Bash script run with native WP-CLI commands.
 	 *
 	 * @param array<string, mixed> $payload Verification payload.
 	 * @return array<string, mixed>
@@ -37,6 +38,10 @@ class Verifier {
 		$runtime_checks_value = $payload['runtime_checks'] ?? [];
 		$static_checks        = is_array( $static_checks_value ) ? $static_checks_value : [];
 		$runtime_checks       = is_array( $runtime_checks_value ) ? $runtime_checks_value : [];
+
+		if ( 'wp_cli_shell' === $kind ) {
+			return ( new Shell_Verifier() )->verify( $payload, $static_checks, $runtime_checks );
+		}
 
 		if ( 'wp_plugin_files' === $kind ) {
 			return $this->verify_plugin_files( $payload, $static_checks, $runtime_checks );

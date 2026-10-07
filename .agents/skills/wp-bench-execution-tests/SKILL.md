@@ -30,9 +30,9 @@ Use this skill when adding or reviewing execution tests for WP-Bench.
 - `test_function`: PHP signature of the entry point the verifier calls, e.g. `wpbp_queries_004( string $category_slug, array $tag_slugs ): WP_Query`. Set it whenever assertions invoke the function. Shown to the model and prepended to the runtime assertions as a weight-0 `function_exists` check (unscored). Use parameter names that convey meaning; pin the return type only when assertions check it.
 - `expected_behavior`: Reviewer documentation. Must differ from `prompt`.
 - `reference_solution`: Canonical passing code used for author verification. Required for every test, including plugin-artifact tests.
-- `artifact_kind`: What the model must produce. `php_snippet` (default) or `wp_plugin_files` (a JSON `files` map installed as a plugin before assertions run).
+- `artifact_kind`: What the model must produce. `php_snippet` (default), `wp_plugin_files` (a JSON `files` map installed as a plugin), or `wp_cli_shell` (a plain Bash command/script string).
 - `reference_files`: For `wp_plugin_files` tests, the reference plugin files (relative path → contents) used by `--check-reference-solution`. Required in addition to `reference_solution`.
-- `exploit_solutions`: Optional list of PHP snippets that must **fail** the assertions. Each defines the gateway function (when there is one) and mimics a plausible shortcut — a hard-coded fixture answer, an incomplete implementation, a wrong API. `--check-exploits` runs them after the generic battery. They are always PHP snippets, even for plugin-artifact tests (never a `{"files": ...}` map). Maintainer-side QA; not exported to the dataset.
+- `exploit_solutions`: Optional list of candidate strings that must **fail** the assertions. Each defines the gateway function (when there is one) and mimics a plausible shortcut — a hard-coded fixture answer, an incomplete implementation, a wrong API. `--check-exploits` runs them after the generic battery. They are Bash scripts for `wp_cli_shell`; otherwise they are PHP snippets, including for plugin-artifact tests (never a `{"files": ...}` map). Maintainer-side QA; not exported to the dataset.
 - `static_checks`: Coarse guardrails for required or forbidden code patterns.
 - `runtime_checks.setup`: Optional PHP fixture setup evaluated before the submitted code.
 - `runtime_checks.assertions`: WordPress-executed behavioral assertions evaluated after the submitted code.
@@ -147,7 +147,55 @@ Clean up state in `teardown` when it persists beyond the PHP process or can affe
 
 Avoid cleanup for in-process-only registries when each verifier run starts a fresh WP-CLI process. Extra cleanup can make failing cases noisy and less diagnostic.
 
-The harness resets the WordPress environment between execution tests by default (`run.execution_isolation: reset_per_test` — database reset plus fresh install), so cross-test leakage is prevented even when a teardown is missed. Teardown still matters within a single test: assertions run in the same process and site state as the submitted code, and authors iterating with `execution_isolation: none` rely on it.
+The default `run.execution_isolation: reset_per_test` gives every candidate a fresh private container, pristine WordPress files, and a trusted SQLite baseline. It discards the container and all descendants after verification, so database, filesystem, and process state cannot leak into other tests. Teardown still matters within a single test: assertions run in the same process and site state as the submitted code, and authors iterating with `execution_isolation: none` rely on it.
+
+## WP-CLI Workflow Tests
+
+Use `wp-cli-v1` for realistic operational tasks that combine discovery, selection,
+changes, reports, and preservation. Prioritize model capability over testing tiny
+WordPress units. This suite targets single-site WordPress 7.1 with SQLite;
+avoid unsupported MySQL operations, network installs, or multisite instead of
+adding compatibility shims.
+
+- The completion and `reference_solution` are plain Bash strings, optionally
+  fenced, never a JSON command array. Bash runs in the WordPress root with
+  `jq` and standard shell utilities. It does not implicitly set errexit/pipefail.
+- Trusted PHP setup and assertions run in the parent verifier; every `wp`
+  invocation is a separate WordPress process. Fixture callbacks must live in
+  temporary plugin/mu-plugin files to run in CLI subprocesses.
+- The verifier flushes its object cache and reloads roles before assertions.
+  Read output from `$GLOBALS['wpbp_shell_result']` (`stdout`, `stderr`,
+  `exit_code`). Candidate stdout cannot substitute for the verifier response.
+- `runtime_checks.exit_code` defaults to 0 and is an unscored execution gate.
+  `repeat: 2` runs the same script twice on the same fixtures, checks both exits,
+  and asserts the final state. Assertions see the last run's output; result
+  `command.runs` retains every run. The time budget is shared across repeats.
+- Vary fixture IDs for both posts and users, and report values such as counts,
+  versions, or UUID markers. Fixed output should not pass. Check unrelated
+  records and structured value types, and author overly broad/incomplete scripts
+  as exploit candidates. Run every reference and exploit through real SQLite.
+- Native operations are required; PHP evaluation/preloading, direct SQL, and
+  implementation-file edits are out of contract. Authored forbidden patterns
+  are coarse policy checks; container isolation is the containment boundary.
+- Source authority includes the installed WP-CLI commands and their official
+  documentation, as well as WordPress 7.1 source. Do not demand an exact command
+  spelling when another native workflow produces the correct state.
+
+Pitfalls found while authoring this suite:
+
+- `wp post delete` permanently deletes posts already in trash even without
+  `--force`. That is a correct alternative, not an exploit.
+- A `name` query is singular and can hide drafts from the default CLI user.
+  Discover drafts with a list query (or an appropriate user context). Assertions
+  can use `post_name__in` to count matching drafts and detect duplicates.
+- `WP_Post::to_array()` includes derived `post_category` and `tags_input` fields.
+  Compare relationships separately when the task changes categories/tags.
+- Publishing legitimately adds `_pingme`/`_encloseme` metadata. Updating drafts
+  with a zero GMT date can refresh their local date. Preserve the content the
+  prompt asks to preserve without rejecting these normal core side effects.
+- A future timestamp can turn an inserted `publish` fixture into `future`.
+  Give published contrasts a past date; use dates sufficiently far ahead for
+  scheduling tasks.
 
 ## Plugin Artifact Tests
 

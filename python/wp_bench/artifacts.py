@@ -8,6 +8,8 @@ This module turns raw model completions into validated artifacts:
 - ``wp_plugin_files``: the model must return a JSON object with a
   ``files`` map of relative paths to file contents, which the runtime
   installs as a plugin before running assertions.
+- ``wp_cli_shell``: a plain Bash command/script string executed in the
+  WordPress root of the disposable runtime.
 
 Parse and validation failures raise ArtifactError, which runners record
 as structured per-test failures — a model that cannot produce a valid
@@ -59,6 +61,11 @@ def parse_artifact(completion: str, artifact_kind: str) -> Artifact:
     """
     if artifact_kind == "php_snippet":
         return Artifact(kind="php_snippet", code=strip_code_fences(completion))
+    if artifact_kind == "wp_cli_shell":
+        code = strip_code_fences(completion)
+        if not code or "\x00" in code or len(code.encode("utf-8")) > MAX_FILE_BYTES:
+            raise ArtifactError("Shell submission must be nonempty, NUL-free, and at most 256KB.")
+        return Artifact(kind="wp_cli_shell", code=code)
     if artifact_kind == "wp_plugin_files":
         return _parse_plugin_files(completion)
     raise ArtifactError(f"Unsupported artifact kind: {artifact_kind}")
@@ -133,6 +140,11 @@ def _find_main_plugin_file(files: dict[str, str]) -> str | None:
 
 def render_artifact_instructions(artifact_kind: str) -> str:
     """Prompt suffix telling the model what artifact format to return."""
+    if artifact_kind == "wp_cli_shell":
+        return (
+            "Return only the Bash command or script as plain text, optionally inside "
+            "a bash code fence. Do not return JSON, an array, or explanations."
+        )
     if artifact_kind == "wp_plugin_files":
         return (
             "Return a JSON object with a `files` object. Keys are relative file "
