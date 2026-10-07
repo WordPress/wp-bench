@@ -41,8 +41,9 @@ docker build -t wp-bench-grader:dev .
 Runtime 2.1 runs WordPress 7.1 with SQLite. It uses the official
 [SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration/releases/tag/v3.0.2)
 3.0.2 drop-in, pinned by version and archive checksum. No database server is
-started. For a persistent diagnostic runtime, run the Compose command above.
-`docker compose stop` stops it; `docker compose down --volumes` removes it and
+started. For a persistent diagnostic runtime, run
+`docker compose up -d --build --renew-anon-volumes --wait`. `docker compose stop`
+stops it; `docker compose down --volumes` removes it and
 its disposable data.
 Renewing anonymous volumes when Compose recreates a container ensures rebuilt
 WordPress, verifier, and SQLite adapter files are used.
