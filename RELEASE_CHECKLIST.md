@@ -25,7 +25,7 @@ results.
 
 ## Runtime verification
 
-- [ ] Start the runtime (`cd runtime && npx wp-env start`).
+- [ ] Start the runtime (`cd runtime && docker compose up -d --build --renew-anon-volumes --wait`).
 - [ ] Run the full reference-solution suite:
       `wp-bench run --config wp-bench.example.yaml --check-reference-solution`
       — every reference solution passes strictly.

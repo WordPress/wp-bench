@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from wp_bench.config import GraderConfig
 from wp_bench.environment import WordPressEnvironment
 
 
-def test_execute_code_uses_internal_runtime_verifier_for_wp_env() -> None:
+def test_execute_code_uses_internal_runtime_verifier() -> None:
     calls: list[tuple[list[str], str | None]] = []
-    environment = WordPressEnvironment(GraderConfig(kind="docker", wp_env_dir=Path("runtime")))
+    environment = WordPressEnvironment(GraderConfig(kind="docker"))
 
     def fake_exec(
         command: list[str],
@@ -39,5 +38,5 @@ def test_execute_code_uses_internal_runtime_verifier_for_wp_env() -> None:
     assert calls[0][0] == [
         "wp",
         "eval-file",
-        "/var/www/html/wp-content/plugins/runtime/verify-runtime.php",
+        "/var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php",
     ]

@@ -12,7 +12,7 @@ namespace WPBench\Runtime;
 /**
  * Manages runtime execution environment for code testing.
  *
- * Safety is provided by Docker isolation (wp-env container).
+ * Safety is provided by Docker isolation.
  * Uses try/catch and shutdown handlers to capture errors.
  */
 class Sandbox {

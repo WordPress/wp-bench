@@ -72,10 +72,38 @@ jobs:
         run: find runtime -name '*.php' -print0 | xargs -0 -n1 php -l
 
   docker:
-    name: Runtime Docker build
+    name: SQLite runtime integration
     runs-on: ubuntu-latest
+    env:
+      SQLITE_TESTS: e-database-001,e-database-002,e-database-003,e-database-004,e-database-005,e-database-006,e-database-007,e-database-008,e-security-009
     steps:
       - uses: actions/checkout@v4
 
       - name: Build grader image
-        run: docker build -t wp-bench-grader:ci ./runtime
+        run: docker build -t wp-bench-grader:dev ./runtime
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install harness
+        run: pip install -e ./python
+
+      - name: SQLite database reference solutions
+        run: >-
+          wp-bench run --config wp-bench.example.yaml --check-reference-solution
+          --test-id "$SQLITE_TESTS"
+
+      - name: SQLite database exploit audit
+        run: >-
+          wp-bench run --config wp-bench.example.yaml --check-exploits
+          --test-id "$SQLITE_TESTS"
+
+      - name: Runtime logs
+        if: always()
+        run: docker logs wp-bench-grader
+
+      - name: Remove disposable grader
+        if: always()
+        run: docker rm -f -v wp-bench-grader

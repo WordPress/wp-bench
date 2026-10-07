@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -86,13 +85,10 @@ def test_execute_code_timeout_preserves_partial_output(
 
 
 def test_setup_timeout_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """wp-env setup timeout is a harness failure with actionable message."""
     monkeypatch.setattr(subprocess, "run", _raise_timeout)
-    environment = WordPressEnvironment(
-        GraderConfig(kind="docker", wp_env_dir=Path("runtime"), setup_timeout_seconds=5)
-    )
-
-    with pytest.raises(EnvironmentSetupTimeout, match="Timed out running npx wp-env start"):
+    environment = WordPressEnvironment(GraderConfig(setup_timeout_seconds=5))
+    monkeypatch.setattr(environment, "_container_exists", lambda: False)
+    with pytest.raises(EnvironmentSetupTimeout, match="Timed out starting container"):
         environment.setup()
 
 
@@ -100,7 +96,7 @@ def test_start_container_timeout_raises_clear_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(subprocess, "run", _raise_timeout)
-    environment = WordPressEnvironment(GraderConfig(kind="docker", timeout_seconds=5))
+    environment = WordPressEnvironment(GraderConfig(kind="docker", setup_timeout_seconds=5))
 
     with pytest.raises(EnvironmentSetupTimeout):
         environment._start_container()
@@ -116,16 +112,11 @@ def test_container_exists_timeout_raises_clear_error(
         environment._container_exists()
 
 
-def test_run_wp_env_nonzero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Nonzero wp-env exits keep failing loudly (previous check=True behavior)."""
-
+def test_container_start_nonzero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess:
-        return subprocess.CompletedProcess(args=args[0], returncode=3, stdout="", stderr="")
+        return subprocess.CompletedProcess(args=args[0], returncode=3, stdout="", stderr="failure")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    environment = WordPressEnvironment(
-        GraderConfig(kind="docker", wp_env_dir=Path("runtime"))
-    )
-
-    with pytest.raises(RuntimeError, match="exit code 3"):
-        environment._run_wp_env(["npx", "wp-env", "start"])
+    environment = WordPressEnvironment(GraderConfig())
+    with pytest.raises(RuntimeError, match="Failed to start container.*failure"):
+        environment._start_container()

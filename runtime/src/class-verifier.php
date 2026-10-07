@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace WPBench\Runtime;
 
 class Verifier {
+	public const VERSION = '2.0.0';
+
 	private Static_Analysis $static_analysis;
 	private Sandbox $sandbox;
 
@@ -89,7 +91,7 @@ class Verifier {
 						'passed_weight' => 0,
 					],
 				],
-				'version' => '1.0.0',
+				'version' => self::VERSION,
 			];
 		}
 
@@ -120,7 +122,7 @@ class Verifier {
 			'static'        => $static_result,
 			'runtime'       => $runtime_result,
 			'assertions'    => $runtime_result['details']['assertions'] ?? [],
-			'version'       => '1.0.0',
+			'version'       => self::VERSION,
 		];
 	}
 }

@@ -10,7 +10,7 @@ The benchmark uses WordPress itself as the grader, running generated code in a s
 
 ## Requirements
 
-Requires Python version 3.10 or later
+Requires Python version 3.10 or later and Docker with Compose support.
 
 ## Quick Start
 
@@ -35,9 +35,31 @@ GOOGLE_API_KEY=...
 
 ```bash
 cd runtime
-npm install
-npm start
+docker compose up -d --build --renew-anon-volumes --wait
 ```
+
+Runtime 2.0 runs WordPress 7.1 with SQLite in one container. It uses the official
+[SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration/releases/tag/v3.0.2)
+3.0.2 drop-in, pinned by version and archive checksum. No database server is
+started. `docker compose stop` stops the runtime; `docker compose down --volumes` removes it and its disposable data.
+Renewing anonymous volumes when Compose recreates a container ensures rebuilt
+WordPress, verifier, and SQLite adapter files are used.
+The grader runs through WP-CLI; `grader.base_url` sets the installed site's URL
+and no HTTP port is exposed.
+
+For an existing local config, remove `grader.wp_env_dir` and use
+`grader.image: wp-bench-grader:dev` as below. SQLite is the sole supported
+database backend; there is no backend selection setting.
+Existing MySQL databases are not migrated: benchmark isolation installs a fresh
+site and restores a host-held SQLite snapshot before each test, including
+custom tables and adapter schema metadata. Snapshots include committed WAL data
+and are validated before restore; `wp core is-installed` checks each restore.
+
+The MySQL fixtures and assertions remain in place to exercise the adapter's
+WordPress SQL compatibility, including `dbDelta()`, `SHOW COLUMNS`, `SHOW INDEX`,
+identifier placeholders, and escaped LIKE queries. SQLite results should be
+compared separately from MySQL results; `metadata.grader.database` records the
+backend, after setup verifies that WordPress loaded the SQLite drop-in.
 
 ### 4. Run the Benchmark
 
@@ -88,7 +110,7 @@ models:
 
 grader:
   kind: docker
-  wp_env_dir: ./runtime      # path to wp-env project
+  image: wp-bench-grader:dev # built in step 3
   timeout_seconds: 90        # hard cap per runtime execution (timeout = 0.0 score)
   setup_timeout_seconds: 600 # hard cap for environment setup
 
@@ -121,6 +143,13 @@ wp-bench run --config wp-bench.yaml --dry-run # validate config without calling 
 wp-bench run --check-reference-solution      # verify reference solutions pass
 wp-bench run --check-exploits                # adversarial assertion audit (see below)
 wp-bench run --skill /path/to/skill          # skills A/B run (see below)
+```
+
+To check SQLite compatibility without model calls:
+
+```bash
+wp-bench run --config wp-bench.example.yaml --check-reference-solution
+wp-bench run --config wp-bench.example.yaml --check-exploits --test-id e-database-001
 ```
 
 ### Skills A/B comparison
@@ -169,7 +198,7 @@ wp-bench run --check-exploits
 ```
 .
 ├── python/          # Benchmark harness (pip installable)
-├── runtime/         # WordPress grader plugin + wp-env config
+├── runtime/         # WordPress grader plugin + SQLite Docker runtime
 ├── datasets/        # Test suites (local JSON + Hugging Face builder)
 ├── notebooks/       # Results visualization and reporting
 └── output/          # Benchmark results (gitignored)
