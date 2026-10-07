@@ -165,3 +165,42 @@ def test_interrupt_while_waiting_cancels_queued_tests(monkeypatch) -> None:
             on_abort=release.set,
         )
     assert sorted(started) == [0, 1]
+
+
+def test_container_already_being_removed_counts_as_released(environment, monkeypatch) -> None:
+    env, _ = environment
+    env.reset()
+    original = env._run_process
+
+    def removing(command: list[str], **kwargs: Any):
+        if command[:2] == ["docker", "rm"]:
+            return ProcessResult("", "removal of container x is already in progress", 1, False)
+        return original(command, **kwargs)
+
+    monkeypatch.setattr(env, "_run_process", removing)
+    env.release()
+    assert env._owned == {}
+
+
+def test_cleanup_failure_does_not_mask_the_run_error() -> None:
+    from wp_bench.core import _graded_run
+
+    class Stream:
+        def __enter__(self) -> None: ...
+        def __exit__(self, *exc: object) -> None: ...
+
+    class BrokenEnv:
+        def close(self) -> None:
+            raise RuntimeError("daemon unavailable")
+
+    with (
+        pytest.raises(SystemExit) as raised,
+        _graded_run(Stream(), BrokenEnv()),  # type: ignore[arg-type]
+    ):
+        raise KeyboardInterrupt
+    assert raised.value.code == 130
+    with (
+        pytest.raises(RuntimeError, match="daemon unavailable"),
+        _graded_run(Stream(), BrokenEnv()),  # type: ignore[arg-type]
+    ):
+        pass

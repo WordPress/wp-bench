@@ -234,9 +234,9 @@ class WordPressEnvironment:
             result = self._run_process(
                 ["docker", "rm", "-f", "-v", name], timeout=CONTAINER_QUERY_TIMEOUT_SECONDS,
             )
-            if result.timed_out or (
-                result.returncode != 0 and "No such container" not in result.stderr
-            ):
+            # --rm containers that exit on their own are already being removed.
+            gone = "No such container" in result.stderr or "already in progress" in result.stderr
+            if result.timed_out or (result.returncode != 0 and not gone):
                 raise RuntimeError(f"Failed to remove isolated container {name}: {result.stderr}")
             with self._lock:
                 self._owned.pop(name, None)

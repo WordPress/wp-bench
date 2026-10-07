@@ -5,7 +5,7 @@ import threading
 import traceback
 from collections.abc import Iterator
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any
 
 from .artifacts import (
@@ -55,17 +55,28 @@ from .utils import sha256
 @contextmanager
 def _graded_run(stream: RecordStream, environment: WordPressEnvironment) -> Iterator[None]:
     """Own the record stream and runtime cleanup, and report failed passes."""
+    failed = False
     try:
         with stream:
             yield
     except TestError as error:
+        failed = True
         print_test_error(error)
         raise SystemExit(1) from error
     except KeyboardInterrupt:
+        failed = True
         print_abort_message()
         raise SystemExit(130) from None
+    except BaseException:
+        failed = True
+        raise
     finally:
-        environment.close()
+        # A cleanup failure must not replace the error that ended the run.
+        try:
+            environment.close()
+        except RuntimeError:
+            if not failed:
+                raise
 
 
 class _ResultBookkeeping:
@@ -396,7 +407,9 @@ def _run_concurrent_loop(
                 stopping.set()
                 for future in futures:
                     future.cancel()
-                on_abort()
+                # Cleanup errors must not mask the error that aborted the run.
+                with suppress(RuntimeError):
+                    on_abort()
                 raise
     policy.finish()
 
