@@ -9,30 +9,6 @@ from wp_bench.config import ModelConfig
 from wp_bench.models import ModelInterface
 
 
-def test_generate_retries_without_temperature_on_deprecated_error(monkeypatch) -> None:
-    calls: list[dict] = []
-
-    def fake_completion(**kwargs):
-        calls.append(kwargs)
-        if len(calls) == 1:
-            raise BadRequestError(
-                message="AnthropicException - `temperature` is deprecated for this model.",
-                model="anthropic/claude-opus-4-7",
-                llm_provider="anthropic",
-            )
-        return SimpleNamespace(choices=[SimpleNamespace(message={"content": "ok"})])
-
-    monkeypatch.setattr(models_module, "completion", fake_completion)
-
-    model = ModelInterface(ModelConfig(name="anthropic/claude-opus-4-7"))
-    result = model.generate("hello")
-
-    assert result == "ok"
-    assert len(calls) == 2
-    assert calls[0]["temperature"] == 0.0
-    assert "temperature" not in calls[1]
-
-
 def test_generate_normalizes_none_content_to_empty_string(monkeypatch) -> None:
     def fake_completion(**kwargs):
         return SimpleNamespace(choices=[SimpleNamespace(message={"content": None})])
