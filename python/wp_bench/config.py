@@ -21,6 +21,7 @@ from pydantic import (
 ArtifactKind = Literal[
     "php_snippet",
     "wp_plugin_files",
+    "wp_cli_shell",
     "block_plugin",
     "wp_theme_files",
     "js_module",
@@ -40,6 +41,8 @@ class DatasetConfig(StrictModel):
     revision: str | None = None
     split: str = "test"
     cache_dir: Path | None = None
+    #: Select a suite within a multi-suite Hugging Face export.
+    suite: str | None = None
 
 
 class ModelConfig(StrictModel):

@@ -139,7 +139,10 @@ def run(
         # bad combination surfaces here as the red message + exit 1.
         if suite:
             harness_config.run.suite = suite
-            harness_config.dataset.name = suite
+            if harness_config.dataset.source == "local":
+                harness_config.dataset.name = suite
+            else:
+                harness_config.dataset.suite = suite
         if limit is not None:
             harness_config.run.limit = limit
         if seed is not None:

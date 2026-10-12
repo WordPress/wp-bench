@@ -4,6 +4,8 @@
 dataset:
   source: local          # 'local' or 'huggingface'
   name: wp-core-v1       # suite name or HF dataset path
+  # suite: wp-core-v1    # HF only: filter rows within a multi-suite export
+                        # Use --suite wp-cli-v1 to select CLI workflows.
 
 # Multiple models to benchmark (runs sequentially, outputs comparison table)
 models:

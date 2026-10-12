@@ -13,6 +13,7 @@ require_once __DIR__ . '/src/class-sandbox.php';
 require_once __DIR__ . '/src/class-static-analysis.php';
 require_once __DIR__ . '/src/class-artifact-installer.php';
 require_once __DIR__ . '/src/class-verifier.php';
+require_once __DIR__ . '/src/class-shell-verifier.php';
 
 // This is an offline evaluation site. Core maintenance requests are unrelated
 // to candidates and otherwise make admin hooks depend on WordPress.org access.

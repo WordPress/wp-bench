@@ -8,6 +8,7 @@ ARG SQLITE_INTEGRATION_VERSION=3.0.2
 ARG SQLITE_INTEGRATION_SHA256=a7c506b95283e90544aa9dcf0096cb5a5eea4afd7d690ae350940a50654c8bfd
 
 USER root
+RUN apk add --no-cache bash jq
 RUN php -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'
 
 WORKDIR /var/www/html
