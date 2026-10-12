@@ -24,8 +24,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -80,8 +80,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -135,8 +135,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -194,8 +194,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -237,6 +237,125 @@
         ],
         "release_focus": "classic",
         "evaluation_focus": "multi-command operational workflow"
+      }
+    },
+    {
+      "id": "e-cli-maintenance-005",
+      "category": "cli-maintenance",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "Repair the existing classic navigation menu 'cli-primary'. Its page-link item titled 'Support' must become a child of its page-link item titled 'Company', immediately after Company in the menu's global order. Preserve every menu item, linked page, URL, label, other parent relationship, and other menu. Discover menu-item IDs from the menu; do not create replacement links. The script runs twice.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The workflow must satisfy these independently checked outcomes: Existing menu links acquire the correct parent and order without replacing any items. Equivalent native workflows are accepted.",
+      "reference_solution": "set -e\nitems=$(wp menu item list cli-primary --fields=db_id,title,position --format=json)\ncompany=$(jq -r '.[] | select(.title==\"Company\") | .db_id' <<< \"$items\")\nsupport=$(jq -r '.[] | select(.title==\"Support\") | .db_id' <<< \"$items\")\nwp menu item update \"$company\" --position=2\nwp menu item update \"$support\" --parent-id=\"$company\" --position=3",
+      "exploit_solutions": [
+        "company=$(wp post list --post_type=page --name=cli-nav-company --field=ID); support=$(wp post list --post_type=page --name=cli-nav-support --field=ID); wp post update \"$support\" --post_parent=\"$company\"",
+        "items=$(wp menu item list cli-primary --format=json); company=$(jq -r '.[]|select(.title==\"Company\")|.db_id' <<< \"$items\"); support=$(jq -r '.[]|select(.title==\"Support\")|.db_id' <<< \"$items\"); wp menu item update \"$support\" --parent-id=\"$company\""
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n$menu=wp_create_nav_menu('cli-primary'); $other=wp_create_nav_menu('cli-secondary');\n$make_item=static function($menu,$title,$page,$position) {\n    $id=wp_update_nav_menu_item($menu,0,array('menu-item-object-id'=>$page,'menu-item-object'=>'page','menu-item-type'=>'post_type','menu-item-title'=>$title,'menu-item-position'=>$position,'menu-item-status'=>'publish','menu-item-classes'=>'cli-keep'));\n    if(is_wp_error($id)) { throw new Exception($id->get_error_message()); } return $id;\n};\n$home=$make_post('cli-nav-home','publish','page'); $support=$make_post('cli-nav-support','publish','page'); $company=$make_post('cli-nav-company','publish','page');\n$a=$make_item($menu,'Home',$home,1); $b=$make_item($menu,'Support',$support,2); $c=$make_item($menu,'Company',$company,3);\n$make_item($other,'Support',$support,1); $make_item($other,'Company',$company,2);\n$GLOBALS['cli_fixture']['menu']=$menu; $GLOBALS['cli_fixture']['menu_items']=array($a,$b,$c); $GLOBALS['cli_fixture']['menu_items_with_expected_order']=array($a,$c,$b);\n$GLOBALS['cli_fixture']['support_item']=$b; $GLOBALS['cli_fixture']['company_item']=$c;\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n\n$GLOBALS['cli_fixture']['nav_menu_before']=array(); foreach($GLOBALS['cli_fixture']['content_before'] as $id=>$before) { $GLOBALS['cli_fixture']['nav_menu_before'][$id]=wp_get_object_terms($id,'nav_menu',array('fields'=>'ids')); }\n\n$GLOBALS['cli_fixture']['post_rows_before']=array(); foreach($GLOBALS['cli_fixture']['content_before'] as $id=>$before) { $GLOBALS['cli_fixture']['post_rows_before'][$id]=$wpdb->get_row($wpdb->prepare(\"SELECT * FROM {$wpdb->posts} WHERE ID=%d\",$id),ARRAY_A); }\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Existing menu links acquire the correct parent and order without replacing any items",
+            "code": "$f=$GLOBALS['cli_fixture']; $items=wp_get_nav_menu_items($f['menu']);\nreturn wp_list_pluck($items,'ID')===$f['menu_items_with_expected_order']\n && (int)get_post_meta($f['support_item'],'_menu_item_menu_item_parent',true)===$f['company_item'];",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Pages, menu contents, metadata, and other relationships are preserved",
+            "code": "$f=$GLOBALS['cli_fixture']; global $wpdb;\nif(count($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\"))!==count($f['content_before'])) { return false; }\nforeach($f['content_before'] as $id=>$before) {\n    $actual=$wpdb->get_row($wpdb->prepare(\"SELECT * FROM {$wpdb->posts} WHERE ID=%d\",$id),ARRAY_A); $expected=$f['post_rows_before'][$id]; $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array((int)$id,array($f['support_item'],$f['company_item']),true)) {\n        foreach(array('menu_order','post_date','post_date_gmt','post_modified','post_modified_gmt') as $key) { unset($actual[$key],$expected[$key]); }\n        if((int)$id===$f['support_item']) { unset($meta['_menu_item_menu_item_parent'],$wanted['_menu_item_menu_item_parent']); }\n    }\n    if($actual!==$expected || $meta!==$wanted) { return false; }\n    $menus=wp_get_object_terms($id,'nav_menu',array('fields'=>'ids'));\n    $old_menus=$f['nav_menu_before'][$id]; sort($menus); sort($old_menus); if($menus!==$old_menus) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0,
+        "repeat": 2
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/nav-menu.php",
+          "https://developer.wordpress.org/cli/commands/menu/item/list/",
+          "https://developer.wordpress.org/cli/commands/menu/item/update/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "advanced native WP-CLI operational workflow",
+        "research_basis": "Command documentation distinguishes menu db_id from linked object_id and provides separate parent-id and position operations."
+      }
+    },
+    {
+      "id": "e-cli-maintenance-006",
+      "category": "cli-maintenance",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "The site has registered classic widget areas 'cli-old-sidebar', 'cli-footer', and 'cli-keep-sidebar'. Move every widget from cli-old-sidebar to the end of cli-footer, keeping both areas' existing relative order. Preserve widget IDs, all widget settings, the other sidebar, and inactive widgets. Empty the old sidebar without deleting its widgets. Discover the widgets and succeed when run a second time.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The workflow must satisfy these independently checked outcomes: Widgets move in order while every instance, setting, and unrelated widget area survives; Existing content, metadata, and relationships change only within the requested scope; Existing accounts and user metadata remain intact outside the requested changes. Equivalent native workflows are accepted.",
+      "reference_solution": "set -e\nposition=$(wp widget list cli-footer --format=count)\nfor widget in $(wp widget list cli-old-sidebar --format=ids); do\n  position=$((position+1))\n  wp widget move \"$widget\" --sidebar-id=cli-footer --position=\"$position\"\ndone",
+      "exploit_solutions": [
+        "for widget in $(wp widget list cli-old-sidebar --format=ids); do wp widget move \"$widget\" --sidebar-id=cli-footer; done",
+        "wp widget reset cli-old-sidebar"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n$plugin=WPMU_PLUGIN_DIR.'/cli-widget-fixtures.php'; wp_mkdir_p(WPMU_PLUGIN_DIR);\n$code='<?php add_action(\"widgets_init\", static function() { foreach(array(\"cli-old-sidebar\",\"cli-footer\",\"cli-keep-sidebar\") as $id) { register_sidebar(array(\"id\"=>$id,\"name\"=>$id)); } });';\nfile_put_contents($plugin,$code); $GLOBALS['cli_fixture']['widget_plugin']=$plugin;\n$n=random_int(20,40); $text=get_option('widget_text',array());\nforeach(range($n,$n+4) as $number) { $text[$number]=array('title'=>'Widget '.$number,'text'=>'Body '.wp_generate_uuid4(),'filter'=>false,'visual'=>true); }\n$text['_multiwidget']=1; update_option('widget_text',$text);\n$sidebars=array('wp_inactive_widgets'=>array('text-'.($n+4)),'cli-old-sidebar'=>array('text-'.$n,'text-'.($n+1)),\n 'cli-footer'=>array('text-'.($n+2)),'cli-keep-sidebar'=>array('text-'.($n+3)),'array_version'=>3);\nwp_set_sidebars_widgets($sidebars); $GLOBALS['cli_fixture']['sidebars']=$sidebars; $GLOBALS['cli_fixture']['widget_text']=$text;\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Widgets move in order while every instance, setting, and unrelated widget area survives",
+            "code": "$f=$GLOBALS['cli_fixture']; $expected=$f['sidebars'];\n$expected['cli-footer']=array_merge($expected['cli-footer'],$expected['cli-old-sidebar']); $expected['cli-old-sidebar']=array();\n$actual=get_option('sidebars_widgets'); unset($actual['array_version'],$expected['array_version']);\nreturn $actual===$expected && get_option('widget_text')===$f['widget_text'];",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing content, metadata, and relationships change only within the requested scope",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array(),true)) {\n        if(in_array('delete',array(),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array() as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array(),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array() as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array(),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0,
+        "repeat": 2,
+        "teardown": "if(isset($GLOBALS['cli_fixture']['widget_plugin'])) { unlink($GLOBALS['cli_fixture']['widget_plugin']); }"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/widgets.php",
+          "https://github.com/wp-cli/widget-command",
+          "https://developer.wordpress.org/cli/commands/widget/move/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "advanced native WP-CLI operational workflow",
+        "research_basis": "Research of the widget command family revealed that moving between sidebars without an explicit position inserts at the top, so repeated default moves reorder both old and destination widgets."
       }
     }
   ]

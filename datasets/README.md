@@ -13,7 +13,7 @@ datasets/
 │   │       ├── rest-api.json
 │   │       └── ...
 │   └── wp-cli-v1/
-│       └── execution/         # 24 WP-CLI workflows, six categories
+│       └── execution/         # 32 WP-CLI workflows, seven categories
 ├── data/                      # Generated Parquet for HF (gitignored)
 │   └── test.parquet
 ├── export_dataset.py          # Converts suites → Parquet

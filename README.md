@@ -260,12 +260,25 @@ hooks, database operations, and security patterns.
 
 ### WP-CLI workflows
 
-`wp-cli-v1` adds 24 operational tasks across content, taxonomy and metadata,
-users and capabilities, options and transients, reporting, and maintenance.
+`wp-cli-v1` adds 32 operational tasks across content, taxonomy and metadata,
+users and capabilities, options and transients, reporting, maintenance, and migration.
 Tasks combine selection, changes, and preservation: examples include retiring
 an author while reassigning content, consolidating categories, repairing a
 plugin that crashes bootstrap, producing scoped JSON/CSV reports, and provisioning
-content without duplicates when the script runs again.
+content without duplicates when the script runs again. Advanced tasks also cover
+serialized URL migrations, menu hierarchy repair, widget relocation, autoload
+management, metadata deduplication, incident credential revocation, and CSV onboarding.
+
+These scenarios come from the official command documentation, installed WP-CLI
+implementations, and upstream reports. For example, [search-replace issue #137](https://github.com/wp-cli/search-replace-command/issues/137)
+documents that serialized array keys are not replaced;
+[table resolution](https://github.com/wp-cli/wp-cli/blob/v2.12.0/php/utils-wp.php)
+restricts explicitly named tables to the selected scope;
+[widget move](https://developer.wordpress.org/cli/commands/widget/move/)
+has position semantics that matter when merging widget areas; and [user import-csv](https://developer.wordpress.org/cli/commands/user/import-csv/)
+can update existing users unless explicitly told to skip them. Each advanced test records
+its research basis and source links in metadata. Prompts describe the desired
+WordPress outcome, and equivalent native command workflows are accepted.
 
 ```bash
 wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --execution-concurrency 4
@@ -281,6 +294,8 @@ quoting, pipelines, loops, command substitution, heredocs, and redirection.
 not enabled automatically. Each `wp` command boots WordPress separately.
 These tasks require native WP-CLI operations and exclude PHP evaluation,
 PHP preloading, direct SQL, and edits to WordPress implementation files.
+Read-only `wp db prefix` and `wp db tables` discovery is permitted;
+these commands do not execute candidate SQL.
 Network downloads, MySQL-only database operations, and multisite are outside
 this initial SQLite suite.
 

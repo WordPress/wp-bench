@@ -25,8 +25,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -82,8 +82,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -140,8 +140,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
@@ -197,8 +197,8 @@
       "static_checks": {
         "forbidden_patterns": [
           {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WP-CLI operations rather than PHP evaluation or direct database commands",
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
             "severity": "error"
           }
         ]
