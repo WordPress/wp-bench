@@ -1,0 +1,6 @@
+services:
+  grader:
+    build: .
+    image: wp-bench-grader:dev
+    container_name: wp-bench-grader
+    init: true

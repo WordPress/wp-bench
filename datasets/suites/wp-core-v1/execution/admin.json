@@ -1,0 +1,989 @@
+{
+  "id": "wp-core-execution-v1-admin",
+  "version": "1.0.1",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Admin",
+    "description": "Code generation tasks for the WordPress admin: menus, list tables, settings, AJAX and notices",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-admin-001",
+      "category": "admin",
+      "prompt": "The wpbp_book post type stores a numeric score in the wpbp_rating post meta. Add a 'Rating' column to that post type's admin list table, positioned immediately before the Date column, showing the stored score for each book. Make the column sortable so that clicking it orders books by the score as numbers rather than as text, and leave every other post type's list table alone.",
+      "expected_behavior": "The submission adds `wpbp_rating` to the wpbp_book list-table columns (via `manage_edit-wpbp_book_columns` or `manage_wpbp_book_posts_columns`) directly before `date`, prints the meta in `manage_wpbp_book_posts_custom_column`, declares the column in `manage_edit-wpbp_book_sortable_columns` with the orderby key `wpbp_rating`, and in `pre_get_posts` maps that orderby onto `meta_key` plus `meta_value_num` so 2/10/30 sort numerically. Runtime validation applies the column filter chain, renders two cells, and runs a main admin query ordered by the column.",
+      "requirements": [
+        "Label the new column Rating and give it the key wpbp_rating",
+        "Place it immediately before the date column and keep the existing columns",
+        "Print the stored wpbp_rating meta value in the column cell",
+        "Register the column as sortable with the orderby key wpbp_rating",
+        "Order admin queries for this post type by the score numerically when that orderby is requested",
+        "Do not change the columns of other post types"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "manage_edit-wpbp_book_columns|manage_wpbp_book_posts_columns",
+            "description": "Filters the list table columns for the post type",
+            "weight": 1
+          },
+          {
+            "pattern": "manage_edit-wpbp_book_sortable_columns",
+            "description": "Declares the column sortable",
+            "weight": 1
+          },
+          {
+            "pattern": "manage_wpbp_book_posts_custom_column|manage_posts_custom_column",
+            "description": "Renders the column cell",
+            "weight": 1
+          },
+          {
+            "pattern": "meta_value_num",
+            "description": "Orders by the meta value numerically",
+            "weight": 1
+          },
+          {
+            "pattern": "pre_get_posts",
+            "description": "Adjusts the admin query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } register_post_type( 'wpbp_book', array( 'label' => 'Books', 'public' => true, 'show_ui' => true, 'supports' => array( 'title', 'custom-fields' ) ) ); $wpbp_ids = array(); foreach ( array( 'Alpha' => 2, 'Bravo' => 10, 'Charlie' => 30 ) as $wpbp_title => $wpbp_rating ) { $wpbp_pid = (int) wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => $wpbp_title, 'post_status' => 'publish' ) ); update_post_meta( $wpbp_pid, 'wpbp_rating', $wpbp_rating ); $wpbp_ids[ $wpbp_title ] = $wpbp_pid; } $GLOBALS['wpbp_admin_001'] = $wpbp_ids; $GLOBALS['wpbp_admin_001_query'] = array( 'wp_the_query' => $GLOBALS['wp_the_query'] ?? null, 'wp_query' => $GLOBALS['wp_query'] ?? null );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'cb' => '<input type=\"checkbox\" />', 'title' => 'Title', 'author' => 'Author', 'date' => 'Date' ); $columns = apply_filters( 'manage_posts_columns', $base, 'wpbp_book' ); $columns = apply_filters( 'manage_wpbp_book_posts_columns', $columns ); $columns = apply_filters( 'manage_edit-wpbp_book_columns', $columns ); $keys = array_keys( $columns ); $rating_at = array_search( 'wpbp_rating', $keys, true ); $date_at = array_search( 'date', $keys, true ); return false !== $rating_at && false !== $date_at && $rating_at === $date_at - 1 && 'Rating' === $columns['wpbp_rating'] && isset( $columns['cb'], $columns['title'], $columns['author'] );",
+            "description": "The Rating column is inserted directly before Date without dropping the existing columns",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'cb' => '<input type=\"checkbox\" />', 'title' => 'Title', 'date' => 'Date' ); $columns = apply_filters( 'manage_posts_columns', $base, 'post' ); $columns = apply_filters( 'manage_post_posts_columns', $columns ); $columns = apply_filters( 'manage_edit-post_columns', $columns ); return ! isset( $columns['wpbp_rating'] ) && 3 === count( $columns );",
+            "description": "Other post types keep their own columns",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$sortable = apply_filters( 'manage_edit-wpbp_book_sortable_columns', array( 'title' => 'title', 'date' => array( 'date', true ) ) ); if ( ! isset( $sortable['wpbp_rating'], $sortable['title'] ) ) { return false; } $declared = $sortable['wpbp_rating']; $orderby = is_array( $declared ) ? ( $declared[0] ?? '' ) : $declared; return 'wpbp_rating' === $orderby;",
+            "description": "The column is declared sortable under its own orderby key",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_001']; ob_start(); do_action( 'manage_posts_custom_column', 'wpbp_rating', $fixture['Bravo'] ); do_action( 'manage_wpbp_book_posts_custom_column', 'wpbp_rating', $fixture['Bravo'] ); $bravo = trim( wp_strip_all_tags( ob_get_clean() ) ); ob_start(); do_action( 'manage_posts_custom_column', 'wpbp_rating', $fixture['Alpha'] ); do_action( 'manage_wpbp_book_posts_custom_column', 'wpbp_rating', $fixture['Alpha'] ); $alpha = trim( wp_strip_all_tags( ob_get_clean() ) ); ob_start(); do_action( 'manage_posts_custom_column', 'title', $fixture['Bravo'] ); do_action( 'manage_wpbp_book_posts_custom_column', 'title', $fixture['Bravo'] ); $title = trim( ob_get_clean() ); return '10' === $bravo && '2' === $alpha && '' === $title;",
+            "description": "Each book's own score is printed, and only for that column",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_001']; $query = new WP_Query(); $GLOBALS['wp_the_query'] = $query; $GLOBALS['wp_query'] = $query; $found = $query->query( array( 'post_type' => 'wpbp_book', 'post_status' => 'publish', 'orderby' => 'wpbp_rating', 'order' => 'ASC', 'fields' => 'ids', 'posts_per_page' => -1 ) ); return array( $fixture['Alpha'], $fixture['Bravo'], $fixture['Charlie'] ) === array_map( 'intval', (array) $found );",
+            "description": "The admin query orders 2, 10 and 30 numerically rather than as strings",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_admin_001'] ?? array() ) as $wpbp_pid ) { wp_delete_post( (int) $wpbp_pid, true ); } if ( isset( $GLOBALS['wpbp_admin_001_query'] ) ) { $GLOBALS['wp_the_query'] = $GLOBALS['wpbp_admin_001_query']['wp_the_query']; $GLOBALS['wp_query'] = $GLOBALS['wpbp_admin_001_query']['wp_query']; } remove_all_filters( 'pre_get_posts' ); unregister_post_type( 'wpbp_book' );"
+      },
+      "reference_solution": "add_filter(\n    'manage_edit-wpbp_book_columns',\n    static function ( $columns ) {\n        $reordered = array();\n\n        foreach ( $columns as $key => $label ) {\n            if ( 'date' === $key ) {\n                $reordered['wpbp_rating'] = 'Rating';\n            }\n            $reordered[ $key ] = $label;\n        }\n\n        if ( ! isset( $reordered['wpbp_rating'] ) ) {\n            $reordered['wpbp_rating'] = 'Rating';\n        }\n\n        return $reordered;\n    }\n);\n\nadd_action(\n    'manage_wpbp_book_posts_custom_column',\n    static function ( $column, $post_id ) {\n        if ( 'wpbp_rating' === $column ) {\n            echo esc_html( get_post_meta( $post_id, 'wpbp_rating', true ) );\n        }\n    },\n    10,\n    2\n);\n\nadd_filter(\n    'manage_edit-wpbp_book_sortable_columns',\n    static function ( $columns ) {\n        $columns['wpbp_rating'] = 'wpbp_rating';\n\n        return $columns;\n    }\n);\n\nadd_action(\n    'pre_get_posts',\n    static function ( $query ) {\n        if ( ! is_admin() || ! $query->is_main_query() ) {\n            return;\n        }\n\n        if ( 'wpbp_book' !== $query->get( 'post_type' ) || 'wpbp_rating' !== $query->get( 'orderby' ) ) {\n            return;\n        }\n\n        $query->set( 'meta_key', 'wpbp_rating' );\n        $query->set( 'orderby', 'meta_value_num' );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/class-wp-posts-list-table.php",
+          "src/wp-admin/includes/class-wp-list-table.php",
+          "src/wp-admin/includes/screen.php",
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'manage_edit-wpbp_book_columns', static function ( $columns ) { $columns['wpbp_rating'] = 'Rating'; return $columns; } ); add_action( 'manage_wpbp_book_posts_custom_column', static function ( $column, $post_id ) { if ( 'wpbp_rating' === $column ) { echo esc_html( get_post_meta( $post_id, 'wpbp_rating', true ) ); } }, 10, 2 ); add_filter( 'manage_edit-wpbp_book_sortable_columns', static function ( $columns ) { $columns['wpbp_rating'] = 'wpbp_rating'; return $columns; } ); add_action( 'pre_get_posts', static function ( $query ) { if ( ! is_admin() || ! $query->is_main_query() ) { return; } if ( 'wpbp_rating' === $query->get( 'orderby' ) ) { $query->set( 'meta_key', 'wpbp_rating' ); $query->set( 'orderby', 'meta_value_num' ); } } );",
+        "add_filter( 'manage_edit-wpbp_book_columns', static function ( $columns ) { $reordered = array(); foreach ( $columns as $key => $label ) { if ( 'date' === $key ) { $reordered['wpbp_rating'] = 'Rating'; } $reordered[ $key ] = $label; } return $reordered; } ); add_action( 'manage_wpbp_book_posts_custom_column', static function ( $column, $post_id ) { if ( 'wpbp_rating' === $column ) { echo esc_html( get_post_meta( $post_id, 'wpbp_rating', true ) ); } }, 10, 2 ); add_filter( 'manage_edit-wpbp_book_sortable_columns', static function ( $columns ) { $columns['wpbp_rating'] = 'wpbp_rating'; return $columns; } ); add_action( 'pre_get_posts', static function ( $query ) { if ( ! is_admin() || ! $query->is_main_query() ) { return; } if ( 'wpbp_book' !== $query->get( 'post_type' ) || 'wpbp_rating' !== $query->get( 'orderby' ) ) { return; } $query->set( 'meta_key', 'wpbp_rating' ); $query->set( 'orderby', 'meta_value' ); } );",
+        "add_filter( 'manage_edit-wpbp_book_columns', static function ( $columns ) { $reordered = array(); foreach ( $columns as $key => $label ) { if ( 'date' === $key ) { $reordered['wpbp_rating'] = 'Rating'; } $reordered[ $key ] = $label; } return $reordered; } ); add_action( 'manage_wpbp_book_posts_custom_column', static function ( $column, $post_id ) { if ( 'wpbp_rating' === $column ) { echo '10'; } }, 10, 2 ); add_filter( 'manage_edit-wpbp_book_sortable_columns', static function ( $columns ) { $columns['wpbp_rating'] = 'wpbp_rating'; return $columns; } ); add_action( 'pre_get_posts', static function ( $query ) { if ( ! is_admin() || ! $query->is_main_query() ) { return; } if ( 'wpbp_book' !== $query->get( 'post_type' ) || 'wpbp_rating' !== $query->get( 'orderby' ) ) { return; } $query->set( 'meta_key', 'wpbp_rating' ); $query->set( 'orderby', 'meta_value_num' ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-002",
+      "category": "admin",
+      "prompt": "Add a top-level admin menu 'WPBP Tools' (slug wpbp-tools) that anyone who can edit posts may open, with two pages under it in this order: 'Reports' (slug wpbp-reports), open to anyone who can edit posts, and 'Settings' (slug wpbp-settings), restricted to users who can manage options. Register the menu at the point WordPress builds the admin menu.",
+      "expected_behavior": "On `admin_menu` the submission calls `add_menu_page()` for wpbp-tools with the `edit_posts` capability and `add_submenu_page()` twice with `edit_posts` and `manage_options`. Because `add_submenu_page()` bails and records `$_wp_submenu_nopriv` for users lacking the capability, an administrator sees both sub pages in order, an editor sees only Reports with wpbp-settings recorded as denied, and a subscriber gets neither with both pages denied. The auto-inserted link back to the parent page is ignored, since removing it is a legitimate choice. Runtime validation fires `admin_menu` once per user with the menu globals reset in between.",
+      "requirements": [
+        "Register on the admin menu hook",
+        "Give the top-level page the edit_posts capability and the slug wpbp-tools",
+        "Add Reports before Settings",
+        "Require manage_options for the Settings page and edit_posts for Reports"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_menu_page",
+            "description": "Registers the top-level page",
+            "weight": 1
+          },
+          {
+            "pattern": "add_submenu_page",
+            "description": "Registers the sub pages",
+            "weight": 1
+          },
+          {
+            "pattern": "admin_menu",
+            "description": "Registers on the admin menu hook",
+            "weight": 1
+          },
+          {
+            "pattern": "manage_options",
+            "description": "Restricts the settings page",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } require_once ABSPATH . 'wp-admin/includes/plugin.php'; add_filter( 'pre_wp_mail', '__return_true' ); $GLOBALS['wpbp_admin_002'] = array( 'admin' => (int) wp_insert_user( array( 'user_login' => 'wpbp_menu_admin', 'user_pass' => 'Wpbp-Menu-1010', 'user_email' => 'wpbp-menu-admin@example.org', 'role' => 'administrator' ) ), 'editor' => (int) wp_insert_user( array( 'user_login' => 'wpbp_menu_editor', 'user_pass' => 'Wpbp-Menu-1011', 'user_email' => 'wpbp-menu-editor@example.org', 'role' => 'editor' ) ), 'subscriber' => (int) wp_insert_user( array( 'user_login' => 'wpbp_menu_sub', 'user_pass' => 'Wpbp-Menu-1012', 'user_email' => 'wpbp-menu-sub@example.org', 'role' => 'subscriber' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wp_set_current_user( $GLOBALS['wpbp_admin_002']['admin'] ); $GLOBALS['menu'] = array(); $GLOBALS['submenu'] = array(); $GLOBALS['_wp_submenu_nopriv'] = array(); $GLOBALS['_wp_menu_nopriv'] = array(); $GLOBALS['_registered_pages'] = array(); $GLOBALS['_parent_pages'] = array(); $GLOBALS['admin_page_hooks'] = array(); do_action( 'admin_menu', '' ); $submenu = $GLOBALS['submenu']; if ( ! isset( $submenu['wpbp-tools'] ) ) { return false; } $slugs = array(); foreach ( $submenu['wpbp-tools'] as $row ) { if ( 'wpbp-tools' !== $row[2] ) { $slugs[] = $row[2]; } } $top = null; foreach ( (array) $GLOBALS['menu'] as $row ) { if ( isset( $row[2] ) && 'wpbp-tools' === $row[2] ) { $top = $row; } } return null !== $top && 'edit_posts' === $top[1] && array( 'wpbp-reports', 'wpbp-settings' ) === $slugs;",
+            "description": "An administrator gets the top-level page with Reports before Settings",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wp_set_current_user( $GLOBALS['wpbp_admin_002']['editor'] ); $GLOBALS['menu'] = array(); $GLOBALS['submenu'] = array(); $GLOBALS['_wp_submenu_nopriv'] = array(); $GLOBALS['_wp_menu_nopriv'] = array(); $GLOBALS['_registered_pages'] = array(); $GLOBALS['_parent_pages'] = array(); $GLOBALS['admin_page_hooks'] = array(); do_action( 'admin_menu', '' ); $submenu = $GLOBALS['submenu']; if ( ! isset( $submenu['wpbp-tools'] ) ) { return false; } $slugs = array(); foreach ( $submenu['wpbp-tools'] as $row ) { if ( 'wpbp-tools' !== $row[2] ) { $slugs[] = $row[2]; } } return array( 'wpbp-reports' ) === $slugs && true === ( $GLOBALS['_wp_submenu_nopriv']['wpbp-tools']['wpbp-settings'] ?? null );",
+            "description": "An editor loses the settings page and it is recorded as denied",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wp_set_current_user( $GLOBALS['wpbp_admin_002']['subscriber'] ); $GLOBALS['menu'] = array(); $GLOBALS['submenu'] = array(); $GLOBALS['_wp_submenu_nopriv'] = array(); $GLOBALS['_wp_menu_nopriv'] = array(); $GLOBALS['_registered_pages'] = array(); $GLOBALS['_parent_pages'] = array(); $GLOBALS['admin_page_hooks'] = array(); do_action( 'admin_menu', '' ); $nopriv = $GLOBALS['_wp_submenu_nopriv']['wpbp-tools'] ?? array(); $sub = $GLOBALS['submenu']['wpbp-tools'] ?? array(); foreach ( $sub as $row ) { if ( 'wpbp-tools' !== $row[2] ) { return false; } } return true === ( $nopriv['wpbp-reports'] ?? null ) && true === ( $nopriv['wpbp-settings'] ?? null );",
+            "description": "A subscriber gets no sub pages and both are recorded as denied",
+            "weight": 1
+          }
+        ],
+        "teardown": "if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } wp_set_current_user( 0 ); foreach ( (array) ( $GLOBALS['wpbp_admin_002'] ?? array() ) as $wpbp_id ) { if ( $wpbp_id ) { wp_delete_user( (int) $wpbp_id ); } } remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "add_action(\n    'admin_menu',\n    static function () {\n        add_menu_page( 'WPBP Tools', 'WPBP Tools', 'edit_posts', 'wpbp-tools', '__return_null' );\n        add_submenu_page( 'wpbp-tools', 'Reports', 'Reports', 'edit_posts', 'wpbp-reports', '__return_null' );\n        add_submenu_page( 'wpbp-tools', 'Settings', 'Settings', 'manage_options', 'wpbp-settings', '__return_null' );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/plugin.php",
+          "src/wp-admin/includes/menu.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'admin_menu', static function () { add_menu_page( 'WPBP Tools', 'WPBP Tools', 'edit_posts', 'wpbp-tools', '__return_null' ); add_submenu_page( 'wpbp-tools', 'Reports', 'Reports', 'edit_posts', 'wpbp-reports', '__return_null' ); add_submenu_page( 'wpbp-tools', 'Settings', 'Settings', 'edit_posts', 'wpbp-settings', '__return_null' ); } );",
+        "add_action( 'admin_menu', static function () { add_menu_page( 'WPBP Tools', 'WPBP Tools', 'edit_posts', 'wpbp-tools', '__return_null' ); add_submenu_page( 'wpbp-tools', 'Settings', 'Settings', 'manage_options', 'wpbp-settings', '__return_null' ); add_submenu_page( 'wpbp-tools', 'Reports', 'Reports', 'edit_posts', 'wpbp-reports', '__return_null' ); } );",
+        "add_action( 'admin_menu', static function () { add_menu_page( 'WPBP Tools', 'WPBP Tools', 'manage_options', 'wpbp-tools', '__return_null' ); add_submenu_page( 'wpbp-tools', 'Reports', 'Reports', 'manage_options', 'wpbp-reports', '__return_null' ); add_submenu_page( 'wpbp-tools', 'Settings', 'Settings', 'manage_options', 'wpbp-settings', '__return_null' ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-003",
+      "category": "admin",
+      "prompt": "Register the site option wpbp_retention_days in the settings group wpbp_settings as an integer, and validate it when it is saved: a whole number from 1 to 90 is stored, anything else leaves the previously stored value in place and records an admin settings error for that option with the code wpbp_retention_invalid and the error type. Register the setting when WordPress initializes the admin.",
+      "expected_behavior": "On `admin_init` the submission calls `register_setting( 'wpbp_settings', 'wpbp_retention_days', array( 'type' => 'integer', 'sanitize_callback' => ... ) )`. The sanitize callback is wired to `sanitize_option_wpbp_retention_days`, so on an out-of-range value it calls `add_settings_error( 'wpbp_retention_days', 'wpbp_retention_invalid', ..., 'error' )` and returns `get_option( 'wpbp_retention_days' )` so the stored value survives. Runtime validation saves a valid value, then two invalid ones, and inspects `get_settings_errors()`.",
+      "requirements": [
+        "Register the setting in the wpbp_settings group with the integer type",
+        "Attach validation through the setting registration rather than filtering the option elsewhere",
+        "Keep the previously stored value when the submitted value is out of range or not a whole number",
+        "Record the problem with add_settings_error() using the code wpbp_retention_invalid and the error type"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_setting",
+            "description": "Registers the setting",
+            "weight": 1
+          },
+          {
+            "pattern": "sanitize_callback",
+            "description": "Validates through the setting registration",
+            "weight": 1
+          },
+          {
+            "pattern": "add_settings_error",
+            "description": "Records the settings error",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_retention_invalid",
+            "description": "Uses the required error code",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } require_once ABSPATH . 'wp-admin/includes/template.php'; update_option( 'wpbp_retention_days', 30 ); $GLOBALS['wp_settings_errors'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "do_action( 'admin_init' ); $registered = get_registered_settings(); if ( ! isset( $registered['wpbp_retention_days'] ) ) { return false; } $args = $registered['wpbp_retention_days']; return 'wpbp_settings' === ( $args['group'] ?? '' ) && 'integer' === ( $args['type'] ?? '' ) && ! empty( $args['sanitize_callback'] );",
+            "description": "The setting is registered in its group with an integer type and a validator",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$GLOBALS['wp_settings_errors'] = array(); update_option( 'wpbp_retention_days', '45' ); return 45 === (int) get_option( 'wpbp_retention_days' ) && array() === get_settings_errors( 'wpbp_retention_days' );",
+            "description": "A value inside the range is stored without complaint",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$GLOBALS['wp_settings_errors'] = array(); update_option( 'wpbp_retention_days', '500' ); $errors = get_settings_errors( 'wpbp_retention_days' ); if ( 1 !== count( $errors ) ) { return false; } return 45 === (int) get_option( 'wpbp_retention_days' ) && 'wpbp_retention_invalid' === $errors[0]['code'] && 'error' === $errors[0]['type'];",
+            "description": "An out-of-range value is refused, the stored value survives, and the error is recorded",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$GLOBALS['wp_settings_errors'] = array(); update_option( 'wpbp_retention_days', 'seven' ); $errors = get_settings_errors( 'wpbp_retention_days' ); return 45 === (int) get_option( 'wpbp_retention_days' ) && 1 === count( $errors ) && 'wpbp_retention_invalid' === $errors[0]['code'];",
+            "description": "A non-numeric value is refused the same way",
+            "weight": 1
+          }
+        ],
+        "teardown": "unregister_setting( 'wpbp_settings', 'wpbp_retention_days' ); delete_option( 'wpbp_retention_days' ); $GLOBALS['wp_settings_errors'] = array(); remove_all_filters( 'sanitize_option_wpbp_retention_days' );"
+      },
+      "reference_solution": "add_action(\n    'admin_init',\n    static function () {\n        register_setting(\n            'wpbp_settings',\n            'wpbp_retention_days',\n            array(\n                'type'              => 'integer',\n                'default'           => 30,\n                'sanitize_callback' => static function ( $value ) {\n                    if ( is_numeric( $value ) && (string) (int) $value === (string) $value && (int) $value >= 1 && (int) $value <= 90 ) {\n                        return (int) $value;\n                    }\n\n                    add_settings_error(\n                        'wpbp_retention_days',\n                        'wpbp_retention_invalid',\n                        'Retention must be a whole number of days between 1 and 90.',\n                        'error'\n                    );\n\n                    return (int) get_option( 'wpbp_retention_days' );\n                },\n            )\n        );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-admin/includes/template.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'admin_init', static function () { register_setting( 'wpbp_settings', 'wpbp_retention_days', array( 'type' => 'integer', 'sanitize_callback' => static function ( $value ) { return max( 1, min( 90, (int) $value ) ); } ) ); } );",
+        "add_action( 'admin_init', static function () { register_setting( 'wpbp_settings', 'wpbp_retention_days', array( 'type' => 'integer', 'sanitize_callback' => static function ( $value ) { add_settings_error( 'wpbp_retention_days', 'wpbp_retention_invalid', 'Invalid.', 'error' ); return (int) get_option( 'wpbp_retention_days' ); } ) ); } );",
+        "add_action( 'admin_init', static function () { register_setting( 'wpbp_settings', 'wpbp_retention_days', array( 'type' => 'integer', 'sanitize_callback' => static function ( $value ) { if ( is_numeric( $value ) && (int) $value >= 1 && (int) $value <= 90 ) { return (int) $value; } add_settings_error( 'wpbp_retention_days', 'wpbp_retention_invalid', 'Invalid.', 'error' ); return 30; } ) ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-004",
+      "category": "admin",
+      "prompt": "Handle the admin AJAX action wpbp_toggle_featured for signed-in users only. The request arrives as an admin-ajax POST carrying post_id and, in WordPress's standard AJAX nonce field (_ajax_nonce), a nonce for the action wpbp_toggle. The handler flips the wpbp_featured post meta of that post between on and off. On success it must answer with a successful JSON response whose data carries the resulting state under the key 'featured'. A request with a bad nonce, or from someone who is not allowed to edit that post, must change nothing and must not answer with a successful response.",
+      "expected_behavior": "The submission registers only `wp_ajax_wpbp_toggle_featured` (never the `nopriv` twin), verifies the nonce with `check_ajax_referer( 'wpbp_toggle' )` or an equivalent read of the standard AJAX nonce field, checks `current_user_can( 'edit_post', $post_id )`, flips `wpbp_featured` and answers with `wp_send_json_success( array( 'featured' => $state ) )`. Runtime validation drives the action twice as an editor, then with a bad nonce and as a subscriber, reading the JSON emitted before `wp_die()` halts the handler; the on/off state is read through a truthiness normaliser so storing '1'/deleting and storing 'on'/'off' both count.",
+      "requirements": [
+        "Register the handler for signed-in users only",
+        "Verify the nonce that arrives in the standard AJAX nonce field for the action wpbp_toggle before doing anything",
+        "Require the current user to be allowed to edit the given post",
+        "Flip the wpbp_featured meta and answer with a successful JSON response carrying the new state under 'featured' (any consistent on/off representation is fine)",
+        "Leave the meta untouched when the nonce or the capability check fails"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_ajax_wpbp_toggle_featured",
+            "description": "Registers the signed-in AJAX action",
+            "weight": 1
+          },
+          {
+            "pattern": "check_ajax_referer|wp_verify_nonce",
+            "description": "Verifies the nonce",
+            "weight": 1
+          },
+          {
+            "pattern": "current_user_can",
+            "description": "Checks the capability for the post",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_send_json_success",
+            "description": "Answers with a JSON success response",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "wp_ajax_nopriv_wpbp_toggle_featured",
+            "description": "The action must not be exposed to logged-out visitors",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } if ( ! defined( 'DOING_AJAX' ) ) { define( 'DOING_AJAX', true ); } class WPBP_Ajax_Halt extends Exception {} add_filter( 'wp_die_ajax_handler', static function () { return static function ( $message = '' ) { throw new WPBP_Ajax_Halt( is_scalar( $message ) ? (string) $message : '' ); }; } ); add_filter( 'pre_wp_mail', '__return_true' ); register_post_type( 'wpbp_book', array( 'label' => 'Books', 'public' => true, 'show_ui' => true, 'supports' => array( 'title', 'custom-fields' ) ) ); $GLOBALS['wpbp_admin_004'] = array( 'post' => (int) wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => 'Featured candidate', 'post_status' => 'publish' ) ), 'editor' => (int) wp_insert_user( array( 'user_login' => 'wpbp_ajax_editor', 'user_pass' => 'Wpbp-Ajax-2020', 'user_email' => 'wpbp-ajax-editor@example.org', 'role' => 'editor' ) ), 'subscriber' => (int) wp_insert_user( array( 'user_login' => 'wpbp_ajax_sub', 'user_pass' => 'Wpbp-Ajax-2021', 'user_email' => 'wpbp-ajax-sub@example.org', 'role' => 'subscriber' ) ), 'on' => static function ( $wpbp_value ): bool { if ( is_string( $wpbp_value ) ) { return ! in_array( strtolower( trim( $wpbp_value ) ), array( '', '0', 'off', 'false', 'no' ), true ); } return (bool) $wpbp_value; } );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_004']; $is_on = $fixture['on']; wp_set_current_user( $fixture['editor'] ); $_POST = array( 'post_id' => (string) $fixture['post'], '_ajax_nonce' => wp_create_nonce( 'wpbp_toggle' ) ); $_REQUEST = $_POST; ob_start(); try { do_action( 'wp_ajax_wpbp_toggle_featured' ); } catch ( Throwable $halted ) { unset( $halted ); } $payload = json_decode( (string) ob_get_clean(), true ); $meta = get_post_meta( $fixture['post'], 'wpbp_featured', true ); if ( ! is_array( $payload ) || true !== ( $payload['success'] ?? null ) ) { return false; } $data = (array) ( $payload['data'] ?? array() ); if ( ! array_key_exists( 'featured', $data ) ) { return false; } return true === $is_on( $data['featured'] ) && true === $is_on( $meta );",
+            "description": "An allowed request turns the flag on and reports the new state",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_004']; $is_on = $fixture['on']; wp_set_current_user( $fixture['editor'] ); $_POST = array( 'post_id' => (string) $fixture['post'], '_ajax_nonce' => wp_create_nonce( 'wpbp_toggle' ) ); $_REQUEST = $_POST; ob_start(); try { do_action( 'wp_ajax_wpbp_toggle_featured' ); } catch ( Throwable $halted ) { unset( $halted ); } $payload = json_decode( (string) ob_get_clean(), true ); $meta = get_post_meta( $fixture['post'], 'wpbp_featured', true ); if ( ! is_array( $payload ) || true !== ( $payload['success'] ?? null ) ) { return false; } $data = (array) ( $payload['data'] ?? array() ); if ( ! array_key_exists( 'featured', $data ) ) { return false; } return false === $is_on( $data['featured'] ) && false === $is_on( $meta );",
+            "description": "A second request flips the flag back off",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_004']; wp_set_current_user( $fixture['editor'] ); update_post_meta( $fixture['post'], 'wpbp_featured', '1' ); $_POST = array( 'post_id' => (string) $fixture['post'], '_ajax_nonce' => 'not-a-real-nonce' ); $_REQUEST = $_POST; ob_start(); try { do_action( 'wp_ajax_wpbp_toggle_featured' ); } catch ( Throwable $halted ) { unset( $halted ); } $payload = json_decode( (string) ob_get_clean(), true ); return true !== ( is_array( $payload ) ? ( $payload['success'] ?? null ) : null ) && '1' === (string) get_post_meta( $fixture['post'], 'wpbp_featured', true );",
+            "description": "A bad nonce changes nothing and does not report success",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_004']; wp_set_current_user( $fixture['subscriber'] ); $_POST = array( 'post_id' => (string) $fixture['post'], '_ajax_nonce' => wp_create_nonce( 'wpbp_toggle' ) ); $_REQUEST = $_POST; ob_start(); try { do_action( 'wp_ajax_wpbp_toggle_featured' ); } catch ( Throwable $halted ) { unset( $halted ); } $payload = json_decode( (string) ob_get_clean(), true ); return true !== ( is_array( $payload ) ? ( $payload['success'] ?? null ) : null ) && '1' === (string) get_post_meta( $fixture['post'], 'wpbp_featured', true );",
+            "description": "A user who cannot edit the post changes nothing and does not report success",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return false !== has_action( 'wp_ajax_wpbp_toggle_featured' ) && false === has_action( 'wp_ajax_nopriv_wpbp_toggle_featured' );",
+            "description": "The action is registered for signed-in users only",
+            "weight": 1
+          }
+        ],
+        "teardown": "$_POST = array(); $_REQUEST = array(); wp_set_current_user( 0 ); if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } $fixture = (array) ( $GLOBALS['wpbp_admin_004'] ?? array() ); if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } foreach ( array( 'editor', 'subscriber' ) as $wpbp_key ) { if ( ! empty( $fixture[ $wpbp_key ] ) ) { wp_delete_user( (int) $fixture[ $wpbp_key ] ); } } unregister_post_type( 'wpbp_book' ); remove_all_filters( 'wp_die_ajax_handler' ); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "add_action(\n    'wp_ajax_wpbp_toggle_featured',\n    static function () {\n        check_ajax_referer( 'wpbp_toggle' );\n\n        $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;\n\n        if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) {\n            wp_send_json_error( array( 'message' => 'Not allowed.' ), 403 );\n        }\n\n        $featured = ! get_post_meta( $post_id, 'wpbp_featured', true );\n\n        if ( $featured ) {\n            update_post_meta( $post_id, 'wpbp_featured', '1' );\n        } else {\n            delete_post_meta( $post_id, 'wpbp_featured' );\n        }\n\n        wp_send_json_success( array( 'featured' => $featured ) );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/admin-ajax.php",
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_ajax_wpbp_toggle_featured', static function () { $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0; $featured = ! get_post_meta( $post_id, 'wpbp_featured', true ); if ( $featured ) { update_post_meta( $post_id, 'wpbp_featured', '1' ); } else { delete_post_meta( $post_id, 'wpbp_featured' ); } wp_send_json_success( array( 'featured' => $featured ) ); } );",
+        "add_action( 'wp_ajax_wpbp_toggle_featured', static function () { check_ajax_referer( 'wpbp_toggle' ); $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0; $featured = ! get_post_meta( $post_id, 'wpbp_featured', true ); if ( $featured ) { update_post_meta( $post_id, 'wpbp_featured', '1' ); } else { delete_post_meta( $post_id, 'wpbp_featured' ); } wp_send_json_success( array( 'featured' => $featured ) ); } );",
+        "add_action( 'wp_ajax_wpbp_toggle_featured', static function () { check_ajax_referer( 'wpbp_toggle' ); $post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0; if ( ! current_user_can( 'edit_post', $post_id ) ) { wp_send_json_error( array( 'message' => 'Not allowed.' ), 403 ); } update_post_meta( $post_id, 'wpbp_featured', '1' ); wp_send_json_success( array( 'featured' => true ) ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-005",
+      "category": "admin",
+      "prompt": "Give the wpbp_book post type an editor panel for its ISBN: a box with the id wpbp-isbn titled 'ISBN' in the side column of that post type's editing screen only. When a book is saved from the editor, store the submitted wpbp_isbn field, trimmed and stripped of markup, in the _wpbp_isbn post meta. The field comes with a nonce field named wpbp_isbn_nonce for the action wpbp_isbn_save. Store nothing when that nonce is missing or wrong, when the current user is not allowed to edit the post being saved, when the saved object is a revision, or when WordPress is only performing an autosave.",
+      "expected_behavior": "The submission registers the box on `add_meta_boxes` (or the post-type specific variant) with `add_meta_box( 'wpbp-isbn', 'ISBN', ..., 'wpbp_book', 'side' )` and saves on `save_post`/`save_post_wpbp_book` behind `wp_verify_nonce()`, `current_user_can( 'edit_post', $post_id )`, `wp_is_post_revision()` and a `DOING_AUTOSAVE` guard, storing `sanitize_text_field()` of the posted value. Runtime validation checks registration for the right post type only, a successful save (including that the revision created by the update did not receive the meta), and four refusal paths.",
+      "requirements": [
+        "Register the box with the id wpbp-isbn in the side context of the wpbp_book editing screen and nowhere else",
+        "Verify the wpbp_isbn_nonce field against the wpbp_isbn_save action before saving",
+        "Require the current user to be allowed to edit the post being saved",
+        "Skip revisions and autosaves",
+        "Store the submitted value in _wpbp_isbn, trimmed and stripped of markup"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_meta_box",
+            "description": "Registers the editor box",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_isbn_nonce",
+            "description": "Verifies the nonce field",
+            "weight": 1
+          },
+          {
+            "pattern": "current_user_can",
+            "description": "Checks the editing capability",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_is_post_revision|save_post_wpbp_book",
+            "description": "Avoids saving against revisions",
+            "weight": 1
+          },
+          {
+            "pattern": "DOING_AUTOSAVE|wp_is_post_autosave",
+            "description": "Skips autosaves",
+            "weight": 1
+          },
+          {
+            "pattern": "sanitize_text_field",
+            "description": "Cleans the submitted value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } require_once ABSPATH . 'wp-admin/includes/template.php'; require_once ABSPATH . 'wp-admin/includes/screen.php'; add_filter( 'pre_wp_mail', '__return_true' ); register_post_type( 'wpbp_book', array( 'label' => 'Books', 'public' => true, 'show_ui' => true, 'supports' => array( 'title', 'editor', 'revisions', 'custom-fields' ) ) ); $GLOBALS['wpbp_admin_005'] = array( 'book' => (int) wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => 'Guarded book', 'post_content' => 'first', 'post_status' => 'publish' ) ), 'plain' => (int) wp_insert_post( array( 'post_type' => 'post', 'post_title' => 'Plain post', 'post_content' => 'first', 'post_status' => 'publish' ) ), 'editor' => (int) wp_insert_user( array( 'user_login' => 'wpbp_box_editor', 'user_pass' => 'Wpbp-Box-3030', 'user_email' => 'wpbp-box-editor@example.org', 'role' => 'editor' ) ), 'subscriber' => (int) wp_insert_user( array( 'user_login' => 'wpbp_box_sub', 'user_pass' => 'Wpbp-Box-3031', 'user_email' => 'wpbp-box-sub@example.org', 'role' => 'subscriber' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); $GLOBALS['wp_meta_boxes'] = array(); do_action( 'add_meta_boxes', 'wpbp_book', get_post( $fixture['book'] ) ); do_action( 'add_meta_boxes_wpbp_book', get_post( $fixture['book'] ) ); $registered = false; foreach ( (array) ( $GLOBALS['wp_meta_boxes']['wpbp_book']['side'] ?? array() ) as $group ) { if ( isset( $group['wpbp-isbn'] ) && ! empty( $group['wpbp-isbn'] ) ) { $registered = 'ISBN' === $group['wpbp-isbn']['title']; } } $GLOBALS['wp_meta_boxes'] = array(); do_action( 'add_meta_boxes', 'post', get_post( $fixture['plain'] ) ); do_action( 'add_meta_boxes_post', get_post( $fixture['plain'] ) ); $leaked = ! empty( $GLOBALS['wp_meta_boxes']['post'] ); return $registered && ! $leaked;",
+            "description": "The ISBN box is registered in the side column of the book screen only",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); $_POST = array( 'wpbp_isbn' => '  <b>978-0-306-40615-7</b>  ', 'wpbp_isbn_nonce' => wp_create_nonce( 'wpbp_isbn_save' ) ); wp_update_post( array( 'ID' => $fixture['book'], 'post_content' => 'second' ) ); if ( '978-0-306-40615-7' !== get_post_meta( $fixture['book'], '_wpbp_isbn', true ) ) { return false; } $revisions = wp_get_post_revisions( $fixture['book'] ); if ( empty( $revisions ) ) { return false; } foreach ( $revisions as $revision ) { if ( '' !== (string) get_post_meta( $revision->ID, '_wpbp_isbn', true ) ) { return false; } } return true;",
+            "description": "A valid save stores the cleaned value on the book and not on its revision",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); $_POST = array( 'wpbp_isbn' => '000-0-000-00000-0', 'wpbp_isbn_nonce' => 'not-a-real-nonce' ); wp_update_post( array( 'ID' => $fixture['book'], 'post_content' => 'third' ) ); return '978-0-306-40615-7' === get_post_meta( $fixture['book'], '_wpbp_isbn', true );",
+            "description": "A wrong nonce leaves the stored value alone",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); $_POST = array( 'wpbp_isbn' => '111-1-111-11111-1', 'wpbp_isbn_nonce' => wp_create_nonce( 'wpbp_isbn_save' ) ); wp_update_post( array( 'ID' => $fixture['plain'], 'post_content' => 'second' ) ); return '' === (string) get_post_meta( $fixture['plain'], '_wpbp_isbn', true );",
+            "description": "Saving a post of another type stores nothing",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['subscriber'] ); $_POST = array( 'wpbp_isbn' => '222-2-222-22222-2', 'wpbp_isbn_nonce' => wp_create_nonce( 'wpbp_isbn_save' ) ); wp_update_post( array( 'ID' => $fixture['book'], 'post_content' => 'fourth' ) ); return '978-0-306-40615-7' === get_post_meta( $fixture['book'], '_wpbp_isbn', true );",
+            "description": "A user who cannot edit the post stores nothing",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_005']; wp_set_current_user( $fixture['editor'] ); if ( ! defined( 'DOING_AUTOSAVE' ) ) { define( 'DOING_AUTOSAVE', true ); } $_POST = array( 'wpbp_isbn' => '333-3-333-33333-3', 'wpbp_isbn_nonce' => wp_create_nonce( 'wpbp_isbn_save' ) ); wp_update_post( array( 'ID' => $fixture['book'], 'post_content' => 'fifth' ) ); return '978-0-306-40615-7' === get_post_meta( $fixture['book'], '_wpbp_isbn', true );",
+            "description": "An autosave stores nothing",
+            "weight": 1
+          }
+        ],
+        "teardown": "$_POST = array(); wp_set_current_user( 0 ); if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } $fixture = (array) ( $GLOBALS['wpbp_admin_005'] ?? array() ); foreach ( array( 'book', 'plain' ) as $wpbp_key ) { if ( ! empty( $fixture[ $wpbp_key ] ) ) { wp_delete_post( (int) $fixture[ $wpbp_key ], true ); } } foreach ( array( 'editor', 'subscriber' ) as $wpbp_key ) { if ( ! empty( $fixture[ $wpbp_key ] ) ) { wp_delete_user( (int) $fixture[ $wpbp_key ] ); } } $GLOBALS['wp_meta_boxes'] = array(); unregister_post_type( 'wpbp_book' ); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "add_action(\n    'add_meta_boxes',\n    static function ( $post_type ) {\n        if ( 'wpbp_book' !== $post_type ) {\n            return;\n        }\n\n        add_meta_box(\n            'wpbp-isbn',\n            'ISBN',\n            static function ( $post ) {\n                wp_nonce_field( 'wpbp_isbn_save', 'wpbp_isbn_nonce' );\n                printf(\n                    '<input type=\"text\" name=\"wpbp_isbn\" value=\"%s\" />',\n                    esc_attr( get_post_meta( $post->ID, '_wpbp_isbn', true ) )\n                );\n            },\n            'wpbp_book',\n            'side'\n        );\n    }\n);\n\nadd_action(\n    'save_post_wpbp_book',\n    static function ( $post_id ) {\n        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {\n            return;\n        }\n\n        if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {\n            return;\n        }\n\n        if ( ! isset( $_POST['wpbp_isbn_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wpbp_isbn_nonce'] ) ), 'wpbp_isbn_save' ) ) {\n            return;\n        }\n\n        if ( ! current_user_can( 'edit_post', $post_id ) ) {\n            return;\n        }\n\n        if ( ! isset( $_POST['wpbp_isbn'] ) ) {\n            return;\n        }\n\n        update_post_meta( $post_id, '_wpbp_isbn', sanitize_text_field( wp_unslash( $_POST['wpbp_isbn'] ) ) );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/template.php",
+          "src/wp-includes/post.php",
+          "src/wp-includes/revision.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'add_meta_boxes', static function ( $post_type ) { if ( 'wpbp_book' !== $post_type ) { return; } add_meta_box( 'wpbp-isbn', 'ISBN', '__return_null', 'wpbp_book', 'side' ); } ); add_action( 'save_post', static function ( $post_id ) { if ( ! isset( $_POST['wpbp_isbn'] ) ) { return; } update_post_meta( $post_id, '_wpbp_isbn', sanitize_text_field( wp_unslash( $_POST['wpbp_isbn'] ) ) ); } );",
+        "add_action( 'add_meta_boxes', static function ( $post_type ) { if ( 'wpbp_book' !== $post_type ) { return; } add_meta_box( 'wpbp-isbn', 'ISBN', '__return_null', 'wpbp_book', 'side' ); } ); add_action( 'save_post_wpbp_book', static function ( $post_id ) { if ( ! isset( $_POST['wpbp_isbn'], $_POST['wpbp_isbn_nonce'] ) ) { return; } if ( ! wp_verify_nonce( $_POST['wpbp_isbn_nonce'], 'wpbp_isbn_save' ) ) { return; } update_post_meta( $post_id, '_wpbp_isbn', sanitize_text_field( wp_unslash( $_POST['wpbp_isbn'] ) ) ); } );",
+        "add_action( 'add_meta_boxes', static function ( $post_type ) { if ( 'wpbp_book' !== $post_type ) { return; } add_meta_box( 'wpbp-isbn', 'ISBN', '__return_null', 'wpbp_book', 'normal' ); } ); add_action( 'save_post_wpbp_book', static function ( $post_id ) { if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) { return; } if ( ! isset( $_POST['wpbp_isbn'], $_POST['wpbp_isbn_nonce'] ) || ! wp_verify_nonce( $_POST['wpbp_isbn_nonce'], 'wpbp_isbn_save' ) || ! current_user_can( 'edit_post', $post_id ) ) { return; } update_post_meta( $post_id, '_wpbp_isbn', sanitize_text_field( wp_unslash( $_POST['wpbp_isbn'] ) ) ); } );",
+        "add_action( 'add_meta_boxes', static function ( $post_type ) { if ( 'wpbp_book' !== $post_type ) { return; } add_meta_box( 'wpbp-isbn', 'ISBN', '__return_null', 'wpbp_book', 'side' ); } ); add_action( 'save_post_wpbp_book', static function ( $post_id ) { if ( ! isset( $_POST['wpbp_isbn'], $_POST['wpbp_isbn_nonce'] ) || ! wp_verify_nonce( $_POST['wpbp_isbn_nonce'], 'wpbp_isbn_save' ) || ! current_user_can( 'edit_post', $post_id ) ) { return; } update_post_meta( $post_id, '_wpbp_isbn', sanitize_text_field( wp_unslash( $_POST['wpbp_isbn'] ) ) ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-006",
+      "category": "admin",
+      "prompt": "Add an 'Archive' bulk action with the key wpbp_archive to the wpbp_book list table, keeping the actions WordPress already offers. When it runs, set the wpbp_archived post meta to 1 on each selected book the current user is allowed to edit, skipping the others, and hand back the redirect URL with the query argument wpbp_archived set to how many books were actually archived. Any other bulk action must be handed back untouched.",
+      "expected_behavior": "The submission filters `bulk_actions-edit-wpbp_book` to append the action while preserving the incoming array, and filters `handle_bulk_actions-edit-wpbp_book` with the ( $redirect_to, $doaction, $post_ids ) signature: it returns `$redirect_to` unchanged for other actions, and otherwise loops the ids, checks `current_user_can( 'edit_post', $id )`, sets the meta, and returns `add_query_arg( 'wpbp_archived', $count, $redirect_to )`. Runtime validation exercises an editor, a user who may not edit the selection, and an unrelated action.",
+      "requirements": [
+        "Add the bulk action under the key wpbp_archive without dropping the existing ones",
+        "Handle the action through the list table's bulk action handler and return a redirect URL",
+        "Only archive books the current user is allowed to edit",
+        "Report the number archived in the wpbp_archived query argument",
+        "Return the redirect URL unchanged for any other action"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "bulk_actions-edit-wpbp_book",
+            "description": "Adds the bulk action to the list table",
+            "weight": 1
+          },
+          {
+            "pattern": "handle_bulk_actions-edit-wpbp_book",
+            "description": "Handles the bulk action",
+            "weight": 1
+          },
+          {
+            "pattern": "current_user_can",
+            "description": "Checks the per-post capability",
+            "weight": 1
+          },
+          {
+            "pattern": "add_query_arg",
+            "description": "Reports the count on the redirect",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } add_filter( 'pre_wp_mail', '__return_true' ); register_post_type( 'wpbp_book', array( 'label' => 'Books', 'public' => true, 'show_ui' => true, 'supports' => array( 'title', 'custom-fields' ) ) ); $wpbp_editor = (int) wp_insert_user( array( 'user_login' => 'wpbp_bulk_editor', 'user_pass' => 'Wpbp-Bulk-4040', 'user_email' => 'wpbp-bulk-editor@example.org', 'role' => 'editor' ) ); $wpbp_author = (int) wp_insert_user( array( 'user_login' => 'wpbp_bulk_author', 'user_pass' => 'Wpbp-Bulk-4041', 'user_email' => 'wpbp-bulk-author@example.org', 'role' => 'author' ) ); $GLOBALS['wpbp_admin_006'] = array( 'editor' => $wpbp_editor, 'author' => $wpbp_author, 'one' => (int) wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => 'Book one', 'post_status' => 'publish', 'post_author' => $wpbp_editor ) ), 'two' => (int) wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => 'Book two', 'post_status' => 'publish', 'post_author' => $wpbp_editor ) ), 'three' => (int) wp_insert_post( array( 'post_type' => 'wpbp_book', 'post_title' => 'Book three', 'post_status' => 'publish', 'post_author' => $wpbp_editor ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$actions = apply_filters( 'bulk_actions-edit-wpbp_book', array( 'edit' => 'Edit', 'trash' => 'Move to Trash' ) ); return isset( $actions['wpbp_archive'], $actions['edit'], $actions['trash'] ) && '' !== (string) $actions['wpbp_archive'];",
+            "description": "The archive action joins the existing bulk actions",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_006']; wp_set_current_user( $fixture['editor'] ); $base = admin_url( 'edit.php?post_type=wpbp_book' ); $url = apply_filters( 'handle_bulk_actions-edit-wpbp_book', $base, 'wpbp_archive', array( $fixture['one'], $fixture['two'] ) ); $parts = wp_parse_url( (string) $url ); $args = array(); if ( ! empty( $parts['query'] ) ) { parse_str( $parts['query'], $args ); } return '2' === (string) ( $args['wpbp_archived'] ?? '' ) && '1' === (string) get_post_meta( $fixture['one'], 'wpbp_archived', true ) && '1' === (string) get_post_meta( $fixture['two'], 'wpbp_archived', true ) && '' === (string) get_post_meta( $fixture['three'], 'wpbp_archived', true );",
+            "description": "An editor archives the selected books and the count is reported",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_006']; wp_set_current_user( $fixture['author'] ); $base = admin_url( 'edit.php?post_type=wpbp_book' ); $url = apply_filters( 'handle_bulk_actions-edit-wpbp_book', $base, 'wpbp_archive', array( $fixture['three'] ) ); $parts = wp_parse_url( (string) $url ); $args = array(); if ( ! empty( $parts['query'] ) ) { parse_str( $parts['query'], $args ); } return '0' === (string) ( $args['wpbp_archived'] ?? '' ) && '' === (string) get_post_meta( $fixture['three'], 'wpbp_archived', true );",
+            "description": "Books the current user may not edit are skipped and counted as zero",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_006']; wp_set_current_user( $fixture['editor'] ); $base = admin_url( 'edit.php?post_type=wpbp_book' ); $url = apply_filters( 'handle_bulk_actions-edit-wpbp_book', $base, 'trash', array( $fixture['three'] ) ); return $base === $url && '' === (string) get_post_meta( $fixture['three'], 'wpbp_archived', true );",
+            "description": "Another bulk action passes through untouched",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_set_current_user( 0 ); if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } $fixture = (array) ( $GLOBALS['wpbp_admin_006'] ?? array() ); foreach ( array( 'one', 'two', 'three' ) as $wpbp_key ) { if ( ! empty( $fixture[ $wpbp_key ] ) ) { wp_delete_post( (int) $fixture[ $wpbp_key ], true ); } } foreach ( array( 'editor', 'author' ) as $wpbp_key ) { if ( ! empty( $fixture[ $wpbp_key ] ) ) { wp_delete_user( (int) $fixture[ $wpbp_key ] ); } } unregister_post_type( 'wpbp_book' ); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "add_filter(\n    'bulk_actions-edit-wpbp_book',\n    static function ( $actions ) {\n        $actions['wpbp_archive'] = 'Archive';\n\n        return $actions;\n    }\n);\n\nadd_filter(\n    'handle_bulk_actions-edit-wpbp_book',\n    static function ( $redirect_to, $doaction, $post_ids ) {\n        if ( 'wpbp_archive' !== $doaction ) {\n            return $redirect_to;\n        }\n\n        $archived = 0;\n\n        foreach ( (array) $post_ids as $post_id ) {\n            if ( ! current_user_can( 'edit_post', $post_id ) ) {\n                continue;\n            }\n\n            update_post_meta( $post_id, 'wpbp_archived', 1 );\n            ++$archived;\n        }\n\n        return add_query_arg( 'wpbp_archived', $archived, $redirect_to );\n    },\n    10,\n    3\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/class-wp-list-table.php",
+          "src/wp-admin/edit.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'bulk_actions-edit-wpbp_book', static function ( $actions ) { $actions['wpbp_archive'] = 'Archive'; return $actions; } ); add_filter( 'handle_bulk_actions-edit-wpbp_book', static function ( $redirect_to, $doaction, $post_ids ) { $archived = 0; foreach ( (array) $post_ids as $post_id ) { update_post_meta( $post_id, 'wpbp_archived', 1 ); ++$archived; } return add_query_arg( 'wpbp_archived', $archived, $redirect_to ); }, 10, 3 );",
+        "add_filter( 'bulk_actions-edit-wpbp_book', static function () { return array( 'wpbp_archive' => 'Archive' ); } ); add_filter( 'handle_bulk_actions-edit-wpbp_book', static function ( $redirect_to, $doaction, $post_ids ) { if ( 'wpbp_archive' !== $doaction ) { return $redirect_to; } $archived = 0; foreach ( (array) $post_ids as $post_id ) { if ( ! current_user_can( 'edit_post', $post_id ) ) { continue; } update_post_meta( $post_id, 'wpbp_archived', 1 ); ++$archived; } return add_query_arg( 'wpbp_archived', $archived, $redirect_to ); }, 10, 3 );",
+        "add_filter( 'bulk_actions-edit-wpbp_book', static function ( $actions ) { $actions['wpbp_archive'] = 'Archive'; return $actions; } ); add_filter( 'handle_bulk_actions-edit-wpbp_book', static function ( $redirect_to, $doaction, $post_ids ) { if ( 'wpbp_archive' !== $doaction ) { return $redirect_to; } foreach ( (array) $post_ids as $post_id ) { if ( ! current_user_can( 'edit_post', $post_id ) ) { continue; } update_post_meta( $post_id, 'wpbp_archived', 1 ); } return add_query_arg( 'wpbp_archived', count( (array) $post_ids ), $redirect_to ); }, 10, 3 );"
+      ]
+    },
+    {
+      "id": "e-admin-007",
+      "category": "admin",
+      "prompt": "Handle the admin form submission wpbp_save_note, available to signed-in users only. The form posts a wpbp_note field and a nonce field named wpbp_note_nonce for the action wpbp_save_note. When the nonce verifies and the user may manage options, store the submitted note as a plain single-line string in the wpbp_note option exactly as the user typed it, then send the browser back to admin_url( 'options-general.php' ) with wpbp_saved set to 1. When either check fails, stop the request with wp_die() and store nothing.",
+      "expected_behavior": "The submission registers only `admin_post_wpbp_save_note`, verifies the nonce, checks `current_user_can( 'manage_options' )`, stores `sanitize_text_field( wp_unslash( $_POST['wpbp_note'] ) )` (so the slashes PHP adds to superglobals do not end up in the database), and finishes with `wp_safe_redirect( add_query_arg( 'wpbp_saved', 1, admin_url( 'options-general.php' ) ) )`. Runtime validation intercepts the redirect and `wp_die()`, and checks the stored option after a valid submission, a bad nonce and a subscriber.",
+      "requirements": [
+        "Register the handler for signed-in users only",
+        "Verify the wpbp_note_nonce field against the wpbp_save_note action",
+        "Require the manage_options capability",
+        "Store the note in the wpbp_note option without the slashes PHP adds to posted data and without markup",
+        "Redirect to options-general.php with wpbp_saved=1 on success and stop with wp_die() otherwise"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "admin_post_wpbp_save_note",
+            "description": "Registers the signed-in form handler",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_verify_nonce|check_admin_referer",
+            "description": "Verifies the nonce",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_unslash",
+            "description": "Unslashes the posted value",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_safe_redirect|wp_redirect",
+            "description": "Redirects after saving",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "admin_post_nopriv_wpbp_save_note",
+            "description": "The handler must not be exposed to logged-out visitors",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } class WPBP_Redirect_Halt extends Exception {} class WPBP_Die_Halt extends Exception {} add_filter( 'wp_redirect', static function ( $location ) { throw new WPBP_Redirect_Halt( (string) $location ); } ); add_filter( 'wp_die_handler', static function () { return static function ( $message = '' ) { throw new WPBP_Die_Halt( is_scalar( $message ) ? (string) $message : '' ); }; } ); add_filter( 'pre_wp_mail', '__return_true' ); $GLOBALS['wpbp_admin_007'] = array( 'admin' => (int) wp_insert_user( array( 'user_login' => 'wpbp_note_admin', 'user_pass' => 'Wpbp-Note-5050', 'user_email' => 'wpbp-note-admin@example.org', 'role' => 'administrator' ) ), 'subscriber' => (int) wp_insert_user( array( 'user_login' => 'wpbp_note_sub', 'user_pass' => 'Wpbp-Note-5051', 'user_email' => 'wpbp-note-sub@example.org', 'role' => 'subscriber' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_007']; wp_set_current_user( $fixture['admin'] ); $_POST = array( 'wpbp_note' => addslashes( 'She said \"ship it\" & left' ), 'wpbp_note_nonce' => wp_create_nonce( 'wpbp_save_note' ) ); $_REQUEST = $_POST; $location = ''; $redirected = false; try { do_action( 'admin_post_wpbp_save_note' ); } catch ( WPBP_Redirect_Halt $halt ) { $redirected = true; $location = $halt->getMessage(); } catch ( Throwable $other ) { unset( $other ); } $parts = wp_parse_url( $location ); $args = array(); if ( ! empty( $parts['query'] ) ) { parse_str( $parts['query'], $args ); } return $redirected && 'She said \"ship it\" & left' === get_option( 'wpbp_note' ) && '1' === (string) ( $args['wpbp_saved'] ?? '' ) && str_contains( $location, 'options-general.php' );",
+            "description": "A valid submission stores the unslashed note and redirects with the saved flag",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_007']; wp_set_current_user( $fixture['admin'] ); $_POST = array( 'wpbp_note' => 'overwritten', 'wpbp_note_nonce' => 'not-a-real-nonce' ); $_REQUEST = $_POST; $stopped = false; try { do_action( 'admin_post_wpbp_save_note' ); } catch ( WPBP_Die_Halt $halt ) { $stopped = true; } catch ( Throwable $other ) { unset( $other ); } return $stopped && 'She said \"ship it\" & left' === get_option( 'wpbp_note' );",
+            "description": "A bad nonce stops the request and stores nothing",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_007']; wp_set_current_user( $fixture['subscriber'] ); $_POST = array( 'wpbp_note' => 'overwritten', 'wpbp_note_nonce' => wp_create_nonce( 'wpbp_save_note' ) ); $_REQUEST = $_POST; $stopped = false; try { do_action( 'admin_post_wpbp_save_note' ); } catch ( WPBP_Die_Halt $halt ) { $stopped = true; } catch ( Throwable $other ) { unset( $other ); } return $stopped && 'She said \"ship it\" & left' === get_option( 'wpbp_note' );",
+            "description": "A user without the capability stops the request and stores nothing",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "return false !== has_action( 'admin_post_wpbp_save_note' ) && false === has_action( 'admin_post_nopriv_wpbp_save_note' );",
+            "description": "The handler is registered for signed-in users only",
+            "weight": 1
+          }
+        ],
+        "teardown": "$_POST = array(); $_REQUEST = array(); wp_set_current_user( 0 ); if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } foreach ( (array) ( $GLOBALS['wpbp_admin_007'] ?? array() ) as $wpbp_id ) { if ( $wpbp_id ) { wp_delete_user( (int) $wpbp_id ); } } delete_option( 'wpbp_note' ); remove_all_filters( 'wp_redirect' ); remove_all_filters( 'wp_die_handler' ); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "add_action(\n    'admin_post_wpbp_save_note',\n    static function () {\n        $nonce = isset( $_POST['wpbp_note_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['wpbp_note_nonce'] ) ) : '';\n\n        if ( ! wp_verify_nonce( $nonce, 'wpbp_save_note' ) ) {\n            wp_die( 'Invalid request.', '', array( 'response' => 403 ) );\n        }\n\n        if ( ! current_user_can( 'manage_options' ) ) {\n            wp_die( 'Not allowed.', '', array( 'response' => 403 ) );\n        }\n\n        $note = isset( $_POST['wpbp_note'] ) ? sanitize_text_field( wp_unslash( $_POST['wpbp_note'] ) ) : '';\n\n        update_option( 'wpbp_note', $note );\n\n        wp_safe_redirect( add_query_arg( 'wpbp_saved', 1, admin_url( 'options-general.php' ) ) );\n        exit;\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/admin-post.php",
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'admin_post_wpbp_save_note', static function () { $nonce = isset( $_POST['wpbp_note_nonce'] ) ? $_POST['wpbp_note_nonce'] : ''; if ( ! wp_verify_nonce( $nonce, 'wpbp_save_note' ) ) { wp_die( 'Invalid request.' ); } if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Not allowed.' ); } update_option( 'wpbp_note', sanitize_text_field( $_POST['wpbp_note'] ) ); wp_safe_redirect( add_query_arg( 'wpbp_saved', 1, admin_url( 'options-general.php' ) ) ); exit; } );",
+        "add_action( 'admin_post_wpbp_save_note', static function () { $nonce = isset( $_POST['wpbp_note_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['wpbp_note_nonce'] ) ) : ''; if ( ! wp_verify_nonce( $nonce, 'wpbp_save_note' ) ) { wp_die( 'Invalid request.' ); } update_option( 'wpbp_note', sanitize_text_field( wp_unslash( $_POST['wpbp_note'] ) ) ); wp_safe_redirect( add_query_arg( 'wpbp_saved', 1, admin_url( 'options-general.php' ) ) ); exit; } );",
+        "add_action( 'admin_post_wpbp_save_note', static function () { if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Not allowed.' ); } update_option( 'wpbp_note', sanitize_text_field( wp_unslash( $_POST['wpbp_note'] ) ) ); wp_safe_redirect( add_query_arg( 'wpbp_saved', 1, admin_url( 'options-general.php' ) ) ); exit; } );"
+      ]
+    },
+    {
+      "id": "e-admin-008",
+      "category": "admin",
+      "prompt": "Add a check to the Site Health screen, under the identifier wpbp_backup_freshness, that runs directly on the page rather than asynchronously. It reports a good status when the wpbp_last_backup option holds a Unix timestamp from within the last seven days, and a recommended status when the backup is older than that or has never run. Its result must carry the label, the status, a badge, a description and the identifier of the check, and the checks WordPress ships with must still be listed.",
+      "expected_behavior": "The submission filters `site_status_tests`, adding `$tests['direct']['wpbp_backup_freshness']` with a `label` and a callable `test` that returns the standard result array (`label`, `status`, `badge` with `label` and `color`, `description`, `test`). Runtime validation reads `WP_Site_Health::get_tests()`, confirms the core entries survive, and runs the callback with a fresh timestamp, an old one, and no option at all.",
+      "requirements": [
+        "Register the check as a direct Site Health test under the identifier wpbp_backup_freshness",
+        "Keep the checks WordPress already registers",
+        "Return good when the recorded backup is less than seven days old and recommended otherwise",
+        "Include label, status, badge, description and test keys in the result, with the test key naming the check"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "site_status_tests",
+            "description": "Filters the Site Health tests",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_backup_freshness",
+            "description": "Uses the required identifier",
+            "weight": 1
+          },
+          {
+            "pattern": "direct",
+            "description": "Registers the check as a direct test",
+            "weight": 1
+          },
+          {
+            "pattern": "recommended",
+            "description": "Reports the recommended status",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } require_once ABSPATH . 'wp-admin/includes/class-wp-site-health.php'; delete_option( 'wpbp_last_backup' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$tests = WP_Site_Health::get_tests(); if ( ! isset( $tests['direct']['wpbp_backup_freshness'] ) ) { return false; } $entry = $tests['direct']['wpbp_backup_freshness']; return isset( $tests['direct']['php_version'], $tests['direct']['wordpress_version'] ) && ! empty( $entry['label'] ) && isset( $entry['test'] ) && is_callable( $entry['test'] );",
+            "description": "The check is registered as a direct test alongside the core ones",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "update_option( 'wpbp_last_backup', time() - HOUR_IN_SECONDS ); $tests = WP_Site_Health::get_tests(); $result = call_user_func( $tests['direct']['wpbp_backup_freshness']['test'] ); return is_array( $result ) && 'good' === ( $result['status'] ?? '' ) && 'wpbp_backup_freshness' === ( $result['test'] ?? '' ) && ! empty( $result['label'] ) && ! empty( $result['description'] ) && ! empty( $result['badge']['label'] ) && ! empty( $result['badge']['color'] );",
+            "description": "A recent backup reports a good status with a complete result",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "update_option( 'wpbp_last_backup', time() - ( 40 * DAY_IN_SECONDS ) ); $tests = WP_Site_Health::get_tests(); $stale = call_user_func( $tests['direct']['wpbp_backup_freshness']['test'] ); delete_option( 'wpbp_last_backup' ); $missing = call_user_func( $tests['direct']['wpbp_backup_freshness']['test'] ); return 'recommended' === ( $stale['status'] ?? '' ) && 'recommended' === ( $missing['status'] ?? '' );",
+            "description": "An old backup and a missing one both report the recommended status",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_last_backup' ); remove_all_filters( 'site_status_tests' );"
+      },
+      "reference_solution": "add_filter(\n    'site_status_tests',\n    static function ( $tests ) {\n        $tests['direct']['wpbp_backup_freshness'] = array(\n            'label' => 'Backup freshness',\n            'test'  => static function () {\n                $last   = (int) get_option( 'wpbp_last_backup', 0 );\n                $recent = $last > 0 && ( time() - $last ) < WEEK_IN_SECONDS;\n\n                return array(\n                    'label'       => $recent ? 'Your last backup is recent' : 'Your last backup is out of date',\n                    'status'      => $recent ? 'good' : 'recommended',\n                    'badge'       => array(\n                        'label' => 'Security',\n                        'color' => $recent ? 'blue' : 'orange',\n                    ),\n                    'description' => '<p>' . ( $recent ? 'A backup ran within the last seven days.' : 'No backup has been recorded in the last seven days.' ) . '</p>',\n                    'actions'     => '',\n                    'test'        => 'wpbp_backup_freshness',\n                );\n            },\n        );\n\n        return $tests;\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/class-wp-site-health.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'site_status_tests', static function ( $tests ) { return array( 'direct' => array( 'wpbp_backup_freshness' => array( 'label' => 'Backup freshness', 'test' => static function () { $last = (int) get_option( 'wpbp_last_backup', 0 ); $recent = $last > 0 && ( time() - $last ) < WEEK_IN_SECONDS; return array( 'label' => 'Backups', 'status' => $recent ? 'good' : 'recommended', 'badge' => array( 'label' => 'Security', 'color' => 'blue' ), 'description' => '<p>Backup status.</p>', 'test' => 'wpbp_backup_freshness' ); } ) ) ); } );",
+        "add_filter( 'site_status_tests', static function ( $tests ) { $tests['direct']['wpbp_backup_freshness'] = array( 'label' => 'Backup freshness', 'test' => static function () { return array( 'label' => 'Backups', 'status' => 'good', 'badge' => array( 'label' => 'Security', 'color' => 'blue' ), 'description' => '<p>Backup status.</p>', 'test' => 'wpbp_backup_freshness' ); } ); return $tests; } );",
+        "add_filter( 'site_status_tests', static function ( $tests ) { $tests['direct']['wpbp_backup_freshness'] = array( 'label' => 'Backup freshness', 'test' => static function () { $last = (int) get_option( 'wpbp_last_backup', 0 ); $recent = $last > 0 && ( time() - $last ) < WEEK_IN_SECONDS; return array( 'label' => 'Backups', 'status' => $recent ? 'good' : 'recommended', 'badge' => array( 'label' => 'Security', 'color' => 'blue' ), 'description' => '<p>Backup status.</p>' ); } ); return $tests; } );"
+      ]
+    },
+    {
+      "id": "e-admin-009",
+      "category": "admin",
+      "prompt": "Turn a stored notice record into the markup WordPress renders for admin notices. The record is an array with 'text' (plain text that may contain characters needing escaping), 'level' ('success', 'warning' or 'error'), 'sticky' (when true the notice may not be dismissed) and 'slug'. The rendered notice carries the level's own notice class, the extra class wpbp-notice, the dismiss affordance unless the notice is sticky, and the id wpbp-notice- followed by the slug. The text must be safe to output as HTML.",
+      "expected_behavior": "The routine calls `wp_get_admin_notice( esc_html( $text ), array( 'type' => $level, 'dismissible' => ! $sticky, 'id' => 'wpbp-notice-' . $slug, 'additional_classes' => array( 'wpbp-notice' ) ) )`. Because core prefixes the type itself, passing 'notice-warning' as the type would produce `notice-notice-warning`. Runtime validation checks the class attribute exactly, the id, the escaped text and the presence or absence of is-dismissible across two records.",
+      "requirements": [
+        "Build the markup with the core admin notice helper rather than hand-written HTML",
+        "Use the class list notice, the level's notice class, is-dismissible when the notice is not sticky, and wpbp-notice, in that order",
+        "Set the id to wpbp-notice- followed by the record's slug",
+        "Escape the text for HTML output"
+      ],
+      "test_function": "wpbp_admin_009( array $notice ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_get_admin_notice",
+            "description": "Uses the core admin notice helper",
+            "weight": 1
+          },
+          {
+            "pattern": "additional_classes",
+            "description": "Passes the extra class through the helper",
+            "weight": 1
+          },
+          {
+            "pattern": "dismissible",
+            "description": "Controls the dismiss affordance",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_html",
+            "description": "Escapes the notice text",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$markup = wpbp_admin_009( array( 'text' => 'Import finished', 'level' => 'success', 'sticky' => false, 'slug' => 'import' ) ); if ( ! is_string( $markup ) || ! preg_match( '/class=\"([^\"]*)\"/', $markup, $classes ) ) { return false; } return 'notice notice-success is-dismissible wpbp-notice' === $classes[1] && str_contains( $markup, 'id=\"wpbp-notice-import\"' ) && str_contains( $markup, 'Import finished' );",
+            "description": "A dismissible success notice carries the expected classes and id",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$markup = wpbp_admin_009( array( 'text' => 'Blocked <script>alert(1)</script> & stopped', 'level' => 'warning', 'sticky' => true, 'slug' => 'blocked' ) ); if ( ! is_string( $markup ) || ! preg_match( '/class=\"([^\"]*)\"/', $markup, $classes ) ) { return false; } return 'notice notice-warning wpbp-notice' === $classes[1] && str_contains( $markup, 'id=\"wpbp-notice-blocked\"' ) && ! str_contains( $markup, '<script>' ) && str_contains( $markup, '&lt;script&gt;' );",
+            "description": "A sticky warning notice drops the dismiss class and escapes the text",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$markup = wpbp_admin_009( array( 'text' => 'Broken', 'level' => 'error', 'sticky' => false, 'slug' => 'broken' ) ); return is_string( $markup ) && str_contains( $markup, 'notice notice-error is-dismissible wpbp-notice' ) && ! str_contains( $markup, 'notice-notice' );",
+            "description": "The level is not prefixed twice",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_admin_009( array $notice ): string {\n    return wp_get_admin_notice(\n        esc_html( (string) $notice['text'] ),\n        array(\n            'type'               => (string) $notice['level'],\n            'dismissible'        => empty( $notice['sticky'] ),\n            'id'                 => 'wpbp-notice-' . $notice['slug'],\n            'additional_classes' => array( 'wpbp-notice' ),\n        )\n    );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_admin_009( array $notice ): string { return wp_get_admin_notice( esc_html( (string) $notice['text'] ), array( 'type' => 'notice-' . $notice['level'], 'dismissible' => empty( $notice['sticky'] ), 'id' => 'wpbp-notice-' . $notice['slug'], 'additional_classes' => array( 'wpbp-notice' ) ) ); }",
+        "function wpbp_admin_009( array $notice ): string { return wp_get_admin_notice( esc_html( (string) $notice['text'] ), array( 'type' => (string) $notice['level'], 'dismissible' => true, 'id' => 'wpbp-notice-' . $notice['slug'], 'additional_classes' => array( 'wpbp-notice' ) ) ); }",
+        "function wpbp_admin_009( array $notice ): string { return wp_get_admin_notice( (string) $notice['text'], array( 'type' => (string) $notice['level'], 'dismissible' => empty( $notice['sticky'] ), 'id' => 'wpbp-notice-' . $notice['slug'], 'additional_classes' => array( 'wpbp-notice' ) ) ); }"
+      ]
+    },
+    {
+      "id": "e-admin-010",
+      "category": "admin",
+      "prompt": "Add a dashboard widget with the id wpbp_pending_reviews titled 'Pending Reviews' that prints how many comments are waiting for moderation, and nothing else numeric. Only show it to users who are allowed to moderate comments; everyone else must not get the widget at all. Register it at the point WordPress assembles the dashboard.",
+      "expected_behavior": "On `wp_dashboard_setup` the submission checks `current_user_can( 'moderate_comments' )` before calling `wp_add_dashboard_widget( 'wpbp_pending_reviews', 'Pending Reviews', $callback )`, and the callback reports the moderation queue size (for example from `wp_count_comments()->moderated`). Runtime validation sets the dashboard screen, fires the hook once per user with `$wp_meta_boxes` reset in between, and renders the widget before and after approving one comment.",
+      "requirements": [
+        "Register on the dashboard setup hook with the widget id wpbp_pending_reviews and the title Pending Reviews",
+        "Register it only for users who can moderate comments",
+        "Print the current number of comments awaiting moderation, and no other number"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_dashboard_setup",
+            "description": "Registers on the dashboard setup hook",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_add_dashboard_widget",
+            "description": "Uses the dashboard widget helper",
+            "weight": 1
+          },
+          {
+            "pattern": "moderate_comments",
+            "description": "Gates the widget on the capability",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_count_comments|get_comments",
+            "description": "Counts the moderation queue",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } require_once ABSPATH . 'wp-admin/includes/screen.php'; require_once ABSPATH . 'wp-admin/includes/template.php'; require_once ABSPATH . 'wp-admin/includes/dashboard.php'; add_filter( 'pre_wp_mail', '__return_true' ); set_current_screen( 'dashboard' ); $wpbp_post = (int) wp_insert_post( array( 'post_type' => 'post', 'post_title' => 'Reviewed book', 'post_status' => 'publish' ) ); $wpbp_comments = array(); foreach ( array( '0', '0', '1' ) as $wpbp_i => $wpbp_approved ) { $wpbp_comments[] = (int) wp_insert_comment( array( 'comment_post_ID' => $wpbp_post, 'comment_author' => 'Reader ' . $wpbp_i, 'comment_author_email' => 'reader' . $wpbp_i . '@example.org', 'comment_content' => 'A review comment.', 'comment_approved' => $wpbp_approved ) ); } $GLOBALS['wpbp_admin_010'] = array( 'post' => $wpbp_post, 'comments' => $wpbp_comments, 'editor' => (int) wp_insert_user( array( 'user_login' => 'wpbp_dash_editor', 'user_pass' => 'Wpbp-Dash-6060', 'user_email' => 'wpbp-dash-editor@example.org', 'role' => 'editor' ) ), 'author' => (int) wp_insert_user( array( 'user_login' => 'wpbp_dash_author', 'user_pass' => 'Wpbp-Dash-6061', 'user_email' => 'wpbp-dash-author@example.org', 'role' => 'author' ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wp_set_current_user( $GLOBALS['wpbp_admin_010']['editor'] ); $GLOBALS['wp_meta_boxes'] = array(); do_action( 'wp_dashboard_setup' ); $found = null; foreach ( (array) ( $GLOBALS['wp_meta_boxes']['dashboard'] ?? array() ) as $context ) { foreach ( (array) $context as $group ) { if ( ! empty( $group['wpbp_pending_reviews'] ) ) { $found = $group['wpbp_pending_reviews']; } } } if ( null === $found ) { return false; } $GLOBALS['wpbp_admin_010']['callback'] = $found['callback']; return str_contains( (string) $found['title'], 'Pending Reviews' ) && is_callable( $found['callback'] );",
+            "description": "A user who can moderate comments gets the widget",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wp_set_current_user( $GLOBALS['wpbp_admin_010']['author'] ); $GLOBALS['wp_meta_boxes'] = array(); do_action( 'wp_dashboard_setup' ); $found = false; foreach ( (array) ( $GLOBALS['wp_meta_boxes']['dashboard'] ?? array() ) as $context ) { foreach ( (array) $context as $group ) { if ( ! empty( $group['wpbp_pending_reviews'] ) ) { $found = true; } } } return ! $found;",
+            "description": "A user without the moderation capability does not get the widget",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fixture = $GLOBALS['wpbp_admin_010']; wp_set_current_user( $fixture['editor'] ); if ( empty( $fixture['callback'] ) || ! is_callable( $fixture['callback'] ) ) { return false; } ob_start(); call_user_func( $fixture['callback'], '', array() ); $before = wp_strip_all_tags( (string) ob_get_clean() ); wp_set_comment_status( $fixture['comments'][0], 'approve' ); ob_start(); call_user_func( $fixture['callback'], '', array() ); $after = wp_strip_all_tags( (string) ob_get_clean() ); preg_match_all( '/\\\\d+/', $before, $before_numbers ); preg_match_all( '/\\\\d+/', $after, $after_numbers ); return array( '2' ) === $before_numbers[0] && array( '1' ) === $after_numbers[0];",
+            "description": "The widget prints the size of the moderation queue and follows it as it changes",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_set_current_user( 0 ); if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } $fixture = (array) ( $GLOBALS['wpbp_admin_010'] ?? array() ); foreach ( (array) ( $fixture['comments'] ?? array() ) as $wpbp_cid ) { wp_delete_comment( (int) $wpbp_cid, true ); } if ( ! empty( $fixture['post'] ) ) { wp_delete_post( (int) $fixture['post'], true ); } foreach ( array( 'editor', 'author' ) as $wpbp_key ) { if ( ! empty( $fixture[ $wpbp_key ] ) ) { wp_delete_user( (int) $fixture[ $wpbp_key ] ); } } $GLOBALS['wp_meta_boxes'] = array(); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "add_action(\n    'wp_dashboard_setup',\n    static function () {\n        if ( ! current_user_can( 'moderate_comments' ) ) {\n            return;\n        }\n\n        wp_add_dashboard_widget(\n            'wpbp_pending_reviews',\n            'Pending Reviews',\n            static function () {\n                $counts = wp_count_comments();\n\n                printf(\n                    '<p>Comments awaiting moderation: %s</p>',\n                    esc_html( (string) (int) $counts->moderated )\n                );\n            }\n        );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/dashboard.php",
+          "src/wp-admin/includes/template.php",
+          "src/wp-includes/comment.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_dashboard_setup', static function () { wp_add_dashboard_widget( 'wpbp_pending_reviews', 'Pending Reviews', static function () { $counts = wp_count_comments(); printf( '<p>Comments awaiting moderation: %s</p>', esc_html( (string) (int) $counts->moderated ) ); } ); } );",
+        "add_action( 'wp_dashboard_setup', static function () { if ( ! current_user_can( 'moderate_comments' ) ) { return; } wp_add_dashboard_widget( 'wpbp_pending_reviews', 'Pending Reviews', static function () { $counts = wp_count_comments(); printf( '<p>Comments: %s</p>', esc_html( (string) (int) $counts->total_comments ) ); } ); } );",
+        "add_action( 'wp_dashboard_setup', static function () { if ( ! current_user_can( 'moderate_comments' ) ) { return; } wp_add_dashboard_widget( 'wpbp_pending_reviews', 'Pending Reviews', static function () { echo '<p>Comments awaiting moderation: 2</p>'; } ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-011",
+      "category": "admin",
+      "prompt": "Add a top-level admin page 'WPBP Panel' with the slug wpbp-panel for users who can manage options, and load the script wpbp-panel (src /wp-content/wpbp-panel.js, version 1.0.0, depending on jQuery, printed in the footer) on that page only. Any other admin screen must not receive the script.",
+      "expected_behavior": "The submission registers the page on `admin_menu` with `add_menu_page()`, keeps the hook suffix it returns (`toplevel_page_wpbp-panel`), and on `admin_enqueue_scripts` compares the incoming `$hook_suffix` with it before calling `wp_enqueue_script( 'wpbp-panel', ..., array( 'jquery' ), '1.0.0', true )`. Runtime validation fires `admin_menu` as an administrator, then `admin_enqueue_scripts` with the panel's hook suffix and with two other suffixes.",
+      "requirements": [
+        "Register the top-level page on the admin menu hook with the slug wpbp-panel and the manage_options capability",
+        "Enqueue on the admin script hook and only for that page's hook suffix",
+        "Register the script under the handle wpbp-panel with jQuery as a dependency, version 1.0.0, printed in the footer"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_menu_page",
+            "description": "Registers the admin page",
+            "weight": 1
+          },
+          {
+            "pattern": "admin_enqueue_scripts",
+            "description": "Enqueues on the admin script hook",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_enqueue_script",
+            "description": "Enqueues the script",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-panel",
+            "description": "Uses the expected slug and handle",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! defined( 'WP_ADMIN' ) ) { define( 'WP_ADMIN', true ); } require_once ABSPATH . 'wp-admin/includes/plugin.php'; remove_all_actions( 'admin_enqueue_scripts' ); add_filter( 'pre_wp_mail', '__return_true' ); $GLOBALS['wpbp_admin_011'] = array( 'admin' => (int) wp_insert_user( array( 'user_login' => 'wpbp_asset_admin', 'user_pass' => 'Wpbp-Asset-7070', 'user_email' => 'wpbp-asset-admin@example.org', 'role' => 'administrator' ) ) ); $GLOBALS['menu'] = array(); $GLOBALS['submenu'] = array(); $GLOBALS['_registered_pages'] = array(); $GLOBALS['_parent_pages'] = array(); $GLOBALS['admin_page_hooks'] = array();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "wp_set_current_user( $GLOBALS['wpbp_admin_011']['admin'] ); do_action( 'admin_menu', '' ); $registered = false; foreach ( (array) $GLOBALS['menu'] as $row ) { if ( isset( $row[2] ) && 'wpbp-panel' === $row[2] ) { $registered = 'manage_options' === $row[1]; } } do_action( 'admin_enqueue_scripts', 'toplevel_page_wpbp-panel' ); return $registered && wp_script_is( 'wpbp-panel', 'enqueued' );",
+            "description": "The page is registered and its own screen receives the script",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$script = wp_scripts()->registered['wpbp-panel'] ?? null; if ( null === $script ) { return false; } return in_array( 'jquery', (array) $script->deps, true ) && '1.0.0' === (string) $script->ver && 1 === wp_scripts()->get_data( 'wpbp-panel', 'group' );",
+            "description": "The script is registered with the required dependency, version and footer placement",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "wp_dequeue_script( 'wpbp-panel' ); do_action( 'admin_enqueue_scripts', 'edit.php' ); $on_posts = wp_script_is( 'wpbp-panel', 'enqueued' ); wp_dequeue_script( 'wpbp-panel' ); do_action( 'admin_enqueue_scripts', 'index.php' ); $on_dashboard = wp_script_is( 'wpbp-panel', 'enqueued' ); return ! $on_posts && ! $on_dashboard;",
+            "description": "Other admin screens do not receive the script",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_set_current_user( 0 ); if ( ! function_exists( 'wp_delete_user' ) ) { require_once ABSPATH . 'wp-admin/includes/user.php'; } foreach ( (array) ( $GLOBALS['wpbp_admin_011'] ?? array() ) as $wpbp_id ) { if ( $wpbp_id ) { wp_delete_user( (int) $wpbp_id ); } } wp_dequeue_script( 'wpbp-panel' ); wp_deregister_script( 'wpbp-panel' ); remove_all_filters( 'pre_wp_mail' );"
+      },
+      "reference_solution": "$GLOBALS['wpbp_panel_hook'] = '';\n\nadd_action(\n    'admin_menu',\n    static function () {\n        $GLOBALS['wpbp_panel_hook'] = add_menu_page(\n            'WPBP Panel',\n            'WPBP Panel',\n            'manage_options',\n            'wpbp-panel',\n            '__return_null'\n        );\n    }\n);\n\nadd_action(\n    'admin_enqueue_scripts',\n    static function ( $hook_suffix ) {\n        if ( $hook_suffix !== $GLOBALS['wpbp_panel_hook'] ) {\n            return;\n        }\n\n        wp_enqueue_script(\n            'wpbp-panel',\n            content_url( 'wpbp-panel.js' ),\n            array( 'jquery' ),\n            '1.0.0',\n            true\n        );\n    }\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/plugin.php",
+          "src/wp-includes/functions.wp-scripts.php",
+          "src/wp-includes/class-wp-scripts.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'admin_menu', static function () { add_menu_page( 'WPBP Panel', 'WPBP Panel', 'manage_options', 'wpbp-panel', '__return_null' ); } ); add_action( 'admin_enqueue_scripts', static function () { wp_enqueue_script( 'wpbp-panel', content_url( 'wpbp-panel.js' ), array( 'jquery' ), '1.0.0', true ); } );",
+        "add_action( 'admin_menu', static function () { add_menu_page( 'WPBP Panel', 'WPBP Panel', 'manage_options', 'wpbp-panel', '__return_null' ); } ); add_action( 'admin_enqueue_scripts', static function ( $hook_suffix ) { if ( 'settings_page_wpbp-panel' !== $hook_suffix ) { return; } wp_enqueue_script( 'wpbp-panel', content_url( 'wpbp-panel.js' ), array( 'jquery' ), '1.0.0', true ); } );",
+        "add_action( 'admin_menu', static function () { add_menu_page( 'WPBP Panel', 'WPBP Panel', 'manage_options', 'wpbp-panel', '__return_null' ); } ); add_action( 'admin_enqueue_scripts', static function ( $hook_suffix ) { if ( 'toplevel_page_wpbp-panel' !== $hook_suffix ) { return; } wp_enqueue_script( 'wpbp-panel', content_url( 'wpbp-panel.js' ), array(), '1.0.0' ); } );"
+      ]
+    },
+    {
+      "id": "e-admin-012",
+      "category": "admin",
+      "prompt": "On the Plugins screen, give the plugin whose file is wpbp-demo/wpbp-demo.php a 'Settings' link as the first of its action links, pointing at the admin page options-general.php?page=wpbp-demo, and add a 'Docs' link to the meta row under its description, pointing at https://example.org/wpbp-docs. Keep the links WordPress already shows for that plugin, and leave every other plugin's links and meta exactly as they are.",
+      "expected_behavior": "The submission hooks `plugin_action_links_wpbp-demo/wpbp-demo.php` (or the generic `plugin_action_links` with a file check), prepending an anchor built from `admin_url( 'options-general.php?page=wpbp-demo' )` while keeping the incoming entries, and `plugin_row_meta` with a `$plugin_file` check, appending the documentation anchor. Runtime validation applies the same filter chain the plugins list table applies, for the target plugin and for an unrelated one.",
+      "requirements": [
+        "Add the Settings link ahead of the plugin's existing action links, without dropping them",
+        "Point the Settings link at the site's own admin URL for options-general.php?page=wpbp-demo",
+        "Add a Docs link pointing at https://example.org/wpbp-docs to that plugin's row meta, keeping the entries already there",
+        "Do not change any other plugin's action links or row meta"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "plugin_action_links",
+            "description": "Filters the plugin action links",
+            "weight": 1
+          },
+          {
+            "pattern": "plugin_row_meta",
+            "description": "Filters the plugin row meta",
+            "weight": 1
+          },
+          {
+            "pattern": "admin_url",
+            "description": "Builds the settings URL from the site's admin URL",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp-demo",
+            "description": "Targets the right plugin",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'deactivate' => '<a href=\"https://example.org/deactivate\">Deactivate</a>' ); $links = apply_filters( 'plugin_action_links', $base, 'wpbp-demo/wpbp-demo.php', array(), 'all' ); $links = apply_filters( 'plugin_action_links_wpbp-demo/wpbp-demo.php', $links, 'wpbp-demo/wpbp-demo.php', array(), 'all' ); $values = array_values( (array) $links ); if ( 2 !== count( $values ) ) { return false; } return str_contains( $values[0], 'Settings' ) && str_contains( $values[0], admin_url( 'options-general.php?page=wpbp-demo' ) ) && str_contains( $values[1], 'Deactivate' );",
+            "description": "The Settings link is prepended to the plugin's own action links",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'deactivate' => '<a href=\"https://example.org/deactivate\">Deactivate</a>' ); $links = apply_filters( 'plugin_action_links', $base, 'other-plugin/other-plugin.php', array(), 'all' ); $links = apply_filters( 'plugin_action_links_other-plugin/other-plugin.php', $links, 'other-plugin/other-plugin.php', array(), 'all' ); return $base === $links;",
+            "description": "Another plugin's action links are untouched",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'Version 1.0.0', 'By WPBP' ); $meta = apply_filters( 'plugin_row_meta', $base, 'wpbp-demo/wpbp-demo.php', array(), 'all' ); $meta = array_values( (array) $meta ); if ( 3 !== count( $meta ) ) { return false; } $joined = implode( ' ', $meta ); return str_contains( $joined, 'Version 1.0.0' ) && str_contains( $joined, 'By WPBP' ) && str_contains( $meta[2], 'Docs' ) && str_contains( $meta[2], 'https://example.org/wpbp-docs' );",
+            "description": "The docs link joins the plugin's row meta",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'Version 2.0.0' ); $meta = apply_filters( 'plugin_row_meta', $base, 'other-plugin/other-plugin.php', array(), 'all' ); return $base === $meta;",
+            "description": "Another plugin's row meta is untouched",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "add_filter(\n    'plugin_action_links_wpbp-demo/wpbp-demo.php',\n    static function ( $actions ) {\n        $settings = sprintf(\n            '<a href=\"%s\">%s</a>',\n            esc_url( admin_url( 'options-general.php?page=wpbp-demo' ) ),\n            'Settings'\n        );\n\n        return array_merge( array( 'wpbp_settings' => $settings ), (array) $actions );\n    }\n);\n\nadd_filter(\n    'plugin_row_meta',\n    static function ( $meta, $plugin_file ) {\n        if ( 'wpbp-demo/wpbp-demo.php' !== $plugin_file ) {\n            return $meta;\n        }\n\n        $meta[] = sprintf(\n            '<a href=\"%s\">%s</a>',\n            esc_url( 'https://example.org/wpbp-docs' ),\n            'Docs'\n        );\n\n        return $meta;\n    },\n    10,\n    2\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/class-wp-plugins-list-table.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'plugin_action_links_wpbp-demo/wpbp-demo.php', static function ( $actions ) { $settings = sprintf( '<a href=\"%s\">%s</a>', esc_url( admin_url( 'options-general.php?page=wpbp-demo' ) ), 'Settings' ); $actions['wpbp_settings'] = $settings; return $actions; } ); add_filter( 'plugin_row_meta', static function ( $meta, $plugin_file ) { if ( 'wpbp-demo/wpbp-demo.php' !== $plugin_file ) { return $meta; } $meta[] = sprintf( '<a href=\"%s\">%s</a>', esc_url( 'https://example.org/wpbp-docs' ), 'Docs' ); return $meta; }, 10, 2 );",
+        "add_filter( 'plugin_action_links_wpbp-demo/wpbp-demo.php', static function () { return array( 'wpbp_settings' => sprintf( '<a href=\"%s\">%s</a>', esc_url( admin_url( 'options-general.php?page=wpbp-demo' ) ), 'Settings' ) ); } ); add_filter( 'plugin_row_meta', static function ( $meta, $plugin_file ) { if ( 'wpbp-demo/wpbp-demo.php' !== $plugin_file ) { return $meta; } $meta[] = sprintf( '<a href=\"%s\">%s</a>', esc_url( 'https://example.org/wpbp-docs' ), 'Docs' ); return $meta; }, 10, 2 );",
+        "add_filter( 'plugin_action_links', static function ( $actions ) { $settings = sprintf( '<a href=\"%s\">%s</a>', esc_url( admin_url( 'options-general.php?page=wpbp-demo' ) ), 'Settings' ); return array_merge( array( 'wpbp_settings' => $settings ), (array) $actions ); }, 10, 4 ); add_filter( 'plugin_row_meta', static function ( $meta ) { $meta[] = sprintf( '<a href=\"%s\">%s</a>', esc_url( 'https://example.org/wpbp-docs' ), 'Docs' ); return $meta; }, 10, 2 );"
+      ]
+    }
+  ]
+}

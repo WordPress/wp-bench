@@ -43,7 +43,6 @@ def _plugin_test(test_id: str = "e-plugin-001") -> ExecutionTest:
         prompt="Build a plugin.",
         expected_behavior="expected",
         category="plugins",
-        difficulty="intermediate",
         requirements=[],
         test_function=None,
         static_checks={},
@@ -172,7 +171,7 @@ def test_plugin_artifact_payload_reaches_environment(
         lambda dataset: [test],
     )
     runner = BenchmarkRunner(_config(tmp_path))
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     seen: dict = {}
 
@@ -205,7 +204,7 @@ def test_artifact_parse_failure_is_scored_failure_not_crash(
         lambda dataset: tests,
     )
     runner = BenchmarkRunner(_config(tmp_path))
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     runner.environment.execute_artifact = lambda artifact, verification_spec: _passing_result()  # type: ignore[method-assign]
     completions = iter(["not json at all", PLUGIN_JSON])
@@ -236,7 +235,7 @@ def test_reference_solution_uses_reference_files_for_plugin_artifacts(
         lambda dataset: [test],
     )
     runner = BenchmarkRunner(_config(tmp_path, check_reference_solution=True))
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
     runner.environment.reset = lambda: None  # type: ignore[method-assign]
     seen: dict = {}
 

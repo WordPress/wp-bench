@@ -87,7 +87,7 @@ class Artifact_Installer {
 		}
 
 		try {
-			include_once $base . '/' . $main_file;
+			self::include_at_global_scope( $base . '/' . $main_file );
 		} catch ( \Throwable $e ) {
 			return [
 				'success' => false,
@@ -129,6 +129,28 @@ class Artifact_Installer {
 			}
 		}
 		return $normalized;
+	}
+
+	/**
+	 * Include the plugin's main file the way wp-settings.php does: at global scope.
+	 *
+	 * Core includes active plugins from the top level of wp-settings.php, so any
+	 * variable a plugin assigns at file scope is a global that its callbacks can
+	 * read with `global $name`. Including from inside a method would make those
+	 * variables method-local and silently break that (common) pattern, so every
+	 * variable the file defines is promoted to $GLOBALS after the include.
+	 *
+	 * @param string $file Absolute path of the main plugin file.
+	 */
+	private static function include_at_global_scope( string $file ): void {
+		include_once $file;
+
+		foreach ( get_defined_vars() as $wpbp_name => $wpbp_value ) {
+			if ( 'file' === $wpbp_name ) {
+				continue;
+			}
+			$GLOBALS[ $wpbp_name ] = $wpbp_value;
+		}
 	}
 
 	/**

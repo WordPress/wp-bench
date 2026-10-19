@@ -9,7 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 ArtifactKind = Literal[
     "php_snippet",
@@ -81,12 +88,22 @@ class ModelConfig(StrictModel):
 
 class GraderConfig(StrictModel):
     kind: Literal["docker", "cli"] = "docker"
-    image: str = "ghcr.io/wordpress/wp-bench-grader:latest"
+    image: str = "wp-bench-grader:dev"
     container_name: str = "wp-bench-grader"
     base_url: str = "http://localhost:8888"
     timeout_seconds: int = Field(default=90, gt=0)
     setup_timeout_seconds: int = Field(default=600, gt=0)
-    wp_env_dir: Path | None = None
+    #: Limits apply to each disposable runtime, including its child processes.
+    container_cpus: float = Field(default=1.0, gt=0)
+    container_memory_mb: int = Field(default=512, gt=0)
+    container_filesystem_mb: int = Field(default=256, gt=0)
+    container_pids_limit: int = Field(default=64, gt=0)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def database(self) -> Literal["sqlite"]:
+        """Record the sole supported backend in result metadata."""
+        return "sqlite"
 
     @model_validator(mode="before")
     @classmethod
@@ -108,6 +125,10 @@ ExecutionIsolation = Literal["reset_per_test", "none"]
 
 
 class RunConfig(StrictModel):
+    #: Re-validated on assignment so CLI flag overrides go through the same
+    #: exclusive-mode rules as a config file.
+    model_config = ConfigDict(validate_assignment=True)
+
     suite: str = "wp-core-v1"
     limit: int | None = Field(default=None, gt=0)
     test_ids: list[str] = Field(default_factory=list)
@@ -138,23 +159,9 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _validate_execution_concurrency(self) -> RunConfig:
-        """Reject concurrency the isolation strategy cannot support.
-
-        ``reset_per_test`` isolation resets one shared WordPress runtime
-        before every execution test, which is only sound when execution
-        tests run serially. Fail loudly instead of silently sharing mutable
-        WordPress state across concurrent tests.
-        """
+        """Bound the number of simultaneous candidate executions."""
         if self.execution_concurrency < 1:
             raise ValueError("run.execution_concurrency must be >= 1")
-        if self.execution_isolation == "reset_per_test" and self.execution_concurrency > 1:
-            raise ValueError(
-                "run.execution_concurrency must be 1 when "
-                "run.execution_isolation is 'reset_per_test': concurrent tests "
-                "would share one mutable WordPress runtime. Set "
-                "run.execution_isolation to 'none' to opt out of isolation "
-                "(not valid for official benchmark runs)."
-            )
         return self
 
     @model_validator(mode="after")
@@ -168,13 +175,10 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _validate_exclusive_modes(self) -> RunConfig:
-        if self.check_exploits and self.check_reference_solution:
-            raise ValueError(
-                "run.check_exploits and run.check_reference_solution are "
-                "separate audit modes and cannot both be enabled."
-            )
-        if self.check_exploits and self.dry_run:
-            raise ValueError("run.check_exploits cannot be combined with run.dry_run.")
+        modes = ("dry_run", "check_reference_solution", "check_exploits")
+        enabled = [f"run.{name}" for name in modes if getattr(self, name)]
+        if len(enabled) > 1:
+            raise ValueError(f"{' and '.join(enabled)} cannot be combined: pick one mode.")
         return self
 
 
@@ -200,6 +204,8 @@ class SkillsConfig(StrictModel):
     #: Skip the baseline (no-skills) variant. Diagnostic escape hatch: the
     #: default in-run A/B is what makes results comparable.
     only: bool = False
+
+    model_config = ConfigDict(validate_assignment=True)
 
     @model_validator(mode="after")
     def _validate_only_requires_paths(self) -> SkillsConfig:
@@ -263,11 +269,6 @@ class HarnessConfig(StrictModel):
             cache_dir = data["dataset"].get("cache_dir")
             if cache_dir:
                 data["dataset"]["cache_dir"] = resolve_path(cache_dir)
-
-        if "grader" in data and isinstance(data["grader"], dict):
-            wp_env_dir = data["grader"].get("wp_env_dir")
-            if wp_env_dir:
-                data["grader"]["wp_env_dir"] = resolve_path(wp_env_dir)
 
         if "output" in data and isinstance(data["output"], dict):
             for key in ("path", "jsonl_path"):

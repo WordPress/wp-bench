@@ -42,7 +42,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="Reviewer contract: expected",
         category="general",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={"required_patterns": [{"pattern": "ref", "weight": 1}]},
@@ -79,7 +78,7 @@ def test_reference_solution_mode_executes_reference_solution(
     calls: list[tuple[str, dict]] = []
     monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
 
     def fake_execute_artifact(artifact: Any, verification_spec: dict) -> ExecutionResult:
         calls.append((artifact.code, verification_spec))
@@ -114,7 +113,7 @@ def test_reference_solution_mode_exits_nonzero_on_failed_reference(
     config = _config(tmp_path)
     monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
     runner = BenchmarkRunner(config)
-    runner.environment.setup = lambda: None  # type: ignore[method-assign]
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
 
     def fake_execute_artifact(artifact: Any, verification_spec: dict[str, Any]) -> ExecutionResult:
         return _failing_result()

@@ -15,7 +15,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=[],
         test_function=None,
         static_checks={},
@@ -77,3 +76,32 @@ def test_dry_run_zero_selection_fails_loudly(tmp_path) -> None:
     result = CliRunner().invoke(app, ["run", "--config", str(config_path), "--dry-run"])
     assert result.exit_code == 1
     assert "No execution tests selected" in result.output
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--check-reference-solution", "--check-exploits"],
+        ["--dry-run", "--check-exploits"],
+        ["--dry-run", "--check-reference-solution"],
+    ],
+)
+def test_audit_mode_flags_are_mutually_exclusive(flags: list[str]) -> None:
+    from typer.testing import CliRunner
+
+    from wp_bench.cli import app
+
+    result = CliRunner().invoke(app, ["run", *flags])
+    assert result.exit_code == 1
+    # The console wraps long lines, so compare on collapsed whitespace.
+    assert "cannot be combined" in " ".join(result.output.split())
+
+
+def test_limit_zero_fails_with_the_config_message() -> None:
+    from typer.testing import CliRunner
+
+    from wp_bench.cli import app
+
+    result = CliRunner().invoke(app, ["run", "--dry-run", "--limit", "0"])
+    assert result.exit_code == 1
+    assert "greater than 0" in result.output

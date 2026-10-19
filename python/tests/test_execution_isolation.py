@@ -27,7 +27,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={},
@@ -59,11 +58,16 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
 class SpyEnvironment:
     """Records the interleaving of reset and execute calls."""
 
+    image_id = "sha256:test"
+    def release(self) -> None: ...
+    def close(self) -> None: ...
+
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def setup(self) -> None:
+    def setup(self, *, capture_baseline: bool = True) -> None:
         self.calls.append("setup")
+        self.capture_baseline = capture_baseline
 
     def reset(self) -> None:
         self.calls.append("reset")
@@ -156,10 +160,9 @@ def test_multi_model_runner_resets_between_models(
     assert spy.calls == ["setup", "reset", "execute", "reset", "execute"]
 
 
-def test_concurrency_above_one_rejected_for_reset_per_test() -> None:
-    """reset_per_test isolation cannot support concurrent execution tests."""
-    with pytest.raises(ValueError, match="execution_concurrency must be 1"):
-        RunConfig(execution_isolation="reset_per_test", execution_concurrency=4)
+def test_reset_per_test_allows_concurrency() -> None:
+    config = RunConfig(execution_isolation="reset_per_test", execution_concurrency=4)
+    assert config.execution_concurrency == 4
 
 
 def test_isolation_none_allows_concurrency() -> None:
@@ -218,3 +221,43 @@ def test_isolation_none_still_runs_all_tests(
     assert spy.calls.count("execute") == 2
     assert spy.calls.count("reset") == 0
     assert payload["metadata"]["runtime_isolation"] == "none"
+
+
+def test_isolation_none_does_not_capture_a_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Capturing a baseline runs `wp db reset`. A run that never restores one
+    must not destroy database state the caller deliberately kept."""
+    tests = [_execution_test("e-one")]
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: tests)
+    config = _config(tmp_path, execution_isolation="none", execution_concurrency=2)
+    runner = BenchmarkRunner(config)
+    spy = SpyEnvironment()
+    runner.environment = spy  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
+
+    runner.run()
+
+    assert spy.capture_baseline is False
+
+
+def test_reset_per_test_captures_a_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tests = [_execution_test("e-one")]
+    monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: tests)
+    config = _config(tmp_path)
+    runner = BenchmarkRunner(config)
+    spy = SpyEnvironment()
+    runner.environment = spy  # type: ignore[assignment]
+    monkeypatch.setattr(
+        runner.model, "generate_with_metadata", lambda prompt: fake_generation("```php\ncode\n```")
+    )
+
+    runner.run()
+
+    assert spy.capture_baseline is True

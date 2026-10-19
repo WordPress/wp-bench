@@ -1,12 +1,12 @@
 """Deterministic, stratified test selection for limited runs.
 
 When a run is limited (``run.limit``), tests are selected with a seeded,
-category/difficulty-stratified strategy instead of "first N by file
+category-stratified strategy instead of "first N by file
 order". First-N overrepresents whichever files sort first, which makes
 quick provider comparisons biased and misleading. Seeded selection keeps
 limited runs deterministic (same seed = same subset), tunable (different
 seed = different subset), and representative (round-robin across
-category/difficulty groups).
+categories).
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def select_tests(
       unaffected by limit or seed (filtering by ID happens upstream).
     - No limit: all tests in dataset order (canonical full-run behavior).
     - Limit: seeded stratified sampling. Tests are grouped by
-      (category, difficulty); each group is shuffled with the seed and
+      category; each group is shuffled with the seed and
       groups are drained round-robin (in deterministic group order) until
       the limit is reached, so small subsets still touch as many groups
       as possible. The final selection is sorted by test id for stable
@@ -42,7 +42,7 @@ def select_tests(
 
     groups: dict[Any, list[Any]] = defaultdict(list)
     for test in tests:
-        key = (getattr(test, "category", ""), getattr(test, "difficulty", ""))
+        key = getattr(test, "category", "")
         groups[key].append(test)
 
     rng = random.Random(seed)

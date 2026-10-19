@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-gb_block_hooks",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Block Hooks",
     "description": "Code generation tasks for WordPress Block Hooks APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-gb-block-hooks-001",
       "category": "gb-block-hooks",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a dynamic block named 'wpbp/cta-hook' that hooks after every core/paragraph block and renders '<p>CTA</p>'.",
       "expected_behavior": "`wpbp_gb_block_hooks_001()` registers `wpbp/cta-hook` with server-side Block Hooks metadata targeting `core/paragraph` in the `after` position and a render callback. Runtime validation checks the block registry, `get_hooked_blocks()`, serialized insertion from `apply_block_hooks_to_content()`, and rendered output through `do_blocks()`.",
       "requirements": [
@@ -77,7 +76,6 @@
     {
       "id": "e-gb-block-hooks-002",
       "category": "gb-block-hooks",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that adds 'wpbp/context-note' as a hooked block only as the first child of core/group blocks when the Block Hooks context array has slug 'wpbp-pattern'.",
       "expected_behavior": "`wpbp_gb_block_hooks_002()` registers a `hooked_block_types` filter that preserves the incoming list, inspects the relative position, anchor block, and context, and appends `wpbp/context-note` only for `core/group` in the `first_child` position when the context slug is `wpbp-pattern`. Runtime validation checks direct filter output and serialized insertion.",
       "requirements": [
@@ -141,7 +139,6 @@
     {
       "id": "e-gb-block-hooks-003",
       "category": "gb-block-hooks",
-      "difficulty": "hard",
       "prompt": "Implement a function that applies Block Hooks to a supplied post object and returns both the updated raw content and the root-level ignored hooked block names WordPress reports.",
       "expected_behavior": "`wpbp_gb_block_hooks_003()` runs the post-object Block Hooks algorithm with the WordPress callback that inserts hooked blocks and records ignored hooked block metadata. It returns an array with `content` containing the updated raw block markup and `ignored` containing the root-level ignored hooked block names populated by WordPress.",
       "requirements": [
@@ -199,7 +196,6 @@
     {
       "id": "e-gb-block-hooks-004",
       "category": "gb-block-hooks",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a dynamic block named 'wpbp/single-hook' that hooks after core/paragraph, renders '<p>Once</p>', and allows only one instance in a context.",
       "expected_behavior": "`wpbp_gb_block_hooks_004()` registers `wpbp/single-hook` with Block Hooks metadata targeting `core/paragraph` after the anchor, a render callback, and block supports that disable multiple instances. Runtime validation checks the registry support flag and verifies that WordPress inserts the hooked block only once across repeated anchors and does not add another copy when one already exists.",
       "requirements": [

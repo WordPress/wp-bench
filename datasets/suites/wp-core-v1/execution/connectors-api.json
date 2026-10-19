@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-connectors_api",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Connectors API",
     "description": "Code generation tasks for WordPress Connectors API APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-connectors-api-001",
       "category": "connectors-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that reports whether WordPress has registered the built-in Akismet connector through the public Connectors API.",
       "expected_behavior": "`wpbp_connectors_api_001()` uses `wp_is_connector_registered()` to check the `akismet` connector after WordPress connector initialization. The runtime calls the helper twice: once with Akismet registered (expects true) and once with Akismet temporarily unregistered (expects false), so a hard-coded `return true` fails; the connector is restored afterward.",
       "requirements": [
@@ -63,7 +62,6 @@
     {
       "id": "e-connectors-api-002",
       "category": "connectors-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that safely returns connector data for the supplied connector ID through the public Connectors API without triggering a not-found registry notice.",
       "expected_behavior": "`wpbp_connectors_api_002()` checks whether the supplied ID is registered before retrieving connector data, returning `null` for unknown IDs without causing a `_doing_it_wrong()` notice. Runtime validation checks Akismet's type, authentication, and plugin metadata, plus a missing-ID case.",
       "requirements": [
@@ -116,7 +114,6 @@
     {
       "id": "e-connectors-api-003",
       "category": "connectors-api",
-      "difficulty": "intermediate",
       "prompt": "Register a Connectors API connector with the ID 'wpbp_supportdesk' so it is discoverable by WordPress. It should represent a non-AI support desk provider with no authentication and the plugin file 'wpbp-supportdesk/wpbp-supportdesk.php'.",
       "expected_behavior": "Adds a callback on `wp_connectors_init` that uses the provided `WP_Connector_Registry` instance to register `wpbp_supportdesk` with type `support_desk`, authentication method `none`, and the requested plugin file. Runtime validation dispatches the connector init hook and verifies discovery through the public query API.",
       "requirements": [
@@ -185,7 +182,6 @@
     {
       "id": "e-connectors-api-004",
       "category": "connectors-api",
-      "difficulty": "basic",
       "prompt": "Register a connector with the ID 'wpbp_crm' through the Connectors API extension action: name 'WPBP CRM', type 'crm', API-key authentication with no explicit setting name.",
       "expected_behavior": "The connector registers from a `wp_connectors_init` callback with `authentication => array( 'method' => 'api_key' )`. The runtime re-fires the action and verifies the stored connector, including the registry's auto-generated setting name `connectors_crm_wpbp_crm_api_key` and the default `plugin.is_active` callback.",
       "requirements": [
@@ -237,7 +233,6 @@
     {
       "id": "e-connectors-api-006",
       "category": "connectors-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that returns the sorted IDs of every registered connector of the supplied type, using the public Connectors API.",
       "expected_behavior": "`wpbp_connectors_api_006()` enumerates `wp_get_connectors()` and filters on each connector's `type`. The runtime registers two fixture connectors of a private type and probes three different types, so no constant return passes.",
       "requirements": [
@@ -285,7 +280,6 @@
     {
       "id": "e-connectors-api-008",
       "category": "connectors-api",
-      "difficulty": "advanced",
       "prompt": "Implement a function that attempts to register an 'ai_provider' connector with the ID 'wpbp_ai_probe' (name 'WPBP AI Probe', API-key authentication) and returns whether the registry accepted it.",
       "expected_behavior": "Registering an `ai_provider` connector silently returns null when `wp_supports_ai()` is false. The runtime calls the function with AI enabled (expects registration) and again with AI force-disabled through the `wp_supports_ai` filter (expects rejection), so the function must reflect real registry behavior.",
       "requirements": [
@@ -330,7 +324,6 @@
     {
       "id": "e-connectors-api-009",
       "category": "connectors-api",
-      "difficulty": "basic",
       "prompt": "Implement a function that reports whether the plugin backing the supplied connector is currently active, by invoking the connector's own plugin is_active callback. Return null when the connector is not registered, without triggering any registry notice.",
       "expected_behavior": "`wpbp_connectors_api_009()` gates with `wp_is_connector_registered()`, reads `plugin.is_active` from the connector data, and invokes it. The runtime registers a fixture whose callback reads a mutable global and probes both toggle states on the same connector (forcing real invocation), plus akismet (inactive here) and an unknown ID.",
       "requirements": [
@@ -382,7 +375,6 @@
     {
       "id": "e-connectors-api-010",
       "category": "connectors-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that renames the built-in 'akismet' connector to 'WPBP Antispam' while preserving every other field, using the Connectors API's supported override approach: unregister, modify the returned data, and re-register.",
       "expected_behavior": "`wpbp_connectors_api_010()` follows the documented override recipe. The runtime snapshots the connector before the call and verifies afterward that only the name changed and every other stored field is identical.",
       "requirements": [
@@ -426,7 +418,6 @@
     {
       "id": "e-connectors-api-011",
       "category": "connectors-api",
-      "difficulty": "advanced",
       "prompt": "Implement a function that registers a connector under the supplied ID with name 'WPBP Probe', type 'wpbp_probe', and no authentication, but only when the ID is valid for the Connectors API (lowercase alphanumerics, hyphens, and underscores). Return true when registered, false otherwise. Invalid IDs must not reach the registry.",
       "expected_behavior": "`wpbp_connectors_api_011()` validates the ID against the registry's `^[a-z0-9_-]+$` contract before calling `register()`, because an invalid ID passed to the registry triggers `_doing_it_wrong` (which fails the test outright). The runtime probes a valid ID (and inspects the stored data) plus four invalid IDs isolating spaces, uppercase, slashes, and periods.",
       "requirements": [
@@ -465,7 +456,6 @@
     {
       "id": "e-connectors-api-013",
       "category": "connectors-api",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers connector data under the supplied ID only when it is safe to do so, returning 'exists' when the ID is already registered, 'invalid' when the args lack a valid authentication array (method 'api_key' or 'none'), and 'registered' on success. Already-registered IDs and missing or invalid authentication must never reach the registry.",
       "expected_behavior": "`wpbp_connectors_api_013()` checks `wp_is_connector_registered()` first and validates the authentication shape before calling the registry, because the registry rejects bad args with `_doing_it_wrong`. The runtime probes all three outcomes, including two invalid authentication shapes, with otherwise-valid connector data.",
       "requirements": [

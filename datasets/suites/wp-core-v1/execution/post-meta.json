@@ -1,17 +1,16 @@
 {
   "id": "wp-core-execution-v1-post_meta",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "metadata": {
     "name": "WordPress Core Execution Tests - Post Meta",
     "description": "Code generation tasks for WordPress Post Meta APIs",
-    "wp_version": "7.0",
+    "wp_version": "7.1",
     "created_at": "2026-05-21"
   },
   "tests": [
     {
       "id": "e-post-meta-001",
       "category": "post-meta",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that increments a numeric post meta counter and returns the new count.",
       "expected_behavior": "`wpbp_post_meta_001()` reads the supplied post meta key with `get_post_meta()`, treats a missing value as zero, increments it, persists the new value with `update_post_meta()`, and returns the new integer count. Runtime validation checks consecutive calls and the stored meta value.",
       "requirements": [
@@ -58,7 +57,6 @@
     {
       "id": "e-post-meta-002",
       "category": "post-meta",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers a protected string post meta field named '_wpbp_subtitle' for REST exposure on posts.",
       "expected_behavior": "`wpbp_post_meta_002()` registers `_wpbp_subtitle` for the `post` post type with `register_post_meta()`, stores a single string value, exposes it through REST metadata, sanitizes incoming text, and permits access to the protected key through an auth callback. Runtime validation inspects WordPress's registered meta registry and the sanitize/auth filters.",
       "requirements": [
@@ -118,7 +116,6 @@
     {
       "id": "e-post-meta-003",
       "category": "post-meta",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that deletes only post meta entries whose stored value matches the supplied value.",
       "expected_behavior": "`wpbp_post_meta_003()` calls `delete_post_meta()` with the supplied previous value so non-matching rows are preserved. Runtime validation creates multiple values for the same key, verifies a wrong value deletes nothing, then verifies only the matching value is removed.",
       "requirements": [
@@ -160,7 +157,6 @@
     {
       "id": "e-post-meta-004",
       "category": "post-meta",
-      "difficulty": "basic",
       "prompt": "Implement a function that returns every stored value for a multi-value post meta key.",
       "expected_behavior": "`wpbp_post_meta_004()` uses `get_post_meta()` in multi-value mode for the supplied key, returning the full array of stored values instead of collapsing to the first value. Runtime validation checks both populated and missing keys.",
       "requirements": [
@@ -202,7 +198,6 @@
     {
       "id": "e-post-meta-005",
       "category": "post-meta",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that stores JSON text containing escaped quotes as post meta without corrupting it.",
       "expected_behavior": "`wpbp_post_meta_005()` compensates for WordPress's unslashing of post meta values by slashing JSON text before calling `update_post_meta()`, then returns the stored value. Runtime validation uses JSON containing escaped quotes and checks both the return value and stored meta.",
       "requirements": [
@@ -249,7 +244,6 @@
     {
       "id": "e-post-meta-006",
       "category": "post-meta",
-      "difficulty": "intermediate",
       "prompt": "Implement a function that registers an integer post meta field named '_wpbp_rating' for the 'post' object subtype with a default value of 0.",
       "expected_behavior": "`wpbp_post_meta_006()` registers `_wpbp_rating` with `register_meta()` for the `post` object type and `post` object subtype, using a single integer value, default `0`, and REST exposure. Runtime validation inspects WordPress's registered meta registry and verifies the default returned for a post without stored rating meta.",
       "requirements": [

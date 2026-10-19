@@ -4,7 +4,7 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 
 ## Project Structure
 - `python/`: Typer CLI (`wp-bench`), config loader, LiteLLM adapters, scoring.
-- `runtime/`: WordPress 6.9 plugin and Docker/wp-env assets that execute `wp bench verify`.
+- `runtime/`: WordPress 7.1 plugin and SQLite Docker assets that execute the verifier via `wp eval-file`.
 - `datasets/`: Canonical suites (`suites/<suite>/execution/*.json`), HF builder (`wp_bench.py`), export helper.
 - `legacy/wp-cli-runner/`: Archived PHP-first runner; avoid changes unless documenting history.
 - `notebooks/` and `staging/`: Scratch space for experiments; avoid committing large artifacts to git.
@@ -17,8 +17,10 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 - Lint: `ruff python`.
 - Type check: `mypy python`.
 - Unit tests: `pytest python` (use `-k <pattern>` to scope).
-- Start WordPress runtime (local): `cd runtime && npx wp-env start`.
+- Start SQLite WordPress runtime (local): `cd runtime && docker compose up -d --build --renew-anon-volumes --wait`.
 - Build Docker grader: `cd runtime && docker build -t wp-bench-grader:dev .`.
+- Verify private runtime isolation: `WP_BENCH_TEST_IMAGE=wp-bench-grader:dev pytest python/tests/test_container_runtime_integration.py -q`.
+- Run isolated tests concurrently: `wp-bench run --config wp-bench.example.yaml --execution-concurrency 4`. Every candidate uses a fresh container; allocate host capacity for each worker's limits.
 
 ## Coding Style & Naming
 - Python: 4-space indent, type hints on public functions, prefer dataclasses/pydantic for payloads. Keep Typer commands in `wp_bench/cli.py` thin and delegate to `core.py`. Use `snake_case`; CLI flags mirror config keys.
@@ -27,7 +29,7 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 
 ## Testing Guidelines
 - Add `test_*.py` under `python/tests` near the feature touched. Favor deterministic fixtures; mock external services (`litellm`, HTTP) at boundaries.
-- For runtime changes, run `npx wp-env run cli wp bench verify --payload=<base64>` against a minimal snippet to sanity-check static/runtime assertions. If adding Docker paths, ensure the built image boots and reaches MySQL.
+- For runtime changes, send a JSON payload on stdin to `docker compose -f runtime/compose.yaml exec -T grader wp eval-file /var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php` to sanity-check static/runtime assertions. Ensure the built image boots with SQLite, passes its healthcheck, and restores a clean database between tests.
 - Aim to cover new code paths; call out gaps in the PR if integration setup is non-trivial.
 
 ## Commit & Pull Request Guidelines

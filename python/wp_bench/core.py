@@ -4,8 +4,8 @@ from __future__ import annotations
 import threading
 import traceback
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
+from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager, suppress
 from typing import Any
 
 from .artifacts import (
@@ -53,24 +53,30 @@ from .utils import sha256
 
 
 @contextmanager
-def _graded_run(stream: RecordStream) -> Iterator[None]:
-    """Own a run's record stream and report a failed pass, once.
-
-    Every run mode needs the same three things: the stream released
-    however the run ends, a TestError rendered and exited on, and Ctrl-C
-    reported as an abort. Keeping them in one place is what stops a new
-    run mode from silently getting one of the three wrong -- the exploit
-    audit already had to re-add its own copy.
-    """
+def _graded_run(stream: RecordStream, environment: WordPressEnvironment) -> Iterator[None]:
+    """Own the record stream and runtime cleanup, and report failed passes."""
+    failed = False
     try:
         with stream:
             yield
     except TestError as error:
+        failed = True
         print_test_error(error)
         raise SystemExit(1) from error
     except KeyboardInterrupt:
+        failed = True
         print_abort_message()
         raise SystemExit(130) from None
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        # A cleanup failure must not replace the error that ended the run.
+        try:
+            environment.close()
+        except RuntimeError:
+            if not failed:
+                raise
 
 
 class _ResultBookkeeping:
@@ -276,6 +282,11 @@ class _ContinueOnErrorPolicy:
             raise self.last_error
 
 
+def _restores_a_baseline(config: HarnessConfig) -> bool:
+    """Whether execution needs a private baseline rather than shared state."""
+    return config.run.execution_isolation == "reset_per_test"
+
+
 def _run_isolated_execution_loop(
     *,
     tests_to_run: list[Any],
@@ -288,10 +299,9 @@ def _run_isolated_execution_loop(
 ) -> None:
     """Run execution-style tests honoring the configured isolation strategy.
 
-    ``reset_per_test`` (default): tests run serially and the WordPress
-    environment is reset to a known baseline before every test, so no test
-    can observe state (options, posts, roles, hooks persisted to DB, etc.)
-    left behind by a previous test or a previous model run.
+    ``reset_per_test`` (default): each test uses a fresh container and a copy
+    of the host-held database baseline, with at most execution_concurrency
+    tests in flight. Serial execution uses the same isolation path.
 
     ``none``: legacy concurrent behavior against a shared environment,
     bounded by ``run.execution_concurrency``. Not valid for official runs.
@@ -311,23 +321,33 @@ def _run_isolated_execution_loop(
         progress_label: Label for the progress bar.
     """
     policy = _ContinueOnErrorPolicy(config.run.continue_on_error)
-    if config.run.execution_isolation != "reset_per_test":
+    isolate = config.run.execution_isolation == "reset_per_test"
+
+    def isolated_test(test: Any) -> Any:
+        # Reset failures are environment failures, outside the TestError policy.
+        environment.reset()
+        try:
+            return process_test(test)
+        finally:
+            environment.release()
+
+    if config.run.execution_concurrency > 1 or not isolate:
         _run_concurrent_loop(
             tests_to_run=tests_to_run,
             max_workers=config.run.execution_concurrency,
             progress_label=progress_label,
-            process_test=process_test,
+            process_test=isolated_test if isolate else process_test,
             on_result=on_result,
             on_error=on_error,
             policy=policy,
+            on_abort=environment.close,
         )
         return
     with create_progress() as progress:
         task = progress.add_task(progress_label, total=len(tests_to_run))
         for test in tests_to_run:
-            environment.reset()
             try:
-                result = process_test(test)
+                result = isolated_test(test)
             except TestError as error:
                 if policy.register_error(error):
                     raise
@@ -349,32 +369,72 @@ def _run_concurrent_loop(
     on_result: Any,
     on_error: Any,
     policy: _ContinueOnErrorPolicy,
+    on_abort: Any,
 ) -> None:
     """Run tests concurrently, honoring the continue-on-error policy.
 
-    The concurrent core for the ``none``-isolation execution branch. A
-    per-test error aborts (cancelling pending futures) unless the policy
-    records it and lets the run continue.
+    Interrupts and errors cancel queued tests and remove active runtimes
+    before waiting for running threads. This also catches interrupts while
+    as_completed is waiting, rather than only during future.result().
     """
     with create_progress() as progress:
         task = progress.add_task(progress_label, total=len(tests_to_run))
+        stopping = threading.Event()
+
+        def run_test(test: Any) -> Any:
+            if stopping.is_set():
+                raise CancelledError()
+            return process_test(test)
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(process_test, test): test for test in tests_to_run}
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                except TestError as error:
-                    if policy.register_error(error):
-                        for f in futures:
-                            f.cancel()
-                        raise
-                    print_test_warning(error)
-                    result = on_error(futures[future], error)
-                else:
-                    policy.record_success()
-                on_result(result)
-                progress.update(task, advance=1)
+            futures = {}
+            try:
+                for test in tests_to_run:
+                    futures[executor.submit(run_test, test)] = test
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                    except TestError as error:
+                        if policy.register_error(error):
+                            raise
+                        print_test_warning(error)
+                        result = on_error(futures[future], error)
+                    else:
+                        policy.record_success()
+                    on_result(result)
+                    progress.update(task, advance=1)
+            except BaseException:
+                stopping.set()
+                for future in futures:
+                    future.cancel()
+                # Cleanup errors must not mask the error that aborted the run.
+                with suppress(RuntimeError):
+                    on_abort()
+                raise
     policy.finish()
+
+
+#: Told to the model with every execution prompt. The grader loads the
+#: submission into an already-booted WordPress (after ``init``), so code that
+#: defers its registrations to the ``init`` action -- idiomatic in a plugin --
+#: would silently never run. Saying so keeps the benchmark about WordPress
+#: knowledge rather than about guessing the harness's load order.
+PLUGIN_EXECUTION_CONTEXT_NOTE = (
+    "Execution context: the plugin is installed and its main file is included into a "
+    "WordPress site that has already finished booting (plugins_loaded and init have "
+    "already fired). Write it as a normal plugin anyway: attach behavior to hooks with "
+    "add_action and add_filter exactly as you would in production, because the grader "
+    "fires the relevant actions itself. Do not skip hook registration behind "
+    "did_action() checks."
+)
+
+EXECUTION_CONTEXT_NOTE = (
+    "Execution context: this code is loaded into a WordPress site that has already "
+    "finished booting (the init action has already fired, as have plugins_loaded, "
+    "after_setup_theme and wp_loaded), so perform any registrations or hook "
+    "attachments directly when the code runs instead of deferring them to those "
+    "boot-time actions."
+)
 
 
 class BenchmarkRunner(_ResultBookkeeping):
@@ -417,8 +477,8 @@ class BenchmarkRunner(_ResultBookkeeping):
         if self.config.run.check_exploits:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
-        self.environment.setup()
-        with _graded_run(self._stream):
+        with _graded_run(self._stream, self.environment):
+            self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
             if reference_mode:
                 self._run_reference_solution_tests(tests)
             else:
@@ -434,6 +494,11 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
+                "runtime_isolation_boundary": (
+                    "container_per_test" if _restores_a_baseline(self.config) else "shared"
+                ),
+                "execution_concurrency": self.config.run.execution_concurrency,
+                "runtime_image_id": self.environment.image_id,
                 "scoring_version": SCORING_VERSION,
                 "seed": self.config.run.seed,
                 "limit": self.config.run.limit,
@@ -587,8 +652,8 @@ class BenchmarkRunner(_ResultBookkeeping):
         rather than the WordPress behavior the task describes. Exits non-zero
         when any test is exploitable, mirroring reference-solution mode.
         """
-        self.environment.setup()
-        with _graded_run(self._stream):
+        with _graded_run(self._stream, self.environment):
+            self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
             self._run_exploit_audit_tests(tests)
 
         exploitable = [record for record in self.records if record["exploitable"]]
@@ -609,6 +674,11 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "grader": self.config.grader.model_dump(mode="json"),
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
+                "runtime_isolation_boundary": (
+                    "container_per_test" if _restores_a_baseline(self.config) else "shared"
+                ),
+                "execution_concurrency": self.config.run.execution_concurrency,
+                "runtime_image_id": self.environment.image_id,
                 "audit": audit,
             },
             "results": sort_records(self.records),
@@ -622,29 +692,38 @@ class BenchmarkRunner(_ResultBookkeeping):
     def _run_exploit_audit_tests(self, tests: list[ExecutionTest]) -> None:
         """Run every exploit candidate for each test; record exploitable ones.
 
-        Serial and reset-before-each-candidate: candidates share a gateway
-        function name and rely on per-test fixtures, so state must not leak
-        between attempts. Short-circuits a test as soon as one cheat passes.
+        Each candidate gets its own runtime. Tests can run concurrently;
+        candidates within a test run sequentially until a cheat passes.
         """
         tests_to_run = select_run_tests(tests, self.config)
-        with create_progress() as progress:
-            task = progress.add_task("Exploit audit", total=len(tests_to_run))
-            for test in tests_to_run:
-                candidates = exploit_candidates(test)
-                try:
-                    hit = self._first_passing_exploit(test, candidates)
-                except Exception as e:
-                    raise TestError(test.id, e) from e
-                record = build_exploit_audit_record(
-                    test=test,
-                    candidates_tried=len(candidates),
-                    passing_exploit=hit[0] if hit else None,
-                    exploit_code=hit[1] if hit else None,
-                )
-                with self._lock:
-                    self.records.append(record)
-                    self._stream.write(record)
-                progress.update(task, advance=1)
+        def process_test(test: ExecutionTest) -> dict[str, Any]:
+            candidates = exploit_candidates(test)
+            try:
+                hit = self._first_passing_exploit(test, candidates)
+            except Exception as e:
+                raise TestError(test.id, e) from e
+            return build_exploit_audit_record(
+                test=test,
+                candidates_tried=len(candidates),
+                passing_exploit=hit[0] if hit else None,
+                exploit_code=hit[1] if hit else None,
+            )
+
+        def on_result(record: dict[str, Any]) -> None:
+            with self._lock:
+                self.records.append(record)
+                self._stream.write(record)
+
+        _run_concurrent_loop(
+            tests_to_run=tests_to_run,
+            max_workers=self.config.run.execution_concurrency,
+            progress_label="Exploit audit",
+            process_test=process_test,
+            on_result=on_result,
+            on_error=lambda test, error: None,
+            policy=_ContinueOnErrorPolicy(False),
+            on_abort=self.environment.close,
+        )
 
     def _first_passing_exploit(
         self,
@@ -656,10 +735,18 @@ class BenchmarkRunner(_ResultBookkeeping):
         The verification spec is identical across a test's candidates, so it
         is built once here rather than per candidate. Returns None when no
         cheat passes — the test's assertions rejected every zero-effort stub.
+
+        Honors ``run.execution_isolation`` like a normal run: under
+        ``reset_per_test`` WordPress is reset before every candidate (each
+        candidate is its own execution of the test's setup/assertions);
+        under ``none`` no reset happens and the test's teardown is relied on,
+        which makes author iteration on a single test several times faster.
         """
         verification_spec = _build_verification_spec(test, self.config)
+        isolate = self.config.run.execution_isolation == "reset_per_test"
         for label, code in candidates:
-            self.environment.reset()
+            if isolate:
+                self.environment.reset()
             env_result = self.environment.execute_artifact(
                 Artifact(kind="php_snippet", code=code),
                 verification_spec,
@@ -690,9 +777,14 @@ class BenchmarkRunner(_ResultBookkeeping):
         if test.test_function:
             lines.append("")
             lines.append(f"Define this function: {test.test_function}")
+        artifact_kind = getattr(test, "artifact_kind", "php_snippet")
+        lines.append("")
         lines.append(
-            render_artifact_instructions(getattr(test, "artifact_kind", "php_snippet"))
+            PLUGIN_EXECUTION_CONTEXT_NOTE
+            if artifact_kind == "wp_plugin_files"
+            else EXECUTION_CONTEXT_NOTE
         )
+        lines.append(render_artifact_instructions(artifact_kind))
         return "\n".join(lines)
 
     @staticmethod
@@ -880,9 +972,8 @@ class MultiModelRunner:
                 f"Dataset '{self.config.dataset.name}' contains no execution "
                 "tests. Check the dataset source and suite name."
             )
-        self.environment.setup()
-
-        with _graded_run(self._stream):
+        with _graded_run(self._stream, self.environment):
+            self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
             for model_config in models:
                 for variant in self.variants:
                     display_name = f"{model_config.name}{variant.label_suffix}"
@@ -952,6 +1043,11 @@ class MultiModelRunner:
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
                 "continue_on_error": self.config.run.continue_on_error,
+                "runtime_isolation_boundary": (
+                    "container_per_test" if _restores_a_baseline(self.config) else "shared"
+                ),
+                "execution_concurrency": self.config.run.execution_concurrency,
+                "runtime_image_id": self.environment.image_id,
                 "skills": self._skills_metadata(),
                 "variants": [variant.key for variant in self.variants],
             },

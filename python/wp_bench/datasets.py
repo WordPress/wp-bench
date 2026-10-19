@@ -21,7 +21,6 @@ class ExecutionTest:
     prompt: str
     expected_behavior: str
     category: str
-    difficulty: str
     requirements: list[str]
     test_function: str | None
     static_checks: dict[str, Any]
@@ -91,7 +90,6 @@ def _load_from_huggingface(config: DatasetConfig) -> list[ExecutionTest]:
                 prompt=row["prompt"],
                 expected_behavior=row.get("expected_behavior", ""),
                 category=row.get("category", "general"),
-                difficulty=row.get("difficulty", "unknown"),
                 requirements=requirements if isinstance(requirements, list) else [],
                 test_function=row.get("test_function") or None,
                 static_checks=static_checks if isinstance(static_checks, dict) else {},
@@ -169,7 +167,6 @@ def _parse_execution_suite(path: Path) -> list[ExecutionTest]:
                 prompt=test["prompt"],
                 expected_behavior=test.get("expected_behavior", ""),
                 category=test.get("category", "general"),
-                difficulty=test.get("difficulty", "unknown"),
                 requirements=test.get("requirements", []),
                 test_function=test.get("test_function"),
                 static_checks=test.get("static_checks", {}),

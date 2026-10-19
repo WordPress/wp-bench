@@ -38,7 +38,6 @@ def load_suite(suite_name: str) -> list[dict]:
                     "prompt": t["prompt"],
                     "expected_behavior": t.get("expected_behavior", ""),
                     "category": t.get("category", "general"),
-                    "difficulty": t.get("difficulty", "unknown"),
                     "requirements": orjson.dumps(t.get("requirements", [])).decode(),
                     "test_function": t.get("test_function", ""),
                     "static_checks": orjson.dumps(t.get("static_checks", {})).decode(),

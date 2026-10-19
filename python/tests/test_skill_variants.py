@@ -33,7 +33,6 @@ def _execution_test(test_id: str = "e-one") -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={"required_patterns": [{"pattern": "code", "weight": 1}]},
@@ -53,7 +52,10 @@ def _passing_result() -> ExecutionResult:
 
 
 class FakeEnvironment:
-    def setup(self) -> None: ...
+    image_id = "sha256:test"
+    def release(self) -> None: ...
+    def close(self) -> None: ...
+    def setup(self, *, capture_baseline: bool = True) -> None: ...
     def reset(self) -> None: ...
 
     def execute_artifact(self, artifact: object, spec: dict) -> ExecutionResult:

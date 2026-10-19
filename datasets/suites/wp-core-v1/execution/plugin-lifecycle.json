@@ -1,0 +1,191 @@
+{
+  "id": "wp-core-execution-v1-plugin_lifecycle",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Plugin Lifecycle",
+    "description": "Plugin artifact tasks for WordPress plugin activation, upgrade and plugin screen integration",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-plugin-lifecycle-001",
+      "category": "plugin-lifecycle",
+      "prompt": "Build a small WordPress plugin that looks after its own stored settings across its lifecycle. When the plugin is activated it stores the option wpbp_reader_settings with its defaults: version 2, per_page 10 and show_covers true, without overwriting settings that are already there. Every time WordPress finishes loading plugins the plugin checks the stored settings and upgrades anything left behind by its version 1, which stored a single perPage entry: the reader's page size is carried over, the missing default is filled in and the current version is stamped. The upgrade must run only when the stored settings are older than the current version, and each run must add one to the option wpbp_reader_upgrades. The plugin must also tell WordPress which function to call to clean up its options when the plugin is deleted.",
+      "expected_behavior": "The main plugin file calls `register_activation_hook( __FILE__, ... )` with a seeding callback, hooks a version-gated upgrade routine to `plugins_loaded`, and calls `register_uninstall_hook( __FILE__, ... )` with a named function or static method (a closure is refused by core). Runtime validation fires the discovered `activate_wp-bench-candidate-*` action, then sets a version 1 payload and fires `plugins_loaded` twice to prove the upgrade is version gated and counted once, then checks that current settings are left alone and that the uninstall callback is recorded in the `uninstall_plugins` option.",
+      "requirements": [
+        "Register the activation routine so WordPress runs it on activation of this plugin file",
+        "Seed the defaults only when no settings are stored yet",
+        "Attach the upgrade check to the plugins_loaded action with add_action, even though this plugin file is loaded after the site has already fired plugins_loaded",
+        "Upgrade only settings older than the current version, keeping the stored page size, and add one to wpbp_reader_upgrades on each upgrade",
+        "Register an uninstall callback that is a named function or a static method rather than a closure"
+      ],
+      "artifact_kind": "wp_plugin_files",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_activation_hook",
+            "description": "Registers the activation routine",
+            "weight": 1
+          },
+          {
+            "pattern": "register_uninstall_hook",
+            "description": "Registers the uninstall callback",
+            "weight": 1
+          },
+          {
+            "pattern": "plugins_loaded",
+            "description": "Runs the upgrade check when plugins are loaded",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_reader_settings",
+            "description": "Uses the settings option",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_reader_upgrades",
+            "description": "Counts the upgrades",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_fire'] = static function ( string $hook ): void { if ( ! isset( $GLOBALS['wp_filter'][ $hook ] ) ) { return; } foreach ( $GLOBALS['wp_filter'][ $hook ]->callbacks as $callbacks ) { foreach ( $callbacks as $callback ) { $fn = $callback['function']; try { if ( is_array( $fn ) ) { $ref = new ReflectionMethod( $fn[0], $fn[1] ); } elseif ( is_string( $fn ) && str_contains( $fn, '::' ) ) { $ref = new ReflectionMethod( $fn ); } elseif ( is_object( $fn ) && ! ( $fn instanceof Closure ) ) { $ref = new ReflectionMethod( $fn, '__invoke' ); } else { $ref = new ReflectionFunction( $fn ); } } catch ( Throwable $error ) { continue; } if ( str_contains( (string) $ref->getFileName(), 'wp-bench-candidate' ) ) { call_user_func( $fn ); } } } }; delete_option( 'wpbp_reader_settings' ); delete_option( 'wpbp_reader_upgrades' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$hook = null; foreach ( array_keys( (array) $GLOBALS['wp_filter'] ) as $name ) { if ( str_starts_with( (string) $name, 'activate_wp-bench-candidate-' ) ) { $hook = $name; } } if ( null === $hook ) { return false; } do_action( $hook ); $settings = get_option( 'wpbp_reader_settings' ); return is_array( $settings ) && 2 === (int) ( $settings['version'] ?? 0 ) && 10 === (int) ( $settings['per_page'] ?? 0 ) && true === ( $settings['show_covers'] ?? null );",
+            "description": "Activation seeds the current defaults",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fire = $GLOBALS['wpbp_pl_fire']; update_option( 'wpbp_reader_settings', array( 'perPage' => 25 ) ); delete_option( 'wpbp_reader_upgrades' ); $fire( 'plugins_loaded' ); $fire( 'plugins_loaded' ); $settings = get_option( 'wpbp_reader_settings' ); return is_array( $settings ) && 2 === (int) ( $settings['version'] ?? 0 ) && 25 === (int) ( $settings['per_page'] ?? 0 ) && true === ( $settings['show_covers'] ?? null ) && ! isset( $settings['perPage'] ) && 1 === (int) get_option( 'wpbp_reader_upgrades', 0 );",
+            "description": "Version 1 settings are upgraded once, keeping the stored page size",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fire = $GLOBALS['wpbp_pl_fire']; update_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => 7, 'show_covers' => false ) ); delete_option( 'wpbp_reader_upgrades' ); $fire( 'plugins_loaded' ); $settings = get_option( 'wpbp_reader_settings' ); return is_array( $settings ) && 7 === (int) ( $settings['per_page'] ?? 0 ) && false === ( $settings['show_covers'] ?? null ) && 0 === (int) get_option( 'wpbp_reader_upgrades', 0 );",
+            "description": "Settings already at the current version are left alone and not counted",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$hook = null; foreach ( array_keys( (array) $GLOBALS['wp_filter'] ) as $name ) { if ( str_starts_with( (string) $name, 'activate_wp-bench-candidate-' ) ) { $hook = $name; } } if ( null === $hook ) { return false; } $basename = substr( (string) $hook, strlen( 'activate_' ) ); $registered = (array) get_option( 'uninstall_plugins', array() ); if ( ! isset( $registered[ $basename ] ) ) { return false; } $callback = $registered[ $basename ]; return ! ( $callback instanceof Closure ) && is_callable( $callback );",
+            "description": "The uninstall callback is recorded for this plugin and is not a closure",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$hook = null; foreach ( array_keys( (array) $GLOBALS['wp_filter'] ) as $name ) { if ( str_starts_with( (string) $name, 'activate_wp-bench-candidate-' ) ) { $hook = $name; } } if ( null === $hook ) { return false; } update_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => 7, 'show_covers' => false ) ); do_action( $hook ); $settings = get_option( 'wpbp_reader_settings' ); return 7 === (int) ( $settings['per_page'] ?? 0 ) && false === ( $settings['show_covers'] ?? null );",
+            "description": "Activating again does not overwrite existing settings",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_option( 'wpbp_reader_settings' ); delete_option( 'wpbp_reader_upgrades' ); delete_option( 'uninstall_plugins' ); remove_all_actions( 'plugins_loaded' );"
+      },
+      "reference_solution": "// Plugin artifact test: the canonical implementation is in reference_files (wpbp-reader.php).",
+      "reference_files": {
+        "wpbp-reader.php": "<?php\n/**\n * Plugin Name: WPBP Reader\n * Description: Reader settings with activation, upgrade and uninstall handling.\n * Version: 2.0.0\n */\n\nif ( ! defined( 'WPBP_READER_VERSION' ) ) {\n\tdefine( 'WPBP_READER_VERSION', 2 );\n}\n\nfunction wpbp_reader_default_settings(): array {\n\treturn array(\n\t\t'version'     => WPBP_READER_VERSION,\n\t\t'per_page'    => 10,\n\t\t'show_covers' => true,\n\t);\n}\n\nfunction wpbp_reader_activate(): void {\n\tif ( false === get_option( 'wpbp_reader_settings', false ) ) {\n\t\tadd_option( 'wpbp_reader_settings', wpbp_reader_default_settings() );\n\t}\n}\nregister_activation_hook( __FILE__, 'wpbp_reader_activate' );\n\nfunction wpbp_reader_maybe_upgrade(): void {\n\t$settings = get_option( 'wpbp_reader_settings' );\n\n\tif ( ! is_array( $settings ) ) {\n\t\treturn;\n\t}\n\n\t$version = isset( $settings['version'] ) ? (int) $settings['version'] : 1;\n\n\tif ( $version >= WPBP_READER_VERSION ) {\n\t\treturn;\n\t}\n\n\t$upgraded = wpbp_reader_default_settings();\n\n\tif ( isset( $settings['perPage'] ) ) {\n\t\t$upgraded['per_page'] = (int) $settings['perPage'];\n\t} elseif ( isset( $settings['per_page'] ) ) {\n\t\t$upgraded['per_page'] = (int) $settings['per_page'];\n\t}\n\n\tif ( isset( $settings['show_covers'] ) ) {\n\t\t$upgraded['show_covers'] = (bool) $settings['show_covers'];\n\t}\n\n\tupdate_option( 'wpbp_reader_settings', $upgraded );\n\tupdate_option( 'wpbp_reader_upgrades', (int) get_option( 'wpbp_reader_upgrades', 0 ) + 1 );\n}\nadd_action( 'plugins_loaded', 'wpbp_reader_maybe_upgrade' );\n\nfunction wpbp_reader_uninstall(): void {\n\tdelete_option( 'wpbp_reader_settings' );\n\tdelete_option( 'wpbp_reader_upgrades' );\n}\nregister_uninstall_hook( __FILE__, 'wpbp_reader_uninstall' );\n"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/plugin.php",
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'activate_wp-bench-candidate-faked/faked.php', static function () { if ( false === get_option( 'wpbp_reader_settings', false ) ) { add_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => 10, 'show_covers' => true ) ); } } ); add_action( 'plugins_loaded', static function () { $settings = get_option( 'wpbp_reader_settings' ); if ( ! is_array( $settings ) || (int) ( $settings['version'] ?? 1 ) >= 2 ) { return; } update_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => (int) ( $settings['perPage'] ?? 10 ), 'show_covers' => true ) ); update_option( 'wpbp_reader_upgrades', (int) get_option( 'wpbp_reader_upgrades', 0 ) + 1 ); } ); $registered = (array) get_option( 'uninstall_plugins', array() ); $registered['wp-bench-candidate-faked/faked.php'] = 'trim'; update_option( 'uninstall_plugins', $registered );",
+        "add_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => 10, 'show_covers' => true ) ); update_option( 'wpbp_reader_upgrades', 1 ); $registered = (array) get_option( 'uninstall_plugins', array() ); $registered['wp-bench-candidate-faked/faked.php'] = 'trim'; update_option( 'uninstall_plugins', $registered ); add_action( 'activate_wp-bench-candidate-faked/faked.php', '__return_null' );",
+        "add_action( 'activate_wp-bench-candidate-faked/faked.php', static function () { update_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => 10, 'show_covers' => true ) ); } ); add_action( 'plugins_loaded', static function () { $settings = (array) get_option( 'wpbp_reader_settings' ); update_option( 'wpbp_reader_settings', array( 'version' => 2, 'per_page' => (int) ( $settings['perPage'] ?? $settings['per_page'] ?? 10 ), 'show_covers' => (bool) ( $settings['show_covers'] ?? true ) ) ); update_option( 'wpbp_reader_upgrades', (int) get_option( 'wpbp_reader_upgrades', 0 ) + 1 ); } );"
+      ]
+    },
+    {
+      "id": "e-plugin-lifecycle-002",
+      "category": "plugin-lifecycle",
+      "prompt": "Build a small WordPress plugin that improves its own row on the Plugins screen. Its list of action links gains a 'Settings' link, ahead of the links WordPress already offers there, pointing at this site's admin page options-general.php?page=wpbp-reader. The meta line under its description gains a 'Docs' link to https://example.org/wpbp-reader-docs, after the entries WordPress already puts there. Both additions must apply to this plugin's row only, and must work no matter which directory the plugin is installed in.",
+      "expected_behavior": "The plugin builds its own file name with `plugin_basename( __FILE__ )` and uses it both for the plugin-specific action links filter (`plugin_action_links_{$file}`) and for the `$plugin_file` comparison inside the shared `plugin_row_meta` filter, prepending the settings anchor with `admin_url()` and appending the docs anchor. Runtime validation discovers the registered `plugin_action_links_wp-bench-candidate-*` hook, applies it with a deactivate link in place, and applies `plugin_row_meta` for the plugin itself and for an unrelated plugin file.",
+      "requirements": [
+        "Derive the plugin's own file name at runtime rather than hard-coding a directory",
+        "Add the Settings link through the filter WordPress offers for this plugin's own action links, ahead of the existing links, and keep them",
+        "Point the Settings link at this site's admin URL for options-general.php?page=wpbp-reader",
+        "Append a Docs link to https://example.org/wpbp-reader-docs to this plugin's row meta, keeping the entries already there",
+        "Leave other plugins' action links and row meta untouched"
+      ],
+      "artifact_kind": "wp_plugin_files",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "plugin_basename",
+            "description": "Derives the plugin file name at runtime",
+            "weight": 1
+          },
+          {
+            "pattern": "plugin_action_links",
+            "description": "Filters the plugin's action links",
+            "weight": 1
+          },
+          {
+            "pattern": "plugin_row_meta",
+            "description": "Filters the plugin row meta",
+            "weight": 1
+          },
+          {
+            "pattern": "admin_url",
+            "description": "Builds the settings URL from the site's admin URL",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_pl_links'] = static function (): string { foreach ( array_keys( (array) $GLOBALS['wp_filter'] ) as $name ) { if ( str_starts_with( (string) $name, 'plugin_action_links_wp-bench-candidate-' ) ) { return (string) $name; } } return ''; };",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$discover = $GLOBALS['wpbp_pl_links']; $hook = $discover(); if ( '' === $hook ) { return false; } $file = substr( $hook, strlen( 'plugin_action_links_' ) ); $base = array( 'deactivate' => '<a href=\"https://example.org/deactivate\">Deactivate</a>' ); $links = array_values( (array) apply_filters( $hook, $base, $file, array(), 'all' ) ); if ( 2 !== count( $links ) ) { return false; } return str_contains( $links[0], 'Settings' ) && str_contains( $links[0], admin_url( 'options-general.php?page=wpbp-reader' ) ) && str_contains( $links[1], 'Deactivate' );",
+            "description": "The Settings link is prepended to the plugin's own action links",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'deactivate' => '<a href=\"https://example.org/deactivate\">Deactivate</a>' ); $links = apply_filters( 'plugin_action_links', $base, 'other-plugin/other-plugin.php', array(), 'all' ); $links = apply_filters( 'plugin_action_links_other-plugin/other-plugin.php', $links, 'other-plugin/other-plugin.php', array(), 'all' ); return $base === $links;",
+            "description": "Another plugin's action links are untouched",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$discover = $GLOBALS['wpbp_pl_links']; $hook = $discover(); if ( '' === $hook ) { return false; } $file = substr( $hook, strlen( 'plugin_action_links_' ) ); $base = array( 'Version 2.0.0', 'By WPBP' ); $meta = array_values( (array) apply_filters( 'plugin_row_meta', $base, $file, array(), 'all' ) ); if ( 3 !== count( $meta ) ) { return false; } return 'Version 2.0.0' === $meta[0] && 'By WPBP' === $meta[1] && str_contains( $meta[2], 'Docs' ) && str_contains( $meta[2], 'https://example.org/wpbp-reader-docs' );",
+            "description": "The docs link is appended to this plugin's row meta",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$base = array( 'Version 9.9.9' ); $meta = apply_filters( 'plugin_row_meta', $base, 'other-plugin/other-plugin.php', array(), 'all' ); return $base === $meta;",
+            "description": "Another plugin's row meta is untouched",
+            "weight": 1
+          }
+        ],
+        "teardown": "remove_all_filters( 'plugin_row_meta' );"
+      },
+      "reference_solution": "// Plugin artifact test: the canonical implementation is in reference_files (wpbp-reader-links.php).",
+      "reference_files": {
+        "wpbp-reader-links.php": "<?php\n/**\n * Plugin Name: WPBP Reader Links\n * Description: Adds settings and documentation links to this plugin's row.\n * Version: 1.0.0\n */\n\nadd_filter(\n\t'plugin_action_links_' . plugin_basename( __FILE__ ),\n\tstatic function ( $actions ) {\n\t\t$settings = sprintf(\n\t\t\t'<a href=\"%s\">%s</a>',\n\t\t\tesc_url( admin_url( 'options-general.php?page=wpbp-reader' ) ),\n\t\t\t'Settings'\n\t\t);\n\n\t\treturn array_merge( array( 'wpbp_settings' => $settings ), (array) $actions );\n\t}\n);\n\nadd_filter(\n\t'plugin_row_meta',\n\tstatic function ( $meta, $plugin_file ) {\n\t\tif ( plugin_basename( __FILE__ ) !== $plugin_file ) {\n\t\t\treturn $meta;\n\t\t}\n\n\t\t$meta[] = sprintf(\n\t\t\t'<a href=\"%s\">%s</a>',\n\t\t\tesc_url( 'https://example.org/wpbp-reader-docs' ),\n\t\t\t'Docs'\n\t\t);\n\n\t\treturn $meta;\n\t},\n\t10,\n\t2\n);\n"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/class-wp-plugins-list-table.php",
+          "src/wp-includes/plugin.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_filter( 'plugin_action_links_wp-bench-candidate-faked/faked.php', static function ( $actions ) { $settings = sprintf( '<a href=\"%s\">%s</a>', esc_url( admin_url( 'options-general.php?page=wpbp-reader' ) ), 'Settings' ); return array_merge( array( 'wpbp_settings' => $settings ), (array) $actions ); } ); add_filter( 'plugin_row_meta', static function ( $meta ) { $meta[] = sprintf( '<a href=\"%s\">%s</a>', esc_url( 'https://example.org/wpbp-reader-docs' ), 'Docs' ); return $meta; }, 10, 2 );",
+        "add_filter( 'plugin_action_links_wp-bench-candidate-faked/faked.php', static function () { return array( 'wpbp_settings' => sprintf( '<a href=\"%s\">%s</a>', esc_url( admin_url( 'options-general.php?page=wpbp-reader' ) ), 'Settings' ) ); } ); add_filter( 'plugin_row_meta', static function ( $meta, $plugin_file ) { if ( ! str_starts_with( (string) $plugin_file, 'wp-bench-candidate-' ) ) { return $meta; } $meta[] = sprintf( '<a href=\"%s\">%s</a>', esc_url( 'https://example.org/wpbp-reader-docs' ), 'Docs' ); return $meta; }, 10, 2 );",
+        "add_filter( 'plugin_action_links_wp-bench-candidate-faked/faked.php', static function ( $actions ) { $settings = '<a href=\"/wp-admin/options-general.php?page=wpbp-reader\">Settings</a>'; $actions['wpbp_settings'] = $settings; return $actions; } ); add_filter( 'plugin_row_meta', static function ( $meta, $plugin_file ) { if ( ! str_starts_with( (string) $plugin_file, 'wp-bench-candidate-' ) ) { return $meta; } $meta[] = '<a href=\"https://example.org/wpbp-reader-docs\">Docs</a>'; return $meta; }, 10, 2 );"
+      ]
+    }
+  ]
+}

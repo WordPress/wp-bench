@@ -27,7 +27,6 @@ def _execution_test(test_id: str) -> ExecutionTest:
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={},
@@ -59,7 +58,11 @@ def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
 class QuietEnvironment:
     """Environment stub that always passes."""
 
-    def setup(self) -> None:
+    image_id = "sha256:test"
+    def release(self) -> None: ...
+    def close(self) -> None: ...
+
+    def setup(self, *, capture_baseline: bool = True) -> None:
         pass
 
     def reset(self) -> None:

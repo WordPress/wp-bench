@@ -71,7 +71,6 @@ def test_skip_runtime_controls_verification_payload() -> None:
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=[],
         test_function=None,
         static_checks={"required_patterns": [{"pattern": "x", "weight": 1}]},
@@ -106,7 +105,6 @@ def test_skipped_dimension_not_scored() -> None:
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
-        difficulty="basic",
         requirements=[],
         test_function=None,
         static_checks={"required_patterns": [{"pattern": "x", "weight": 1}]},
@@ -122,3 +120,9 @@ def test_skipped_dimension_not_scored() -> None:
     # Without the skip flag this would crash-detect (no runtime weight) -> fail.
     assert scores["execution_pass"] is True
     assert scores["correctness"] == 1.0
+
+
+@pytest.mark.parametrize("field", ["container_cpus", "container_memory_mb", "container_filesystem_mb", "container_pids_limit"])
+def test_isolated_runtime_limits_cannot_be_disabled(field: str) -> None:
+    with pytest.raises(ValidationError, match="greater than 0"):
+        GraderConfig.model_validate({field: 0})

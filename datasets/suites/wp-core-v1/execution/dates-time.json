@@ -1,0 +1,334 @@
+{
+  "id": "wp-core-execution-v1-dates_time",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Dates and Time",
+    "description": "Timezone-aware date handling: site timezone rendering, UTC round trips, relative ages and local calendar-day queries.",
+    "wp_version": "7.1",
+    "created_at": "2026-09-04"
+  },
+  "tests": [
+    {
+      "id": "e-dates-time-001",
+      "category": "dates-time",
+      "prompt": "Implement a function that renders a post's publication moment in the site's timezone using a supplied PHP date format string. The result must be the local wall clock and the local UTC offset for that moment, so posts on either side of a daylight saving change are both rendered correctly.",
+      "expected_behavior": "The publication moment has to be resolved to a true Unix timestamp (`get_post_timestamp()` / `get_post_datetime()`) and rendered with `wp_date()`, which applies the site timezone at that instant. Passing `strtotime( $post->post_date_gmt )` to `date_i18n()`, running `date()` on a timestamp, or applying a fixed offset all break for at least one of the fixtures. Runtime validation formats one post from the southern-hemisphere summer and one from the winter in Australia/Sydney and compares against values computed with DateTimeImmutable, using formats that expose the offset and the timezone abbreviation.",
+      "requirements": [
+        "Render the moment the post was published, in the site's timezone",
+        "Use the supplied format string as-is",
+        "The rendered offset must be the one in force at that moment, not a fixed site offset"
+      ],
+      "test_function": "wpbp_dates_time_001( int $post_id, string $format ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_date|get_the_date",
+            "description": "Formats through the timezone-aware date API",
+            "weight": 1
+          },
+          {
+            "pattern": "get_post_timestamp|get_post_datetime|get_post_time",
+            "description": "Resolves the post's publication instant",
+            "weight": 1
+          },
+          {
+            "pattern": "\\$format",
+            "description": "Uses the supplied format",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_dt_001_tz'] = array( 'timezone_string' => get_option( 'timezone_string' ), 'gmt_offset' => get_option( 'gmt_offset' ) ); update_option( 'timezone_string', 'Australia/Sydney' ); update_option( 'gmt_offset', '' ); $summer = wp_insert_post( array( 'post_title' => 'WPBP Sydney summer', 'post_status' => 'publish', 'post_date' => '2025-01-15 09:30:00', 'post_date_gmt' => '2025-01-14 22:30:00' ) ); $winter = wp_insert_post( array( 'post_title' => 'WPBP Sydney winter', 'post_status' => 'publish', 'post_date' => '2025-07-15 09:30:00', 'post_date_gmt' => '2025-07-14 23:30:00' ) ); $GLOBALS['wpbp_dt_001'] = array( (int) $summer => '2025-01-14 22:30:00', (int) $winter => '2025-07-14 23:30:00' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_dates_time_001' ) ) { return false; } $fixtures = (array) ( $GLOBALS['wpbp_dt_001'] ?? array() ); if ( 2 !== count( $fixtures ) ) { return false; } $site = new DateTimeZone( 'Australia/Sydney' ); $utc = new DateTimeZone( 'UTC' ); $abbreviations = array(); foreach ( $fixtures as $post_id => $gmt ) { $moment = ( new DateTimeImmutable( $gmt, $utc ) )->setTimezone( $site ); foreach ( array( 'Y-m-d H:i T', 'c', 'Y-m-d H:i:s P' ) as $format ) { $actual = wpbp_dates_time_001( (int) $post_id, $format ); if ( ! is_string( $actual ) || $moment->format( $format ) !== $actual ) { return false; } } $abbreviations[] = $moment->format( 'T' ); } return 2 === count( array_unique( $abbreviations ) );",
+            "description": "Both posts render with the site wall clock and the offset in force at that moment",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( array_keys( (array) ( $GLOBALS['wpbp_dt_001'] ?? array() ) ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_dt_001'] ); $saved = (array) ( $GLOBALS['wpbp_dt_001_tz'] ?? array() ); update_option( 'timezone_string', $saved['timezone_string'] ?? '' ); update_option( 'gmt_offset', $saved['gmt_offset'] ?? 0 ); unset( $GLOBALS['wpbp_dt_001_tz'] ); "
+      },
+      "reference_solution": "function wpbp_dates_time_001( int $post_id, string $format ): string { $timestamp = get_post_timestamp( $post_id ); if ( false === $timestamp ) { return ''; } return (string) wp_date( $format, $timestamp ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php",
+          "src/wp-includes/general-template.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_dates_time_001( int $post_id, string $format ): string { $post = get_post( $post_id ); return (string) date_i18n( $format, strtotime( $post->post_date_gmt ) ); }",
+        "function wpbp_dates_time_001( int $post_id, string $format ): string { $post = get_post( $post_id ); return (string) wp_date( $format, strtotime( $post->post_date ) ); }",
+        "function wpbp_dates_time_001( int $post_id, string $format ): string { $timestamp = get_post_timestamp( $post_id ); return (string) gmdate( $format, $timestamp + 11 * HOUR_IN_SECONDS ); }"
+      ]
+    },
+    {
+      "id": "e-dates-time-002",
+      "category": "dates-time",
+      "prompt": "A form collects a date and time in the site's local timezone. Implement a function that, given that local 'Y-m-d H:i:s' string, returns an array with 'gmt' — the same moment as a UTC 'Y-m-d H:i:s' string, ready to store — and 'local' — that UTC value converted back to the site's timezone. Both sides of a daylight saving change must convert correctly.",
+      "expected_behavior": "`get_gmt_from_date()` interprets the string in the site timezone and `get_date_from_gmt()` converts back, both using the offset in force on that date; a fixed offset or `strtotime()` in the server timezone breaks one of the two fixtures. Runtime validation converts a winter and a summer moment in America/New_York and compares against values computed with DateTimeImmutable, and requires the round trip to return the original local string.",
+      "requirements": [
+        "Interpret the supplied string as a local time in the site's timezone",
+        "Return 'gmt' as the matching UTC 'Y-m-d H:i:s' string",
+        "Return 'local' as the 'gmt' value converted back to the site's timezone"
+      ],
+      "test_function": "wpbp_dates_time_002( string $local_datetime ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_gmt_from_date",
+            "description": "Converts local input to UTC",
+            "weight": 1
+          },
+          {
+            "pattern": "get_date_from_gmt",
+            "description": "Converts the stored UTC value back to site time",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_dt_002_tz'] = array( 'timezone_string' => get_option( 'timezone_string' ), 'gmt_offset' => get_option( 'gmt_offset' ) ); update_option( 'timezone_string', 'America/New_York' ); update_option( 'gmt_offset', '' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_dates_time_002' ) ) { return false; } $site = new DateTimeZone( 'America/New_York' ); $utc = new DateTimeZone( 'UTC' ); $offsets = array(); foreach ( array( '2025-01-15 09:30:00', '2025-07-15 09:30:00' ) as $local ) { $moment = new DateTimeImmutable( $local, $site ); $expected_gmt = $moment->setTimezone( $utc )->format( 'Y-m-d H:i:s' ); $result = wpbp_dates_time_002( $local ); if ( ! is_array( $result ) ) { return false; } if ( $expected_gmt !== ( $result['gmt'] ?? null ) ) { return false; } if ( $local !== ( $result['local'] ?? null ) ) { return false; } $offsets[] = $site->getOffset( $moment ); } return 2 === count( array_unique( $offsets ) );",
+            "description": "Both the winter and the summer moment convert to UTC and back with the offset in force on that date",
+            "weight": 1
+          }
+        ],
+        "teardown": "$saved = (array) ( $GLOBALS['wpbp_dt_002_tz'] ?? array() ); update_option( 'timezone_string', $saved['timezone_string'] ?? '' ); update_option( 'gmt_offset', $saved['gmt_offset'] ?? 0 ); unset( $GLOBALS['wpbp_dt_002_tz'] ); "
+      },
+      "reference_solution": "function wpbp_dates_time_002( string $local_datetime ): array { $gmt = get_gmt_from_date( $local_datetime ); return array( 'gmt' => $gmt, 'local' => get_date_from_gmt( $gmt ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/formatting.php",
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_dates_time_002( string $local_datetime ): array { $offset = (int) get_option( 'gmt_offset' ) * HOUR_IN_SECONDS; $timestamp = strtotime( $local_datetime ); $gmt = gmdate( 'Y-m-d H:i:s', $timestamp - $offset ); return array( 'gmt' => $gmt, 'local' => gmdate( 'Y-m-d H:i:s', strtotime( $gmt ) + $offset ) ); }",
+        "function wpbp_dates_time_002( string $local_datetime ): array { $gmt = gmdate( 'Y-m-d H:i:s', strtotime( $local_datetime ) - 5 * HOUR_IN_SECONDS ); return array( 'gmt' => $gmt, 'local' => get_date_from_gmt( $gmt ) ); }"
+      ]
+    },
+    {
+      "id": "e-dates-time-003",
+      "category": "dates-time",
+      "prompt": "A plugin logs an event and needs both timestamps WordPress keeps for a record: the moment in UTC (what gets stored) and the same moment on the site's clock (what gets displayed). Implement a function that returns them for right now as an array with the keys 'gmt' and 'local', both formatted 'Y-m-d H:i:s'. It must keep working after the site's timezone setting changes.",
+      "expected_behavior": "The two strings describe the same instant in different zones: `current_time( 'mysql', true )` (or `current_datetime()` converted to UTC) for 'gmt' and `current_time( 'mysql' )` for 'local'. Runtime validation checks the pair against the real clock and requires the wall-clock difference between the two strings to equal the site's UTC offset, first in Asia/Kolkata (a half-hour offset) and again after the timezone option is switched to Pacific/Auckland.",
+      "requirements": [
+        "Return both values for the same instant, formatted 'Y-m-d H:i:s'",
+        "'gmt' must be the UTC value and 'local' the site's local value",
+        "Read the site's timezone setting at call time rather than assuming a fixed offset"
+      ],
+      "test_function": "wpbp_dates_time_003(): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "current_time|current_datetime|wp_timezone",
+            "description": "Reads the current time through WordPress",
+            "weight": 1
+          },
+          {
+            "pattern": "gmt",
+            "description": "Returns the gmt key",
+            "weight": 1
+          },
+          {
+            "pattern": "local",
+            "description": "Returns the local key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_dt_003_tz'] = array( 'timezone_string' => get_option( 'timezone_string' ), 'gmt_offset' => get_option( 'gmt_offset' ) ); update_option( 'timezone_string', 'Asia/Kolkata' ); update_option( 'gmt_offset', '' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_dates_time_003' ) ) { return false; } $utc = new DateTimeZone( 'UTC' ); foreach ( array( 'Asia/Kolkata', 'Pacific/Auckland' ) as $zone ) { update_option( 'timezone_string', $zone ); $site = new DateTimeZone( $zone ); $result = wpbp_dates_time_003(); if ( ! is_array( $result ) || ! isset( $result['gmt'], $result['local'] ) ) { return false; } $gmt = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', (string) $result['gmt'], $utc ); $local = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', (string) $result['local'], $site ); if ( ! $gmt || ! $local ) { return false; } if ( abs( $gmt->getTimestamp() - time() ) > 120 ) { return false; } if ( abs( $gmt->getTimestamp() - $local->getTimestamp() ) > 2 ) { return false; } $wall = strtotime( $result['local'] . ' UTC' ) - strtotime( $result['gmt'] . ' UTC' ); if ( abs( $wall - $site->getOffset( $gmt ) ) > 1 ) { return false; } } return true;",
+            "description": "The pair describes one instant and the wall-clock gap tracks the configured timezone offset",
+            "weight": 1
+          }
+        ],
+        "teardown": "$saved = (array) ( $GLOBALS['wpbp_dt_003_tz'] ?? array() ); update_option( 'timezone_string', $saved['timezone_string'] ?? '' ); update_option( 'gmt_offset', $saved['gmt_offset'] ?? 0 ); unset( $GLOBALS['wpbp_dt_003_tz'] ); "
+      },
+      "reference_solution": "function wpbp_dates_time_003(): array { return array( 'gmt' => current_time( 'mysql', true ), 'local' => current_time( 'mysql' ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_dates_time_003(): array { $now = current_time( 'mysql' ); return array( 'gmt' => $now, 'local' => $now ); }",
+        "function wpbp_dates_time_003(): array { return array( 'gmt' => gmdate( 'Y-m-d H:i:s' ), 'local' => gmdate( 'Y-m-d H:i:s', time() + 5.5 * HOUR_IN_SECONDS ) ); }"
+      ]
+    },
+    {
+      "id": "e-dates-time-004",
+      "category": "dates-time",
+      "prompt": "Implement a function that labels when a post was published the way WordPress admin screens do: for a post published less than a week ago, the human-readable age followed by ' ago' (for example '3 hours ago'); for anything a week old or older, the publication date in the site's timezone formatted with the site's date format setting.",
+      "expected_behavior": "The age comes from `human_time_diff()` on the post's publication timestamp, the threshold is a week (`WEEK_IN_SECONDS`), and the fallback must render in the site timezone with the site's `date_format` option (`wp_date()`), not the server's timezone. Runtime validation seeds posts three hours, six days and thirty days old in Europe/Berlin and checks the exact strings, with the old post's expected value computed with DateTimeImmutable.",
+      "requirements": [
+        "Use the relative form only while the post is less than a week old, appending ' ago' to the human-readable difference",
+        "Otherwise format the publication date in the site's timezone using the site's date format setting",
+        "Base both branches on the post's publication moment"
+      ],
+      "test_function": "wpbp_dates_time_004( int $post_id ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "human_time_diff",
+            "description": "Builds the relative age",
+            "weight": 1
+          },
+          {
+            "pattern": "WEEK_IN_SECONDS|604800",
+            "description": "Uses the one week threshold",
+            "weight": 1
+          },
+          {
+            "pattern": "date_format",
+            "description": "Uses the site date format for the absolute branch",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_date|get_the_date",
+            "description": "Formats the absolute date in the site timezone",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_dt_004_tz'] = array( 'timezone_string' => get_option( 'timezone_string' ), 'gmt_offset' => get_option( 'gmt_offset' ) ); update_option( 'timezone_string', 'Europe/Berlin' ); update_option( 'gmt_offset', '' ); $now = time(); $ages = array( 'recent' => 3 * HOUR_IN_SECONDS, 'week_edge' => 6 * DAY_IN_SECONDS, 'old' => 30 * DAY_IN_SECONDS ); $fixtures = array(); foreach ( $ages as $key => $age ) { $timestamp = $now - $age; $post_id = wp_insert_post( array( 'post_title' => 'WPBP age ' . $key, 'post_status' => 'publish', 'post_date' => (string) wp_date( 'Y-m-d H:i:s', $timestamp ), 'post_date_gmt' => gmdate( 'Y-m-d H:i:s', $timestamp ) ) ); $fixtures[ $key ] = array( 'id' => (int) $post_id, 'timestamp' => $timestamp ); } $GLOBALS['wpbp_dt_004'] = $fixtures;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_dates_time_004' ) ) { return false; } $fixtures = (array) ( $GLOBALS['wpbp_dt_004'] ?? array() ); if ( 3 !== count( $fixtures ) ) { return false; } if ( '3 hours ago' !== wpbp_dates_time_004( (int) $fixtures['recent']['id'] ) ) { return false; } if ( '6 days ago' !== wpbp_dates_time_004( (int) $fixtures['week_edge']['id'] ) ) { return false; } $expected = ( new DateTimeImmutable( '@' . (int) $fixtures['old']['timestamp'] ) )->setTimezone( new DateTimeZone( 'Europe/Berlin' ) )->format( (string) get_option( 'date_format' ) ); return $expected === wpbp_dates_time_004( (int) $fixtures['old']['id'] );",
+            "description": "Recent posts read as a relative age and a month-old post falls back to the site-formatted date",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_dt_004'] ?? array() ) as $fixture ) { wp_delete_post( (int) ( $fixture['id'] ?? 0 ), true ); } unset( $GLOBALS['wpbp_dt_004'] ); $saved = (array) ( $GLOBALS['wpbp_dt_004_tz'] ?? array() ); update_option( 'timezone_string', $saved['timezone_string'] ?? '' ); update_option( 'gmt_offset', $saved['gmt_offset'] ?? 0 ); unset( $GLOBALS['wpbp_dt_004_tz'] ); "
+      },
+      "reference_solution": "function wpbp_dates_time_004( int $post_id ): string { $timestamp = get_post_timestamp( $post_id ); if ( false === $timestamp ) { return ''; } if ( ( time() - $timestamp ) < WEEK_IN_SECONDS ) { return sprintf( '%s ago', human_time_diff( $timestamp, time() ) ); } return (string) wp_date( (string) get_option( 'date_format' ), $timestamp ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/formatting.php",
+          "src/wp-includes/functions.php",
+          "src/wp-includes/general-template.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_dates_time_004( int $post_id ): string { $timestamp = get_post_timestamp( $post_id ); return sprintf( '%s ago', human_time_diff( $timestamp, time() ) ); }",
+        "function wpbp_dates_time_004( int $post_id ): string { $timestamp = get_post_timestamp( $post_id ); if ( ( time() - $timestamp ) < DAY_IN_SECONDS ) { return sprintf( '%s ago', human_time_diff( $timestamp, time() ) ); } return (string) wp_date( (string) get_option( 'date_format' ), $timestamp ); }",
+        "function wpbp_dates_time_004( int $post_id ): string { $timestamp = get_post_timestamp( $post_id ); if ( ( time() - $timestamp ) < WEEK_IN_SECONDS ) { return sprintf( '%s ago', human_time_diff( $timestamp, time() ) ); } return gmdate( 'Y-m-d', $timestamp ); }"
+      ]
+    },
+    {
+      "id": "e-dates-time-005",
+      "category": "dates-time",
+      "prompt": "Implement a function that takes a moment stored in UTC as a 'Y-m-d H:i:s' string and returns it as an ISO 8601 string (PHP's 'c' format) in the site's timezone. It must work both when the site is configured with a named timezone and when the site only has a manual UTC offset, including offsets that are not whole hours.",
+      "expected_behavior": "`wp_timezone()` handles both configurations: it returns the named zone when `timezone_string` is set and builds a ±HH:MM zone from `gmt_offset` otherwise, so `new DateTimeZone( get_option( 'timezone_string' ) )` throws on an offset-only site and whole-hour arithmetic misplaces half-hour and three-quarter-hour offsets. Runtime validation runs the same moment through Europe/Berlin, a -3.5 offset site and a +5.75 offset site, comparing against DateTimeImmutable output.",
+      "requirements": [
+        "Interpret the incoming string as UTC",
+        "Render it in the site's timezone as an ISO 8601 string with the correct UTC offset",
+        "Support sites configured with only a manual UTC offset, including fractional offsets"
+      ],
+      "test_function": "wpbp_dates_time_005( string $utc_datetime ): string",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_timezone|get_date_from_gmt",
+            "description": "Resolves the site timezone for both configurations",
+            "weight": 1
+          },
+          {
+            "pattern": "DateTimeImmutable|DateTime|format",
+            "description": "Produces an ISO 8601 string",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_dt_005_tz'] = array( 'timezone_string' => get_option( 'timezone_string' ), 'gmt_offset' => get_option( 'gmt_offset' ) ); update_option( 'timezone_string', 'Europe/Berlin' ); update_option( 'gmt_offset', '' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_dates_time_005' ) ) { return false; } $utc = new DateTimeZone( 'UTC' ); $moment = '2025-07-15 12:00:00'; $cases = array( array( 'Europe/Berlin', '', 'Europe/Berlin' ), array( '', '-3.5', '-03:30' ), array( '', '5.75', '+05:45' ) ); foreach ( $cases as $case ) { update_option( 'timezone_string', $case[0] ); update_option( 'gmt_offset', $case[1] ); $expected = ( new DateTimeImmutable( $moment, $utc ) )->setTimezone( new DateTimeZone( $case[2] ) )->format( 'c' ); $actual = wpbp_dates_time_005( $moment ); if ( ! is_string( $actual ) || $expected !== $actual ) { return false; } } return true;",
+            "description": "The moment renders correctly for a named timezone and for fractional manual offsets",
+            "weight": 1
+          }
+        ],
+        "teardown": "$saved = (array) ( $GLOBALS['wpbp_dt_005_tz'] ?? array() ); update_option( 'timezone_string', $saved['timezone_string'] ?? '' ); update_option( 'gmt_offset', $saved['gmt_offset'] ?? 0 ); unset( $GLOBALS['wpbp_dt_005_tz'] ); "
+      },
+      "reference_solution": "function wpbp_dates_time_005( string $utc_datetime ): string { $datetime = new DateTimeImmutable( $utc_datetime, new DateTimeZone( 'UTC' ) ); return $datetime->setTimezone( wp_timezone() )->format( 'c' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php",
+          "src/wp-includes/formatting.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_dates_time_005( string $utc_datetime ): string { $datetime = new DateTimeImmutable( $utc_datetime, new DateTimeZone( 'UTC' ) ); return $datetime->setTimezone( new DateTimeZone( (string) get_option( 'timezone_string' ) ) )->format( 'c' ); }",
+        "function wpbp_dates_time_005( string $utc_datetime ): string { $offset = (int) get_option( 'gmt_offset' ); $datetime = new DateTimeImmutable( $utc_datetime, new DateTimeZone( 'UTC' ) ); return $datetime->setTimezone( new DateTimeZone( sprintf( '%+03d:00', $offset ) ) )->format( 'c' ); }"
+      ]
+    },
+    {
+      "id": "e-dates-time-006",
+      "category": "dates-time",
+      "prompt": "Implement a function that returns the IDs of the published posts whose publication date falls on a given calendar day on the site's clock. The day arrives as a 'Y-m-d' string, and a post published at exactly midnight local time belongs to that day.",
+      "expected_behavior": "Posts are matched on `post_date`, which holds site-local time, with a date query on the calendar day (or an inclusive between-bounds query) — matching on `post_date_gmt` shifts the window by the site's offset, and an exclusive `after` bound drops the post published at exactly 00:00:00. Runtime validation seeds posts either side of local midnight in America/Los_Angeles, whose UTC dates deliberately disagree with their local dates, and queries three different days plus an empty one.",
+      "requirements": [
+        "Match the calendar day on the site's clock, not in UTC",
+        "Include a post published at exactly 00:00:00 local time and exclude the previous day's late evening post",
+        "Return the matching published post IDs"
+      ],
+      "test_function": "wpbp_dates_time_006( string $day ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "date_query",
+            "description": "Filters the query by date",
+            "weight": 1
+          },
+          {
+            "pattern": "WP_Query|get_posts",
+            "description": "Runs a post query",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_dt_006_tz'] = array( 'timezone_string' => get_option( 'timezone_string' ), 'gmt_offset' => get_option( 'gmt_offset' ) ); update_option( 'timezone_string', 'America/Los_Angeles' ); update_option( 'gmt_offset', '' ); $seed = array( 'eve' => array( '2025-07-15 23:30:00', '2025-07-16 06:30:00' ), 'midnight' => array( '2025-07-16 00:00:00', '2025-07-16 07:00:00' ), 'morning' => array( '2025-07-16 00:30:00', '2025-07-16 07:30:00' ), 'night' => array( '2025-07-16 23:45:00', '2025-07-17 06:45:00' ), 'earlier' => array( '2025-07-14 12:00:00', '2025-07-14 19:00:00' ) ); $fixtures = array(); foreach ( $seed as $key => $dates ) { $fixtures[ $key ] = (int) wp_insert_post( array( 'post_title' => 'WPBP day ' . $key, 'post_status' => 'publish', 'post_date' => $dates[0], 'post_date_gmt' => $dates[1] ) ); } $GLOBALS['wpbp_dt_006'] = $fixtures;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_dates_time_006' ) ) { return false; } $fixtures = (array) ( $GLOBALS['wpbp_dt_006'] ?? array() ); if ( 5 !== count( $fixtures ) ) { return false; } $normalize = static function ( $value ) { if ( ! is_array( $value ) ) { return null; } $ids = array_map( 'intval', $value ); sort( $ids ); return $ids; }; $expect = static function ( array $keys ) use ( $fixtures ) { $ids = array(); foreach ( $keys as $key ) { $ids[] = (int) $fixtures[ $key ]; } sort( $ids ); return $ids; }; if ( $normalize( wpbp_dates_time_006( '2025-07-16' ) ) !== $expect( array( 'midnight', 'morning', 'night' ) ) ) { return false; } if ( $normalize( wpbp_dates_time_006( '2025-07-15' ) ) !== $expect( array( 'eve' ) ) ) { return false; } if ( $normalize( wpbp_dates_time_006( '2025-07-14' ) ) !== $expect( array( 'earlier' ) ) ) { return false; } return array() === $normalize( wpbp_dates_time_006( '2025-07-17' ) );",
+            "description": "Days are cut on the site's clock, including the post published at exactly local midnight",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( (array) ( $GLOBALS['wpbp_dt_006'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unset( $GLOBALS['wpbp_dt_006'] ); $saved = (array) ( $GLOBALS['wpbp_dt_006_tz'] ?? array() ); update_option( 'timezone_string', $saved['timezone_string'] ?? '' ); update_option( 'gmt_offset', $saved['gmt_offset'] ?? 0 ); unset( $GLOBALS['wpbp_dt_006_tz'] ); "
+      },
+      "reference_solution": "function wpbp_dates_time_006( string $day ): array { $parts = array_map( 'intval', explode( '-', $day ) ); $query = new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => -1, 'fields' => 'ids', 'no_found_rows' => true, 'date_query' => array( array( 'year' => $parts[0], 'month' => $parts[1], 'day' => $parts[2] ) ) ) ); return array_map( 'intval', $query->posts ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-date-query.php",
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_dates_time_006( string $day ): array { $query = new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => -1, 'fields' => 'ids', 'no_found_rows' => true, 'date_query' => array( array( 'column' => 'post_date_gmt', 'after' => $day . ' 00:00:00', 'before' => $day . ' 23:59:59', 'inclusive' => true ) ) ) ); return array_map( 'intval', $query->posts ); }",
+        "function wpbp_dates_time_006( string $day ): array { $query = new WP_Query( array( 'post_type' => 'post', 'post_status' => 'publish', 'posts_per_page' => -1, 'fields' => 'ids', 'no_found_rows' => true, 'date_query' => array( array( 'after' => $day . ' 00:00:00', 'before' => $day . ' 23:59:59' ) ) ) ); return array_map( 'intval', $query->posts ); }"
+      ]
+    }
+  ]
+}

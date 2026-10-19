@@ -125,7 +125,6 @@ def _run_multi_model(monkeypatch, tmp_path: Path, names: list[str]):
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
-        difficulty="basic",
         requirements=["Requirement"],
         test_function=None,
         static_checks={},
@@ -135,8 +134,11 @@ def _run_multi_model(monkeypatch, tmp_path: Path, names: list[str]):
     )
 
     class FakeEnvironment:
+        image_id = "sha256:test"
+        def release(self) -> None: ...
+        def close(self) -> None: ...
         def __init__(self, *args: object, **kwargs: object) -> None: ...
-        def setup(self) -> None: ...
+        def setup(self, *, capture_baseline: bool = True) -> None: ...
         def reset(self) -> None: ...
 
         def execute_artifact(self, artifact: object, spec: dict) -> ExecutionResult:
