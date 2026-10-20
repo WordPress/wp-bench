@@ -441,6 +441,285 @@
         "function wpbp_caching_009( string $counter_key ): int { return (int) wp_cache_incr( $counter_key, 1, 'wpbp_counters' ); }",
         "function wpbp_caching_009( string $counter_key ): int { $total = (int) wp_cache_get( $counter_key, 'wpbp_counters' ) + 1; wp_cache_set( $counter_key, $total, 'default' ); return $total; }"
       ]
+    },
+    {
+      "id": "e-caching-010",
+      "category": "caching",
+      "prompt": "Expensive dashboard reports should be computed at most once an hour. Implement a function that returns the report for a supplied report key. When no cached copy exists it calls the supplied compute callback, keeps the result in a transient named 'wpbp_report_' followed by the report key for one hour, and returns it. While the cached copy exists it returns that copy without calling the callback again. Some reports are legitimately empty, and an empty report is still a result worth caching.",
+      "expected_behavior": "Classic cache-aside over the Transients API: `get_transient()` first, and only a `false` return counts as a miss, so an empty array is served from the cache instead of being recomputed on every request (the common `if ( ! $cached )` bug). The miss path stores the callback's result with `set_transient()` and a one hour expiration. Runtime validation counts callback invocations across repeated calls for two keys, checks the stored transient and its timeout option, caches an empty report, and confirms deleting the transient forces exactly one recompute.",
+      "requirements": [
+        "Call the compute callback with no arguments; it returns the report as an array",
+        "Store the report in the transient 'wpbp_report_<report key>' with a one hour expiration",
+        "Do not call the callback while a cached report exists, including when the cached report is an empty array"
+      ],
+      "test_function": "wpbp_caching_010( string $report_key, callable $compute ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_transient",
+            "description": "Reads the cached report from a transient",
+            "weight": 1
+          },
+          {
+            "pattern": "set_transient",
+            "description": "Stores the computed report in a transient",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_report_",
+            "description": "Uses the requested transient name prefix",
+            "weight": 1
+          },
+          {
+            "pattern": "HOUR_IN_SECONDS|3600|60\\s*\\*\\s*60",
+            "description": "Sets a one hour lifetime",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "delete_transient( 'wpbp_report_sales' ); delete_transient( 'wpbp_report_refunds' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_010' ) ) { return false; } $calls = 0; $sales = function () use ( &$calls ) { $calls++; return array( 'total' => 40 + $calls, 'currency' => 'EUR' ); }; $first = wpbp_caching_010( 'sales', $sales ); if ( array( 'total' => 41, 'currency' => 'EUR' ) !== $first || 1 !== $calls ) { return false; } if ( $first !== wpbp_caching_010( 'sales', $sales ) || $first !== wpbp_caching_010( 'sales', $sales ) || 1 !== $calls ) { return false; } if ( $first !== get_transient( 'wpbp_report_sales' ) ) { return false; } delete_transient( 'wpbp_report_sales' ); if ( array( 'total' => 42, 'currency' => 'EUR' ) !== wpbp_caching_010( 'sales', $sales ) || 2 !== $calls ) { return false; } return array( 'total' => 42, 'currency' => 'EUR' ) === wpbp_caching_010( 'sales', $sales ) && 2 === $calls;",
+            "description": "A cached report is served without calling the callback, and deleting the transient forces one recompute",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_010' ) ) { return false; } $timeout = (int) get_option( '_transient_timeout_wpbp_report_sales' ); $now = time(); return $timeout >= $now + HOUR_IN_SECONDS - 60 && $timeout <= $now + HOUR_IN_SECONDS + 5;",
+            "description": "The report transient expires one hour after it was stored",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_010' ) ) { return false; } $calls = 0; $refunds = function () use ( &$calls ) { $calls++; return array(); }; if ( array() !== wpbp_caching_010( 'refunds', $refunds ) || 1 !== $calls ) { return false; } if ( array() !== get_transient( 'wpbp_report_refunds' ) ) { return false; } if ( array() !== wpbp_caching_010( 'refunds', $refunds ) || array() !== wpbp_caching_010( 'refunds', $refunds ) ) { return false; } return 1 === $calls;",
+            "description": "An empty report is cached and served without recomputing it",
+            "weight": 1
+          }
+        ],
+        "teardown": "delete_transient( 'wpbp_report_sales' ); delete_transient( 'wpbp_report_refunds' );"
+      },
+      "reference_solution": "function wpbp_caching_010( string $report_key, callable $compute ): array { $name = 'wpbp_report_' . $report_key; $cached = get_transient( $name ); if ( false !== $cached ) { return (array) $cached; } $report = (array) call_user_func( $compute ); set_transient( $name, $report, HOUR_IN_SECONDS ); return $report; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_010( string $report_key, callable $compute ): array { $cached = get_transient( 'wpbp_report_' . $report_key ); if ( $cached ) { return $cached; } $report = call_user_func( $compute ); set_transient( 'wpbp_report_' . $report_key, $report, HOUR_IN_SECONDS ); return $report; }",
+        "function wpbp_caching_010( string $report_key, callable $compute ): array { $cached = get_transient( 'wpbp_report_' . $report_key ); if ( false !== $cached ) { return $cached; } $report = call_user_func( $compute ); set_transient( 'wpbp_report_' . $report_key, $report ); return $report; }",
+        "function wpbp_caching_010( string $report_key, callable $compute ): array { $found = false; $cached = wp_cache_get( 'wpbp_report_' . $report_key, 'wpbp_reports', false, $found ); if ( $found ) { return $cached; } $report = call_user_func( $compute ); wp_cache_set( 'wpbp_report_' . $report_key, $report, 'wpbp_reports', HOUR_IN_SECONDS ); return $report; }"
+      ]
+    },
+    {
+      "id": "e-caching-011",
+      "category": "caching",
+      "prompt": "Every page on this site lists the published 'wpbp_event' posts, so the list of their IDs is cached in a transient named 'wpbp_event_ids'. Implement a function that returns the IDs of all published 'wpbp_event' posts, served from that transient when it holds a list and rebuilt from the database (and cached again) when it does not. Visitors must never see a stale list: whenever a 'wpbp_event' post is created, updated, trashed or deleted, drop the cached list. Saving posts of any other type must leave the cached list in place.",
+      "expected_behavior": "The gateway reads `get_transient( 'wpbp_event_ids' )` and rebuilds with an IDs-only query on a miss. Invalidation is registered by the submission itself on hooks that cover create, update, trash and permanent delete (for example `clean_post_cache`, or `save_post_wpbp_event` plus `deleted_post`), filtered to the 'wpbp_event' post type. Runtime validation proves the list really comes from the transient by inserting an event row directly with `$wpdb` (no hooks fire, no core cache is bumped) and expecting it to stay hidden, saves an unrelated post and expects the list to stay cached, then creates, unpublishes, trashes and force-deletes events through the post APIs and expects a fresh list each time.",
+      "requirements": [
+        "Return the IDs of published 'wpbp_event' posts as integers, in any order",
+        "Cache the list in the 'wpbp_event_ids' transient and serve it from there while it exists",
+        "Drop the cached list when a 'wpbp_event' post is created, updated, trashed or deleted, and only then"
+      ],
+      "test_function": "wpbp_caching_011(): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_transient",
+            "description": "Reads the cached list",
+            "weight": 1
+          },
+          {
+            "pattern": "set_transient",
+            "description": "Caches the rebuilt list",
+            "weight": 1
+          },
+          {
+            "pattern": "delete_transient",
+            "description": "Drops the cached list on changes",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_event_ids",
+            "description": "Uses the requested transient name",
+            "weight": 1
+          },
+          {
+            "pattern": "add_action",
+            "description": "Hooks into post lifecycle events",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_event', array( 'public' => true, 'label' => 'WPBP Events' ) ); delete_transient( 'wpbp_event_ids' ); $events = array(); foreach ( array( 'Launch', 'Meetup', 'Workshop' ) as $title ) { $events[] = (int) wp_insert_post( array( 'post_type' => 'wpbp_event', 'post_title' => 'WPBP ' . $title, 'post_status' => 'publish' ) ); } $draft = (int) wp_insert_post( array( 'post_type' => 'wpbp_event', 'post_title' => 'WPBP Draft Event', 'post_status' => 'draft' ) ); $GLOBALS['wpbp_caching_011'] = array( 'events' => $events, 'cleanup' => array_merge( $events, array( $draft ) ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_011' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_caching_011'] ?? array(); if ( empty( $f['events'] ) || in_array( 0, $f['events'], true ) ) { return false; } $list = function () { $ids = array_map( 'intval', (array) wpbp_caching_011() ); sort( $ids ); return $ids; }; $expected = $f['events']; sort( $expected ); if ( $expected !== $list() ) { return false; } if ( false === get_transient( 'wpbp_event_ids' ) ) { return false; } $now = current_time( 'mysql' ); $now_gmt = current_time( 'mysql', true ); $wpdb->insert( $wpdb->posts, array( 'post_author' => 1, 'post_date' => $now, 'post_date_gmt' => $now_gmt, 'post_content' => '', 'post_title' => 'WPBP Imported Event', 'post_excerpt' => '', 'post_status' => 'publish', 'post_type' => 'wpbp_event', 'post_name' => 'wpbp-imported-event', 'to_ping' => '', 'pinged' => '', 'post_modified' => $now, 'post_modified_gmt' => $now_gmt, 'post_content_filtered' => '', 'guid' => '' ) ); $imported = (int) $wpdb->insert_id; $GLOBALS['wpbp_caching_011']['cleanup'][] = $imported; if ( ! $imported || $expected !== $list() ) { return false; } $other = (int) wp_insert_post( array( 'post_title' => 'WPBP Unrelated Post', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_caching_011']['cleanup'][] = $other; $page = (int) wp_insert_post( array( 'post_type' => 'page', 'post_title' => 'WPBP Unrelated Page', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_caching_011']['cleanup'][] = $page; return $other && $page && $expected === $list();",
+            "description": "The list is served from the transient, and saving other post types keeps it cached",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_011' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_caching_011'] ?? array(); if ( empty( $f['events'] ) ) { return false; } $list = function () { $ids = array_map( 'intval', (array) wpbp_caching_011() ); sort( $ids ); return $ids; }; $published = function () use ( $wpdb ) { $ids = array_map( 'intval', $wpdb->get_col( \"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'wpbp_event' AND post_status = 'publish'\" ) ); sort( $ids ); return $ids; }; $list(); $new = (int) wp_insert_post( array( 'post_type' => 'wpbp_event', 'post_title' => 'WPBP Hackathon', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_caching_011']['cleanup'][] = $new; $after_create = $list(); if ( ! $new || ! in_array( $new, $after_create, true ) || $published() !== $after_create ) { return false; } wp_update_post( array( 'ID' => $f['events'][0], 'post_status' => 'draft' ) ); $after_update = $list(); if ( in_array( $f['events'][0], $after_update, true ) || $published() !== $after_update ) { return false; } wp_trash_post( $f['events'][1] ); $after_trash = $list(); if ( in_array( $f['events'][1], $after_trash, true ) || $published() !== $after_trash ) { return false; } wp_delete_post( $f['events'][2], true ); $after_delete = $list(); return ! in_array( $f['events'][2], $after_delete, true ) && $published() === $after_delete;",
+            "description": "Creating, unpublishing, trashing and deleting an event each rebuild the list",
+            "weight": 1
+          }
+        ],
+        "teardown": "$f = $GLOBALS['wpbp_caching_011'] ?? array(); foreach ( (array) ( $f['cleanup'] ?? array() ) as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } delete_transient( 'wpbp_event_ids' ); unset( $GLOBALS['wpbp_caching_011'] );"
+      },
+      "reference_solution": "function wpbp_caching_011(): array { $ids = get_transient( 'wpbp_event_ids' ); if ( is_array( $ids ) ) { return array_map( 'intval', $ids ); } $ids = array_map( 'intval', get_posts( array( 'post_type' => 'wpbp_event', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1, 'orderby' => 'ID', 'order' => 'ASC' ) ) ); set_transient( 'wpbp_event_ids', $ids, DAY_IN_SECONDS ); return $ids; } add_action( 'clean_post_cache', function ( $post_id, $post ) { if ( $post instanceof WP_Post && 'wpbp_event' === $post->post_type ) { delete_transient( 'wpbp_event_ids' ); } }, 10, 2 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_011(): array { return array_map( 'intval', get_posts( array( 'post_type' => 'wpbp_event', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1 ) ) ); }",
+        "function wpbp_caching_011(): array { $ids = get_transient( 'wpbp_event_ids' ); if ( is_array( $ids ) ) { return $ids; } $ids = array_map( 'intval', get_posts( array( 'post_type' => 'wpbp_event', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1 ) ) ); set_transient( 'wpbp_event_ids', $ids ); return $ids; }",
+        "function wpbp_caching_011(): array { $ids = get_transient( 'wpbp_event_ids' ); if ( is_array( $ids ) ) { return $ids; } $ids = array_map( 'intval', get_posts( array( 'post_type' => 'wpbp_event', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1 ) ) ); set_transient( 'wpbp_event_ids', $ids ); return $ids; } add_action( 'save_post_wpbp_event', function () { delete_transient( 'wpbp_event_ids' ); } );",
+        "function wpbp_caching_011(): array { $ids = get_transient( 'wpbp_event_ids' ); if ( is_array( $ids ) ) { return $ids; } $ids = array_map( 'intval', get_posts( array( 'post_type' => 'wpbp_event', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1 ) ) ); set_transient( 'wpbp_event_ids', $ids ); return $ids; } add_action( 'clean_post_cache', function () { delete_transient( 'wpbp_event_ids' ); } );"
+      ]
+    },
+    {
+      "id": "e-caching-012",
+      "category": "caching",
+      "prompt": "Report the shop's total stock: the sum of the numeric 'wpbp_stock' custom field over every published 'wpbp_product' post. Summing it is a database aggregate that is too slow to run on every request, so keep the computed total in the object cache group 'wpbp_stats'. Do not register your own post or meta hooks to invalidate it. Instead, tie the cached total to the change marker WordPress itself maintains for posts, so that whenever WordPress records a change to posts or post meta the old total is never served again.",
+      "expected_behavior": "The cache key (or salt) includes `wp_cache_get_last_changed( 'posts' )`, the marker core bumps from `clean_post_cache()` and from the `added/updated/deleted_post_meta` actions, so invalidation is implicit. Either `wp_cache_get()`/`wp_cache_set()` with the marker in the key or `wp_cache_get_salted()`/`wp_cache_set_salted()` (6.9+) passes. The aggregate runs once per marker value. Runtime validation checks the total, confirms a value is stored in the 'wpbp_stats' group, edits a stock value directly in the database (and drops that post's meta cache) without bumping the marker to prove the total is served from cache, then bumps the marker explicitly, updates meta through the API, and publishes a draft product, expecting a fresh total after each.",
+      "requirements": [
+        "Return the total as an integer; only published 'wpbp_product' posts count",
+        "Store the computed total in the 'wpbp_stats' object cache group",
+        "Serve the cached total until WordPress marks posts as changed, without registering invalidation hooks"
+      ],
+      "test_function": "wpbp_caching_012(): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_cache_get_last_changed",
+            "description": "Reads the posts last-changed marker",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_stats",
+            "description": "Uses the requested cache group",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_stock",
+            "description": "Sums the requested custom field",
+            "weight": 1
+          }
+        ],
+        "forbidden_patterns": [
+          {
+            "pattern": "/add_action\\s*\\(\\s*['\"](save_post|clean_post_cache|updated_post_meta|added_post_meta|deleted_post_meta|transition_post_status)/",
+            "description": "Invalidates through its own post or meta hooks instead of the last-changed marker",
+            "severity": "warning"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_product', array( 'public' => true, 'label' => 'WPBP Products' ) ); $make = function ( $type, $status, $stock ) { $id = (int) wp_insert_post( array( 'post_type' => $type, 'post_title' => 'WPBP Stock ' . $stock, 'post_status' => $status ) ); if ( $id ) { update_post_meta( $id, 'wpbp_stock', (string) $stock ); } return $id; }; $GLOBALS['wpbp_caching_012'] = array( 'a' => $make( 'wpbp_product', 'publish', 5 ), 'b' => $make( 'wpbp_product', 'publish', 7 ), 'c' => $make( 'wpbp_product', 'publish', 11 ), 'draft' => $make( 'wpbp_product', 'draft', 100 ), 'post' => $make( 'post', 'publish', 50 ) ); wp_cache_flush_group( 'wpbp_stats' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_012' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_caching_012'] ?? array(); if ( empty( $f['a'] ) || empty( $f['b'] ) || empty( $f['draft'] ) ) { return false; } if ( 23 !== wpbp_caching_012() ) { return false; } $store = $GLOBALS['wp_object_cache']->cache; if ( empty( $store['wpbp_stats'] ) ) { return false; } $wpdb->update( $wpdb->postmeta, array( 'meta_value' => '9' ), array( 'post_id' => $f['a'], 'meta_key' => 'wpbp_stock' ) ); wp_cache_delete( $f['a'], 'post_meta' ); if ( 23 !== wpbp_caching_012() || 23 !== wpbp_caching_012() ) { return false; } wp_cache_set_posts_last_changed(); return 27 === wpbp_caching_012();",
+            "description": "The total is cached in 'wpbp_stats' and only recomputed after the posts marker changes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_012' ) ) { return false; } $f = $GLOBALS['wpbp_caching_012'] ?? array(); if ( empty( $f['b'] ) || empty( $f['draft'] ) ) { return false; } $before = wpbp_caching_012(); update_post_meta( $f['b'], 'wpbp_stock', '1' ); if ( $before - 6 !== wpbp_caching_012() ) { return false; } wp_publish_post( $f['draft'] ); return $before + 94 === wpbp_caching_012();",
+            "description": "Meta updates and status changes made through WordPress produce a fresh total",
+            "weight": 1
+          }
+        ],
+        "teardown": "$f = $GLOBALS['wpbp_caching_012'] ?? array(); foreach ( $f as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } wp_cache_flush_group( 'wpbp_stats' ); unset( $GLOBALS['wpbp_caching_012'] );"
+      },
+      "reference_solution": "function wpbp_caching_012(): int { global $wpdb; $key = 'stock_total:' . wp_cache_get_last_changed( 'posts' ); $found = false; $total = wp_cache_get( $key, 'wpbp_stats', false, $found ); if ( $found ) { return (int) $total; } $total = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT SUM( CAST( pm.meta_value AS SIGNED ) ) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status = %s\", 'wpbp_stock', 'wpbp_product', 'publish' ) ); wp_cache_set( $key, $total, 'wpbp_stats' ); return $total; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/functions.php",
+          "src/wp-includes/cache-compat.php",
+          "src/wp-includes/default-filters.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_012(): int { global $wpdb; return (int) $wpdb->get_var( $wpdb->prepare( \"SELECT SUM( pm.meta_value ) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status = 'publish'\", 'wpbp_stock', 'wpbp_product' ) ); }",
+        "function wpbp_caching_012(): int { global $wpdb; $found = false; $total = wp_cache_get( 'stock_total', 'wpbp_stats', false, $found ); if ( $found ) { return (int) $total; } $total = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT SUM( pm.meta_value ) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status = 'publish'\", 'wpbp_stock', 'wpbp_product' ) ); wp_cache_set( 'stock_total', $total, 'wpbp_stats' ); return $total; } add_action( 'updated_post_meta', function () { wp_cache_delete( 'stock_total', 'wpbp_stats' ); } ); add_action( 'clean_post_cache', function () { wp_cache_delete( 'stock_total', 'wpbp_stats' ); } );",
+        "function wpbp_caching_012(): int { global $wpdb; $key = 'stock_total:' . wp_cache_get_last_changed( 'posts' ); $found = false; $total = wp_cache_get( $key, 'default', false, $found ); if ( $found ) { return (int) $total; } $total = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT SUM( pm.meta_value ) FROM {$wpdb->postmeta} pm INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = %s AND p.post_type = %s AND p.post_status = 'publish'\", 'wpbp_stock', 'wpbp_product' ) ); wp_cache_set( $key, $total, 'default' ); return $total; }",
+        "function wpbp_caching_012(): int { $ids = get_posts( array( 'post_type' => 'wpbp_product', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1 ) ); $total = 0; foreach ( $ids as $id ) { $total += (int) get_post_meta( $id, 'wpbp_stock', true ); } wp_cache_set( 'stock_total', $total, 'wpbp_stats' ); return $total; }"
+      ]
+    },
+    {
+      "id": "e-caching-013",
+      "category": "caching",
+      "prompt": "Profile badges are expensive to compute and are cached in the object cache group 'wpbp_badges', keyed by user ID. Implement a function that takes a list of user IDs and a compute callback and returns a map of user ID to badge. On sites with a persistent object cache every cache call is a network round trip, so a whole lookup may read the cache only once and write it only once: fetch every requested badge in a single cache read, call the callback only for the users whose badge was not cached, and save all of the newly computed badges in a single cache write.",
+      "expected_behavior": "The function uses `wp_cache_get_multiple()` for the read and `wp_cache_set_multiple()` (or `wp_cache_add_multiple()`) for the write, never a per-key `wp_cache_get()`/`wp_cache_set()` loop. Misses are the keys whose value comes back `false`. Runtime validation swaps in a `WP_Object_Cache` subclass that counts top-level calls for the 'wpbp_badges' group, seeds two badges, and requires one batch read, zero single reads, the callback for exactly the two misses, one batch write and zero single writes; a second lookup over already cached users must not call the callback or write per key.",
+      "requirements": [
+        "Call the compute callback with a single user ID; it returns that user's badge string",
+        "Return every requested user ID mapped to its badge, cached or newly computed",
+        "Use one object cache read for all requested IDs and at most one write for the newly computed badges"
+      ],
+      "test_function": "wpbp_caching_013( array $user_ids, callable $compute ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_cache_get_multiple",
+            "description": "Reads every badge in one batch",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_cache_set_multiple|wp_cache_add_multiple",
+            "description": "Writes the computed badges in one batch",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_badges",
+            "description": "Uses the requested cache group",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "if ( ! class_exists( 'WPBP_Caching_013_Cache' ) ) { class WPBP_Caching_013_Cache extends WP_Object_Cache { public $wpbp_calls = array(); private $wpbp_depth = 0; private function wpbp_enter( $op, $group ) { if ( 0 === $this->wpbp_depth && 'wpbp_badges' === $group ) { $this->wpbp_calls[ $op ] = ( $this->wpbp_calls[ $op ] ?? 0 ) + 1; } $this->wpbp_depth++; } public function get( $key, $group = 'default', $force = false, &$found = null ) { $this->wpbp_enter( 'get', $group ); try { return parent::get( $key, $group, $force, $found ); } finally { $this->wpbp_depth--; } } public function get_multiple( $keys, $group = 'default', $force = false ) { $this->wpbp_enter( 'get_multiple', $group ); try { return parent::get_multiple( $keys, $group, $force ); } finally { $this->wpbp_depth--; } } public function set( $key, $data, $group = 'default', $expire = 0 ) { $this->wpbp_enter( 'set', $group ); try { return parent::set( $key, $data, $group, $expire ); } finally { $this->wpbp_depth--; } } public function set_multiple( array $data, $group = '', $expire = 0 ) { $this->wpbp_enter( 'set_multiple', $group ); try { return parent::set_multiple( $data, $group, $expire ); } finally { $this->wpbp_depth--; } } public function add( $key, $data, $group = 'default', $expire = 0 ) { $this->wpbp_enter( 'add', $group ); try { return parent::add( $key, $data, $group, $expire ); } finally { $this->wpbp_depth--; } } public function add_multiple( array $data, $group = '', $expire = 0 ) { $this->wpbp_enter( 'add_multiple', $group ); try { return parent::add_multiple( $data, $group, $expire ); } finally { $this->wpbp_depth--; } } public function replace( $key, $data, $group = 'default', $expire = 0 ) { $this->wpbp_enter( 'set', $group ); try { return parent::replace( $key, $data, $group, $expire ); } finally { $this->wpbp_depth--; } } } } $GLOBALS['wp_object_cache'] = new WPBP_Caching_013_Cache();",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_013' ) ) { return false; } $cache = $GLOBALS['wp_object_cache']; if ( ! $cache instanceof WPBP_Caching_013_Cache ) { return false; } wp_cache_set( 11, 'gold', 'wpbp_badges' ); wp_cache_set( 13, 'silver', 'wpbp_badges' ); $seen = array(); $compute = function ( $user_id ) use ( &$seen ) { $seen[] = (int) $user_id; return 'computed-' . (int) $user_id; }; $cache->wpbp_calls = array(); $out = wpbp_caching_013( array( 11, 12, 13, 14 ), $compute ); $calls = $cache->wpbp_calls; if ( ! is_array( $out ) ) { return false; } ksort( $out ); sort( $seen ); if ( array( 11 => 'gold', 12 => 'computed-12', 13 => 'silver', 14 => 'computed-14' ) !== $out || array( 12, 14 ) !== $seen ) { return false; } if ( 1 !== ( $calls['get_multiple'] ?? 0 ) || 0 !== ( $calls['get'] ?? 0 ) ) { return false; } if ( 1 !== ( $calls['set_multiple'] ?? 0 ) + ( $calls['add_multiple'] ?? 0 ) || 0 !== ( $calls['set'] ?? 0 ) + ( $calls['add'] ?? 0 ) ) { return false; } return 'computed-12' === wp_cache_get( 12, 'wpbp_badges' ) && 'computed-14' === wp_cache_get( 14, 'wpbp_badges' ) && 'gold' === wp_cache_get( 11, 'wpbp_badges' );",
+            "description": "Badges are read in one batch, only misses are computed, and they are written back in one batch",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_caching_013' ) ) { return false; } $cache = $GLOBALS['wp_object_cache']; if ( ! $cache instanceof WPBP_Caching_013_Cache ) { return false; } wp_cache_set( 21, 'bronze', 'wpbp_badges' ); wp_cache_set( 22, 'platinum', 'wpbp_badges' ); wp_cache_set( 23, 'gold', 'wpbp_badges' ); $seen = array(); $compute = function ( $user_id ) use ( &$seen ) { $seen[] = (int) $user_id; return 'computed-' . (int) $user_id; }; $cache->wpbp_calls = array(); $out = wpbp_caching_013( array( 23, 21, 22 ), $compute ); $calls = $cache->wpbp_calls; if ( ! is_array( $out ) ) { return false; } ksort( $out ); if ( array( 21 => 'bronze', 22 => 'platinum', 23 => 'gold' ) !== $out || array() !== $seen ) { return false; } return 1 === ( $calls['get_multiple'] ?? 0 ) && 0 === ( $calls['get'] ?? 0 ) && 0 === ( $calls['set'] ?? 0 ) + ( $calls['add'] ?? 0 ) && 1 >= ( $calls['set_multiple'] ?? 0 ) + ( $calls['add_multiple'] ?? 0 );",
+            "description": "A fully cached lookup makes one batch read and never calls the callback",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_cache_flush_group( 'wpbp_badges' );"
+      },
+      "reference_solution": "function wpbp_caching_013( array $user_ids, callable $compute ): array { $user_ids = array_values( array_unique( array_map( 'intval', $user_ids ) ) ); $cached = wp_cache_get_multiple( $user_ids, 'wpbp_badges' ); $badges = array(); $missing = array(); foreach ( $user_ids as $user_id ) { if ( isset( $cached[ $user_id ] ) && false !== $cached[ $user_id ] ) { $badges[ $user_id ] = $cached[ $user_id ]; continue; } $badges[ $user_id ] = call_user_func( $compute, $user_id ); $missing[ $user_id ] = $badges[ $user_id ]; } if ( $missing ) { wp_cache_set_multiple( $missing, 'wpbp_badges' ); } return $badges; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/cache.php",
+          "src/wp-includes/class-wp-object-cache.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_caching_013( array $user_ids, callable $compute ): array { $badges = array(); foreach ( $user_ids as $user_id ) { $badge = wp_cache_get( $user_id, 'wpbp_badges' ); if ( false === $badge ) { $badge = call_user_func( $compute, $user_id ); wp_cache_set( $user_id, $badge, 'wpbp_badges' ); } $badges[ $user_id ] = $badge; } return $badges; }",
+        "function wpbp_caching_013( array $user_ids, callable $compute ): array { $cached = wp_cache_get_multiple( $user_ids, 'wpbp_badges' ); $badges = array(); foreach ( $user_ids as $user_id ) { $badge = $cached[ $user_id ] ?? false; if ( false === $badge ) { $badge = call_user_func( $compute, $user_id ); wp_cache_set( $user_id, $badge, 'wpbp_badges' ); } $badges[ $user_id ] = $badge; } return $badges; }",
+        "function wpbp_caching_013( array $user_ids, callable $compute ): array { $badges = array(); foreach ( $user_ids as $user_id ) { $badges[ $user_id ] = call_user_func( $compute, $user_id ); } wp_cache_set_multiple( $badges, 'wpbp_badges' ); return $badges; }"
+      ]
     }
   ]
 }
