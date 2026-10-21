@@ -152,20 +152,34 @@ def test_shell_limits_remove_candidate_and_descendant_processes(environment, scr
     assert inspect.returncode != 0
 
 
-@pytest.mark.parametrize("command", ["wp eval", "wp --quiet eval"])
-def test_php_shortcuts_fail_policy_even_when_the_state_is_correct(environment, command) -> None:
-    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
-    environment.reset()
-    result = environment.execute_artifact(
-        Artifact(kind="wp_cli_shell", code=command + " 'update_option(\"cli_probe\",\"changed\");'"),
-        {"static_checks": test.static_checks,
-         "runtime_checks": {"assertions": [{"type": "option_value", "target": "cli_probe", "expected": "changed"}]}},
+PROBE = "update_option(\"cli_probe\",\"changed\");"
+
+
+@pytest.mark.parametrize("script", [
+    f"wp eval '{PROBE}'",
+    f"wp --quiet eval '{PROBE}'",
+    # Quoting and env tricks the static regex does not see.
+    f"wp 'eval' '{PROBE}'",
+    f"'wp' '--exec={PROBE}' option get siteurl",
+    f"WP_CLI_CONFIG_PATH=/dev/null wp eval '{PROBE}'",
+    f"echo 'disabled_commands: []' > wp-cli.yml; wp eval '{PROBE}'",
+    f": > \"$WP_CLI_CONFIG_PATH\"; wp eval '{PROBE}'",
+    f"mkdir -p wp-content/mu-plugins; echo '<?php {PROBE}' > wp-content/mu-plugins/probe.php; wp option get siteurl",
+    (f"mkdir -p wp-content/mu-plugins; echo '<?php {PROBE}' > wp-content/mu-plugins/probe.php; wp option get siteurl; "
+     "rm wp-content/mu-plugins/probe.php"),
+])
+def test_php_shortcuts_score_zero(environment, script) -> None:
+    result = execute(environment, script, "return get_option('cli_probe') === 'changed';")
+    assert not result.success and result.raw["runtime"]["score"] == 0, result.raw
+
+
+def test_rewriting_a_fixture_php_file_in_the_same_second_scores_zero(environment) -> None:
+    result = execute(
+        environment, f"echo '<?php {PROBE}' > wp-content/mu-plugins/fixture.php; wp option get siteurl",
+        "return get_option('cli_probe') === 'changed';",
+        setup="wp_mkdir_p(WPMU_PLUGIN_DIR); file_put_contents(WPMU_PLUGIN_DIR.'/fixture.php','<?php ');",
     )
-    test.runtime_checks = {"assertions": [{"type": "option_value"}]}
-    scores = BenchmarkRunner._score_execution(result.raw, test)
-    assert result.raw["runtime"]["score"] == 1, result.raw
-    assert scores["static_policy_pass"] is False
-    assert scores["execution_pass"] is False
+    assert not result.success and result.raw["runtime"]["score"] == 0, result.raw
 
 
 def test_concurrent_shell_workflows_have_private_database_and_files(environment) -> None:

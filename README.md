@@ -296,6 +296,14 @@ These tasks require native WP-CLI operations and exclude PHP evaluation,
 PHP preloading, direct SQL, and edits to WordPress implementation files.
 Read-only `wp db prefix` and `wp db tables` discovery is permitted;
 these commands do not execute candidate SQL.
+Beyond each task's static checks, the runtime blocks the common shortcuts:
+`eval`, `eval-file`, `shell`, `db query`, `db cli`, `db import`, and `package`
+are disabled, `wp` rejects `--exec` and `--require`, and a script scores zero
+if it leaves new or changed PHP files (including `wp-config.php`, so no
+`wp config set`), `.maintenance`, or WP-CLI config files, or if WordPress loads
+a PHP file the script added, even one it removes afterwards. This raises the
+bar rather than sandboxing: a script that deliberately calls the PHP binary or
+bypasses the `wp` function is caught only by the static checks.
 Network downloads, MySQL-only database operations, and multisite are outside
 this initial SQLite suite.
 

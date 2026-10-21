@@ -29,6 +29,7 @@ COPY wp-bench-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/wp-b
 COPY verify-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php
 COPY src /var/www/html/wp-content/plugins/wp-bench-runtime/src
 COPY sqlite-snapshot.php /var/www/html/wp-content/plugins/wp-bench-runtime/sqlite-snapshot.php
+COPY record-loaded-files.php /var/www/html/wp-content/plugins/wp-bench-runtime/record-loaded-files.php
 COPY docker-entrypoint.sh /usr/local/bin/wp-bench-entrypoint
 RUN chmod +x /usr/local/bin/wp-bench-entrypoint
 RUN chown -R www-data:www-data /var/www/html
