@@ -260,7 +260,7 @@ hooks, database operations, and security patterns.
 
 ### WP-CLI workflows
 
-`wp-cli-v1` adds 32 operational tasks across content, taxonomy and metadata,
+`wp-cli-v1` adds 27 operational tasks across content, taxonomy and metadata,
 users and capabilities, options and transients, reporting, maintenance, and migration.
 Tasks combine selection, changes, and preservation: examples include retiring
 an author while reassigning content, consolidating categories, repairing a
@@ -332,9 +332,10 @@ dataset:
   suite: wp-core-v1       # filter a multi-suite export; defaults to run.suite
 ```
 
-`--suite wp-cli-v1` selects CLI rows without changing the Hugging Face repository
-name. The new suite is available locally immediately; Hub users need an export
-that includes it.
+An explicit `dataset.suite` selects the rows and their result-suite label;
+`--suite` overrides both. `--suite wp-cli-v1` selects CLI rows without changing
+the Hugging Face repository name. The new suite is available locally immediately;
+Hub users need an export that includes it.
 
 ## Results & Reporting
 

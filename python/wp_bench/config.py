@@ -246,14 +246,16 @@ class HarnessConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def _default_hub_suite_to_run_suite(self) -> HarnessConfig:
-        """Load only run.suite from a multi-suite Hub export unless dataset.suite says otherwise.
+    def _align_hub_suite_with_run(self) -> HarnessConfig:
+        """Keep the Hub row filter and result label on the same selected suite.
 
-        Results are labeled with run.suite, so loading every suite would score
-        CLI rows under a wp-core-v1 label.
+        An explicit dataset.suite takes precedence over run.suite. Otherwise
+        use run.suite as the filter so a multi-suite export cannot mix suites.
         """
-        if self.dataset.source == "huggingface" and self.dataset.suite is None:
-            self.dataset.suite = self.run.suite
+        if self.dataset.source == "huggingface":
+            suite = self.dataset.suite if self.dataset.suite is not None else self.run.suite
+            self.dataset.suite = suite
+            self.run.suite = suite
         return self
 
     def get_models(self) -> list[ModelConfig]:

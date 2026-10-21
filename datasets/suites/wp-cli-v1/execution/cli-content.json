@@ -8,64 +8,6 @@
   },
   "tests": [
     {
-      "id": "e-cli-content-001",
-      "category": "cli-content",
-      "artifact_kind": "wp_cli_shell",
-      "prompt": "Publish all draft posts whose '_cli_ready' metadata is 'yes'. Leave pending posts, pages, and all other content untouched. The script must also succeed when rerun after the drafts have been published.",
-      "requirements": [
-        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
-      ],
-      "expected_behavior": "The script satisfies these observable contracts: Only the two ready draft posts become published. Unrelated fixtures remain intact.",
-      "reference_solution": "set -e\nids=$(wp post list --post_type=post --post_status=draft --meta_key=_cli_ready --meta_value=yes --format=ids)\nif [ -n \"$ids\" ]; then wp post update $ids --post_status=publish; fi",
-      "exploit_solutions": [
-        "wp post update $(wp post list --post_status=draft --format=ids) --post_status=publish",
-        "wp post update $(wp post list --post_type=any --post_status=draft --meta_key=_cli_ready --meta_value=yes --format=ids) --post_status=publish",
-        "set -e\nids=$(wp post list --post_type=post --post_status=draft --meta_key=_cli_ready --meta_value=yes --format=ids)\nif [ -n \"$ids\" ]; then wp post update $ids --post_status=publish; fi\nwp post update $(wp post list --post_status=draft --format=ids) --post_status=publish"
-      ],
-      "static_checks": {
-        "forbidden_patterns": [
-          {
-            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
-            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
-            "severity": "error"
-          }
-        ]
-      },
-      "runtime_checks": {
-        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n    $make_post('cli-ready-a','draft','post',array('_cli_ready'=>'yes'));\n    $make_post('cli-ready-b','draft','post',array('_cli_ready'=>'yes'));\n    $make_post('cli-not-ready','draft','post',array('_cli_ready'=>'no'));\n    $make_post('cli-pending','pending','post',array('_cli_ready'=>'yes'));\n    $make_post('cli-ready-page','draft','page',array('_cli_ready'=>'yes'));\n    $make_post('cli-already-live','publish','post',array('_cli_ready'=>'yes'));\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
-        "assertions": [
-          {
-            "type": "custom_assertion",
-            "description": "Only the two ready draft posts become published",
-            "code": "$f = $GLOBALS['cli_fixture'];\n\n    foreach ($f['posts'] as $slug=>$id) {\n        $wanted = in_array($slug,array('cli-ready-a','cli-ready-b','cli-already-live'),true) ? 'publish' : ($slug==='cli-pending'?'pending':'draft');\n        if (get_post_status($id) !== $wanted) { return false; }\n    } return true;",
-            "weight": 1
-          },
-          {
-            "type": "custom_assertion",
-            "description": "Existing content, metadata, and relationships change only within the requested scope",
-            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array('cli-ready-a','cli-ready-b'),true)) {\n        if(in_array('delete',array('post_status','post_date','post_date_gmt','post_modified','post_modified_gmt'),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array('post_status','post_date','post_date_gmt','post_modified','post_modified_gmt') as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array('cli-ready-a','cli-ready-b'),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array('_pingme','_encloseme') as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array(),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
-            "weight": 1
-          },
-          {
-            "type": "custom_assertion",
-            "description": "Existing accounts and user metadata remain intact outside the requested changes",
-            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
-            "weight": 1
-          }
-        ],
-        "exit_code": 0,
-        "repeat": 2
-      },
-      "metadata": {
-        "source_refs": [
-          "src/wp-includes/post.php",
-          "https://developer.wordpress.org/cli/commands/post/"
-        ],
-        "release_focus": "classic",
-        "evaluation_focus": "multi-command operational workflow"
-      }
-    },
-    {
       "id": "e-cli-content-002",
       "category": "cli-content",
       "artifact_kind": "wp_cli_shell",

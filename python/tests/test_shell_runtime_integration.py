@@ -199,7 +199,7 @@ def test_rewriting_a_fixture_php_file_in_the_same_second_scores_zero(environment
     assert not result.success and result.raw["runtime"]["score"] == 0, result.raw
 
 
-@pytest.mark.parametrize("test_id", ["e-cli-maintenance-001", "e-cli-maintenance-002", "e-cli-reporting-003"])
+@pytest.mark.parametrize("test_id", ["e-cli-maintenance-001", "e-cli-maintenance-002"])
 def test_fixture_plugins_do_not_leak_into_the_next_test(environment, test_id) -> None:
     test = next(t for t in load_tests(DatasetConfig(source="local", name="wp-cli-v1")) if t.id == test_id)
     artifact = Artifact(kind="wp_cli_shell", code=test.reference_solution or "")

@@ -13,7 +13,7 @@ datasets/
 │   │       ├── rest-api.json
 │   │       └── ...
 │   └── wp-cli-v1/
-│       └── execution/         # 32 WP-CLI workflows, seven categories
+│       └── execution/         # 27 WP-CLI workflows, seven categories
 ├── data/                      # Generated Parquet for HF (gitignored)
 │   └── test.parquet
 ├── export_dataset.py          # Converts suites → Parquet
@@ -92,8 +92,10 @@ callbacks in a temporary plugin or mu-plugin when a command must execute them.
 fails execution without awarding exit-status points. `runtime_checks.repeat`
 defaults to `1`; `2` runs the script twice on the same fixtures, checks every
 exit status, and asserts the final state. Only the last run's output is exposed
-to assertions; all runs are retained in the result. The script gets the remaining
-execution timeout after fixture setup, shared across repeats.
+to assertions; all runs are retained in the result. The shell budget is
+`grader.timeout_seconds` minus 5 seconds (at least 1), with fixture setup and
+repeats sharing that budget. The reserved time lets the outer grader retain
+diagnostics when a script reaches its own limit.
 
 `exploit_solutions` contains Bash strings for CLI tasks, PHP snippets for other
 tasks. The CLI audit also runs a no-op, a nonzero exit, and empty JSON output.
@@ -103,7 +105,8 @@ exact command spelling. Forbidden static patterns are coarse policy checks,
 not a shell security boundary; Docker provides containment.
 
 The local loader selects `dataset.name`; the Hub loader uses `dataset.name` as
-the repository and optional `dataset.suite` to filter the combined export.
+the repository and `dataset.suite` to filter the combined export, defaulting to
+`run.suite`. An explicit Hub `dataset.suite` also sets the result-suite label.
 `--suite` handles both sources. Exports include both suites, and omit authored
 exploit candidates. CLI scores should be reported separately from core scores.
 
