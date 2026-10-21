@@ -174,7 +174,8 @@
             "weight": 1
           }
         ],
-        "exit_code": 0
+        "exit_code": 0,
+        "teardown": "foreach(array('cli-active','cli-inactive') as $slug) { $dir=WP_PLUGIN_DIR.'/'.$slug; if(is_dir($dir)) { array_map('unlink',glob($dir.'/*')); rmdir($dir); } update_option('active_plugins',array_values(array_diff(get_option('active_plugins',array()),array($slug.'/'.$slug.'.php')))); }"
       },
       "metadata": {
         "source_refs": [

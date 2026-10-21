@@ -52,7 +52,8 @@
             "weight": 1
           }
         ],
-        "exit_code": 0
+        "exit_code": 0,
+        "teardown": "$mu=WP_CONTENT_DIR.'/mu-plugins/cli-cron.php'; if(file_exists($mu)) { unlink($mu); } foreach(array('cli_job_log','cli_hold_ran','cli_future_ran') as $option) { delete_option($option); }"
       },
       "metadata": {
         "source_refs": [
@@ -108,7 +109,8 @@
             "weight": 1
           }
         ],
-        "exit_code": 0
+        "exit_code": 0,
+        "teardown": "foreach(array('cli-broken','cli-good','cli-healthy') as $slug) { $dir=WP_PLUGIN_DIR.'/'.$slug; if(is_dir($dir)) { array_map('unlink',glob($dir.'/*')); rmdir($dir); } update_option('active_plugins',array_values(array_diff(get_option('active_plugins',array()),array($slug.'/'.$slug.'.php')))); }"
       },
       "metadata": {
         "source_refs": [

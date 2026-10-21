@@ -1,6 +1,7 @@
 """Real Bash/WP-CLI execution checks; enabled by WP_BENCH_TEST_IMAGE."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -196,6 +197,25 @@ def test_rewriting_a_fixture_php_file_in_the_same_second_scores_zero(environment
         setup="wp_mkdir_p(WPMU_PLUGIN_DIR); file_put_contents(WPMU_PLUGIN_DIR.'/fixture.php','<?php ');",
     )
     assert not result.success and result.raw["runtime"]["score"] == 0, result.raw
+
+
+@pytest.mark.parametrize("test_id", ["e-cli-maintenance-001", "e-cli-maintenance-002", "e-cli-reporting-003"])
+def test_fixture_plugins_do_not_leak_into_the_next_test(environment, test_id) -> None:
+    test = next(t for t in load_tests(DatasetConfig(source="local", name="wp-cli-v1")) if t.id == test_id)
+    artifact = Artifact(kind="wp_cli_shell", code=test.reference_solution or "")
+    spec = _build_verification_spec(test, HarnessConfig())
+    payload = base64.b64encode(json.dumps({**artifact.payload_fields(), **spec}).encode()).decode()
+    environment.reset()
+    # What execution_isolation none hands the next test is this site after verify_payload returns.
+    result = environment.execute_code(
+        f"$GLOBALS['shell_result']=(new WPBench\\Runtime\\Verifier())->verify_payload(json_decode(base64_decode('{payload}'),true));",
+        {"runtime_checks": {"assertions": [{"type": "custom_assertion", "code": """
+            return $GLOBALS['shell_result']['success'] && glob(WP_PLUGIN_DIR.'/cli-*') === array()
+                && ! file_exists(WPMU_PLUGIN_DIR.'/cli-cron.php') && ! preg_grep('/^cli-/', get_option('active_plugins'))
+                && false === get_option('cli_job_log');
+        """}]}},
+    )
+    assert result.success, result.raw
 
 
 def test_concurrent_shell_workflows_have_private_database_and_files(environment) -> None:
