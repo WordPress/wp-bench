@@ -10,8 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from wp_bench.artifacts import Artifact
-from wp_bench.config import DatasetConfig, GraderConfig
-from wp_bench.core import BenchmarkRunner
+from wp_bench.config import DatasetConfig, GraderConfig, HarnessConfig
+from wp_bench.core import BenchmarkRunner, _build_verification_spec
 from wp_bench.datasets import load_tests
 from wp_bench.environment import WordPressEnvironment
 
@@ -150,6 +150,22 @@ def test_shell_limits_remove_candidate_and_descendant_processes(environment, scr
     assert len(result.raw["command"]["stdout"]) <= 1024 * 1024
     inspect = subprocess.run(["docker", "inspect", name], capture_output=True, timeout=30, check=False)
     assert inspect.returncode != 0
+
+
+def test_slow_script_stops_inside_the_shell_and_keeps_its_output(environment, monkeypatch) -> None:
+    grader = GraderConfig(timeout_seconds=10)
+    monkeypatch.setattr(environment.config, "timeout_seconds", grader.timeout_seconds)
+    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
+    test.runtime_checks = {"assertions": [{"type": "custom_assertion", "code": "return true;"}]}
+    environment.reset()
+    result = environment.execute_artifact(
+        Artifact(kind="wp_cli_shell", code="echo started; echo waiting >&2; sleep 60"),
+        _build_verification_spec(test, HarnessConfig(grader=grader)),
+    )
+    assert result.timed_out and result.raw["runtime"]["score"] == 0
+    command = result.raw["command"]
+    assert command["timed_out"] and command["stdout"] == "started\n" and command["stderr"] == "waiting\n"
+    assert len(command["runs"]) == 1
 
 
 PROBE = "update_option(\"cli_probe\",\"changed\");"

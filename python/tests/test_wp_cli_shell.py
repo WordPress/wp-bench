@@ -11,8 +11,18 @@ from typer.testing import CliRunner
 
 from wp_bench.artifacts import MAX_FILE_BYTES, Artifact, ArtifactError, parse_artifact
 from wp_bench.cli import app
-from wp_bench.config import DatasetConfig, HarnessConfig, OutputConfig, RunConfig
-from wp_bench.core import BenchmarkRunner
+from wp_bench.config import (
+    DatasetConfig,
+    GraderConfig,
+    HarnessConfig,
+    OutputConfig,
+    RunConfig,
+)
+from wp_bench.core import (
+    SHELL_TIMEOUT_MARGIN_SECONDS,
+    BenchmarkRunner,
+    _build_verification_spec,
+)
 from wp_bench.datasets import load_tests
 from wp_bench.environment import ExecutionResult
 from wp_bench.exploits import exploit_candidates
@@ -31,6 +41,13 @@ def test_shell_artifact_preserves_script_as_a_string(fenced: bool) -> None:
 def test_shell_artifact_rejects_invalid_size_or_content(script: str) -> None:
     with pytest.raises(ArtifactError, match="nonempty, NUL-free"):
         parse_artifact(script, "wp_cli_shell")
+
+
+@pytest.mark.parametrize("grader_timeout,shell_timeout", [(90, 85), (6, 1), (1, 1)])
+def test_shell_budget_ends_before_the_grader_timeout(grader_timeout, shell_timeout) -> None:
+    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
+    config = HarnessConfig(grader=GraderConfig(timeout_seconds=grader_timeout))
+    assert _build_verification_spec(test, config)["timeout_seconds"] == shell_timeout
 
 
 @pytest.mark.parametrize("mode", ["model", "reference", "exploits"])
@@ -53,7 +70,7 @@ def test_shell_scripts_reach_the_runtime_in_every_mode(monkeypatch, tmp_path, mo
     artifacts: list[Artifact] = []
 
     def execute(artifact: Artifact, spec: dict) -> ExecutionResult:
-        assert spec["timeout_seconds"] == config.grader.timeout_seconds
+        assert spec["timeout_seconds"] == config.grader.timeout_seconds - SHELL_TIMEOUT_MARGIN_SECONDS
         assert spec["runtime_checks"] == test.runtime_checks
         artifacts.append(artifact)
         raw = {"runtime": {"score": 0 if mode == "exploits" else 1,

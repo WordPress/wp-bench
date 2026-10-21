@@ -136,6 +136,12 @@ def select_run_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
     return selected
 
 
+#: Seconds of grader.timeout_seconds kept back from a shell script's own budget.
+#: The outer timeout also covers WordPress boot and the assertions, so a slow
+#: script must stop inside the runtime for its stdout, stderr, and runs to be kept.
+SHELL_TIMEOUT_MARGIN_SECONDS = 5
+
+
 def _build_verification_spec(test: Any, config: HarnessConfig) -> dict[str, Any]:
     """Build the verifier payload honoring run.skip_runtime/skip_static.
 
@@ -173,7 +179,7 @@ def _build_verification_spec(test: Any, config: HarnessConfig) -> dict[str, Any]
         "runtime_checks": runtime_checks,
     }
     if getattr(test, "artifact_kind", "php_snippet") == "wp_cli_shell":
-        spec["timeout_seconds"] = config.grader.timeout_seconds
+        spec["timeout_seconds"] = max(1, config.grader.timeout_seconds - SHELL_TIMEOUT_MARGIN_SECONDS)
     return spec
 
 

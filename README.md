@@ -314,8 +314,10 @@ site to check convergence and empty selections. The expected script exit status
 is a pass gate (default `0`); intermediate nonzero statuses can be handled with
 normal shell branches. Results retain stdout, stderr, exit status, elapsed time,
 and repeat runs under `grader.raw.command`. Each output stream is capped at
-1 MiB. The existing timeout and private container limits apply to the script
-and its descendants, and timeouts or output overflow score zero.
+1 MiB. The script and its descendants get `grader.timeout_seconds` minus
+5 seconds (at least 1), so a slow script stops inside the runtime and its
+output is still recorded. Private container limits also apply, and timeouts
+or output overflow score zero.
 
 The WP-CLI suite is scored separately from `wp-core-v1`; existing PHP task
 contracts and scoring remain unchanged. Compare scores only within the same
