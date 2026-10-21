@@ -41,7 +41,8 @@ class DatasetConfig(StrictModel):
     revision: str | None = None
     split: str = "test"
     cache_dir: Path | None = None
-    #: Select a suite within a multi-suite Hugging Face export.
+    #: Select a suite within a multi-suite Hugging Face export. Defaults to
+    #: run.suite so a run never mixes rows from other suites.
     suite: str | None = None
 
 
@@ -242,6 +243,17 @@ class HarnessConfig(StrictModel):
                 f"Duplicate model names {duplicates}: results are keyed by name, "
                 "so entries sharing one would overwrite each other."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _default_hub_suite_to_run_suite(self) -> HarnessConfig:
+        """Load only run.suite from a multi-suite Hub export unless dataset.suite says otherwise.
+
+        Results are labeled with run.suite, so loading every suite would score
+        CLI rows under a wp-core-v1 label.
+        """
+        if self.dataset.source == "huggingface" and self.dataset.suite is None:
+            self.dataset.suite = self.run.suite
         return self
 
     def get_models(self) -> list[ModelConfig]:

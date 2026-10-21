@@ -127,6 +127,15 @@ def test_huggingface_suite_filter_preserves_repository_name(monkeypatch, tmp_pat
     assert seen == ["WordPress/wp-bench-v1"] * 2
 
 
+@pytest.mark.parametrize("dataset,suites", [({}, ["wp-core-v1"]), ({"suite": "wp-cli-v1"}, ["wp-cli-v1"])])
+def test_huggingface_loads_only_the_run_suite_unless_overridden(monkeypatch, dataset, suites) -> None:
+    rows = [{"id": suite, "suite": suite, "test_kind": "execution", "prompt": "Task"}
+            for suite in ["wp-core-v1", "wp-cli-v1"]]
+    monkeypatch.setattr("wp_bench.datasets.hf_load_dataset", lambda name, **kwargs: rows)
+    config = HarnessConfig.model_validate({"dataset": {"source": "huggingface", **dataset}})
+    assert [t.suite for t in load_tests(config.dataset)] == suites
+
+
 def test_cli_suite_has_workflows_with_behavioral_and_exploit_checks() -> None:
     tests = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))
     assert Counter(t.category for t in tests) == {

@@ -329,7 +329,7 @@ suite and execution profile.
 dataset:
   source: huggingface
   name: WordPress/wp-bench-v1
-  suite: wp-core-v1       # filter a multi-suite export; omit to load all suites
+  suite: wp-core-v1       # filter a multi-suite export; defaults to run.suite
 ```
 
 `--suite wp-cli-v1` selects CLI rows without changing the Hugging Face repository
