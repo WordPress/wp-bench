@@ -323,6 +323,50 @@ The WP-CLI suite is scored separately from `wp-core-v1`; existing PHP task
 contracts and scoring remain unchanged. Compare scores only within the same
 suite and execution profile.
 
+### Authoring preservation assertions
+
+PHP and CLI tasks can use `WPBench\Runtime\Preservation` in trusted
+`runtime_checks.setup` and `custom_assertion` code. Capture after creating
+fixtures, before the candidate runs:
+
+```php
+$GLOBALS['before_posts'] = \WPBench\Runtime\Preservation::capture_posts();
+$GLOBALS['before_users'] = \WPBench\Runtime\Preservation::capture_users();
+```
+
+Each snapshot covers all existing non-revision posts or all accounts, including
+unrelated records, and keeps its before-state private in the verifier process.
+`preserved()` compares fields and stored metadata strictly, including serialized
+types, duplicate values, missing keys, and deleted records. Post snapshots also
+compare category and tag IDs as unordered relationships; derived
+`WP_Post::to_array()` fields `post_category` and `tags_input` are excluded from
+the field comparison. CLI assertions use the verifier's existing cache refresh.
+
+Allow only declared changes, keyed by the captured record's ID:
+
+```php
+return $GLOBALS['before_posts']->preserved( array(
+    $target_id => array(
+        'fields' => array( 'post_author', 'post_modified', 'post_modified_gmt' ),
+        'meta' => array( '_tracking' ),
+        'meta_prefixes' => array( '_legacy_' ),
+        'terms' => array( 'category' ),
+    ),
+    $deleted_id => array( 'deleted' => true ),
+) );
+```
+
+`fields`, `meta`, `meta_prefixes`, and `terms` permit changes only on that record;
+`deleted: true` requires its absence. Unknown record IDs or allowance keys throw.
+There are no automatic timestamp or metadata exemptions. Where the existing
+contract permits them, declare core side effects such as modified timestamps,
+draft date refreshes, publishing's `_pingme`/`_encloseme`, or role metadata
+explicitly. Task-specific assertions still verify the intended new values,
+creation/count rules (`count($snapshot)` gives the original count), and custom
+taxonomies or raw database contracts. The helper does not constrain new records
+and is not a security boundary for PHP candidates. The CLI menu and URL-migration
+tasks retain specialized assertions for their distinct contracts.
+
 ### Loading from Hugging Face
 
 ```yaml
