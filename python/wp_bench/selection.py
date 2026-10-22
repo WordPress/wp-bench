@@ -7,6 +7,9 @@ quick provider comparisons biased and misleading. Seeded selection keeps
 limited runs deterministic (same seed = same subset), tunable (different
 seed = different subset), and representative (round-robin across
 categories).
+
+Optional category filtering is applied before limited selection. Explicit
+test IDs bypass category filtering.
 """
 from __future__ import annotations
 
@@ -21,13 +24,16 @@ def select_tests(
     limit: int | None,
     test_ids: list[str],
     seed: int,
+    categories: list[str] | None = None,
 ) -> list[Any]:
     """Select tests for a run, deterministically.
 
     Rules:
     - Explicit ``test_ids`` win: the tests are returned in dataset order,
-      unaffected by limit or seed (filtering by ID happens upstream).
-    - No limit: all tests in dataset order (canonical full-run behavior).
+      unaffected by category, limit, or seed (filtering by ID happens upstream).
+    - Non-empty ``categories`` filters tests before limited selection.
+    - ``None`` or an empty categories list includes every category.
+    - No limit: all applicable tests in dataset order (canonical full-run behavior).
     - Limit: seeded stratified sampling. Tests are grouped by
       category; each group is shuffled with the seed and
       groups are drained round-robin (in deterministic group order) until
@@ -37,6 +43,19 @@ def select_tests(
     """
     if test_ids:
         return tests
+
+    if categories:
+        requested_categories = set(categories)
+        available_categories = {getattr(test, "category", "") for test in tests}
+        unknown_categories = sorted(requested_categories - available_categories)
+        if unknown_categories:
+            raise ValueError(f"Unknown categories: {', '.join(unknown_categories)}")
+        tests = [
+            test
+            for test in tests
+            if getattr(test, "category", "") in requested_categories
+        ]
+
     if limit is None or limit >= len(tests):
         return tests
 
