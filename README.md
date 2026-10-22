@@ -368,6 +368,10 @@ mypy python/                    # type check
 pytest python/                  # test
 ```
 
+### Maintainers
+
+Maintainers for this repo are [Jason Adams (@JasonTheAdams)](https://github.com/JasonTheAdams), [Jeffrey Paul (@jeffpaul)](https://github.com/jeffpaul), and [Miguel Lezama (@lezama)](https://github.com/lezama); all can be reached using the [@WordPress/wp-bench-maintainers](https://github.com/orgs/WordPress/teams/wp-bench-maintainers) team.
+
 ## License
 
 [GPL-2.0-or-later](https://github.com/WordPress/wp-bench/blob/trunk/LICENSE.md)
