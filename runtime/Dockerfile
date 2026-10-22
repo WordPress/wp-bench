@@ -8,6 +8,7 @@ ARG SQLITE_INTEGRATION_VERSION=3.0.2
 ARG SQLITE_INTEGRATION_SHA256=a7c506b95283e90544aa9dcf0096cb5a5eea4afd7d690ae350940a50654c8bfd
 
 USER root
+RUN apk add --no-cache bash jq
 RUN php -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'
 
 WORKDIR /var/www/html
@@ -28,6 +29,7 @@ COPY wp-bench-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/wp-b
 COPY verify-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php
 COPY src /var/www/html/wp-content/plugins/wp-bench-runtime/src
 COPY sqlite-snapshot.php /var/www/html/wp-content/plugins/wp-bench-runtime/sqlite-snapshot.php
+COPY record-loaded-files.php /var/www/html/wp-content/plugins/wp-bench-runtime/record-loaded-files.php
 COPY docker-entrypoint.sh /usr/local/bin/wp-bench-entrypoint
 RUN chmod +x /usr/local/bin/wp-bench-entrypoint
 RUN chown -R www-data:www-data /var/www/html

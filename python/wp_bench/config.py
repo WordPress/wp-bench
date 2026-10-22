@@ -21,6 +21,7 @@ from pydantic import (
 ArtifactKind = Literal[
     "php_snippet",
     "wp_plugin_files",
+    "wp_cli_shell",
     "block_plugin",
     "wp_theme_files",
     "js_module",
@@ -40,6 +41,9 @@ class DatasetConfig(StrictModel):
     revision: str | None = None
     split: str = "test"
     cache_dir: Path | None = None
+    #: Select a suite within a multi-suite Hugging Face export. Defaults to
+    #: run.suite so a run never mixes rows from other suites.
+    suite: str | None = None
 
 
 class ModelConfig(StrictModel):
@@ -239,6 +243,19 @@ class HarnessConfig(StrictModel):
                 f"Duplicate model names {duplicates}: results are keyed by name, "
                 "so entries sharing one would overwrite each other."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _align_hub_suite_with_run(self) -> HarnessConfig:
+        """Keep the Hub row filter and result label on the same selected suite.
+
+        An explicit dataset.suite takes precedence over run.suite. Otherwise
+        use run.suite as the filter so a multi-suite export cannot mix suites.
+        """
+        if self.dataset.source == "huggingface":
+            suite = self.dataset.suite if self.dataset.suite is not None else self.run.suite
+            self.dataset.suite = suite
+            self.run.suite = suite
         return self
 
     def get_models(self) -> list[ModelConfig]:

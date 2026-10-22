@@ -51,7 +51,7 @@ jobs:
         run: pip install -e ./python[dev]
 
       - name: Dataset shape and metadata tests
-        run: pytest python/tests/test_execution_dataset.py python/tests/test_dataset_metadata.py -q
+        run: pytest python/tests/test_execution_dataset.py python/tests/test_dataset_metadata.py python/tests/test_wp_cli_shell.py -q
 
       - name: Parquet export builds
         run: |
@@ -93,7 +93,17 @@ jobs:
       - name: Container isolation integration tests
         env:
           WP_BENCH_TEST_IMAGE: wp-bench-grader:dev
-        run: pytest python/tests/test_container_runtime_integration.py -q
+        run: pytest python/tests/test_container_runtime_integration.py python/tests/test_shell_runtime_integration.py -q
+
+      - name: WP-CLI workflow reference solutions
+        run: >-
+          wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1
+          --check-reference-solution --execution-concurrency 4
+
+      - name: WP-CLI workflow exploit audit
+        run: >-
+          wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1
+          --check-exploits --execution-concurrency 4
 
       - name: SQLite database reference solutions
         run: >-

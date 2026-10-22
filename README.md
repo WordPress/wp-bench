@@ -38,7 +38,7 @@ cd runtime
 docker build -t wp-bench-grader:dev .
 ```
 
-Runtime 2.1 runs WordPress 7.1 with SQLite. It uses the official
+Runtime 2.2 runs WordPress 7.1 with SQLite. It uses the official
 [SQLite Database Integration](https://github.com/WordPress/sqlite-database-integration/releases/tag/v3.0.2)
 3.0.2 drop-in, pinned by version and archive checksum. No database server is
 started. For a persistent diagnostic runtime, run
@@ -255,7 +255,73 @@ Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 
-The default suite `wp-core-v1` covers WordPress core APIs, hooks, database operations, and security patterns.
+The default suite `wp-core-v1` contains 350 tasks covering WordPress core APIs,
+hooks, database operations, and security patterns.
+
+### WP-CLI workflows
+
+`wp-cli-v1` adds 27 operational tasks across content, taxonomy and metadata,
+users and capabilities, options and transients, reporting, maintenance, and migration.
+Tasks combine selection, changes, and preservation: examples include retiring
+an author while reassigning content, consolidating categories, repairing a
+plugin that crashes bootstrap, producing scoped JSON/CSV reports, and provisioning
+content without duplicates when the script runs again. Advanced tasks also cover
+serialized URL migrations, menu hierarchy repair, widget relocation, autoload
+management, metadata deduplication, incident credential revocation, and CSV onboarding.
+
+These scenarios come from the official command documentation, installed WP-CLI
+implementations, and upstream reports. For example, [search-replace issue #137](https://github.com/wp-cli/search-replace-command/issues/137)
+documents that serialized array keys are not replaced;
+[table resolution](https://github.com/wp-cli/wp-cli/blob/v2.12.0/php/utils-wp.php)
+restricts explicitly named tables to the selected scope;
+[widget move](https://developer.wordpress.org/cli/commands/widget/move/)
+has position semantics that matter when merging widget areas; and [user import-csv](https://developer.wordpress.org/cli/commands/user/import-csv/)
+can update existing users unless explicitly told to skip them. Each advanced test records
+its research basis and source links in metadata. Prompts describe the desired
+WordPress outcome, and equivalent native command workflows are accepted.
+
+```bash
+wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --execution-concurrency 4
+# Maintainer validation without model calls:
+wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --check-reference-solution
+wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --check-exploits
+```
+
+The model returns a **plain command or Bash script string**, optionally inside
+a Bash code fence. Bash executes it from the WordPress root, with ordinary
+quoting, pipelines, loops, command substitution, heredocs, and redirection.
+`jq` and standard shell utilities are available; `errexit` and `pipefail` are
+not enabled automatically. Each `wp` command boots WordPress separately.
+These tasks require native WP-CLI operations and exclude PHP evaluation,
+PHP preloading, direct SQL, and edits to WordPress implementation files.
+Read-only `wp db prefix` and `wp db tables` discovery is permitted;
+these commands do not execute candidate SQL.
+Beyond each task's static checks, the runtime blocks the common shortcuts:
+`eval`, `eval-file`, `shell`, `db query`, `db cli`, `db import`, and `package`
+are disabled, `wp` rejects `--exec` and `--require`, and a script scores zero
+if it leaves new or changed PHP files (including `wp-config.php`, so no
+`wp config set`), `.maintenance`, or WP-CLI config files, or if WordPress loads
+a PHP file the script added, even one it removes afterwards. This raises the
+bar rather than sandboxing: a script that deliberately calls the PHP binary or
+bypasses the `wp` function is caught only by the static checks.
+Network downloads, MySQL-only database operations, and multisite are outside
+this initial SQLite suite.
+
+Trusted PHP creates fixtures before Bash runs and checks the resulting
+WordPress state and report output afterward. IDs and some fixture values vary
+to reject fixed answers. Several tasks run the same script twice on the same
+site to check convergence and empty selections. The expected script exit status
+is a pass gate (default `0`); intermediate nonzero statuses can be handled with
+normal shell branches. Results retain stdout, stderr, exit status, elapsed time,
+and repeat runs under `grader.raw.command`. Each output stream is capped at
+1 MiB. The script and its descendants get `grader.timeout_seconds` minus
+5 seconds (at least 1), so a slow script stops inside the runtime and its
+output is still recorded. Private container limits also apply, and timeouts
+or output overflow score zero.
+
+The WP-CLI suite is scored separately from `wp-core-v1`; existing PHP task
+contracts and scoring remain unchanged. Compare scores only within the same
+suite and execution profile.
 
 ### Loading from Hugging Face
 
@@ -263,7 +329,13 @@ The default suite `wp-core-v1` covers WordPress core APIs, hooks, database opera
 dataset:
   source: huggingface
   name: WordPress/wp-bench-v1
+  suite: wp-core-v1       # filter a multi-suite export; defaults to run.suite
 ```
+
+An explicit `dataset.suite` selects the rows and their result-suite label;
+`--suite` overrides both. `--suite wp-cli-v1` selects CLI rows without changing
+the Hugging Face repository name. The new suite is available locally immediately;
+Hub users need an export that includes it.
 
 ## Results & Reporting
 

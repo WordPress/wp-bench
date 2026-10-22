@@ -1,0 +1,136 @@
+{
+  "id": "wp-cli-v1",
+  "name": "WP-CLI operational workflows: cli-migration",
+  "metadata": {
+    "wp_version": "7.1",
+    "database": "sqlite",
+    "artifact_kind": "wp_cli_shell"
+  },
+  "tests": [
+    {
+      "id": "e-cli-migration-001",
+      "category": "cli-migration",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "Migrate every stored occurrence of 'https://cli-old.example.test' to 'https://cli-new.example.test' in this site's tables, including nested serialized settings, post metadata, and plugin tables sharing the actual WordPress table prefix. Preserve all GUID columns, primary keys, serialized value types, and tables outside this site's prefix. Do not assume the table prefix is wp_. A second run must succeed without further changes.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The workflow must satisfy these independently checked outcomes: Core content, nested metadata, and settings migrate without changing types or GUIDs; Plugin tables in scope migrate while their GUIDs, primary keys, and foreign tables survive. Equivalent native workflows are accepted.",
+      "reference_solution": "wp search-replace 'https://cli-old.example.test' 'https://cli-new.example.test' --all-tables-with-prefix --skip-columns=guid --precise",
+      "exploit_solutions": [
+        "wp search-replace 'https://cli-old.example.test' 'https://cli-new.example.test' --all-tables --skip-columns=guid --precise",
+        "wp search-replace 'https://cli-old.example.test' 'https://cli-new.example.test' --all-tables-with-prefix --precise",
+        "wp search-replace 'https://cli-old.example.test' 'https://cli-new.example.test' --skip-columns=guid --precise",
+        "wp db query 'SELECT 1' >/dev/null 2>&1 || true\nwp search-replace 'https://cli-old.example.test' 'https://cli-new.example.test' --all-tables-with-prefix --skip-columns=guid --precise"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n$old='https://cli-old.example.test'; $new='https://cli-new.example.test';\n$id=$make_post('cli-migrate','publish','post',array('_cli_links'=>array('url'=>$old.'/asset','enabled'=>false,'count'=>3)),array('post_content'=>$old.'/article','guid'=>$old.'/?p=31'));\n$make_post('cli-keep','draft','page',array('_cli_other'=>array('code'=>0)),array('post_content'=>'https://elsewhere.example.test/keep','guid'=>'https://elsewhere.example.test/?p=42'));\n$settings=array('endpoint'=>$old.'/api','nested'=>array('urls'=>array($old.'/one',$old.'/two'),'enabled'=>false,'retries'=>3),'marker'=>wp_generate_uuid4());\nupdate_option('cli_migration_settings',$settings); update_option('cli_migration_keep',array('url'=>'https://elsewhere.example.test','zero'=>0));\n$GLOBALS['cli_fixture']['settings']=$settings;\nglobal $wpdb;\n$suffix='cli_plugin_'.str_replace('-','',wp_generate_uuid4());\n$plugin_table=$wpdb->prefix.$suffix; $foreign_table='foreign_'.$suffix;\nforeach(array($plugin_table,$foreign_table) as $table) {\n    $wpdb->query(\"CREATE TABLE $table (id bigint(20) unsigned NOT NULL AUTO_INCREMENT, payload longtext NOT NULL, guid text NOT NULL, PRIMARY KEY (id))\");\n    $wpdb->insert($table,array('payload'=>maybe_serialize(array('url'=>$old.'/plugin','count'=>7,'enabled'=>false)),'guid'=>$old.'/stable-guid'));\n}\n$GLOBALS['cli_fixture']['plugin_table']=$plugin_table; $GLOBALS['cli_fixture']['foreign_table']=$foreign_table;\n$GLOBALS['cli_fixture']['plugin_before']=$wpdb->get_results(\"SELECT * FROM $plugin_table ORDER BY id\",ARRAY_A);\n$GLOBALS['cli_fixture']['foreign_before']=$wpdb->get_results(\"SELECT * FROM $foreign_table ORDER BY id\",ARRAY_A);\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Core content, nested metadata, and settings migrate without changing types or GUIDs",
+            "code": "$f=$GLOBALS['cli_fixture']; $id=$f['posts']['cli-migrate'];\n$p=get_post($id); $expected=$f['settings']; $expected['endpoint']='https://cli-new.example.test/api';\n$expected['nested']['urls']=array('https://cli-new.example.test/one','https://cli-new.example.test/two');\nreturn $p->post_content==='https://cli-new.example.test/article' && $p->guid==='https://cli-old.example.test/?p=31'\n && get_post_meta($id,'_cli_links',true)===array('url'=>'https://cli-new.example.test/asset','enabled'=>false,'count'=>3)\n && get_option('cli_migration_settings')===$expected && get_option('cli_migration_keep')===array('url'=>'https://elsewhere.example.test','zero'=>0);",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Plugin tables in scope migrate while their GUIDs, primary keys, and foreign tables survive",
+            "code": "$f=$GLOBALS['cli_fixture']; global $wpdb;\n$actual=$wpdb->get_results(\"SELECT * FROM {$f['plugin_table']} ORDER BY id\",ARRAY_A);\n$expected=$f['plugin_before']; $expected[0]['payload']=maybe_serialize(array('url'=>'https://cli-new.example.test/plugin','count'=>7,'enabled'=>false));\nreturn $actual===$expected && $wpdb->get_results(\"SELECT * FROM {$f['foreign_table']} ORDER BY id\",ARRAY_A)===$f['foreign_before'];",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing records retain all fields except the requested URL replacement outside GUID columns",
+            "code": "$f=$GLOBALS['cli_fixture']; global $wpdb;\n$replace=static function($value) use (&$replace) {\n    if(is_string($value)) { return str_replace('https://cli-old.example.test','https://cli-new.example.test',$value); }\n    if(is_array($value)) { foreach($value as $key=>$item) { $value[$key]=$replace($item); } }\n    return $value;\n};\n$ids=$wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\");\nif(count($ids)!==count($f['content_before'])) { return false; }\nforeach($f['content_before'] as $id=>$before) {\n    $expected=$replace($before['post']); $expected['guid']=$before['post']['guid'];\n    if(get_post($id,ARRAY_A)!==$expected || get_post_meta($id)!==$replace($before['meta'])) { return false; }\n}\nforeach($f['users_before'] as $id=>$before) { $user=get_userdata($id); if(!$user || $user->to_array()!==$before['data'] || get_user_meta($id)!==$before['meta']) { return false; } }\nreturn true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0,
+        "repeat": 2,
+        "teardown": "global $wpdb; foreach(array('plugin_table','foreign_table') as $key) { if(isset($GLOBALS['cli_fixture'][$key])) { $wpdb->query('DROP TABLE IF EXISTS '.$GLOBALS['cli_fixture'][$key]); } }"
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-includes/meta.php",
+          "https://developer.wordpress.org/cli/commands/search-replace/",
+          "https://developer.wordpress.org/cli/commands/db/tables/",
+          "https://developer.wordpress.org/cli/commands/db/prefix/",
+          "https://github.com/wp-cli/wp-cli/blob/v2.12.0/php/utils-wp.php"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "advanced native WP-CLI operational workflow",
+        "research_basis": "Official search-replace documentation distinguishes registered tables, prefix-scoped plugin tables, all tables, and serialized values. WP-CLI 2.12.0 wp_get_table_names intersects explicit table arguments with that scope, so naming a discovered plugin table alone does not include it."
+      }
+    },
+    {
+      "id": "e-cli-migration-002",
+      "category": "cli-migration",
+      "artifact_kind": "wp_cli_shell",
+      "prompt": "After a domain migration, option 'cli_url_routes' still has top-level URL keys beginning 'https://cli-old.example.test/'. Rename all such keys to the same path under 'https://cli-new.example.test/'. Discover the keys from the option. Preserve each associated value exactly, including types and any old-domain strings inside those values. Preserve keys for other domains, sibling settings, and every other option. The script runs twice; no obsolete keys or duplicate routes should remain.",
+      "requirements": [
+        "Use native WP-CLI commands for WordPress operations; discover IDs rather than assuming them."
+      ],
+      "expected_behavior": "The workflow must satisfy these independently checked outcomes: Every matching URL key changes while nested values and other options retain their exact types and content; Existing content, metadata, and relationships change only within the requested scope; Existing accounts and user metadata remain intact outside the requested changes. Equivalent native workflows are accepted.",
+      "reference_solution": "set -e\nkeys=$(wp option get cli_url_routes --format=json | jq -r 'keys[] | select(startswith(\"https://cli-old.example.test/\"))')\nfor key in $keys; do\n  value=$(wp option pluck cli_url_routes \"$key\" --format=json)\n  new=\"https://cli-new.example.test${key#https://cli-old.example.test}\"\n  wp option patch insert cli_url_routes \"$new\" \"$value\" --format=json\n  wp option patch delete cli_url_routes \"$key\"\ndone",
+      "exploit_solutions": [
+        "wp search-replace 'https://cli-old.example.test' 'https://cli-new.example.test' --all-tables-with-prefix --precise",
+        "wp option get cli_url_routes --format=json | sed 's/cli-old.example.test/cli-new.example.test/g' | wp option update cli_url_routes --format=json"
+      ],
+      "static_checks": {
+        "forbidden_patterns": [
+          {
+            "pattern": "/(?:\\bwp\\s+(?:--[^\\s]+\\s+)*(?:eval(?:-file)?|db(?!\\s+(?:--[^\\s]+\\s+)*(?:prefix|tables)\\b)|shell)\\b|--(?:exec|require)(?:=|\\s)|(?:^|[\\s;&|])(?:php|sqlite3|mysql)\\s)/m",
+            "description": "Use native WordPress operations; read-only table/prefix discovery is allowed, but PHP evaluation and direct SQL are forbidden",
+            "severity": "error"
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['cli_fixture'] = array();\n// Vary incidental IDs so reports must discover actual records, not echo constants.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_insert_post( array( 'post_title' => 'Unrelated filler', 'post_status' => 'draft' ) );\n}\n// Vary user IDs too; reports must resolve real accounts.\nfor ( $i = 0, $n = random_int( 1, 4 ); $i < $n; ++$i ) {\n    wp_create_user( 'cli-filler-' . $i, 'benchmark-password', 'filler-' . $i . '@wp-bench.test' );\n}\n$make_post = static function ( $slug, $status = 'publish', $type = 'post', $meta = array(), $extra = array() ) {\n    $id = wp_insert_post( array_merge( array( 'post_name' => $slug, 'post_title' => $slug,\n        'post_status' => $status, 'post_type' => $type, 'meta_input' => $meta ), $extra ), true );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    $GLOBALS['cli_fixture']['posts'][$slug] = $id;\n    return $id;\n};\n$make_user = static function ( $login, $role = 'author', $meta = array() ) {\n    $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => 'benchmark-password',\n        'user_email' => $login . '@wp-bench.test', 'role' => $role ) );\n    if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); }\n    foreach ( $meta as $key => $value ) { update_user_meta( $id, $key, $value ); }\n    $GLOBALS['cli_fixture']['users'][$login] = $id;\n    return $id;\n};\n$make_term = static function ( $slug, $taxonomy = 'category' ) {\n    $term = wp_insert_term( $slug, $taxonomy, array( 'slug' => $slug ) );\n    if ( is_wp_error( $term ) ) { throw new Exception( $term->get_error_message() ); }\n    $GLOBALS['cli_fixture']['terms'][$slug] = $term['term_id'];\n    return $term['term_id'];\n};\n\n$marker=substr(wp_generate_uuid4(),0,8);\n$routes=array('https://cli-old.example.test/news'=>array('enabled'=>false,'priority'=>3,'destination'=>'https://cli-old.example.test/internal'),\n 'https://cli-old.example.test/docs/'.$marker=>array('enabled'=>true,'aliases'=>array('a','b'),'limit'=>0),\n 'https://other.example.test/news'=>array('enabled'=>true),'defaults'=>array('retry'=>2,'enabled'=>false));\nupdate_option('cli_url_routes',$routes); update_option('cli_url_routes_keep',array('https://cli-old.example.test/news'=>'keep'));\n$GLOBALS['cli_fixture']['routes']=$routes; $GLOBALS['cli_fixture']['route_keep']=get_option('cli_url_routes_keep');\n// Snapshot content independently so broad updates cannot hide behind target-only checks.\n$GLOBALS['cli_fixture']['content_before']=array();\nglobal $wpdb;\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->posts} WHERE post_type != 'revision'\") as $id) {\n    $GLOBALS['cli_fixture']['content_before'][$id]=array(\n        'post'=>get_post($id,ARRAY_A), 'meta'=>get_post_meta($id),\n        'category'=>wp_get_post_categories($id), 'tags'=>wp_get_post_tags($id,array('fields'=>'ids'))\n    );\n}\n\n$GLOBALS['cli_fixture']['users_before']=array();\nforeach($wpdb->get_col(\"SELECT ID FROM {$wpdb->users}\") as $id) {\n    $GLOBALS['cli_fixture']['users_before'][$id]=array('data'=>get_userdata($id)->to_array(),'meta'=>get_user_meta($id));\n}\n",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "description": "Every matching URL key changes while nested values and other options retain their exact types and content",
+            "code": "$f=$GLOBALS['cli_fixture']; $expected=array();\nforeach($f['routes'] as $key=>$value) { if(str_starts_with($key,'https://cli-old.example.test/')) { $key='https://cli-new.example.test'.substr($key,strlen('https://cli-old.example.test')); } $expected[$key]=$value; }\n$actual=get_option('cli_url_routes');\nif(!is_array($actual)) { return false; } ksort($expected); ksort($actual);\nreturn $actual===$expected && get_option('cli_url_routes_keep')===$f['route_keep'];",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing content, metadata, and relationships change only within the requested scope",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$slugs=array_flip($f['posts']??array());\nforeach($f['content_before'] as $id=>$before) {\n    $slug=$slugs[$id]??'';\n    $actual=get_post($id,ARRAY_A); $expected=$before['post'];\n    // Derived taxonomy fields are checked independently below.\n    unset($actual['post_category'],$actual['tags_input'],$expected['post_category'],$expected['tags_input']);\n    if(in_array($slug,array(),true)) {\n        if(in_array('delete',array(),true)) { if($actual!==null) { return false; } continue; }\n        foreach(array() as $key) { unset($actual[$key],$expected[$key]); }\n    }\n    if($actual!==$expected) { return false; }\n    $meta=get_post_meta($id); $wanted=$before['meta'];\n    if(in_array($slug,array(),true)) {\n        foreach(array_unique(array_merge(array_keys($meta),array_keys($wanted))) as $key) {\n            foreach(array() as $allowed) {\n                if($key===$allowed || (str_starts_with($allowed,'prefix:') && str_starts_with($key,substr($allowed,7)))) { unset($meta[$key],$wanted[$key]); }\n            }\n        }\n    }\n    if($meta!==$wanted) { return false; }\n    $cats=wp_get_post_categories($id); $tags=wp_get_post_tags($id,array('fields'=>'ids'));\n    sort($cats); sort($tags); sort($before['category']); sort($before['tags']);\n    if(!in_array($slug,array(),true) && $cats!==$before['category']) { return false; }\n    if(!in_array($slug,array(),true) && $tags!==$before['tags']) { return false; }\n} return true;",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "description": "Existing accounts and user metadata remain intact outside the requested changes",
+            "code": "$f=$GLOBALS['cli_fixture'];\n$logins=array_flip($f['users']??array());\nforeach($f['users_before'] as $id=>$before) {\n    $login=$logins[$id]??'';\n    if($login==='--none--') { continue; }\n    $user=get_userdata($id);\n    if(!$user || $user->to_array()!==$before['data']) { return false; }\n    $meta=get_user_meta($id); $wanted=$before['meta'];\n    if(in_array($login,array(),true)) {\n        foreach(array() as $key) { unset($meta[$key],$wanted[$key]); }\n    }\n    if($meta!==$wanted) { return false; }\n} return true;",
+            "weight": 1
+          }
+        ],
+        "exit_code": 0,
+        "repeat": 2
+      },
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "https://github.com/wp-cli/search-replace-command/issues/137",
+          "https://developer.wordpress.org/cli/commands/option/patch/",
+          "https://developer.wordpress.org/cli/commands/option/pluck/"
+        ],
+        "release_focus": "classic",
+        "evaluation_focus": "advanced native WP-CLI operational workflow",
+        "research_basis": "Upstream search-replace issue #137 documents that serialized array keys are left unchanged. Native pluck/patch can rename keys while retaining values."
+      }
+    }
+  ]
+}
