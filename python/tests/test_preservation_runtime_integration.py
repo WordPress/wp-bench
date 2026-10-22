@@ -189,10 +189,11 @@ def test_allowlist_typos_fail_instead_of_silently_ignoring_checks(environment) -
     result = environment.execute_code("", {"runtime_checks": {"setup": SETUP, "assertions": [{
         "type": "custom_assertion", "code": """
             extract($GLOBALS['preserve_ids']); $before=$GLOBALS['preserve_posts']; $caught=0;
-            foreach (array(array(999999=>array()),array($p=>array('metas'=>array('structured')))) as $allow) {
+            foreach (array(array(999999=>array()),array($p=>array('metas'=>array('structured'))),
+                array($p=>array('meta_prefixes'=>array('')))) as $allow) {
                 try { $before->preserved($allow); } catch (InvalidArgumentException $e) { ++$caught; }
             }
-            return $caught===2;
+            return $caught===3;
         """,
     }]}})
     assert result.success, result.raw

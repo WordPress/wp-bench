@@ -53,8 +53,9 @@ final class Preservation implements \Countable {
 	public function preserved( array $allow = array() ): bool {
 		foreach ( $allow as $id => $changes ) {
 			if ( ! isset( $this->records[ $id ] ) ||
-				array_diff( array_keys( $changes ), array( 'fields', 'meta', 'meta_prefixes', 'terms', 'deleted' ) ) ) {
-				throw new \InvalidArgumentException( 'Unknown preservation record or allowance.' );
+				array_diff( array_keys( $changes ), array( 'fields', 'meta', 'meta_prefixes', 'terms', 'deleted' ) ) ||
+				in_array( '', $changes['meta_prefixes'] ?? array(), true ) ) {
+				throw new \InvalidArgumentException( 'Unknown preservation record or invalid allowance.' );
 			}
 		}
 		foreach ( $this->records as $id => $before ) {
