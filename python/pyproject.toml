@@ -7,7 +7,7 @@ name = "wp-bench"
 version = "0.1.0"
 description = "Python-native harness for the WordPress AI Benchmark"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
   { name = "WordPress.org", email = "wp-aisystems@wordpress.org" }
 ]

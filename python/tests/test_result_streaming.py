@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from wp_bench.results_io import RecordStream, open_stream, timestamped_path
@@ -78,13 +78,13 @@ def test_finalize_never_destroys_streamed_records_it_cannot_replace(tmp_path: Pa
 
 def test_run_artifacts_share_one_timestamp() -> None:
     """The JSON and JSONL of one run must be correlatable by filename."""
-    moment = datetime(2026, 8, 5, 14, 30, 52, tzinfo=timezone.utc)
+    moment = datetime(2026, 8, 5, 14, 30, 52, tzinfo=UTC)
     assert timestamped_path(Path("out/results.json"), moment).name == "results_20260805_143052.json"
     assert timestamped_path(Path("out/results.jsonl"), moment).name == "results_20260805_143052.jsonl"
 
 
 def test_open_stream_disables_itself_without_a_configured_path() -> None:
-    moment = datetime(2026, 8, 5, 14, 30, 52, tzinfo=timezone.utc)
+    moment = datetime(2026, 8, 5, 14, 30, 52, tzinfo=UTC)
     assert open_stream(None, moment).path is None
     assert open_stream(Path("out/results.jsonl"), moment).path == Path(
         "out/results_20260805_143052.jsonl"

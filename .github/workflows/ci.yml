@@ -14,14 +14,19 @@ permissions:
 
 jobs:
   python:
-    name: Python lint, types, tests
+    name: Python lint, types, tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep the floor from pyproject's requires-python in here (#61).
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "${{ matrix.python-version }}"
           cache: pip
 
       - name: Install harness with dev tooling
