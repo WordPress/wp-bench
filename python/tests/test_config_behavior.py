@@ -56,7 +56,7 @@ def test_example_config_loads() -> None:
     """The shipped example must only use supported fields."""
     example = PROJECT_ROOT / "wp-bench.example.yaml"
     config = HarnessConfig.from_file(example)
-    assert config.run.suite == "wp-core-v1"
+    assert config.run.suite == "wp-core"
     assert config.grader.kind in ("docker", "cli")
 
 
@@ -67,7 +67,7 @@ def test_skip_runtime_controls_verification_payload() -> None:
 
     test = ExecutionTest(
         id="e-one",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
@@ -101,7 +101,7 @@ def test_skipped_dimension_not_scored() -> None:
 
     test = ExecutionTest(
         id="e-one",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="general",

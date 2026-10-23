@@ -12,7 +12,7 @@ from wp_bench.selection import select_tests, selected_test_ids
 def _test(test_id: str, category: str) -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category=category,
@@ -176,7 +176,7 @@ def test_category_filtering_happens_before_limit_selection() -> None:
 def test_categories_flow_from_harness_config_to_run_selection() -> None:
     config = HarnessConfig.model_validate(
         {
-            "dataset": {"source": "local", "name": "wp-core-v1"},
+            "dataset": {"source": "local", "name": "wp-core"},
             "run": {"categories": ["bbb"]},
         }
     )
@@ -189,7 +189,7 @@ def test_categories_flow_from_harness_config_to_run_selection() -> None:
 def test_unknown_category_raises_value_error_naming_category() -> None:
     config = HarnessConfig.model_validate(
         {
-            "dataset": {"source": "local", "name": "wp-core-v1"},
+            "dataset": {"source": "local", "name": "wp-core"},
             "run": {"categories": ["not-a-category"]},
         }
     )

@@ -13,7 +13,7 @@ from wp_bench.datasets import ExecutionTest, filter_tests_by_ids
 def _execution_test(test_id: str, category: str = "general") -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category=category,
@@ -58,7 +58,7 @@ def test_filter_tests_by_ids_rejects_unknown_ids() -> None:
 def test_zero_selected_tests_fails_loudly() -> None:
     """An empty selection (missing suite, execution-less dataset) must not
     produce a vacuous successful run."""
-    config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core-v1"}})
+    config = HarnessConfig.model_validate({"dataset": {"source": "local", "name": "wp-core"}})
     with pytest.raises(ValueError, match="No execution tests selected"):
         select_run_tests([], config)
 
@@ -137,7 +137,7 @@ def test_dry_run_category_filters_selected_test_ids(monkeypatch: pytest.MonkeyPa
 def test_category_filter_rejects_mixed_known_and_unknown_categories() -> None:
     config = HarnessConfig.model_validate(
         {
-            "dataset": {"source": "local", "name": "wp-core-v1"},
+            "dataset": {"source": "local", "name": "wp-core"},
             "run": {"categories": ["hooks", "not-a-category"]},
         }
     )

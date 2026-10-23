@@ -1,11 +1,16 @@
 # WP-Bench Configuration
 # Copy to wp-bench.yaml and customize. API keys loaded from .env file.
 
+# Optional: assert a public release before spending on models. Use the exact
+# model/grader protocol from `wp-bench benchmark show --version v1`.
+# benchmark:
+#   version: v1
+
 dataset:
   source: local          # 'local' or 'huggingface'
-  name: wp-core-v1       # suite name or HF dataset path
-  # suite: wp-core-v1    # HF only: suite rows to load; defaults to run.suite
-                        # Use --suite wp-cli-v1 to select CLI workflows.
+  name: wp-core       # suite name or HF dataset path
+  # suite: wp-core    # HF only: suite rows to load; defaults to run.suite
+                        # Use --suite wp-cli to select CLI workflows.
 
 # Multiple models to benchmark (runs sequentially, outputs comparison table)
 models:
@@ -46,7 +51,7 @@ grader:
 
 # Run configuration
 run:
-  suite: wp-core-v1
+  suite: wp-core
   # limit: 10            # limit tests per model (null = all); limited runs
   #                      # use seeded stratified selection across categories
   # seed: 1337           # selection seed (same seed = same subset)

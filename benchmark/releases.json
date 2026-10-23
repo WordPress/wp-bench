@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "releases": [
+    {
+      "version": "v1",
+      "path": "releases/v1.json",
+      "fingerprint": "83e81aa6ebc36f6516d0b38655f4818d556039a3507c03a029aef868c4171220"
+    }
+  ],
+  "current": "v1"
+}

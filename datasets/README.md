@@ -7,12 +7,12 @@ This directory contains the benchmark test suites and tooling for publishing to 
 ```
 datasets/
 ├── suites/                    # Source of truth (human-editable JSON)
-│   ├── wp-core-v1/
+│   ├── wp-core/
 │   │   └── execution/         # Code generation tests (one file per category)
 │   │       ├── hooks.json
 │   │       ├── rest-api.json
 │   │       └── ...
-│   └── wp-cli-v1/
+│   └── wp-cli/
 │       └── execution/         # 27 WP-CLI workflows, seven categories
 ├── data/                      # Generated Parquet for HF (gitignored)
 │   └── test.parquet
@@ -28,7 +28,7 @@ The harness loads directly from `suites/` JSON files:
 # wp-bench.yaml
 dataset:
   source: local
-  name: wp-core-v1
+  name: wp-core
 ```
 
 ## Publishing to Hugging Face
@@ -108,7 +108,7 @@ The local loader selects `dataset.name`; the Hub loader uses `dataset.name` as
 the repository and `dataset.suite` to filter the combined export, defaulting to
 `run.suite`. An explicit Hub `dataset.suite` also sets the result-suite label.
 `--suite` handles both sources. Exports include both suites, and omit authored
-exploit candidates. CLI scores should be reported separately from core scores.
+exploit candidates. Report component/category scores alongside the task-weighted overall score defined by the public benchmark release.
 
 
 ### Per-Test Metadata
@@ -132,3 +132,11 @@ field named `suite_metadata` would be shadowed — avoid that name).
 
 All fields are optional; unknown fields are preserved as-is. Prefer adding
 new fields here before inventing per-suite conventions.
+
+## Release identity
+
+`wp-core` and `wp-cli` are stable component IDs. Category JSON files carry no
+independent version. The complete public release and all source fingerprints
+are defined in [../benchmark/README.md](../benchmark/README.md). Any dataset
+change creates an unreleased evaluation until the next overall release is frozen.
+Exports use the stable IDs; publish a pinned Hub revision for each public release.

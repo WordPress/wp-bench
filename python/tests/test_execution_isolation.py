@@ -23,7 +23,7 @@ from wp_bench.environment import ExecutionResult
 def _execution_test(test_id: str) -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
@@ -47,7 +47,7 @@ def _passing_result() -> ExecutionResult:
 
 def _config(tmp_path: Path, **run_overrides: Any) -> HarnessConfig:
     return HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(**run_overrides),
@@ -136,7 +136,7 @@ def test_multi_model_runner_resets_between_models(
         lambda dataset: tests,
     )
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         models=[ModelConfig(name="model-a"), ModelConfig(name="model-b")],
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),
