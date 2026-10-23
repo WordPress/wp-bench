@@ -45,21 +45,21 @@ def test_shell_artifact_rejects_invalid_size_or_content(script: str) -> None:
 
 @pytest.mark.parametrize("grader_timeout,shell_timeout", [(90, 85), (6, 1), (1, 1)])
 def test_shell_budget_ends_before_the_grader_timeout(grader_timeout, shell_timeout) -> None:
-    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
+    test = load_tests(DatasetConfig(source="local", name="wp-cli"))[0]
     config = HarnessConfig(grader=GraderConfig(timeout_seconds=grader_timeout))
     assert _build_verification_spec(test, config)["timeout_seconds"] == shell_timeout
 
 
 @pytest.mark.parametrize("mode", ["model", "reference", "exploits"])
 def test_shell_scripts_reach_the_runtime_in_every_mode(monkeypatch, tmp_path, mode) -> None:
-    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
+    test = load_tests(DatasetConfig(source="local", name="wp-cli"))[0]
     reference = test.reference_solution
     assert reference is not None
     monkeypatch.setattr("wp_bench.core.load_tests", lambda dataset: [test])
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-cli-v1"),
+        dataset=DatasetConfig(source="local", name="wp-cli"),
         run=RunConfig(
-            suite="wp-cli-v1", check_reference_solution=mode == "reference",
+            suite="wp-cli", check_reference_solution=mode == "reference",
             check_exploits=mode == "exploits",
         ),
         output=OutputConfig(path=tmp_path / "result.json", jsonl_path=None),
@@ -87,7 +87,7 @@ def test_shell_scripts_reach_the_runtime_in_every_mode(monkeypatch, tmp_path, mo
 
 
 def test_shell_prompt_describes_the_actual_execution_contract() -> None:
-    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
+    test = load_tests(DatasetConfig(source="local", name="wp-cli"))[0]
     prompt = BenchmarkRunner._render_execution_prompt(test)
     assert "Bash command or script" in prompt
     assert "SQLite" in prompt and "no network" in prompt
@@ -99,8 +99,8 @@ def test_shell_prompt_describes_the_actual_execution_contract() -> None:
 
 def test_cli_suite_flag_selects_the_local_cli_suite(tmp_path) -> None:
     path = tmp_path / "config.yaml"
-    path.write_text("dataset: {source: local, name: wp-core-v1}\n")
-    result = CliRunner().invoke(app, ["run", "--config", str(path), "--suite", "wp-cli-v1", "--dry-run"])
+    path.write_text("dataset: {source: local, name: wp-core}\n")
+    result = CliRunner().invoke(app, ["run", "--config", str(path), "--suite", "wp-cli", "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "Execution tests: 27" in result.output
 
@@ -113,30 +113,30 @@ def test_huggingface_suite_filter_preserves_repository_name(monkeypatch, tmp_pat
         return [
             {"id": suite, "suite": suite, "test_kind": "execution", "prompt": "Task",
              "artifact_kind": kind}
-            for suite, kind in [("wp-core-v1", "php_snippet"), ("wp-cli-v1", "wp_cli_shell")]
+            for suite, kind in [("wp-core", "php_snippet"), ("wp-cli", "wp_cli_shell")]
         ]
 
     monkeypatch.setattr("wp_bench.datasets.hf_load_dataset", load)
-    selected = load_tests(DatasetConfig(source="huggingface", name="WordPress/wp-bench-v1", suite="wp-cli-v1"))
+    selected = load_tests(DatasetConfig(source="huggingface", name="WordPress/wp-bench-v1", suite="wp-cli"))
     assert [t.artifact_kind for t in selected] == ["wp_cli_shell"]
     path = tmp_path / "config.yaml"
     path.write_text("dataset: {source: huggingface, name: WordPress/wp-bench-v1}\n")
-    result = CliRunner().invoke(app, ["run", "--config", str(path), "--suite", "wp-cli-v1", "--dry-run"])
+    result = CliRunner().invoke(app, ["run", "--config", str(path), "--suite", "wp-cli", "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "Execution tests: 1" in result.output
     assert seen == ["WordPress/wp-bench-v1"] * 2
 
 
 @pytest.mark.parametrize("dataset,run,suite", [
-    ({}, {}, "wp-core-v1"),
-    ({}, {"suite": "wp-cli-v1"}, "wp-cli-v1"),
-    ({"suite": "wp-cli-v1"}, {}, "wp-cli-v1"),
-    ({"suite": "wp-cli-v1"}, {"suite": "wp-core-v1"}, "wp-cli-v1"),
-    ({"suite": "wp-core-v1"}, {"suite": "wp-cli-v1"}, "wp-core-v1"),
+    ({}, {}, "wp-core"),
+    ({}, {"suite": "wp-cli"}, "wp-cli"),
+    ({"suite": "wp-cli"}, {}, "wp-cli"),
+    ({"suite": "wp-cli"}, {"suite": "wp-core"}, "wp-cli"),
+    ({"suite": "wp-core"}, {"suite": "wp-cli"}, "wp-core"),
 ])
 def test_huggingface_loads_only_the_run_suite_unless_overridden(monkeypatch, dataset, run, suite) -> None:
     rows = [{"id": suite, "suite": suite, "test_kind": "execution", "prompt": "Task"}
-            for suite in ["wp-core-v1", "wp-cli-v1"]]
+            for suite in ["wp-core", "wp-cli"]]
     monkeypatch.setattr("wp_bench.datasets.hf_load_dataset", lambda name, **kwargs: rows)
     config = HarnessConfig.model_validate({"dataset": {"source": "huggingface", **dataset}, "run": run})
     assert [t.suite for t in load_tests(config.dataset)] == [suite]
@@ -144,17 +144,17 @@ def test_huggingface_loads_only_the_run_suite_unless_overridden(monkeypatch, dat
 
 
 def test_cli_suite_has_workflows_with_behavioral_and_exploit_checks() -> None:
-    tests = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))
+    tests = load_tests(DatasetConfig(source="local", name="wp-cli"))
     assert Counter(t.category for t in tests) == {
         "cli-content": 3, "cli-taxonomy-meta": 4, "cli-users": 5,
         "cli-options": 4, "cli-reporting": 3, "cli-maintenance": 6,
         "cli-migration": 2,
     }
-    core = load_tests(DatasetConfig(source="local", name="wp-core-v1"))
+    core = load_tests(DatasetConfig(source="local", name="wp-core"))
     assert len(core) == 350
     assert len({t.id for t in core + tests}) == 377
     for test in tests:
-        assert test.suite == "wp-cli-v1" and test.artifact_kind == "wp_cli_shell"
+        assert test.suite == "wp-cli" and test.artifact_kind == "wp_cli_shell"
         assert test.test_function is None
         assert test.reference_solution and "wp " in test.reference_solution
         assert test.exploit_solutions and all(s.strip() for s in test.exploit_solutions)
@@ -175,10 +175,10 @@ def test_cli_export_preserves_shell_contract_and_excludes_exploits() -> None:
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    rows = module.load_suite("wp-cli-v1")
+    rows = module.load_suite("wp-cli")
     assert len(rows) == 27
     assert all(r["artifact_kind"] == "wp_cli_shell" and "exploit_solutions" not in r for r in rows)
-    local = {t.id: t for t in load_tests(DatasetConfig(source="local", name="wp-cli-v1"))}
+    local = {t.id: t for t in load_tests(DatasetConfig(source="local", name="wp-cli"))}
     for row in rows:
         assert row["reference_solution"] == local[row["id"]].reference_solution
         assert json.loads(row["runtime_checks"]) == local[row["id"]].runtime_checks

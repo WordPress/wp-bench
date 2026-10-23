@@ -14,7 +14,7 @@ def _make_test(
 ) -> ExecutionTest:
     return ExecutionTest(
         id="e-test-001",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Do something.",
         expected_behavior="Reviewer contract: does something observable.",
         category="hooks",

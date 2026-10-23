@@ -102,7 +102,7 @@ def _multi_model_config(tmp_path: Path, names: list[str]):
     )
 
     return HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         models=[ModelConfig(name=name) for name in names],
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),
@@ -121,7 +121,7 @@ def _run_multi_model(monkeypatch, tmp_path: Path, names: list[str]):
 
     test = ExecutionTest(
         id="e-one",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",

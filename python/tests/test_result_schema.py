@@ -25,7 +25,7 @@ from wp_bench.records import RESULT_SCHEMA_VERSION
 def _execution_test(test_id: str = "e-one") -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
@@ -60,7 +60,7 @@ def _key_paths(record: dict[str, Any], prefix: str = "") -> set[str]:
 
 def _single_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list:
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),
@@ -81,7 +81,7 @@ def _single_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> li
 
 def _multi_model_records(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list:
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         models=[ModelConfig(name="model-a")],
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),
@@ -154,7 +154,7 @@ def test_reference_solution_record_uses_canonical_schema(
     tmp_path: Path,
 ) -> None:
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(check_reference_solution=True),
@@ -191,7 +191,7 @@ def test_jsonl_records_match_json_results(
     tmp_path: Path,
 ) -> None:
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),
@@ -226,7 +226,7 @@ def test_records_are_sorted_for_stable_output(
     tmp_path: Path,
 ) -> None:
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),

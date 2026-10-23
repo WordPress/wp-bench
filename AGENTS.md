@@ -36,3 +36,9 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 - Follow Conventional Commits (`feat:`, `refactor:`, etc.) as seen in git history. Scope prefixes are optional.
 - PRs should state intent, key commands run (`ruff`, `mypy`, `pytest`, runtime smoke test), and config changes. Link related issues. Include logs or screenshots for runtime/verifier output when relevant.
 - Keep changes small and focused; update README/AGENTS.md when workflows or flags change. Avoid touching `legacy/` unless explicitly required.
+
+## Benchmark Releases
+- Public versions (`v1`, `v2`, …) identify the entire evaluation; `wp-core` and `wp-cli` are stable component IDs, never independent public versions.
+- Read `benchmark/README.md` before changing the release protocol, category mapping, result provenance, or website export contract.
+- Published `benchmark/releases/v*.json` files are immutable. Batch evaluation changes during development, then freeze the next release. Adding model results and changing presentation do not create benchmark versions.
+- Run `wp-bench benchmark check` and `pytest python/tests/test_benchmark_releases.py -q` after changes to versioning. Dataset/runtime/harness changes intentionally produce unreleased results until a new release is frozen.

@@ -29,7 +29,7 @@ from wp_bench.skills import build_variants, load_skill
 def _execution_test(test_id: str = "e-one") -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
@@ -74,7 +74,7 @@ def _skill_dir(tmp_path: Path) -> Path:
 
 def _config(tmp_path: Path, skill_path: Path) -> HarnessConfig:
     return HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         models=[ModelConfig(name="model-a")],
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),

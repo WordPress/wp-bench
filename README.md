@@ -2,6 +2,19 @@
 
 The official WordPress AI benchmark. Evaluate how well language models understand WordPress development—from core APIs and coding standards to plugin architecture and security best practices.
 
+## Public benchmark version
+
+One public version identifies the complete evaluation: **WP-Bench v1**. The
+`wp-core` and `wp-cli` datasets are stable components of that release. Changes to
+any dataset or score-affecting rules require the next benchmark version; adding
+model results updates the same version. Release manifests, run provenance and
+validated website exports are documented in [benchmark/README.md](benchmark/README.md).
+
+```sh
+wp-bench benchmark show --version v1
+wp-bench benchmark check
+```
+
 ## Overview
 
 WP-Bench measures AI model capabilities on **execution**: code generation tasks graded by static checks and runtime assertions in a real WordPress environment.
@@ -148,7 +161,7 @@ Copy `wp-bench.example.yaml` and customize:
 ```yaml
 dataset:
   source: local              # 'local' or 'huggingface'
-  name: wp-core-v1           # suite name
+  name: wp-core           # suite name
 
 models:
   - name: gpt-4o
@@ -160,7 +173,7 @@ grader:
   setup_timeout_seconds: 600 # hard cap for environment setup
 
 run:
-  suite: wp-core-v1
+  suite: wp-core
   limit: 10                  # limit tests (null = all); seeded stratified selection
   seed: 1337                 # selection seed (same seed = same subset)
   test_ids: []               # optional explicit test IDs to run
@@ -260,12 +273,12 @@ Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 
-The default suite `wp-core-v1` contains 350 tasks covering WordPress core APIs,
+The default suite `wp-core` contains 350 tasks covering WordPress core APIs,
 hooks, database operations, and security patterns.
 
 ### WP-CLI workflows
 
-`wp-cli-v1` adds 27 operational tasks across content, taxonomy and metadata,
+`wp-cli` adds 27 operational tasks across content, taxonomy and metadata,
 users and capabilities, options and transients, reporting, maintenance, and migration.
 Tasks combine selection, changes, and preservation: examples include retiring
 an author while reassigning content, consolidating categories, repairing a
@@ -286,10 +299,10 @@ its research basis and source links in metadata. Prompts describe the desired
 WordPress outcome, and equivalent native command workflows are accepted.
 
 ```bash
-wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --execution-concurrency 4
+wp-bench run --config wp-bench.example.yaml --suite wp-cli --execution-concurrency 4
 # Maintainer validation without model calls:
-wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --check-reference-solution
-wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1 --check-exploits
+wp-bench run --config wp-bench.example.yaml --suite wp-cli --check-reference-solution
+wp-bench run --config wp-bench.example.yaml --suite wp-cli --check-exploits
 ```
 
 The model returns a **plain command or Bash script string**, optionally inside
@@ -324,7 +337,7 @@ and repeat runs under `grader.raw.command`. Each output stream is capped at
 output is still recorded. Private container limits also apply, and timeouts
 or output overflow score zero.
 
-The WP-CLI suite is scored separately from `wp-core-v1`; existing PHP task
+The WP-CLI suite is scored separately from `wp-core`; existing PHP task
 contracts and scoring remain unchanged. Compare scores only within the same
 suite and execution profile.
 
@@ -378,11 +391,11 @@ tasks retain specialized assertions for their distinct contracts.
 dataset:
   source: huggingface
   name: WordPress/wp-bench-v1
-  suite: wp-core-v1       # filter a multi-suite export; defaults to run.suite
+  suite: wp-core       # filter a multi-suite export; defaults to run.suite
 ```
 
 An explicit `dataset.suite` selects the rows and their result-suite label;
-`--suite` overrides both. `--suite wp-cli-v1` selects CLI rows without changing
+`--suite` overrides both. `--suite wp-cli` selects CLI rows without changing
 the Hugging Face repository name. The new suite is available locally immediately;
 Hub users need an export that includes it.
 

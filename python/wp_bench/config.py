@@ -36,8 +36,8 @@ class StrictModel(BaseModel):
 
 
 class DatasetConfig(StrictModel):
-    source: Literal["huggingface", "local"] = "huggingface"
-    name: str = "WordPress/wp-bench-v1"
+    source: Literal["huggingface", "local"] = "local"
+    name: str = "wp-core"
     revision: str | None = None
     split: str = "test"
     cache_dir: Path | None = None
@@ -133,7 +133,7 @@ class RunConfig(StrictModel):
     #: exclusive-mode rules as a config file.
     model_config = ConfigDict(validate_assignment=True)
 
-    suite: str = "wp-core-v1"
+    suite: str = "wp-core"
     limit: int | None = Field(default=None, gt=0)
     test_ids: list[str] = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list)
@@ -219,7 +219,23 @@ class SkillsConfig(StrictModel):
         return self
 
 
+class BenchmarkConfig(StrictModel):
+    #: Optional release assertion. When set, reject mismatched evaluation inputs
+    #: before spending on model calls. Unset runs still record their provenance.
+    version: str | None = None
+
+    @field_validator("version")
+    @classmethod
+    def _validate_version(cls, value: str | None) -> str | None:
+        import re
+
+        if value is not None and not re.fullmatch(r"v[1-9][0-9]*", value):
+            raise ValueError("benchmark.version must be v1, v2, ...")
+        return value
+
+
 class HarnessConfig(StrictModel):
+    benchmark: BenchmarkConfig = BenchmarkConfig()
     dataset: DatasetConfig = DatasetConfig()
     model: ModelConfig | None = None  # Single model (legacy)
     models: list[ModelConfig] | None = None  # Multiple models
