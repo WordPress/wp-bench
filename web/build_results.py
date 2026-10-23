@@ -110,7 +110,7 @@ def build_data(bundle: dict[str, Any], manifest: dict[str, Any], catalog: dict[s
                "Those pairs show meaningful gains on this task set; progress varies across model families.") if meaningful else (
                "This release does not establish meaningful improvement across model generations. Use the measured category results to choose a model.")
     date = datetime.fromisoformat(bundle["updated_at"])
-    result = {"data_schema_version": "1.0", "display_date": date.strftime("%B %d, %Y").replace(" 0", " "),
+    result = {"data_schema_version": "1.0", "cost_estimate_basis": "recorded_usage", "display_date": date.strftime("%B %d, %Y").replace(" 0", " "),
               "benchmark": bundle["benchmark"], "commit": source_commit,
               "dataset_sha256": digest({path: value for path, value in manifest["evaluation"]["files"].items() if path.startswith("datasets/")}),
               "wordpress_version": definition["wordpress_version"], "scoring_version": definition["scoring_version"],

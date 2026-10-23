@@ -37,3 +37,7 @@ This adapter has no campaign-specific paths, provider credentials, or model API
 calls. Raw completions remain in private run artifacts. Publish larger scored
 answer bundles separately from the frontend source when retention grows; the
 frontend only needs compact summaries and stable links to those downloads.
+
+Future display data identifies cost estimates as harness-recorded usage; it does
+not silently claim those values were normalized to uncached price tables. Missing
+latency/cost stays unavailable rather than appearing as zero.
