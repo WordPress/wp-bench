@@ -4,7 +4,7 @@ Welcome to WP-Bench! Here you'll find information on how to get started contribu
 
 ### Merging PRs
 
-All members of the [wp-bench-maintainers team](https://github.com/orgs/WordPress/teams/wp-bench-maintainers) within the WordPress org on GitHub have the ability to review and merge PRs.  If you are not a maintainer but have reviewed a PR and are confident in the code, approve the PR and comment pinging @wordpress/wp-bench-maintainers or a specific maintainer who has been involved in the PR.  Once a maintainer confirms there are no objections, you are free to merge the PR into `trunk`.
+All members of the [wp-bench-maintainers team](https://github.com/orgs/WordPress/teams/wp-bench-maintainers) within the WordPress org on GitHub have the ability to review and merge PRs.  If you are not a maintainer but have reviewed a PR and are confident in the code, approve the PR and comment pinging @wordpress/wp-bench-maintainers or a specific maintainer who has been involved in the PR.  Once a maintainer confirms there are no objections, you are free to merge the PR into `trunk` (if you have write access, otherwise the maintainer can merge the PR).
 
 ### Joining the wp-bench-maintainers team
 
