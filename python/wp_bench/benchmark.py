@@ -144,7 +144,7 @@ def freeze_release(version: str, root: Path = PROJECT_ROOT) -> dict[str, Any]:
     if path.exists():
         raise ValueError(f"Benchmark {version} already exists; published releases are immutable")
     catalog_path = root / "benchmark/releases.json"
-    catalog = read_json(catalog_path) if catalog_path.exists() else {
+    catalog: dict[str, Any] = read_json(catalog_path) if catalog_path.exists() else {
         "schema_version": CONTRACT_SCHEMA_VERSION, "releases": [],
     }
     expected = max((int(entry["version"][1:]) for entry in catalog["releases"]), default=0) + 1
