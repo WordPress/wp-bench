@@ -27,13 +27,13 @@ jobs:
           cache: pip
 
       - name: Install harness with dev tooling
-        run: pip install -e ./python[dev]
+        run: pip install -e ./python[dev,leaderboard]
 
       - name: Lint (ruff)
-        run: ruff check python
+        run: ruff check python web
 
       - name: Type check (mypy)
-        run: mypy python
+        run: mypy python web
 
       - name: Benchmark release integrity
         env:

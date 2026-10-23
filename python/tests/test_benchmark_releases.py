@@ -345,3 +345,60 @@ def test_harness_streams_the_same_verified_identity_as_the_completed_payload(
     assert streamed == payload["results"]
     assert publication_issues(payload, load_release(root=release_root)) == []
     assert streamed[0]["run_id"] == payload["metadata"]["run_id"]
+
+
+def _website_adapter() -> Any:
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[2] / "web/build_results.py"
+    spec = importlib.util.spec_from_file_location("leaderboard_adapter", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_website_builds_from_the_shared_export_and_release(release_root: Path, tmp_path: Path) -> None:
+    exported = export_results(inputs(release_root, tmp_path), tmp_path / "exports", root=release_root)
+    module = _website_adapter()
+    bundle = read_json(exported)
+    data = module.build_data(bundle, load_release(root=release_root), {"models": {"model-a": {"label": "Model A", "provider": "OpenAI"}}}, "commit-sha")
+    result = data["results"]
+    assert result["benchmark"]["version"] == "v1"
+    assert result["task_count"] == 2
+    assert result["models"][0]["label"] == "Model A"
+    assert result["models"][0]["overall"]["passed"] == 4
+    assert result["models"][0]["overall"]["rate"] == 1
+    assert result["models"][0]["overall"]["ci"] == [1, 1]
+    target = module.write_data(data, tmp_path / "display")
+    original = (target / "task-results.csv").read_bytes()
+    assert module.write_data(data, tmp_path / "display") == target
+    assert (target / "task-results.csv").read_bytes() == original
+    data["answers"][0]["passed"] = False
+    with pytest.raises(ValueError, match="immutable"):
+        module.write_data(data, tmp_path / "display")
+    assert (target / "task-results.csv").read_bytes() == original
+
+
+@pytest.mark.parametrize("change", ["coverage", "category", "version"])
+def test_website_refuses_incompatible_display_inputs(release_root: Path, tmp_path: Path, change: str) -> None:
+    exported = export_results(inputs(release_root, tmp_path), tmp_path / "exports", root=release_root)
+    bundle = read_json(exported)
+    if change == "coverage":
+        bundle["models"][0]["answers"].pop()
+    elif change == "category":
+        bundle["models"][0]["answers"][0]["category"] = "another-category"
+    elif change == "version":
+        bundle["benchmark"]["version"] = "v2"
+    bundle["fingerprint"] = digest({key: value for key, value in bundle.items()
+                                     if key not in {"snapshot_id", "fingerprint", "updated_at"}})
+    with pytest.raises(ValueError):
+        _website_adapter().build_data(bundle, load_release(root=release_root), {}, "commit-sha")
+
+
+def test_pinned_baseline_release_rejects_skills_ab_before_generation(release_root: Path) -> None:
+    cfg = config(pinned=True)
+    cfg.skills.paths = [Path('some-skill.md')]
+    tests = _parse_execution_suite(release_root / 'datasets/suites/wp-core/execution/tasks.json')
+    with pytest.raises(ValueError, match='Skills A/B runs are diagnostic'):
+        capture_identity(cfg, tests, root=release_root)

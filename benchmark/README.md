@@ -120,6 +120,11 @@ skills variants, errored/partial runs, duplicate repeats and mixed versions fail
 before output is created. A legitimate failed model answer is still a scored
 answer and remains in the denominator.
 
+The shared [website adapter](../web/README.md) turns these validated bundles
+into the Spacefast display data, including category scores and paired generation
+comparisons. Model names/pairs are editorial inputs; versions and categories
+come from the frozen manifest.
+
 The output is a small, stable ingestion contract, not a website theme:
 
 ```text

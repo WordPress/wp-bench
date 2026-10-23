@@ -222,6 +222,8 @@ def capture_identity(config: HarnessConfig, tests: list[ExecutionTest], *,
         ):
             issues.append("Loaded tasks differ from the frozen release")
         protocol = manifest["evaluation"]["definition"]["protocol"]
+        if config.skills.paths:
+            issues.append("Skills A/B runs are diagnostic; this release defines the baseline protocol")
         if config.run.skip_static or config.run.skip_runtime or config.run.continue_on_error:
             issues.append("Diagnostic run settings are enabled")
         if config.run.execution_isolation != "reset_per_test":
