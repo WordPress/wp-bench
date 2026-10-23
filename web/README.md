@@ -41,3 +41,7 @@ frontend only needs compact summaries and stable links to those downloads.
 Future display data identifies cost estimates as harness-recorded usage; it does
 not silently claim those values were normalized to uncached price tables. Missing
 latency/cost stays unavailable rather than appearing as zero.
+
+Order result updates by their explicit `updated_at` timestamp, never by the hash
+suffix of a snapshot ID. Select the latest data within each benchmark version;
+updating an archived benchmark does not replace the default newer benchmark.
