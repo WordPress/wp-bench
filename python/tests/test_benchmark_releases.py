@@ -370,6 +370,7 @@ def test_website_builds_from_the_shared_export_and_release(release_root: Path, t
     assert result["models"][0]["overall"]["passed"] == 4
     assert result["models"][0]["overall"]["rate"] == 1
     assert result["models"][0]["overall"]["ci"] == [1, 1]
+    assert result["models"][0]["overall"]["median_seconds"] is None
     target = module.write_data(data, tmp_path / "display")
     original = (target / "task-results.csv").read_bytes()
     assert module.write_data(data, tmp_path / "display") == target

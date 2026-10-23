@@ -34,7 +34,7 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     passed = sum(row["passed"] for row in rows)
     return {"passed": passed, "total": len(rows), "rate": passed / len(rows),
             "ci": interval([statistics.mean(values) for _, values in sorted(grouped.items())]),
-            "median_seconds": statistics.median(latencies) if latencies else 0,
+            "median_seconds": statistics.median(latencies) if latencies else None,
             "cost_per_100": 100 * statistics.mean(costs) if len(costs) == len(rows) else None}
 
 
