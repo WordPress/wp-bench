@@ -127,8 +127,9 @@ def export_results(paths: list[Path], output: Path, *, version: str | None = Non
     catalog: dict[str, Any] = read_json(catalog_path) if catalog_path.exists() else {
         "schema_version": CONTRACT_SCHEMA_VERSION, "benchmarks": {},
     }
-    # Same exact inputs are idempotent, including the original update date.
-    if destination.exists():
+    # Same exact inputs preserve both their date and the latest-results pointer.
+    created = not destination.exists()
+    if not created:
         existing = read_json(destination)
         existing_content = {key: value for key, value in existing.items()
                             if key not in {"snapshot_id", "fingerprint", "updated_at"}}
@@ -143,7 +144,8 @@ def export_results(paths: list[Path], output: Path, *, version: str | None = Non
     entry = catalog["benchmarks"].setdefault(manifest["version"], {"current": snapshot_id, "snapshots": []})
     if snapshot_id not in [item["id"] for item in entry["snapshots"]]:
         entry["snapshots"].append({"id": snapshot_id, "path": f"{manifest['version']}/{snapshot_id}.json"})
-    entry["current"] = snapshot_id
+    if created:
+        entry["current"] = snapshot_id
     temporary = catalog_path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(catalog, indent=2) + "\n")
     temporary.replace(catalog_path)

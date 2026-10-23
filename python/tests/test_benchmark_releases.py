@@ -225,6 +225,8 @@ def test_export_preserves_old_snapshots_and_is_idempotent(release_root: Path, tm
     assert first.read_bytes() == original
     catalog = read_json(output / "results.json")
     assert len(catalog["benchmarks"]["v1"]["snapshots"]) == 2
+    assert export_results(paths, output, root=release_root) == first
+    assert read_json(output / "results.json") == catalog
 
 
 def test_export_requires_both_complete_suites_and_independent_repeats(release_root: Path, tmp_path: Path) -> None:
