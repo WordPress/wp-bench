@@ -77,6 +77,9 @@ class ModelInterface:
         #: Variant state (e.g. injected skill content), deliberately not part
         #: of ModelConfig so it never lands in serialized model config blocks.
         self.system_prompt = system_prompt
+        #: Set once the provider rejects ``temperature`` for this model, so
+        #: later calls skip it instead of failing first every time.
+        self._omit_temperature = False
 
     def generate(self, prompt: str) -> str:
         """Generate a completion for the given prompt (text only).
@@ -99,7 +102,7 @@ class ModelInterface:
         kwargs = self._completion_kwargs(prompt)
         started = time.perf_counter()
         attempt_count = 0
-        temperature_fallback = False
+        temperature_fallback = self._omit_temperature
 
         def _should_retry(error: BaseException) -> bool:
             if not self._retry_enabled_for(error):
@@ -129,9 +132,10 @@ class ModelInterface:
                     # temperature case which is fixable by dropping the
                     # parameter. That fallback is intentional behavior,
                     # not a retry, and is flagged separately.
-                    if not _is_deprecated_temperature_error(error) or "temperature" not in kwargs:
+                    if not _is_unsupported_temperature_error(error) or "temperature" not in kwargs:
                         raise
                     kwargs.pop("temperature")
+                    self._omit_temperature = True
                     temperature_fallback = True
                     response = completion(**kwargs)
 
@@ -179,12 +183,16 @@ class ModelInterface:
             "top_p": self.config.top_p,
             "timeout": self.config.request_timeout,
         }
-        kwargs["temperature"] = self.config.temperature
+        if not self._omit_temperature:
+            kwargs["temperature"] = self.config.temperature
         return kwargs
 
 
-def _is_deprecated_temperature_error(error: BadRequestError) -> bool:
-    return "`temperature` is deprecated" in str(error)
+def _is_unsupported_temperature_error(error: BadRequestError) -> bool:
+    # Anthropic's API says the parameter is deprecated; LiteLLM rejects it
+    # client-side for newer models with an UnsupportedParamsError.
+    message = str(error)
+    return "`temperature` is deprecated" in message or "does not support temperature" in message
 
 
 def _extract_usage(response: Any) -> dict[str, int | None]:
