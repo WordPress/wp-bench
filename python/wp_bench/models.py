@@ -52,6 +52,8 @@ class ModelGeneration:
     retry_count: int
     latency_ms: float
     provider_response_id: str | None
+    #: True when this call went out without ``temperature`` because the
+    #: model rejects it (see ``_is_unsupported_temperature_error``).
     temperature_fallback: bool = False
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -128,8 +130,8 @@ class ModelInterface:
                 try:
                     response = completion(**kwargs)
                 except BadRequestError as error:
-                    # Deterministic error, except the known deprecated-
-                    # temperature case which is fixable by dropping the
+                    # Deterministic error, except a model that rejects
+                    # temperature, which is fixable by dropping the
                     # parameter. That fallback is intentional behavior,
                     # not a retry, and is flagged separately.
                     if not _is_unsupported_temperature_error(error) or "temperature" not in kwargs:
@@ -189,10 +191,12 @@ class ModelInterface:
 
 
 def _is_unsupported_temperature_error(error: BadRequestError) -> bool:
-    # Anthropic's API says the parameter is deprecated; LiteLLM rejects it
-    # client-side for newer models with an UnsupportedParamsError.
+    # Anthropic's API says the parameter is deprecated. LiteLLM rejects it
+    # client-side with an UnsupportedParamsError for newer Anthropic models
+    # ("does not support temperature=0") and for gpt-5 / o-series models
+    # ("don't support temperature=0").
     message = str(error)
-    return "`temperature` is deprecated" in message or "does not support temperature" in message
+    return "`temperature` is deprecated" in message or "support temperature=" in message
 
 
 def _extract_usage(response: Any) -> dict[str, int | None]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from litellm.exceptions import BadRequestError, UnsupportedParamsError
 
 import wp_bench.models as models_module
@@ -54,8 +55,28 @@ def test_generate_drops_temperature_litellm_rejects_and_remembers_it(monkeypatch
 
     assert first.text == "ok" and second.text == "ok"
     assert first.temperature_fallback and second.temperature_fallback
-    # Only the first call pays for the rejection.
     assert ["temperature" in call for call in calls] == [True, False, False]
+
+
+def test_generate_drops_temperature_for_openai_wording(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def fake_completion(**kwargs):
+        calls.append(kwargs)
+        if "temperature" in kwargs:
+            raise UnsupportedParamsError(
+                message="gpt-5 models (including gpt-5-codex) don't support temperature=0.0. Only temperature=1 is supported.",
+                model="gpt-5",
+                llm_provider="openai",
+            )
+        return SimpleNamespace(choices=[SimpleNamespace(message={"content": "ok"})])
+
+    monkeypatch.setattr(models_module, "completion", fake_completion)
+
+    result = ModelInterface(ModelConfig(name="gpt-5")).generate_with_metadata("hello")
+
+    assert result.text == "ok" and result.temperature_fallback
+    assert "temperature" not in calls[-1]
 
 
 def test_generate_reraises_unrelated_bad_request(monkeypatch) -> None:
@@ -65,12 +86,8 @@ def test_generate_reraises_unrelated_bad_request(monkeypatch) -> None:
     monkeypatch.setattr(models_module, "completion", fake_completion)
 
     model = ModelInterface(ModelConfig(name="anthropic/claude-opus-5-5"))
-    try:
+    with pytest.raises(BadRequestError):
         model.generate("hello")
-    except BadRequestError:
-        pass
-    else:
-        raise AssertionError("expected BadRequestError")
     assert "temperature" in model._completion_kwargs("x")
 
 
