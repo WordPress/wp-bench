@@ -555,6 +555,214 @@
         "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { $current = get_user_meta( $user_id, 'wpbp_topic' ); if ( $follow && ! in_array( $topic, $current, true ) ) { add_user_meta( $user_id, 'wpbp_topic', $topic ); } if ( ! $follow ) { $keep = array_diff( $current, array( $topic ) ); delete_user_meta( $user_id, 'wpbp_topic' ); foreach ( $keep as $t ) { add_user_meta( $user_id, 'wpbp_topic', $t ); } return array_values( $keep ); } return get_user_meta( $user_id, 'wpbp_topic' ); }",
         "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { $current = get_user_meta( $user_id, 'wpbp_topic' ); if ( $follow ) { add_user_meta( $user_id, 'wpbp_topic', $topic ); } else { delete_user_meta( $user_id, 'wpbp_topic', $topic ); } return array_values( array_unique( get_user_meta( $user_id, 'wpbp_topic' ) ) ); }"
       ]
+    },
+    {
+      "id": "e-comments-users-011",
+      "category": "comments-users",
+      "prompt": "Apply an edit from the member profile form. Given a user ID and the submitted display name, website URL, first name and phone number, save them where WordPress and other plugins expect to find them: the display name and website on the user record itself (so they appear on the user object and in user queries), the first name where WordPress keeps first names, and the phone number in the 'wpbp_phone' user meta. Leave every other part of the account unchanged. Return true when the profile was saved, and false without writing anything when the user does not exist.",
+      "expected_behavior": "`display_name` and `user_url` are columns of the users table, not user meta, so the function must use `wp_update_user()` (which also stores `first_name` as meta) and `update_user_meta()` only for the custom phone field. Writing `update_user_meta( $id, 'display_name', ... )` leaves the column unchanged and creates stray meta. User meta functions do not check that the user exists, so the function must check first or it leaves orphaned meta rows. Runtime validation reads the users table and usermeta table directly, checks email, password hash and role are untouched, repeats with new values, and calls it for a missing user ID.",
+      "requirements": [
+        "Store the display name and website URL on the user record, the first name as the user's first name, and the phone number in 'wpbp_phone' user meta",
+        "Do not change the email address, password or role",
+        "Return true on success; for a user ID that does not exist return false and write nothing"
+      ],
+      "test_function": "wpbp_comments_users_011( int $user_id, string $display_name, string $website, string $first_name, string $phone ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_update_user",
+            "description": "Updates the user record",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_phone",
+            "description": "Stores the phone number meta",
+            "weight": 1
+          },
+          {
+            "pattern": "first_name",
+            "description": "Updates the first name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$id = wp_insert_user( array( 'user_login' => 'wpbp_profile_member', 'user_email' => 'wpbp-profile-member@example.com', 'user_pass' => 'wpbp-original-pass', 'display_name' => 'Original Name', 'first_name' => 'Original', 'role' => 'author' ) ); $GLOBALS['wpbp_comments_users_011'] = array( 'user' => is_wp_error( $id ) ? 0 : (int) $id, 'missing' => 987654 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_011' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_comments_users_011'] ?? array(); $id = (int) ( $f['user'] ?? 0 ); if ( ! $id ) { return false; } $before = $wpdb->get_row( $wpdb->prepare( \"SELECT user_email, user_pass FROM {$wpdb->users} WHERE ID = %d\", $id ), ARRAY_A ); $check = function ( $name, $url, $first, $phone ) use ( $wpdb, $id, $before ) { if ( true !== wpbp_comments_users_011( $id, $name, $url, $first, $phone ) ) { return false; } $row = $wpdb->get_row( $wpdb->prepare( \"SELECT display_name, user_url, user_email, user_pass FROM {$wpdb->users} WHERE ID = %d\", $id ), ARRAY_A ); if ( $name !== $row['display_name'] || $url !== $row['user_url'] || $before['user_email'] !== $row['user_email'] || $before['user_pass'] !== $row['user_pass'] ) { return false; } $meta = function ( $key ) use ( $wpdb, $id ) { return $wpdb->get_col( $wpdb->prepare( \"SELECT meta_value FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = %s\", $id, $key ) ); }; if ( array( $first ) !== $meta( 'first_name' ) || array( $phone ) !== $meta( 'wpbp_phone' ) ) { return false; } $stray = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key IN ( 'display_name', 'user_url', 'url', 'website' )\", $id ) ); clean_user_cache( $id ); $user = get_userdata( $id ); return 0 === $stray && $user && $name === $user->display_name && in_array( 'author', (array) $user->roles, true ); }; return $check( 'Asha K.', 'https://asha.example.com', 'Asha', '+91 98765 43210' ) && $check( 'Asha Kulkarni', 'https://kulkarni.example.org', 'Ashwini', '+91 91234 56789' );",
+            "description": "Display name and website land on the user record, first name and phone in meta, and nothing else changes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_011' ) ) { return false; } global $wpdb; $missing = (int) ( $GLOBALS['wpbp_comments_users_011']['missing'] ?? 0 ); if ( ! $missing || false !== get_userdata( $missing ) ) { return false; } if ( false !== wpbp_comments_users_011( $missing, 'Ghost', 'https://ghost.example.com', 'Ghost', '000' ) ) { return false; } return 0 === (int) $wpdb->get_var( $wpdb->prepare( \"SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE user_id = %d\", $missing ) ) && false === get_userdata( $missing );",
+            "description": "A missing user is reported as false and leaves no orphaned meta",
+            "weight": 1
+          }
+        ],
+        "teardown": "global $wpdb; require_once ABSPATH . 'wp-admin/includes/user.php'; $f = $GLOBALS['wpbp_comments_users_011'] ?? array(); if ( ! empty( $f['user'] ) ) { wp_delete_user( (int) $f['user'] ); } if ( ! empty( $f['missing'] ) ) { $wpdb->delete( $wpdb->usermeta, array( 'user_id' => (int) $f['missing'] ) ); } unset( $GLOBALS['wpbp_comments_users_011'] );"
+      },
+      "reference_solution": "function wpbp_comments_users_011( int $user_id, string $display_name, string $website, string $first_name, string $phone ): bool { if ( ! get_userdata( $user_id ) ) { return false; } $result = wp_update_user( array( 'ID' => $user_id, 'display_name' => $display_name, 'user_url' => $website, 'first_name' => $first_name ) ); if ( is_wp_error( $result ) ) { return false; } update_user_meta( $user_id, 'wpbp_phone', $phone ); return true; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/user.php",
+          "src/wp-includes/meta.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_011( int $user_id, string $display_name, string $website, string $first_name, string $phone ): bool { if ( ! get_userdata( $user_id ) ) { return false; } update_user_meta( $user_id, 'display_name', $display_name ); update_user_meta( $user_id, 'user_url', $website ); update_user_meta( $user_id, 'first_name', $first_name ); update_user_meta( $user_id, 'wpbp_phone', $phone ); return true; }",
+        "function wpbp_comments_users_011( int $user_id, string $display_name, string $website, string $first_name, string $phone ): bool { update_user_meta( $user_id, 'wpbp_phone', $phone ); return ! is_wp_error( wp_update_user( array( 'ID' => $user_id, 'display_name' => $display_name, 'user_url' => $website, 'first_name' => $first_name ) ) ); }",
+        "function wpbp_comments_users_011( int $user_id, string $display_name, string $website, string $first_name, string $phone ): bool { $user = get_userdata( $user_id ); if ( ! $user ) { return false; } $result = wp_insert_user( array( 'ID' => $user_id, 'user_login' => $user->user_login, 'user_email' => $user->user_email, 'user_pass' => 'reset', 'display_name' => $display_name, 'user_url' => $website, 'first_name' => $first_name ) ); update_user_meta( $user_id, 'wpbp_phone', $phone ); return ! is_wp_error( $result ); }"
+      ]
+    },
+    {
+      "id": "e-comments-users-012",
+      "category": "comments-users",
+      "prompt": "Keep an audit trail of email address changes. Whenever an existing user's email address is changed through WordPress, append the address they had before the change to that user's 'wpbp_previous_emails' user meta, a single meta value holding a list of addresses ordered oldest first. Updates that leave the email address as it was must not add entries, and newly created accounts start with no history.",
+      "expected_behavior": "The snippet hooks `profile_update` (whose second argument is the `WP_User` as it was before the update) and compares `$old_user_data->user_email` with the stored address, or uses the `send_email_change_email` filter, which only runs for a changed address and receives the old user array. Reading `get_userdata()` inside the hook already returns the new address. Runtime validation changes one user's email twice with a display-name-only update in between, changes a second user's email, and creates a fresh account through `wp_insert_user()`.",
+      "requirements": [
+        "Store the history as one 'wpbp_previous_emails' user meta value: a list of previous addresses, oldest first",
+        "Record only real email address changes made to existing users",
+        "Register the behavior when the code loads; there is no function to call"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "/profile_update|send_email_change_email/",
+            "description": "Hooks the user update lifecycle",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_previous_emails",
+            "description": "Uses the requested meta key",
+            "weight": 1
+          },
+          {
+            "pattern": "user_email",
+            "description": "Compares the email address",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$make = function ( $login, $email ) { $id = wp_insert_user( array( 'user_login' => $login, 'user_email' => $email, 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); return is_wp_error( $id ) ? 0 : (int) $id; }; $GLOBALS['wpbp_comments_users_012'] = array( 'a' => $make( 'wpbp_audit_a', 'audit-a1@example.com' ), 'b' => $make( 'wpbp_audit_b', 'audit-b1@example.com' ), 'fresh' => 0 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$f = $GLOBALS['wpbp_comments_users_012'] ?? array(); if ( empty( $f['a'] ) || empty( $f['b'] ) ) { return false; } $history = function ( $id ) { clean_user_cache( $id ); $v = get_user_meta( $id, 'wpbp_previous_emails', true ); return is_array( $v ) ? array_values( $v ) : $v; }; if ( $f['a'] !== wp_update_user( array( 'ID' => $f['a'], 'user_email' => 'audit-a2@example.com' ) ) ) { return false; } if ( array( 'audit-a1@example.com' ) !== $history( $f['a'] ) ) { return false; } wp_update_user( array( 'ID' => $f['a'], 'display_name' => 'Audit A Renamed' ) ); wp_update_user( array( 'ID' => $f['a'], 'user_email' => 'audit-a2@example.com' ) ); if ( array( 'audit-a1@example.com' ) !== $history( $f['a'] ) ) { return false; } wp_update_user( array( 'ID' => $f['a'], 'user_email' => 'audit-a3@example.com' ) ); if ( array( 'audit-a1@example.com', 'audit-a2@example.com' ) !== $history( $f['a'] ) ) { return false; } wp_update_user( array( 'ID' => $f['b'], 'user_email' => 'audit-b2@example.com' ) ); return array( 'audit-b1@example.com' ) === $history( $f['b'] ) && array( 'audit-a1@example.com', 'audit-a2@example.com' ) === $history( $f['a'] );",
+            "description": "Each email change appends the previous address, oldest first, and other updates add nothing",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "global $wpdb; $id = wp_insert_user( array( 'user_login' => 'wpbp_audit_fresh', 'user_email' => 'audit-fresh@example.com', 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); if ( is_wp_error( $id ) ) { return false; } $GLOBALS['wpbp_comments_users_012']['fresh'] = (int) $id; $rows = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = 'wpbp_previous_emails'\", $id ) ); $value = get_user_meta( $id, 'wpbp_previous_emails', true ); return 0 === $rows || array() === $value;",
+            "description": "A newly created account has no email history",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $GLOBALS['wpbp_comments_users_012'] ?? array() ) as $id ) { if ( $id ) { wp_delete_user( (int) $id ); } } unset( $GLOBALS['wpbp_comments_users_012'] );"
+      },
+      "reference_solution": "add_action( 'profile_update', function ( $user_id, $old_user_data ) { $user = get_userdata( $user_id ); if ( ! $user || ! $old_user_data instanceof WP_User || $old_user_data->user_email === $user->user_email ) { return; } $history = get_user_meta( $user_id, 'wpbp_previous_emails', true ); $history = is_array( $history ) ? array_values( $history ) : array(); $history[] = $old_user_data->user_email; update_user_meta( $user_id, 'wpbp_previous_emails', $history ); }, 10, 2 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/user.php",
+          "src/wp-includes/meta.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "add_action( 'profile_update', function ( $user_id ) { $history = (array) get_user_meta( $user_id, 'wpbp_previous_emails', true ); $history = array_values( array_filter( $history ) ); $history[] = get_userdata( $user_id )->user_email; update_user_meta( $user_id, 'wpbp_previous_emails', $history ); } );",
+        "add_action( 'profile_update', function ( $user_id, $old_user_data ) { $history = get_user_meta( $user_id, 'wpbp_previous_emails', true ); $history = is_array( $history ) ? $history : array(); $history[] = $old_user_data->user_email; update_user_meta( $user_id, 'wpbp_previous_emails', $history ); }, 10, 2 );",
+        "add_action( 'profile_update', function ( $user_id, $old_user_data ) { if ( $old_user_data->user_email === get_userdata( $user_id )->user_email ) { return; } add_user_meta( $user_id, 'wpbp_previous_emails', $old_user_data->user_email ); }, 10, 2 ); add_action( 'user_register', function ( $user_id ) { update_user_meta( $user_id, 'wpbp_previous_emails', array( get_userdata( $user_id )->user_email ) ); } );"
+      ]
+    },
+    {
+      "id": "e-comments-users-013",
+      "category": "comments-users",
+      "prompt": "Add a 'Mastodon handle' field to the user profile screens. Show a text input named 'wpbp_mastodon' holding the user's saved handle both when people view their own profile and when an administrator edits someone else's profile. Save the submitted value from either screen into the 'wpbp_mastodon' user meta as plain text with a leading '@' removed. Only save when the person submitting the form is allowed to edit that user. WordPress already verifies the profile form's nonce before its save hooks run, so do not add a nonce field of your own.",
+      "expected_behavior": "The snippet renders on both `show_user_profile` (own profile) and `edit_user_profile` (someone else's), escaping the stored value with `esc_attr()`, and saves on both `personal_options_update` and `edit_user_profile_update`, guarded by `current_user_can( 'edit_user', $user_id )`. Users may always edit themselves, so `edit_users` alone would block a subscriber's own profile. Runtime validation renders both screens (parsing the input with the HTML API and rejecting an injected attribute), saves as a subscriber on their own profile, saves as an administrator on another profile, and has a subscriber submit for another user and for the administrator, which must change nothing. Like the real form, each submission carries the target user's unchanged 'email' (core's `send_confirmation_on_profile_email()` reads it) and a valid 'update-user_<id>' nonce for code that also checks it.",
+      "requirements": [
+        "Render a text input named 'wpbp_mastodon' with the saved handle on both profile screens",
+        "Save the submitted 'wpbp_mastodon' value from both profile save hooks as plain text without a leading '@'",
+        "Ignore submissions from people who are not allowed to edit the user being saved"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "show_user_profile",
+            "description": "Renders on the own-profile screen",
+            "weight": 1
+          },
+          {
+            "pattern": "edit_user_profile[^_]",
+            "description": "Renders on the edit-user screen",
+            "weight": 1
+          },
+          {
+            "pattern": "personal_options_update",
+            "description": "Saves from the own-profile screen",
+            "weight": 1
+          },
+          {
+            "pattern": "edit_user_profile_update",
+            "description": "Saves from the edit-user screen",
+            "weight": 1
+          },
+          {
+            "pattern": "/current_user_can\\s*\\(\\s*['\"]edit_user['\"]/",
+            "description": "Checks the edit_user capability",
+            "weight": 1
+          },
+          {
+            "pattern": "esc_attr",
+            "description": "Escapes the rendered value",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$make = function ( $login, $role ) { $id = wp_insert_user( array( 'user_login' => $login, 'user_email' => $login . '@example.com', 'user_pass' => wp_generate_password(), 'role' => $role ) ); return is_wp_error( $id ) ? 0 : (int) $id; }; $admin = $make( 'wpbp_profile_admin', 'administrator' ); $one = $make( 'wpbp_profile_one', 'subscriber' ); $two = $make( 'wpbp_profile_two', 'subscriber' ); if ( $one ) { update_user_meta( $one, 'wpbp_mastodon', 'one\" onfocus=\"alert(1)' ); } if ( $two ) { update_user_meta( $two, 'wpbp_mastodon', 'two_handle' ); } $GLOBALS['wpbp_comments_users_013'] = array( 'admin' => $admin, 'one' => $one, 'two' => $two ); $GLOBALS['wpbp_comments_users_013_submit'] = function ( $hook, $as, $target, $value ) { wp_set_current_user( $as ); $nonce = wp_create_nonce( 'update-user_' . $target ); $_POST['_wpnonce'] = $nonce; $_REQUEST['_wpnonce'] = $nonce; $_POST['wpbp_mastodon'] = $value; $_REQUEST['wpbp_mastodon'] = $value; $_POST['email'] = get_userdata( $target )->user_email; $_REQUEST['email'] = $_POST['email']; do_action( $hook, $target ); unset( $_POST['_wpnonce'], $_REQUEST['_wpnonce'], $_POST['wpbp_mastodon'], $_REQUEST['wpbp_mastodon'], $_POST['email'], $_REQUEST['email'] ); wp_set_current_user( 0 ); clean_user_cache( $target ); return get_user_meta( $target, 'wpbp_mastodon', true ); }; $GLOBALS['wpbp_comments_users_013_render'] = function ( $hook, $as, $target ) { wp_set_current_user( $as ); ob_start(); do_action( $hook, get_userdata( $target ) ); $html = ob_get_clean(); wp_set_current_user( 0 ); $p = new WP_HTML_Tag_Processor( $html ); $found = null; $unsafe = false; while ( $p->next_tag() ) { if ( null !== $p->get_attribute( 'onfocus' ) ) { $unsafe = true; } if ( 'INPUT' === $p->get_tag() && 'wpbp_mastodon' === $p->get_attribute( 'name' ) ) { $found = (string) $p->get_attribute( 'value' ); } } return $unsafe ? null : $found; };",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$f = $GLOBALS['wpbp_comments_users_013'] ?? array(); $render = $GLOBALS['wpbp_comments_users_013_render'] ?? null; if ( ! $render || empty( $f['admin'] ) || empty( $f['one'] ) || empty( $f['two'] ) ) { return false; } if ( 'one\" onfocus=\"alert(1)' !== $render( 'show_user_profile', $f['one'], $f['one'] ) ) { return false; } return 'two_handle' === $render( 'edit_user_profile', $f['admin'], $f['two'] );",
+            "description": "Both profile screens show an escaped input holding the saved handle",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$f = $GLOBALS['wpbp_comments_users_013'] ?? array(); $submit = $GLOBALS['wpbp_comments_users_013_submit'] ?? null; if ( ! $submit || empty( $f['admin'] ) || empty( $f['one'] ) || empty( $f['two'] ) ) { return false; } if ( 'sub_onex' !== $submit( 'personal_options_update', $f['one'], $f['one'], '@sub_one<b>x</b>' ) ) { return false; } return 'set_by_admin' === $submit( 'edit_user_profile_update', $f['admin'], $f['two'], '@set_by_admin' );",
+            "description": "A user can save their own handle and an administrator can save another user's, sanitized and without '@'",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$f = $GLOBALS['wpbp_comments_users_013'] ?? array(); $submit = $GLOBALS['wpbp_comments_users_013_submit'] ?? null; if ( ! $submit || empty( $f['admin'] ) || empty( $f['one'] ) || empty( $f['two'] ) ) { return false; } $two_before = get_user_meta( $f['two'], 'wpbp_mastodon', true ); if ( $two_before !== $submit( 'edit_user_profile_update', $f['one'], $f['two'], '@hijacked' ) ) { return false; } if ( '' !== $submit( 'personal_options_update', $f['one'], $f['admin'], '@hijacked' ) ) { return false; } return 'admin_ok' === $submit( 'personal_options_update', $f['admin'], $f['admin'], 'admin_ok' );",
+            "description": "A subscriber cannot change another user's handle through either save hook",
+            "weight": 1
+          }
+        ],
+        "teardown": "wp_set_current_user( 0 ); unset( $_POST['_wpnonce'], $_REQUEST['_wpnonce'], $_POST['wpbp_mastodon'], $_REQUEST['wpbp_mastodon'], $_POST['email'], $_REQUEST['email'] ); require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $GLOBALS['wpbp_comments_users_013'] ?? array() ) as $id ) { if ( $id ) { wp_delete_user( (int) $id ); } } unset( $GLOBALS['wpbp_comments_users_013'], $GLOBALS['wpbp_comments_users_013_submit'], $GLOBALS['wpbp_comments_users_013_render'] );"
+      },
+      "reference_solution": "function wpbp_mastodon_field( $user ) { $value = get_user_meta( $user->ID, 'wpbp_mastodon', true ); echo '<table class=\"form-table\"><tr><th><label for=\"wpbp_mastodon\">' . esc_html__( 'Mastodon handle' ) . '</label></th><td><input type=\"text\" name=\"wpbp_mastodon\" id=\"wpbp_mastodon\" class=\"regular-text\" value=\"' . esc_attr( $value ) . '\" /></td></tr></table>'; } add_action( 'show_user_profile', 'wpbp_mastodon_field' ); add_action( 'edit_user_profile', 'wpbp_mastodon_field' ); function wpbp_mastodon_save( $user_id ) { if ( ! current_user_can( 'edit_user', $user_id ) || ! isset( $_POST['wpbp_mastodon'] ) ) { return; } $handle = sanitize_text_field( wp_unslash( $_POST['wpbp_mastodon'] ) ); if ( '' !== $handle && '@' === $handle[0] ) { $handle = substr( $handle, 1 ); } update_user_meta( $user_id, 'wpbp_mastodon', $handle ); } add_action( 'personal_options_update', 'wpbp_mastodon_save' ); add_action( 'edit_user_profile_update', 'wpbp_mastodon_save' );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/user-edit.php",
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/user.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_x_field( $user ) { echo '<input type=\"text\" name=\"wpbp_mastodon\" value=\"' . esc_attr( get_user_meta( $user->ID, 'wpbp_mastodon', true ) ) . '\" />'; } add_action( 'show_user_profile', 'wpbp_x_field' ); add_action( 'edit_user_profile', 'wpbp_x_field' ); function wpbp_x_save( $user_id ) { if ( isset( $_POST['wpbp_mastodon'] ) ) { update_user_meta( $user_id, 'wpbp_mastodon', ltrim( sanitize_text_field( wp_unslash( $_POST['wpbp_mastodon'] ) ), '@' ) ); } } add_action( 'personal_options_update', 'wpbp_x_save' ); add_action( 'edit_user_profile_update', 'wpbp_x_save' );",
+        "function wpbp_x_field( $user ) { echo '<input type=\"text\" name=\"wpbp_mastodon\" value=\"' . esc_attr( get_user_meta( $user->ID, 'wpbp_mastodon', true ) ) . '\" />'; } add_action( 'show_user_profile', 'wpbp_x_field' ); add_action( 'edit_user_profile', 'wpbp_x_field' ); function wpbp_x_save( $user_id ) { if ( current_user_can( 'edit_users' ) && isset( $_POST['wpbp_mastodon'] ) ) { update_user_meta( $user_id, 'wpbp_mastodon', ltrim( sanitize_text_field( wp_unslash( $_POST['wpbp_mastodon'] ) ), '@' ) ); } } add_action( 'personal_options_update', 'wpbp_x_save' ); add_action( 'edit_user_profile_update', 'wpbp_x_save' );",
+        "function wpbp_x_field( $user ) { echo '<input type=\"text\" name=\"wpbp_mastodon\" value=\"' . get_user_meta( $user->ID, 'wpbp_mastodon', true ) . '\" />'; } add_action( 'show_user_profile', 'wpbp_x_field' ); add_action( 'edit_user_profile', 'wpbp_x_field' ); function wpbp_x_save( $user_id ) { if ( current_user_can( 'edit_user', $user_id ) && isset( $_POST['wpbp_mastodon'] ) ) { update_user_meta( $user_id, 'wpbp_mastodon', ltrim( sanitize_text_field( wp_unslash( $_POST['wpbp_mastodon'] ) ), '@' ) ); } } add_action( 'personal_options_update', 'wpbp_x_save' ); add_action( 'edit_user_profile_update', 'wpbp_x_save' );",
+        "function wpbp_x_field( $user ) { echo '<input type=\"text\" name=\"wpbp_mastodon\" value=\"' . esc_attr( get_user_meta( $user->ID, 'wpbp_mastodon', true ) ) . '\" />'; } add_action( 'show_user_profile', 'wpbp_x_field' ); function wpbp_x_save( $user_id ) { if ( current_user_can( 'edit_user', $user_id ) && isset( $_POST['wpbp_mastodon'] ) ) { update_user_meta( $user_id, 'wpbp_mastodon', ltrim( sanitize_text_field( wp_unslash( $_POST['wpbp_mastodon'] ) ), '@' ) ); } } add_action( 'personal_options_update', 'wpbp_x_save' );"
+      ]
     }
   ]
 }
