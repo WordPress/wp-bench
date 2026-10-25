@@ -375,6 +375,186 @@
         "function wpbp_comments_users_007( int $post_id ): array { return get_comments( array( 'post_id' => $post_id, 'status' => 'approve', 'hierarchical' => 'flat' ) ); }",
         "function wpbp_comments_users_007( int $post_id ): array { return get_comments( array( 'post_id' => $post_id, 'hierarchical' => 'threaded' ) ); }"
       ]
+    },
+    {
+      "id": "e-comments-users-008",
+      "category": "comments-users",
+      "prompt": "Power the member directory. List the users who hold either the 'editor' or the 'author' role and whose 'wpbp_region' user meta equals the supplied region, ranked by their 'wpbp_points' user meta from highest to lowest, three members per page. Points are whole numbers stored as strings. For the requested page number, return the IDs of the members on that page in rank order together with the total number of matching members across all pages.",
+      "expected_behavior": "A single `WP_User_Query` (or `get_users()` plus a count) with `role__in` (OR; `role` with an array requires every role), a meta clause for the region, numeric ordering by points (`orderby => 'meta_value_num'` with `meta_key`, or a named meta clause with `type => 'NUMERIC'`), `number => 3`, `paged`, and `get_total()` for the full count. String ordering puts '9' above '45' and '300'. Runtime validation pages through five northern members (editors and authors mixed, with points 300, 120, 45, 10 and 9), checks a subscriber, a contributor and a southern editor stay out, and checks a second region.",
+      "requirements": [
+        "Return an array with 'ids' (the user IDs on the requested page, highest points first, as integers) and 'total' (the number of matching members on all pages)",
+        "Page numbers start at 1 and each page holds at most three members",
+        "Rank by points as numbers, not as text"
+      ],
+      "test_function": "wpbp_comments_users_008( string $region, int $page ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_User_Query|get_users",
+            "description": "Uses the user query API",
+            "weight": 1
+          },
+          {
+            "pattern": "role__in",
+            "description": "Matches either role",
+            "weight": 1
+          },
+          {
+            "pattern": "/meta_value_num|NUMERIC/",
+            "description": "Orders points numerically",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_points",
+            "description": "Ranks by the points field",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$make = function ( $login, $role, $region, $points ) { $id = wp_insert_user( array( 'user_login' => 'wpbp_dir_' . $login, 'user_email' => 'wpbp-dir-' . $login . '@example.com', 'user_pass' => wp_generate_password(), 'role' => $role ) ); if ( is_wp_error( $id ) ) { return 0; } update_user_meta( $id, 'wpbp_region', $region ); update_user_meta( $id, 'wpbp_points', (string) $points ); return (int) $id; }; $GLOBALS['wpbp_comments_users_008'] = array( 'n_e120' => $make( 'n_e120', 'editor', 'north', 120 ), 'n_a9' => $make( 'n_a9', 'author', 'north', 9 ), 'n_a45' => $make( 'n_a45', 'author', 'north', 45 ), 'n_e300' => $make( 'n_e300', 'editor', 'north', 300 ), 'n_a10' => $make( 'n_a10', 'author', 'north', 10 ), 'n_sub999' => $make( 'n_sub999', 'subscriber', 'north', 999 ), 'n_con50' => $make( 'n_con50', 'contributor', 'north', 50 ), 's_e500' => $make( 's_e500', 'editor', 'south', 500 ), 's_a20' => $make( 's_a20', 'author', 'south', 20 ), );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_008' ) ) { return false; } $f = $GLOBALS['wpbp_comments_users_008'] ?? array(); if ( count( array_filter( $f ) ) !== 9 ) { return false; } $page = function ( $region, $n ) { $r = wpbp_comments_users_008( $region, $n ); if ( ! is_array( $r ) || ! isset( $r['ids'], $r['total'] ) ) { return null; } return array( array_map( 'intval', array_values( (array) $r['ids'] ) ), (int) $r['total'] ); }; if ( array( array( $f['n_e300'], $f['n_e120'], $f['n_a45'] ), 5 ) !== $page( 'north', 1 ) ) { return false; } return array( array( $f['n_a10'], $f['n_a9'] ), 5 ) === $page( 'north', 2 );",
+            "description": "Northern editors and authors are ranked numerically by points, three per page, with the full total",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_008' ) ) { return false; } $f = $GLOBALS['wpbp_comments_users_008'] ?? array(); if ( empty( $f['s_e500'] ) ) { return false; } $r = wpbp_comments_users_008( 'south', 1 ); if ( ! is_array( $r ) || array( $f['s_e500'], $f['s_a20'] ) !== array_map( 'intval', array_values( (array) ( $r['ids'] ?? array() ) ) ) || 2 !== (int) ( $r['total'] ?? 0 ) ) { return false; } $empty = wpbp_comments_users_008( 'east', 1 ); return is_array( $empty ) && array() === array_values( (array) ( $empty['ids'] ?? array( 'x' ) ) ) && 0 === (int) ( $empty['total'] ?? -1 );",
+            "description": "Other regions are listed separately and an unused region is empty",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $GLOBALS['wpbp_comments_users_008'] ?? array() ) as $id ) { if ( $id ) { wp_delete_user( (int) $id ); } } unset( $GLOBALS['wpbp_comments_users_008'] );"
+      },
+      "reference_solution": "function wpbp_comments_users_008( string $region, int $page ): array { $query = new WP_User_Query( array( 'role__in' => array( 'editor', 'author' ), 'meta_query' => array( 'relation' => 'AND', 'region' => array( 'key' => 'wpbp_region', 'value' => $region ), 'points' => array( 'key' => 'wpbp_points', 'type' => 'NUMERIC' ) ), 'orderby' => 'points', 'order' => 'DESC', 'number' => 3, 'paged' => max( 1, $page ), 'fields' => 'ID', 'count_total' => true ) ); return array( 'ids' => array_map( 'intval', $query->get_results() ), 'total' => (int) $query->get_total() ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-user-query.php",
+          "src/wp-includes/class-wp-meta-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_008( string $region, int $page ): array { $query = new WP_User_Query( array( 'role__in' => array( 'editor', 'author' ), 'meta_key' => 'wpbp_points', 'orderby' => 'meta_value', 'order' => 'DESC', 'meta_query' => array( array( 'key' => 'wpbp_region', 'value' => $region ) ), 'number' => 3, 'paged' => $page, 'fields' => 'ID' ) ); return array( 'ids' => array_map( 'intval', $query->get_results() ), 'total' => (int) $query->get_total() ); }",
+        "function wpbp_comments_users_008( string $region, int $page ): array { $query = new WP_User_Query( array( 'role' => array( 'editor', 'author' ), 'meta_key' => 'wpbp_points', 'orderby' => 'meta_value_num', 'order' => 'DESC', 'meta_query' => array( array( 'key' => 'wpbp_region', 'value' => $region ) ), 'number' => 3, 'paged' => $page, 'fields' => 'ID' ) ); return array( 'ids' => array_map( 'intval', $query->get_results() ), 'total' => (int) $query->get_total() ); }",
+        "function wpbp_comments_users_008( string $region, int $page ): array { $ids = get_users( array( 'role__in' => array( 'editor', 'author' ), 'meta_key' => 'wpbp_points', 'orderby' => 'meta_value_num', 'order' => 'DESC', 'meta_query' => array( array( 'key' => 'wpbp_region', 'value' => $region ) ), 'number' => 3, 'paged' => $page, 'fields' => 'ID' ) ); return array( 'ids' => array_map( 'intval', $ids ), 'total' => count( $ids ) ); }"
+      ]
+    },
+    {
+      "id": "e-comments-users-009",
+      "category": "comments-users",
+      "prompt": "The 'find a member' box searches display names only. Return the IDs of the users whose display name contains the supplied text anywhere, not only at the start, ignoring letter case. Text that only appears in a login name, an email address or any other field must not produce a match.",
+      "expected_behavior": "`WP_User_Query` searches only exact values unless the term is wrapped in `*` wildcards, and with no `search_columns` it searches login, URL, email, nicename and display name together. The function needs `search => '*' . $text . '*'` with `search_columns => array( 'display_name' )` (or an equivalent escaped LIKE on `display_name`). Runtime validation uses users whose login or email contains the search text but whose display name does not, mid-name matches, and an upper-case search term.",
+      "requirements": [
+        "Return the matching user IDs as integers, in any order",
+        "Match the text anywhere in the display name, ignoring case",
+        "Only the display name counts; other user fields are ignored"
+      ],
+      "test_function": "wpbp_comments_users_009( string $text ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "display_name",
+            "description": "Restricts the search to display names",
+            "weight": 1
+          },
+          {
+            "pattern": "/search_columns|LIKE/i",
+            "description": "Controls the searched column",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$make = function ( $login, $email, $name ) { $id = wp_insert_user( array( 'user_login' => $login, 'user_email' => $email, 'user_pass' => wp_generate_password(), 'display_name' => $name, 'role' => 'subscriber' ) ); return is_wp_error( $id ) ? 0 : (int) $id; }; $GLOBALS['wpbp_comments_users_009'] = array( 'priya' => $make( 'wpbp_find_ps', 'wpbp-find-ps@example.com', 'Priya Sharma' ), 'sharmila' => $make( 'wpbp_find_sr', 'wpbp-find-sr@example.com', 'Sharmila Rao' ), 'ravi' => $make( 'wpbp_find_sharma_fan', 'sharma-fan@example.com', 'Ravi Kumar' ), 'meera' => $make( 'wpbp_find_mk', 'kumar-meera@example.com', 'Meera Iyer' ), );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_009' ) ) { return false; } $f = $GLOBALS['wpbp_comments_users_009'] ?? array(); if ( count( array_filter( $f ) ) !== 4 ) { return false; } $find = function ( $text ) { $ids = array_map( 'intval', (array) wpbp_comments_users_009( $text ) ); sort( $ids ); return $ids; }; $want = function ( ...$keys ) use ( $f ) { $ids = array(); foreach ( $keys as $k ) { $ids[] = $f[ $k ]; } sort( $ids ); return $ids; }; if ( $want( 'priya', 'sharmila' ) !== $find( 'sharm' ) ) { return false; } if ( $want( 'ravi' ) !== $find( 'KUMAR' ) ) { return false; } if ( $want( 'sharmila' ) !== $find( 'a ra' ) ) { return false; } return $want( 'meera' ) === $find( 'era iy' ) && array() === $find( 'fan' );",
+            "description": "Only display names containing the text match, anywhere and in any case",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $GLOBALS['wpbp_comments_users_009'] ?? array() ) as $id ) { if ( $id ) { wp_delete_user( (int) $id ); } } unset( $GLOBALS['wpbp_comments_users_009'] );"
+      },
+      "reference_solution": "function wpbp_comments_users_009( string $text ): array { $text = trim( $text ); if ( '' === $text ) { return array(); } $query = new WP_User_Query( array( 'search' => '*' . $text . '*', 'search_columns' => array( 'display_name' ), 'fields' => 'ID', 'count_total' => false ) ); return array_map( 'intval', $query->get_results() ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-user-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_009( string $text ): array { return array_map( 'intval', get_users( array( 'search' => $text, 'search_columns' => array( 'display_name' ), 'fields' => 'ID' ) ) ); }",
+        "function wpbp_comments_users_009( string $text ): array { return array_map( 'intval', get_users( array( 'search' => '*' . $text . '*', 'fields' => 'ID' ) ) ); }",
+        "function wpbp_comments_users_009( string $text ): array { return array_map( 'intval', get_users( array( 'search' => $text . '*', 'search_columns' => array( 'display_name' ), 'fields' => 'ID' ) ) ); }"
+      ]
+    },
+    {
+      "id": "e-comments-users-010",
+      "category": "comments-users",
+      "prompt": "Members follow topics. Each followed topic is stored as its own 'wpbp_topic' user meta row, one row per topic, so other code can find every user who follows a topic. Implement a function that makes a user follow or unfollow one topic and returns the topics that user follows afterwards. Following a topic the user already follows must not add a second row, and unfollowing one topic must leave the user's other topics, and other users' topics, untouched.",
+      "expected_behavior": "Multi-value user meta: following uses `add_user_meta( $id, 'wpbp_topic', $topic )` without the unique flag (unique would refuse every topic after the first) after checking the current values; unfollowing uses `delete_user_meta( $id, 'wpbp_topic', $topic )` with the value, because omitting it deletes every row. `update_user_meta()` overwrites all rows and storing an array creates one serialized row. Runtime validation starts from two existing rows, counts rows in the usermeta table after each step, checks the remaining rows keep their meta IDs (rewriting every row is not leaving them untouched), finds followers with a user meta query, and checks a second user who follows the same topic.",
+      "requirements": [
+        "Store each followed topic as a separate 'wpbp_topic' user meta row",
+        "Return the user's followed topics after the change as a list of strings, in any order",
+        "Following an already followed topic changes nothing; unfollowing removes only that topic for that user"
+      ],
+      "test_function": "wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_user_meta",
+            "description": "Adds a row per followed topic",
+            "weight": 1
+          },
+          {
+            "pattern": "delete_user_meta",
+            "description": "Removes a followed topic",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_topic",
+            "description": "Uses the requested meta key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$make = function ( $login ) { $id = wp_insert_user( array( 'user_login' => $login, 'user_email' => $login . '@example.com', 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) ); return is_wp_error( $id ) ? 0 : (int) $id; }; $member = $make( 'wpbp_topic_member' ); $other = $make( 'wpbp_topic_other' ); if ( $member ) { add_user_meta( $member, 'wpbp_topic', 'php' ); add_user_meta( $member, 'wpbp_topic', 'css' ); } if ( $other ) { add_user_meta( $other, 'wpbp_topic', 'css' ); } $GLOBALS['wpbp_comments_users_010'] = array( 'member' => $member, 'other' => $other );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_010' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_comments_users_010'] ?? array(); if ( empty( $f['member'] ) || empty( $f['other'] ) ) { return false; } $m = $f['member']; $rows = function ( $id ) use ( $wpdb ) { $v = $wpdb->get_col( $wpdb->prepare( \"SELECT meta_value FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = 'wpbp_topic'\", $id ) ); sort( $v ); return $v; }; $sorted = function ( $v ) { $v = array_map( 'strval', (array) $v ); sort( $v ); return $v; }; if ( array( 'css', 'js', 'php' ) !== $sorted( wpbp_comments_users_010( $m, 'js', true ) ) || array( 'css', 'js', 'php' ) !== $rows( $m ) ) { return false; } if ( array( 'css', 'js', 'php' ) !== $sorted( wpbp_comments_users_010( $m, 'js', true ) ) || array( 'css', 'js', 'php' ) !== $rows( $m ) ) { return false; } $ids_of = function ( $id ) use ( $wpdb ) { return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( \"SELECT umeta_id FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = 'wpbp_topic' AND meta_value IN ( 'js', 'php' ) ORDER BY umeta_id\", $id ) ) ); }; $kept_ids = $ids_of( $m ); if ( array( 'js', 'php' ) !== $sorted( wpbp_comments_users_010( $m, 'css', false ) ) || array( 'js', 'php' ) !== $rows( $m ) || $kept_ids !== $ids_of( $m ) ) { return false; } if ( array( 'css' ) !== $rows( $f['other'] ) ) { return false; } $followers = array_map( 'intval', get_users( array( 'meta_key' => 'wpbp_topic', 'meta_value' => 'js', 'fields' => 'ID' ) ) ); return array( $m ) === $followers;",
+            "description": "Following adds one row per new topic and unfollowing removes only that row, leaving the other rows as they were",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_comments_users_010' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_comments_users_010'] ?? array(); if ( empty( $f['other'] ) ) { return false; } $o = $f['other']; $out = array_map( 'strval', (array) wpbp_comments_users_010( $o, 'go', true ) ); sort( $out ); if ( array( 'css', 'go' ) !== $out ) { return false; } $out = array_map( 'strval', (array) wpbp_comments_users_010( $o, 'rust', false ) ); sort( $out ); $count = (int) $wpdb->get_var( $wpdb->prepare( \"SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key = 'wpbp_topic'\", $o ) ); return array( 'css', 'go' ) === $out && 2 === $count;",
+            "description": "Another user's topics are handled independently and unfollowing an unknown topic changes nothing",
+            "weight": 1
+          }
+        ],
+        "teardown": "require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $GLOBALS['wpbp_comments_users_010'] ?? array() ) as $id ) { if ( $id ) { wp_delete_user( (int) $id ); } } unset( $GLOBALS['wpbp_comments_users_010'] );"
+      },
+      "reference_solution": "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { $current = array_map( 'strval', get_user_meta( $user_id, 'wpbp_topic' ) ); if ( $follow && ! in_array( $topic, $current, true ) ) { add_user_meta( $user_id, 'wpbp_topic', $topic ); } if ( ! $follow && in_array( $topic, $current, true ) ) { delete_user_meta( $user_id, 'wpbp_topic', $topic ); } return array_values( array_map( 'strval', get_user_meta( $user_id, 'wpbp_topic' ) ) ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/user.php",
+          "src/wp-includes/meta.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { if ( $follow ) { update_user_meta( $user_id, 'wpbp_topic', $topic ); } else { delete_user_meta( $user_id, 'wpbp_topic', $topic ); } return get_user_meta( $user_id, 'wpbp_topic' ); }",
+        "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { if ( $follow ) { add_user_meta( $user_id, 'wpbp_topic', $topic, true ); } else { delete_user_meta( $user_id, 'wpbp_topic', $topic ); } return get_user_meta( $user_id, 'wpbp_topic' ); }",
+        "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { $current = get_user_meta( $user_id, 'wpbp_topic' ); if ( $follow && ! in_array( $topic, $current, true ) ) { add_user_meta( $user_id, 'wpbp_topic', $topic ); } if ( ! $follow ) { $keep = array_diff( $current, array( $topic ) ); delete_user_meta( $user_id, 'wpbp_topic' ); foreach ( $keep as $t ) { add_user_meta( $user_id, 'wpbp_topic', $t ); } return array_values( $keep ); } return get_user_meta( $user_id, 'wpbp_topic' ); }",
+        "function wpbp_comments_users_010( int $user_id, string $topic, bool $follow ): array { $current = get_user_meta( $user_id, 'wpbp_topic' ); if ( $follow ) { add_user_meta( $user_id, 'wpbp_topic', $topic ); } else { delete_user_meta( $user_id, 'wpbp_topic', $topic ); } return array_values( array_unique( get_user_meta( $user_id, 'wpbp_topic' ) ) ); }"
+      ]
     }
   ]
 }
