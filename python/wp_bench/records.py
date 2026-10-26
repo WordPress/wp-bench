@@ -16,7 +16,8 @@ from .config import ModelConfig
 #: field were removed (knowledge track removed).
 #: 2.1: added the "variant" block for skill-injection A/B runs.
 #: 2.2: dropped the "difficulty" field from every record.
-RESULT_SCHEMA_VERSION = "2.2"
+# 2.3: benchmark identity and run_id on every streamed result.
+RESULT_SCHEMA_VERSION = "2.3"
 
 
 def _baseline_variant_info() -> dict[str, Any]:
@@ -77,6 +78,8 @@ def _base_record(
     the builders from drifting (the key set is asserted identical in tests).
     """
     return {
+        "run_id": None,
+        "benchmark": None,
         "test_id": test.id,
         "suite": test.suite,
         "type": "execution",

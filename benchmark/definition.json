@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "wordpress_version": "7.1",
+  "scoring_version": "3.0",
+  "suites": [
+    "wp-core",
+    "wp-cli"
+  ],
+  "categories": [
+    {
+      "id": "core",
+      "label": "Core development",
+      "description": "Hooks, content, queries, settings, admin, internationalization, dates, plugins, and shortcodes."
+    },
+    {
+      "id": "blocks",
+      "label": "Block editor",
+      "description": "Blocks, patterns, bindings, interactivity, editor customization, and block markup."
+    },
+    {
+      "id": "themes-media",
+      "label": "Themes & media",
+      "description": "Theme templates, scripts, styles, and media handling."
+    },
+    {
+      "id": "apis",
+      "label": "APIs & integrations",
+      "description": "REST endpoints, HTTP, email, URLs, and scheduled tasks."
+    },
+    {
+      "id": "security",
+      "label": "Security & access",
+      "description": "Authentication, permissions, roles, capabilities, and safe handling of input and output."
+    },
+    {
+      "id": "modern",
+      "label": "New WordPress APIs",
+      "description": "Abilities, the AI Client, and Connectors APIs in the WordPress 7.1 runtime."
+    },
+    {
+      "id": "performance",
+      "label": "Data & performance",
+      "description": "Database access, caching, and performance tasks."
+    },
+    {
+      "id": "wp-cli",
+      "label": "WP-CLI",
+      "description": "Content, users, options, taxonomy, metadata, reporting, migration, and maintenance with WP-CLI."
+    }
+  ],
+  "category_mapping": {
+    "wp-core": {
+      "abilities-api": "modern",
+      "admin": "core",
+      "ai-client": "modern",
+      "auth": "security",
+      "block-patterns-styles": "blocks",
+      "caching": "performance",
+      "comments-users": "core",
+      "connectors-api": "modern",
+      "cron": "apis",
+      "database": "performance",
+      "dates-time": "core",
+      "gb-block-api": "blocks",
+      "gb-block-bindings": "blocks",
+      "gb-block-editor": "blocks",
+      "gb-block-hooks": "blocks",
+      "gb-block-markup": "blocks",
+      "gb-font-library": "blocks",
+      "gb-interactivity-api": "blocks",
+      "gb-templates-navigation": "blocks",
+      "hooks": "core",
+      "html-api": "core",
+      "http-api": "apis",
+      "internationalization": "core",
+      "mail-url": "apis",
+      "media": "themes-media",
+      "performance": "performance",
+      "plugin-lifecycle": "core",
+      "post-meta": "core",
+      "post-types-taxonomy": "core",
+      "posts-lifecycle": "core",
+      "queries": "core",
+      "rest-api": "apis",
+      "rewrite-permalinks": "core",
+      "roles-caps": "security",
+      "scripts-styles": "themes-media",
+      "security": "security",
+      "settings-options": "core",
+      "shortcodes": "core",
+      "theme-templates": "themes-media"
+    },
+    "wp-cli": {
+      "cli-content": "wp-cli",
+      "cli-maintenance": "wp-cli",
+      "cli-migration": "wp-cli",
+      "cli-options": "wp-cli",
+      "cli-reporting": "wp-cli",
+      "cli-taxonomy-meta": "wp-cli",
+      "cli-users": "wp-cli"
+    }
+  },
+  "aggregation": "strict pass rate; every task weighted equally; average independent repeats per task",
+  "protocol": {
+    "model": {
+      "temperature": 1.0,
+      "top_p": null,
+      "max_tokens": 16384
+    },
+    "grader": {
+      "kind": "docker",
+      "timeout_seconds": 90,
+      "container_cpus": 1.0,
+      "container_memory_mb": 512,
+      "container_filesystem_mb": 256,
+      "container_pids_limit": 64
+    },
+    "repeats": 2,
+    "reasoning_effort": "provider default",
+    "answer_policy": "first response; baseline without skills; transient provider errors retried; no scored-answer regeneration"
+  },
+  "runtime_image_ids": [
+    "sha256:6dcab391357137b2ce52d99ef15f342499b6b9f3287e5b96946036628a7dfb1e"
+  ]
+}

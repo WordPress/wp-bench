@@ -39,7 +39,7 @@ PLUGIN_JSON = json.dumps(
 def _plugin_test(test_id: str = "e-plugin-001") -> ExecutionTest:
     return ExecutionTest(
         id=test_id,
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Build a plugin.",
         expected_behavior="expected",
         category="plugins",
@@ -143,7 +143,7 @@ def test_prompt_instructions_differ_by_kind() -> None:
 
 def _config(tmp_path: Path, **run_overrides: object) -> HarnessConfig:
     return HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig.model_validate(dict(run_overrides)),

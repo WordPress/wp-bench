@@ -30,7 +30,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def test_local_parser_preserves_execution_task_metadata() -> None:
     """Per-task provenance fields survive local loading at the top level."""
-    tests = load_tests(DatasetConfig(source="local", name="wp-core-v1"))
+    tests = load_tests(DatasetConfig(source="local", name="wp-core"))
 
     with_refs = [t for t in tests if t.metadata.get("source_refs")]
     assert with_refs, "expected execution tasks with source_refs metadata"
@@ -73,7 +73,7 @@ def test_huggingface_loader_preserves_metadata(monkeypatch: pytest.MonkeyPatch) 
     rows = [
         {
             "id": "e-one",
-            "suite": "wp-core-v1",
+            "suite": "wp-core",
             "test_kind": "execution",
             "prompt": "Prompt",
             "requirements": "[]",
@@ -84,7 +84,7 @@ def test_huggingface_loader_preserves_metadata(monkeypatch: pytest.MonkeyPatch) 
         },
         {
             "id": "k-one",
-            "suite": "wp-core-v1",
+            "suite": "wp-core",
             "test_kind": "knowledge",
             "prompt": "Prompt",
             "requirements": "[]",
@@ -114,9 +114,9 @@ def test_export_dataset_writes_metadata_column() -> None:
     finally:
         sys.path.pop(0)
 
-    rows = load_suite("wp-core-v1")
+    rows = load_suite("wp-core")
 
-    assert rows, "expected exported rows for wp-core-v1"
+    assert rows, "expected exported rows for wp-core"
     assert all("metadata" in row for row in rows)
     execution_rows = [r for r in rows if r["test_kind"] == "execution"]
     assert any('"source_refs"' in r["metadata"] for r in execution_rows)
@@ -129,7 +129,7 @@ def test_result_record_includes_task_metadata(
     """Task provenance is auditable from every result record."""
     test = ExecutionTest(
         id="e-one",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="general",
@@ -141,7 +141,7 @@ def test_result_record_includes_task_metadata(
         metadata={"source_refs": ["plugin.php"], "release_focus": "6.9", "suite_metadata": {}},
     )
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="test-model"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),

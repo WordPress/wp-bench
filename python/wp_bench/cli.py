@@ -9,6 +9,7 @@ import typer
 from dotenv import load_dotenv
 from rich.console import Console
 
+from .benchmark_cli import app as benchmark_app
 from .config import HarnessConfig, ModelConfig
 from .core import BenchmarkRunner, MultiModelRunner, select_run_tests
 from .datasets import ExecutionTest, filter_tests_by_ids, load_tests
@@ -20,6 +21,7 @@ load_dotenv()
 T = TypeVar("T")
 
 app = typer.Typer(add_completion=False)
+app.add_typer(benchmark_app, name="benchmark")
 console = Console()
 
 

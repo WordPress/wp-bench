@@ -74,7 +74,7 @@ def test_role_changes_are_reloaded_before_assertions(environment) -> None:
 
 
 def test_capability_workflow_accepts_explicit_denial_as_well_as_removal(environment) -> None:
-    test = next(t for t in load_tests(DatasetConfig(source="local", name="wp-cli-v1")) if t.id == "e-cli-users-002")
+    test = next(t for t in load_tests(DatasetConfig(source="local", name="wp-cli")) if t.id == "e-cli-users-002")
     assert test.reference_solution is not None
     script = test.reference_solution.replace(
         "wp cap remove cli-contributor publish_posts", "wp cap add cli-contributor publish_posts --grant=false",
@@ -156,7 +156,7 @@ def test_shell_limits_remove_candidate_and_descendant_processes(environment, scr
 def test_slow_script_stops_inside_the_shell_and_keeps_its_output(environment, monkeypatch) -> None:
     grader = GraderConfig(timeout_seconds=10)
     monkeypatch.setattr(environment.config, "timeout_seconds", grader.timeout_seconds)
-    test = load_tests(DatasetConfig(source="local", name="wp-cli-v1"))[0]
+    test = load_tests(DatasetConfig(source="local", name="wp-cli"))[0]
     test.runtime_checks = {"assertions": [{"type": "custom_assertion", "code": "return true;"}]}
     environment.reset()
     result = environment.execute_artifact(
@@ -201,7 +201,7 @@ def test_rewriting_a_fixture_php_file_in_the_same_second_scores_zero(environment
 
 @pytest.mark.parametrize("test_id", ["e-cli-maintenance-001", "e-cli-maintenance-002"])
 def test_fixture_plugins_do_not_leak_into_the_next_test(environment, test_id) -> None:
-    test = next(t for t in load_tests(DatasetConfig(source="local", name="wp-cli-v1")) if t.id == test_id)
+    test = next(t for t in load_tests(DatasetConfig(source="local", name="wp-cli")) if t.id == test_id)
     artifact = Artifact(kind="wp_cli_shell", code=test.reference_solution or "")
     spec = _build_verification_spec(test, HarnessConfig())
     payload = base64.b64encode(json.dumps({**artifact.payload_fields(), **spec}).encode()).decode()

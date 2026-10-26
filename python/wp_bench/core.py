@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, suppress
 from typing import Any
+from uuid import uuid4
 
 from .artifacts import (
     Artifact,
@@ -14,6 +15,7 @@ from .artifacts import (
     parse_artifact,
     render_artifact_instructions,
 )
+from .benchmark import BenchmarkIdentity, capture_identity
 from .config import HarnessConfig, ModelConfig
 from .datasets import (
     ExecutionTest,
@@ -88,6 +90,8 @@ class _ResultBookkeeping:
     """
 
     def _init_bookkeeping(self, stream: RecordStream) -> None:
+        self._run_id = uuid4().hex
+        self._benchmark_identity: BenchmarkIdentity | None = None
         self.aggregator = ScoreAggregator()
         self.usage_aggregator = UsageAggregator()
         self.records: list[dict[str, Any]] = []
@@ -97,6 +101,12 @@ class _ResultBookkeeping:
     def _on_result(self, result: dict[str, Any]) -> None:
         """Aggregate a finished record, keep it, and stream it to disk."""
         with self._lock:
+            result["run_id"] = self._run_id
+            if self._benchmark_identity is not None:
+                result["benchmark"] = {
+                    **self._benchmark_identity.record_info(),
+                    "task_sha256": self._benchmark_identity.tasks.get(result["test_id"]),
+                }
             if result.get("error") is None:
                 self.aggregator.add_execution(result["scores"])
             self.usage_aggregator.add(result.get("usage"))
@@ -500,11 +510,13 @@ class BenchmarkRunner(_ResultBookkeeping):
                 f"Dataset '{self.config.dataset.name}' contains no execution "
                 "tests. Check the dataset source and suite name."
             )
+        self._benchmark_identity = capture_identity(self.config, tests)
         if self.config.run.check_exploits:
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
         with _graded_run(self._stream, self.environment):
             self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
+            self._benchmark_identity.bind_runtime(self.environment.image_id, required=bool(self.config.benchmark.version))
             if reference_mode:
                 self._run_reference_solution_tests(tests)
             else:
@@ -515,6 +527,8 @@ class BenchmarkRunner(_ResultBookkeeping):
             "metadata": {
                 "suite": self.config.run.suite,
                 "mode": "reference_solution" if reference_mode else "model",
+                "run_id": self._run_id,
+                "benchmark": self._benchmark_identity.metadata(self.records),
                 "result_schema_version": RESULT_SCHEMA_VERSION,
                 "model": model_config,
                 "grader": self.config.grader.model_dump(mode="json"),
@@ -696,6 +710,8 @@ class BenchmarkRunner(_ResultBookkeeping):
             "metadata": {
                 "suite": self.config.run.suite,
                 "mode": "exploit_audit",
+                "run_id": self._run_id,
+                "benchmark": self._benchmark_identity.metadata(self.records) if self._benchmark_identity else None,
                 "result_schema_version": RESULT_SCHEMA_VERSION,
                 "scoring_version": SCORING_VERSION,
                 "grader": self.config.grader.model_dump(mode="json"),
@@ -1079,10 +1095,13 @@ class MultiModelRunner:
                 "runtime_image_id": self.environment.image_id,
                 "skills": self._skills_metadata(),
                 "variants": [variant.key for variant in self.variants],
+                "benchmark": next(iter(self.results.values()))["benchmark"],
             },
             "models": {
                 name: {
                     "config": result["model_config"],
+                    "run_id": result["run_id"],
+                    "benchmark": result["benchmark"],
                     "base_model": result["base_model"],
                     "variant": result["variant"],
                     "scores": result["scores"],
@@ -1140,10 +1159,14 @@ class SingleModelRunner(_ResultBookkeeping):
         Returns:
             Dict with model config, aggregate scores, and individual results.
         """
+        self._benchmark_identity = capture_identity(self.config, self.tests)
+        self._benchmark_identity.bind_runtime(self.environment.image_id, required=bool(self.config.benchmark.version))
         self._run_execution_tests(self.tests)
         summary = self.aggregator.finalize()
         return {
             "model_config": self.model_config.model_dump(mode="json"),
+            "run_id": self._run_id,
+            "benchmark": self._benchmark_identity.metadata(self.records),
             "scoring_version": SCORING_VERSION,
             "usage": self.usage_aggregator.summary(),
             "errored_test_ids": errored_test_ids(self.records),

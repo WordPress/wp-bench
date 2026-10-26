@@ -135,7 +135,7 @@ def test_result_record_contains_usage_and_model_call(
 ) -> None:
     test = ExecutionTest(
         id="e-one",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Prompt",
         expected_behavior="expected",
         category="hooks",
@@ -147,7 +147,7 @@ def test_result_record_contains_usage_and_model_call(
         metadata={},
     )
     config = HarnessConfig(
-        dataset=DatasetConfig(source="local", name="wp-core-v1"),
+        dataset=DatasetConfig(source="local", name="wp-core"),
         model=ModelConfig(name="gpt-4o-mini"),
         grader=GraderConfig(kind="cli"),
         run=RunConfig(),

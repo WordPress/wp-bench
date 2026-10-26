@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -25,13 +27,18 @@ jobs:
           cache: pip
 
       - name: Install harness with dev tooling
-        run: pip install -e ./python[dev]
+        run: pip install -e ./python[dev,leaderboard]
 
       - name: Lint (ruff)
-        run: ruff check python
+        run: ruff check python web
 
       - name: Type check (mypy)
-        run: mypy python
+        run: mypy python web
+
+      - name: Benchmark release integrity
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: wp-bench benchmark check --base-ref "$BASE_REF"
 
       - name: Unit tests (pytest)
         run: pytest python -q
@@ -97,12 +104,12 @@ jobs:
 
       - name: WP-CLI workflow reference solutions
         run: >-
-          wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1
+          wp-bench run --config wp-bench.example.yaml --suite wp-cli
           --check-reference-solution --execution-concurrency 4
 
       - name: WP-CLI workflow exploit audit
         run: >-
-          wp-bench run --config wp-bench.example.yaml --suite wp-cli-v1
+          wp-bench run --config wp-bench.example.yaml --suite wp-cli
           --check-exploits --execution-concurrency 4
 
       - name: SQLite database reference solutions

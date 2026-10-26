@@ -151,7 +151,7 @@ The default `run.execution_isolation: reset_per_test` gives every candidate a fr
 
 ## WP-CLI Workflow Tests
 
-Use `wp-cli-v1` for realistic operational tasks that combine discovery, selection,
+Use `wp-cli` for realistic operational tasks that combine discovery, selection,
 changes, reports, and preservation. Prioritize model capability over testing tiny
 WordPress units. This suite targets single-site WordPress 7.1 with SQLite;
 avoid unsupported MySQL operations, network installs, or multisite instead of

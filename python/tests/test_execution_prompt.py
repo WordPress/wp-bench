@@ -12,7 +12,7 @@ from wp_bench.datasets import ExecutionTest
 def _test(artifact_kind: str = "php_snippet") -> ExecutionTest:
     return ExecutionTest(
         id="e-x-001",
-        suite="wp-core-v1",
+        suite="wp-core",
         prompt="Register a thing.",
         expected_behavior="expected",
         category="hooks",
