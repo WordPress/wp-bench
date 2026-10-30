@@ -15,7 +15,7 @@ not state are `null`.
 
 ```json
 {
-  "metadata": { ... },      // the "metadata" object from output/results_<timestamp>.json
+  "metadata": { ... },      // the "metadata" object from output/results_<timestamp>.json, minus "results"
   "submission": {
     "submitted_by": "github-login",
     "source": "https://github.com/WordPress/wp-bench/...",
@@ -27,15 +27,17 @@ not state are `null`.
 }
 ```
 
-`metadata` is copied from the harness output with the per-test `results` array
-dropped. The leaderboard reads these keys from it:
+`metadata` is the harness run metadata exactly as `wp-bench run` writes it
+(suite, model config, grader, dataset, scoring version, usage, scores, selected
+and errored test ids), with the per-test `results` array dropped. The leaderboard
+reads these keys from it:
 
 | Key | Meaning |
 | --- | --- |
 | `model.name` | Model id; must match the file name. |
 | `suite` | Dataset suite (`wp-core-v1`, `wp-cli-v1`, ...), or `null` when unknown. |
 | `scoring_version` | `SCORING_VERSION` at run time. Only compare files with the same value. Legacy knowledge-era rows carry `scores.knowledge` and are flagged on the page. |
-| `scores` | 0–1 fractions: `execution_pass_rate`, `runtime`, `correctness`, `overall` (and legacy `knowledge`). |
+| `scores` | 0–1 fractions: `execution_pass_rate`, `runtime`, `correctness`, `static_policy_pass_rate`, `overall` (and legacy `knowledge`). |
 | `usage.median_latency_ms`, `usage.estimated_cost_usd` | Run-level usage; cost is an estimate, not billing truth. |
 
 `submission` is written by the person publishing the run: GitHub login, URL of
@@ -46,6 +48,14 @@ caveats.
 
 1. Check the model does not already have a file (see `AGENTS.md`, "Leaderboard
    results").
-2. Copy `metadata` from the run's `output/results_<timestamp>.json`, drop
-   `results`, add `submission`, and save as `results/<model-id>.json`.
+2. Build the file from the run output. Single- and multi-model outputs both work;
+   one file is written per model:
+
+   ```sh
+   python leaderboard/build_entry.py output/results_<timestamp>.json \
+     --submitted-by <github-login> --source <url of the PR or issue comment>
+   ```
+
+   `--run-date` defaults to the timestamp in the file name; add `--notes` for
+   caveats.
 3. Run `pytest python -k leaderboard` and open a PR linking to the run output.

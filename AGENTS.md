@@ -12,7 +12,7 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 ## Leaderboard Results
 - `leaderboard/results/<model-id>.json` holds one file per benchmarked model (`/` in the id becomes `__`; shape in `leaderboard/README.md`). The folder's git history is the leaderboard change log, so update a model's file in place rather than adding variants of it.
 - **Before starting any benchmark run, check whether the model already has a result file:** `ls leaderboard/results | grep -i '<model>'`, then read its `metadata.scores.overall`, `metadata.scoring_version`, `submission.run_date` and `submission.source`. If a file exists for the model, do not re-run by default: report the existing result to the user and ask whether a fresh run is wanted (new suite or scoring version, or they explicitly ask for one).
-- After a completed run, take `metadata` from `output/results_<timestamp>.json`, drop the per-test `results` array, add a `submission` block (GitHub login, source URL, ISO run date, pass counts), and save it as `leaderboard/results/<model-id>.json`. Validate with `pytest python -k leaderboard` and open a PR.
+- After a completed run, build the file from the run output: `python leaderboard/build_entry.py output/results_<timestamp>.json --submitted-by <github-login> --source <url>` (works for single- and multi-model outputs, writes one file per model, keeps the harness `metadata` and drops per-test records). Validate with `pytest python -k leaderboard` and open a PR.
 
 ## Build, Test, and Development Commands
 - Create a venv and install the harness: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ./python`.

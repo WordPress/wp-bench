@@ -1,19 +1,42 @@
 {
   "metadata": {
     "suite": null,
+    "mode": "model",
+    "result_schema_version": null,
     "model": {
-      "name": "gpt-6-luna"
+      "kind": null,
+      "name": "gpt-6-luna",
+      "temperature": null,
+      "max_tokens": null,
+      "top_p": null
     },
+    "grader": null,
+    "dataset": null,
+    "runtime_isolation": null,
+    "runtime_isolation_boundary": null,
+    "execution_concurrency": null,
+    "runtime_image_id": null,
     "scoring_version": null,
+    "seed": null,
+    "limit": null,
+    "categories": [],
+    "selected_test_ids": null,
+    "continue_on_error": null,
+    "errored_test_ids": null,
+    "usage": {
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "total_tokens": null,
+      "estimated_cost_usd": 0.0638,
+      "median_latency_ms": 6913,
+      "p95_latency_ms": null
+    },
     "scores": {
       "correctness": null,
       "execution_pass_rate": 0.719,
       "runtime": 0.722,
+      "static_policy_pass_rate": null,
       "overall": 0.719
-    },
-    "usage": {
-      "median_latency_ms": 6913,
-      "estimated_cost_usd": 0.0638
     }
   },
   "submission": {
