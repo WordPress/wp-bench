@@ -13,11 +13,10 @@ file, so `git log -- leaderboard/results` (and the leaderboard page's History ta
 shows every change with its author, date and commit message. Put the context a
 reader needs — run date, link to the discussion, caveats — in the commit message.
 
-The initial files were seeded from the tables in
-[issue #5](https://github.com/WordPress/wp-bench/issues/5). They keep the harness
-key set with everything the tables did not state set to `null`, an empty `results`
-array, and (for the oldest rows) a legacy `scores.knowledge` value from the retired
-knowledge track, which the page flags as not comparable with execution-only runs.
+Every file holds a complete run with its per-test `results`. The figures posted in
+[issue #5](https://github.com/WordPress/wp-bench/issues/5) are not carried over:
+they have no per-test records and mix suite sizes and scoring eras. To list a model
+from that thread, re-run it and add its output.
 
 ## Adding or updating a model
 
