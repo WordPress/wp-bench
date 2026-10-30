@@ -1,44 +1,38 @@
 # Leaderboard results
 
-`results/` holds one JSON file per benchmarked model, named after the LiteLLM
-model id with `/` replaced by `__` (`gemini/gemini-3-flash-preview` →
-`results/gemini__gemini-3-flash-preview.json`). Each file is the harness output
-of that model's run, exactly as `wp-bench run` writes `output/results_<timestamp>.json`
-for a single-model run: a `metadata` block (suite, model config, grader, dataset,
-scoring version, usage, scores, selected and errored test ids) and the per-test
-`results` records.
+`results/` holds raw `wp-bench run` outputs, copied from `output/` unchanged:
+`results_<timestamp>.json` (the run payload) and, when available, the matching
+`results_<timestamp>.jsonl` (streamed per-test records). Nothing else belongs in
+this folder. The timestamp is when the run started, so a run's JSON and JSONL share
+one name.
 
-Who ran a model, and when, is the git history: re-running a model overwrites its
-file, so `git log -- leaderboard/results` (and the leaderboard page's History tab)
-shows every change with its author, date and commit message. Put the context a
-reader needs — run date, link to the discussion, caveats — in the commit message.
+A payload is either a single-model run (`metadata` with `model`, `scores`, `usage`
+plus per-test `results`) or a multi-model run (`metadata` plus `models`, one entry
+per model with its `config`, `scores` and `results`). The leaderboard page reads
+both: it lists the folder, takes every model from every run, and shows the latest
+run per model (older runs stay visible with "Show all runs"). Who published a run,
+and when, is the file's git history, which the page shows as well.
 
-Every file holds a complete run with its per-test `results`. The figures posted in
-[issue #5](https://github.com/WordPress/wp-bench/issues/5) are not carried over:
-they have no per-test records and mix suite sizes and scoring eras. To list a model
-from that thread, re-run it and add its output.
+## Adding a run
 
-## Adding or updating a model
-
-1. Check the model does not already have a file (see `AGENTS.md`, "Leaderboard
+1. Check the model does not already have a run (see `AGENTS.md`, "Leaderboard
    results").
-2. Copy the run output into place. Single- and multi-model outputs both work; one
-   file is written per model (multi-model runs are split into single-model payloads):
+2. Copy the run output in:
 
    ```sh
-   python leaderboard/build_entry.py output/results_<timestamp>.json
+   cp output/results_<timestamp>.json output/results_<timestamp>.jsonl leaderboard/results/
    ```
 
-3. Run `pytest python -k leaderboard`, commit with a message that says when the run
-   happened and links the discussion, and open a PR.
+3. Run `pytest python -k leaderboard`, commit with a message that links the
+   discussion, and open a PR.
 
 ## Leaderboard page
 
 `site/index.html` is the static leaderboard page, hosted on Spacefast at
 https://wpbench-leaderboard.space.fast/ and deployed from this folder through the
-Space's Git connection. It has no build step or backend: it lists `results/`
-through the GitHub contents API, reads each file's `metadata`, and attributes each
-row to the last commit that touched its file. The History tab walks the commits
-that touched the folder and diffs any two versions. The data source defaults to
+Space's Git connection. It has no build step or backend: it lists `results/` through
+the GitHub contents API, reads each run's `metadata`, and attributes each run to
+the commit that added it. The History tab walks the commits that touched the folder
+and diffs the leaderboard between any two of them. The data source defaults to
 `WordPress/wp-bench@trunk` and falls back to the PR branch while it is open;
 override with `?repo=owner/name&ref=branch`.

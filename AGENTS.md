@@ -10,9 +10,9 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 - `notebooks/` and `staging/`: Scratch space for experiments; avoid committing large artifacts to git.
 
 ## Leaderboard Results
-- `leaderboard/results/<model-id>.json` holds one file per benchmarked model (`/` in the id becomes `__`), each being that model's `wp-bench run` output verbatim (`metadata` + per-test `results`; see `leaderboard/README.md`). The folder's git history is the leaderboard change log, so update a model's file in place rather than adding variants of it.
-- **Before starting any benchmark run, check whether the model already has a result file:** `ls leaderboard/results | grep -i '<model>'`, then read its `metadata.scores.overall`, `metadata.scoring_version` and `git log -1 -- leaderboard/results/<file>`. If a file exists for the model, do not re-run by default: report the existing result to the user and ask whether a fresh run is wanted (new suite or scoring version, or they explicitly ask for one).
-- After a completed run, copy the output into place with `python leaderboard/build_entry.py output/results_<timestamp>.json` (writes one file per model; multi-model outputs are split into single-model payloads). Validate with `pytest python -k leaderboard`, commit with a message that states the run date and links the discussion, and open a PR.
+- `leaderboard/results/` holds raw `wp-bench run` outputs (`results_<timestamp>.json` plus the matching `.jsonl`), copied from `output/` unchanged; see `leaderboard/README.md`. Nothing else goes in that folder. Its git history is the leaderboard change log.
+- **Before starting any benchmark run, check whether the model already has a run there:** `for f in leaderboard/results/results_*.json; do jq -r '[input_filename, .metadata.suite, (.metadata.model.name // (.models | keys | join(","))), .metadata.scoring_version] | @tsv' "$f"; done | grep -i '<model>'`. If a run exists for the model and suite, do not re-run by default: report the existing result (overall score, run date from the file name, `git log -1 -- <file>`) and ask whether a fresh run is wanted (new suite or scoring version, or they explicitly ask for one).
+- After a completed run, copy `output/results_<timestamp>.json` and `.jsonl` into `leaderboard/results/`, validate with `pytest python -k leaderboard`, commit with a message that links the discussion, and open a PR.
 
 ## Build, Test, and Development Commands
 - Create a venv and install the harness: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ./python`.
