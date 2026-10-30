@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "suite": "wp-core-v1",
+    "model": {
+      "name": "gemini/gemini-3-flash-preview"
+    },
+    "scoring_version": null,
+    "scores": {
+      "knowledge": 0.714,
+      "correctness": 0.479,
+      "execution_pass_rate": null,
+      "runtime": null,
+      "overall": 0.406
+    },
+    "usage": {
+      "median_latency_ms": null,
+      "estimated_cost_usd": null
+    }
+  },
+  "submission": {
+    "submitted_by": "Jameswlepage",
+    "source": "https://github.com/WordPress/wp-bench/issues/5",
+    "run_date": null,
+    "reported_at": "2025-12-20",
+    "tests": {
+      "passed": null,
+      "total": 66
+    },
+    "notes": "Knowledge/correctness scoring era (42 knowledge + 24 execution tests); not comparable with execution-only (scoring 3.0) runs."
+  }
+}

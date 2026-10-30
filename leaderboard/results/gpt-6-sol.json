@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "suite": null,
+    "model": {
+      "name": "gpt-6-sol"
+    },
+    "scoring_version": null,
+    "scores": {
+      "correctness": null,
+      "execution_pass_rate": 0.789,
+      "runtime": 0.795,
+      "overall": 0.789
+    },
+    "usage": {
+      "median_latency_ms": 4930,
+      "estimated_cost_usd": 0.7065
+    }
+  },
+  "submission": {
+    "submitted_by": "fellyph",
+    "source": "https://github.com/WordPress/wp-bench/issues/5#issuecomment-5958337039",
+    "run_date": "2026-09-23",
+    "reported_at": "2026-10-02",
+    "tests": {
+      "passed": 146,
+      "total": 185
+    },
+    "notes": "Execution-only metrics over 185 tests. Suite not stated in source."
+  }
+}

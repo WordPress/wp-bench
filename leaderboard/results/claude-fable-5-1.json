@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "suite": null,
+    "model": {
+      "name": "claude-fable-5-1"
+    },
+    "scoring_version": null,
+    "scores": {
+      "correctness": null,
+      "execution_pass_rate": 0.557,
+      "runtime": 0.562,
+      "overall": 0.557
+    },
+    "usage": {
+      "median_latency_ms": 5732,
+      "estimated_cost_usd": null
+    }
+  },
+  "submission": {
+    "submitted_by": "fellyph",
+    "source": "https://github.com/WordPress/wp-bench/issues/5#issuecomment-5573990531",
+    "run_date": null,
+    "reported_at": "2026-09-07",
+    "tests": {
+      "passed": null,
+      "total": null
+    },
+    "notes": "Execution-only metrics (execution pass / runtime partial). Suite and test count not stated in source."
+  }
+}
