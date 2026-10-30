@@ -74,3 +74,39 @@ def test_run_output_shape(path: Path) -> None:
             else [r for entry in payload["models"].values() for r in entry["results"]]
         )
         assert len(lines) == len(records), f"{jsonl.name} does not match {path.name}"
+
+
+DATA_FILE = RESULTS_DIR.parent / "site" / "data" / "leaderboard.json"
+
+
+def test_site_data_matches_results_folder() -> None:
+    """The page's prebuilt data must describe exactly the runs in the folder."""
+    assert DATA_FILE.exists(), (
+        "run `python3 leaderboard/site/build_data.py` and commit the data file"
+    )
+    data = json.loads(DATA_FILE.read_text())
+    runs = data["runs"]
+    assert {r["file"] for r in runs} == {p.name for p in run_files()}, (
+        "leaderboard/site/data/leaderboard.json is stale: rerun build_data.py"
+    )
+    by_file: dict[str, dict[str, dict]] = {}
+    for r in runs:
+        by_file.setdefault(r["file"], {})[r["model"]] = r
+    for path in run_files():
+        payload = json.loads(path.read_text())
+        if "results" in payload:
+            expected = {
+                payload["metadata"]["model"]["name"]: payload["metadata"]["scores"][
+                    "overall"
+                ]
+            }
+        else:
+            expected = {
+                e["config"]["name"]: e["scores"]["overall"]
+                for e in payload["models"].values()
+                if (e.get("variant") or {}).get("kind", "none") == "none"
+            }
+        got = {model: r["scores"]["overall"] for model, r in by_file[path.name].items()}
+        assert got == expected, (
+            f"{path.name}: data file scores differ from the run output"
+        )

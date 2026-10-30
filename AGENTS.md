@@ -12,7 +12,7 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 ## Leaderboard Results
 - `leaderboard/results/` holds raw `wp-bench run` outputs (`results_<timestamp>.json` plus the matching `.jsonl`), copied from `output/` unchanged; see `leaderboard/README.md`. Nothing else goes in that folder. Its git history is the leaderboard change log.
 - **Before starting any benchmark run, check whether the model already has a run there:** `for f in leaderboard/results/results_*.json; do jq -r '[input_filename, .metadata.suite, (.metadata.model.name // (.models | keys | join(","))), .metadata.scoring_version] | @tsv' "$f"; done | grep -i '<model>'`. If a run exists for the model and suite, do not re-run by default: report the existing result (overall score, run date from the file name, `git log -1 -- <file>`) and ask whether a fresh run is wanted (new suite or scoring version, or they explicitly ask for one).
-- After a completed run, copy `output/results_<timestamp>.json` and `.jsonl` into `leaderboard/results/`, validate with `pytest python -k leaderboard`, commit with a message that links the discussion, and open a PR.
+- After a completed run, copy `output/results_<timestamp>.json` and `.jsonl` into `leaderboard/results/` and commit them (that commit is the run's attribution). Then run `python3 leaderboard/site/build_data.py`, commit the regenerated `leaderboard/site/data/leaderboard.json`, validate with `pytest python -k leaderboard`, and open a PR linking the discussion.
 
 ## Build, Test, and Development Commands
 - Create a venv and install the harness: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ./python`.

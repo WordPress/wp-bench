@@ -4,440 +4,478 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WP-Bench Leaderboard</title>
-<meta name="description" content="Model scores from WordPress/wp-bench leaderboard/results.json, with the file's git history so you can see how results changed over time.">
+<meta name="description" content="How well AI models write WordPress code: scores, cost, latency, per-category breakdowns and head-to-head comparisons from WordPress/wp-bench runs, with the full history of changes.">
 <style>
   :root {
-    --bg: #f6f7f9;
-    --surface: #ffffff;
-    --surface-2: #eef0f3;
-    --text: #1d2327;
-    --muted: #5f6b76;
-    --border: #d9dee4;
-    --accent: #2271b1;
-    --accent-text: #ffffff;
-    --good: #1a7f37;
-    --bad: #b42318;
-    --warn-bg: #fff6e0;
-    --warn-text: #7a4b00;
-    --tag-bg: #e7eef7;
-    --shadow: 0 1px 2px rgba(0,0,0,.06);
+    color-scheme: light;
+    --bg: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec; --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --accent: #2a78d6; --accent-ink: #ffffff;
+    --good: #006300; --bad: #d03b3b; --warn-bg: #fff6e0; --warn-text: #7a4b00; --tag-bg: #e8eef7;
+    --seq-100: #cde2fb; --seq-200: #9ec5f4; --seq-300: #6da7ec; --seq-400: #3987e5; --seq-500: #256abf; --seq-600: #184f95; --seq-700: #0d366b;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1216; --surface: #171b21; --surface-2: #1f252d; --text: #e6e9ed; --muted: #9aa5b1;
-      --border: #2c343e; --accent: #5aa0e6; --accent-text: #0f1216; --good: #4ac26b; --bad: #f08a7d;
-      --warn-bg: #3a2d10; --warn-text: #f5d58a; --tag-bg: #223044; --shadow: none;
+      color-scheme: dark;
+      --bg: #0d0d0d; --surface: #1a1a19; --surface-2: #242423; --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --accent: #3987e5; --accent-ink: #0d0d0d;
+      --good: #0ca30c; --bad: #e66767; --warn-bg: #3a2d10; --warn-text: #f5d58a; --tag-bg: #223044;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0f1216; --surface: #171b21; --surface-2: #1f252d; --text: #e6e9ed; --muted: #9aa5b1;
-    --border: #2c343e; --accent: #5aa0e6; --accent-text: #0f1216; --good: #4ac26b; --bad: #f08a7d;
-    --warn-bg: #3a2d10; --warn-text: #f5d58a; --tag-bg: #223044; --shadow: none;
+    color-scheme: dark;
+    --bg: #0d0d0d; --surface: #1a1a19; --surface-2: #242423; --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --accent: #3987e5; --accent-ink: #0d0d0d;
+    --good: #0ca30c; --bad: #e66767; --warn-bg: #3a2d10; --warn-text: #f5d58a; --tag-bg: #223044;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   a { color: var(--accent); }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
   header h1 { margin: 0 0 4px; font-size: 26px; }
-  header p { margin: 0; color: var(--muted); }
-  .src { font-size: 13px; color: var(--muted); margin-top: 8px; word-break: break-all; }
-  .tabs { display: flex; gap: 4px; margin: 20px 0 12px; border-bottom: 1px solid var(--border); }
-  .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 14px; font: inherit; color: var(--muted); cursor: pointer; }
+  header p { margin: 0; color: var(--text-2); }
+  .src { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .tabs { display: flex; gap: 2px; margin: 20px 0 14px; border-bottom: 1px solid var(--grid); overflow-x: auto; }
+  .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 14px; font: inherit; color: var(--text-2); cursor: pointer; white-space: nowrap; }
   .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
   .panel[hidden] { display: none; }
-  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-  .controls label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
-  select, input[type=search] { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 12px; }
+  .controls label { font-size: 13px; color: var(--text-2); display: flex; gap: 6px; align-items: center; }
+  select, input[type=search] { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--axis); border-radius: 6px; background: var(--surface); color: var(--text); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .pad { padding: 14px 16px; }
   .table-wrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 14px; }
-  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
-  th:nth-child(-n+3), td:nth-child(-n+3), th.left, td.left { text-align: left; }
-  thead th { position: sticky; top: 0; background: var(--surface-2); font-weight: 600; cursor: pointer; user-select: none; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th.left, td.left { text-align: left; }
+  thead th { position: sticky; top: 0; background: var(--surface-2); font-weight: 600; cursor: pointer; user-select: none; color: var(--text-2); }
   thead th .dir { color: var(--muted); font-size: 11px; margin-left: 3px; }
   tbody tr:hover { background: var(--surface-2); }
+  tr.dim td { opacity: .45; }
   td.model { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
   td.rank { color: var(--muted); }
-  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--tag-bg); color: var(--text); margin-left: 6px; vertical-align: middle; }
-  .bar { display: inline-block; height: 6px; width: 60px; background: var(--surface-2); border-radius: 3px; vertical-align: middle; margin-left: 8px; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: var(--accent); }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--tag-bg); color: var(--text); margin-left: 6px; vertical-align: middle; white-space: nowrap; }
+  .bar { display: inline-block; height: 6px; width: 64px; background: var(--surface-2); border-radius: 3px; vertical-align: middle; margin-left: 8px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .ci { color: var(--muted); font-size: 12px; margin-left: 4px; }
   .note { background: var(--warn-bg); color: var(--warn-text); padding: 10px 12px; border-radius: 8px; font-size: 13px; margin: 0 0 12px; }
-  .muted { color: var(--muted); }
+  .muted { color: var(--muted); } .sub { color: var(--text-2); font-size: 13px; }
   .status { padding: 24px; text-align: center; color: var(--muted); }
   .err { color: var(--bad); }
+  .up { color: var(--good); } .down { color: var(--bad); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+  .tile .k { font-size: 12px; color: var(--text-2); } .tile .v { font-size: 22px; font-weight: 600; } .tile .s { font-size: 12px; color: var(--muted); }
+  details.drawer { margin: 0; } details.drawer summary { cursor: pointer; color: var(--accent); font-size: 12px; list-style: none; }
+  details.drawer summary::-webkit-details-marker { display: none; }
+  .drawer-body { text-align: left; white-space: normal; font-size: 13px; color: var(--text-2); padding: 8px 0 4px; max-width: 900px; }
+  .drawer-body dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; }
+  .drawer-body dt { color: var(--muted); } .drawer-body dd { margin: 0; word-break: break-all; }
+  /* heatmap */
+  .heat { border-collapse: separate; border-spacing: 2px; font-size: 12px; }
+  .heat th { background: none; position: static; cursor: default; color: var(--text-2); font-weight: 500; border: 0; }
+  .heat th.cat { text-align: left; white-space: nowrap; padding: 2px 8px 2px 0; }
+  .heat th.col { writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; padding: 4px 2px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; max-height: 160px; }
+  .heat td { border: 0; padding: 0; }
+  .heat td .cell { display: block; min-width: 44px; padding: 4px 6px; border-radius: 4px; text-align: center; cursor: pointer; color: var(--text); }
+  .heat td .cell.dark { color: #fff; }
+  .heat td .cell.na { background: var(--surface-2); color: var(--muted); }
+  .heat td .cell:hover { outline: 2px solid var(--text); outline-offset: -2px; }
+  .legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); margin: 10px 0 0; }
+  .legend i { display: inline-block; width: 22px; height: 12px; border-radius: 2px; }
+  /* scatter */
+  .chart { width: 100%; height: 360px; }
+  .chart text { fill: var(--text-2); font-size: 12px; font-family: inherit; }
+  .chart .grid line { stroke: var(--grid); } .chart .axis line, .chart .axis path { stroke: var(--axis); }
+  .chart .dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+  .chart .dot.dim { opacity: .35; }
+  .chart .lbl { fill: var(--text); font-size: 12px; }
+  .tip { position: fixed; pointer-events: none; background: var(--text); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: 12px; z-index: 10; display: none; max-width: 320px; white-space: pre-line; }
+  /* head to head */
+  .h2h { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 900px) { .h2h { grid-template-columns: 1fr 1fr 1fr; } }
+  .h2h h3 { margin: 0 0 6px; font-size: 14px; } .h2h ul { margin: 0; padding-left: 16px; font-size: 13px; }
+  .h2h li { margin: 2px 0; } .h2h .why { color: var(--muted); font-size: 12px; }
+  .pill { display: inline-block; min-width: 22px; text-align: center; font-size: 12px; padding: 0 7px; border-radius: 999px; background: var(--tag-bg); margin-left: 6px; }
   /* history */
   .hist { display: grid; grid-template-columns: 1fr; gap: 16px; }
-  @media (min-width: 900px) { .hist { grid-template-columns: 340px 1fr; } }
+  @media (min-width: 900px) { .hist { grid-template-columns: 360px 1fr; } }
   .commits { max-height: 70vh; overflow: auto; }
-  .commit { padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .commit { padding: 10px 12px; border-bottom: 1px solid var(--grid); cursor: pointer; }
   .commit:hover, .commit.active { background: var(--surface-2); }
   .commit .msg { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .commit .meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; margin-top: 2px; }
-  .commit img { width: 16px; height: 16px; border-radius: 50%; }
-  .commit code { font-size: 11px; }
-  .diff { padding: 14px 16px; }
-  .diff h3 { margin: 14px 0 6px; font-size: 15px; }
-  .diff h3:first-child { margin-top: 0; }
-  .cmp { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; font-size: 13px; }
-  .delta-up { color: var(--good); } .delta-down { color: var(--bad); }
-  .pill { display: inline-block; min-width: 22px; text-align: center; font-size: 12px; padding: 0 7px; border-radius: 999px; background: var(--tag-bg); margin-left: 6px; }
+  .commit .meta { font-size: 12px; color: var(--muted); display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
+  .diff h3 { margin: 14px 0 6px; font-size: 15px; } .diff h3:first-child { margin-top: 0; }
   ul.plain { margin: 0; padding-left: 18px; }
   footer { margin-top: 24px; font-size: 13px; color: var(--muted); }
+  @media (max-width: 700px) { .heat th.col { max-height: 110px; } .chart { height: 300px; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>WP-Bench Leaderboard</h1>
-    <p>Published benchmark runs from <a id="repoLink" href="#" rel="noopener">WordPress/wp-bench</a>, read live from the raw <code>wp-bench run</code> outputs in <code>leaderboard/results/</code>. Each row is the latest run of a model; who published it comes from the commit that added the file.</p>
-    <div class="src" id="srcLine"></div>
+    <p>How well AI models write WordPress code, from <a id="repoLink" href="https://github.com/WordPress/wp-bench" rel="noopener">WordPress/wp-bench</a> runs. Each model's latest run on the selected suite and scoring version is ranked; everything else is shown greyed out.</p>
+    <div class="src" id="srcLine">Loading data…</div>
   </header>
 
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="board">Leaderboard</button>
+    <button role="tab" aria-selected="false" data-tab="categories">Categories</button>
+    <button role="tab" aria-selected="false" data-tab="cost">Score vs cost</button>
+    <button role="tab" aria-selected="false" data-tab="h2h">Head-to-head</button>
+    <button role="tab" aria-selected="false" data-tab="hardest">Hardest tests</button>
     <button role="tab" aria-selected="false" data-tab="history">History</button>
   </div>
 
+  <div class="controls" id="globalControls">
+    <label>Suite <select id="suiteFilter"></select></label>
+    <label>Scoring <select id="scoringFilter"></select></label>
+    <label><input type="checkbox" id="allRuns"> Show all runs</label>
+    <label>Search <input type="search" id="search" placeholder="model or author"></label>
+    <span class="sub" id="count"></span>
+  </div>
+
   <section class="panel" id="panel-board">
-    <p class="note">Only compare runs with the same suite and scoring version; both are shown per row. Overall = strict execution pass rate (scoring 3.0).</p>
-    <div class="controls">
-      <label>Suite <select id="suiteFilter"><option value="all">All</option></select></label>
-      <label>Scoring <select id="scoringFilter"><option value="all">All</option></select></label>
-      <label><input type="checkbox" id="allRuns"> Show all runs</label>
-      <label>Search <input type="search" id="search" placeholder="model or author"></label>
-      <span class="muted" id="count"></span>
-    </div>
+    <div class="tiles" id="tiles"></div>
     <div class="card table-wrap">
       <table id="board">
         <thead><tr>
           <th data-key="rank">#</th>
-          <th data-key="model">Model</th>
-          <th data-key="suite">Suite</th>
-          <th data-key="scores.overall">Overall</th>
-          <th data-key="scores.execution_pass_rate">Exec pass</th>
-          <th data-key="scores.runtime">Runtime</th>
-          <th data-key="scores.static_policy_pass_rate">Static policy</th>
-          <th data-key="scoring_version">Scoring</th>
+          <th data-key="model" class="left">Model</th>
+          <th data-key="scores.overall">Overall <span class="muted" title="strict execution pass rate; ± is a 95% Wilson interval">±</span></th>
           <th data-key="tests.passed">Passed</th>
-          <th data-key="usage.median_latency_ms">Median latency</th>
-          <th data-key="usage.estimated_cost_usd">Est. cost</th>
-          <th data-key="date">Run date</th>
-          <th data-key="submitted_by" class="left">Published by</th>
+          <th data-key="cost_usd.total">Cost / run</th>
+          <th data-key="cost_usd.per_pass">$ / pass</th>
+          <th data-key="tokens.completion_p50">Tokens / test</th>
+          <th data-key="latency_ms.p50">Latency p50</th>
+          <th data-key="latency_ms.p90">p90</th>
+          <th data-key="run_date">Run date</th>
+          <th data-key="published.by" class="left">Published by</th>
+          <th class="left">Run details</th>
         </tr></thead>
-        <tbody><tr><td colspan="13" class="status">Loading…</td></tr></tbody>
+        <tbody><tr><td colspan="12" class="status">Loading…</td></tr></tbody>
       </table>
     </div>
+    <p class="sub" style="margin:10px 0 0">Overall = strict execution pass rate (code runs, passes its runtime assertions, triggers no forbidden pattern). Costs are harness estimates, not billing. Tokens = median completion tokens per test.</p>
+  </section>
+
+  <section class="panel" id="panel-categories" hidden>
+    <p class="sub" style="margin:0 0 10px">Pass rate per category for each model's latest run. Darker = higher. Click a cell to list its tests. Categories with fewer than 5 tests are marked <span class="tag">n&lt;5</span>: one test moves them by 20 points or more.</p>
+    <div class="card pad table-wrap"><div id="heatmap" class="status">Loading…</div>
+      <div class="legend">0%<i style="background:var(--seq-100)"></i><i style="background:var(--seq-200)"></i><i style="background:var(--seq-300)"></i><i style="background:var(--seq-400)"></i><i style="background:var(--seq-500)"></i><i style="background:var(--seq-600)"></i><i style="background:var(--seq-700)"></i>100%</div>
+    </div>
+    <div class="card pad" id="cellDetail" hidden></div>
+  </section>
+
+  <section class="panel" id="panel-cost" hidden>
+    <p class="sub" style="margin:0 0 10px">Overall score against the estimated cost of the full run (log scale). Up and to the left is better. Hover a point for details.</p>
+    <div class="card pad"><svg id="scatter" class="chart" role="img" aria-label="Overall score versus cost per run"></svg></div>
+    <div class="card table-wrap" style="margin-top:12px"><table id="costTable"><thead><tr><th class="left">Model</th><th>Overall</th><th>Cost / run</th><th>$ / pass</th><th>Passes per $</th><th>Tokens / test</th><th>Latency p50</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="panel" id="panel-h2h" hidden>
+    <div class="controls">
+      <label>A <select id="h2hA"></select></label>
+      <span class="sub">vs</span>
+      <label>B <select id="h2hB"></select></label>
+      <span class="sub" id="h2hSummary"></span>
+    </div>
+    <div class="h2h" id="h2h"></div>
+  </section>
+
+  <section class="panel" id="panel-hardest" hidden>
+    <p class="sub" style="margin:0 0 10px">Tests that fail for the most models (latest run per model, selected suite and scoring). Tests failing for every model point at benchmark difficulty or a test issue rather than a model gap.</p>
+    <div class="card table-wrap"><table id="hardest"><thead><tr><th class="left">Test</th><th class="left">Category</th><th>Fails</th><th class="left">Models failing</th><th class="left">Failing assertion</th><th class="left">Source refs</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="panel" id="panel-history" hidden>
-    <p class="muted" style="margin:0 0 12px">Every commit that touched <code>leaderboard/results/</code>; each diff compares the latest run per model before and after. Pick a commit to see what it added, removed or changed compared with the previous version, or compare any two versions.</p>
+    <p class="sub" style="margin:0 0 12px">Every commit that touched <code>leaderboard/results/</code>. Select one to see which runs it added, removed or changed and how the latest score per model moved.</p>
     <div class="hist">
-      <div class="card commits" id="commits"><div class="status">Loading commits…</div></div>
-      <div class="card diff" id="diff"><div class="status">Select a commit.</div></div>
+      <div class="card commits" id="commits"></div>
+      <div class="card pad diff" id="diff"><div class="status">Select a commit.</div></div>
     </div>
   </section>
 
   <footer>
-    Data: <a id="rawLink" href="#" rel="noopener">results folder</a> · <a id="histLink" href="#" rel="noopener">file history on GitHub</a> ·
-    Override the source with <code>?repo=owner/name&amp;ref=branch</code>. GitHub's unauthenticated API allows 60 requests/hour (one call per folder listing, plus one per commit for attribution); each run file is a few MB, so loading many models takes a moment; responses are cached for this browser session.
+    Data: <a id="dataLink" href="data/leaderboard.json">data/leaderboard.json</a>, built by <a id="buildLink" href="#" rel="noopener">build_data.py</a> from the raw run outputs in <a id="folderLink" href="#" rel="noopener">leaderboard/results</a>. No API calls at view time.
   </footer>
 </div>
+<div class="tip" id="tip"></div>
 
 <script>
 (() => {
-  const qs = new URLSearchParams(location.search);
-  const clean = (v) => (v || '').replace(/[^\w.\/-]/g, '');
-  // Until the leaderboard PR lands on trunk, fall back to the PR branch.
-  const SOURCES = qs.get('repo') || qs.get('ref')
-    ? [[clean(qs.get('repo')) || 'WordPress/wp-bench', clean(qs.get('ref')) || 'trunk']]
-    : [['WordPress/wp-bench', 'trunk'], ['joaopamaral/wp-bench', 'leaderboard-results']];
-  let REPO = SOURCES[0][0], REF = SOURCES[0][1];
-  const DIR = 'leaderboard/results';
-  const RUN_FILE = /^results_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.json$/;
-  const listUrl = (ref) => `https://api.github.com/repos/${REPO}/contents/${DIR}?ref=${encodeURIComponent(ref)}`;
-  const rawUrl = (ref, name) => `https://raw.githubusercontent.com/${REPO}/${ref}/${DIR}/${name}`;
-  const commitsUrl = () => `https://api.github.com/repos/${REPO}/commits?path=${encodeURIComponent(DIR)}&sha=${encodeURIComponent(REF)}&per_page=100`;
+  const REPO = new URLSearchParams(location.search).get('repo')?.replace(/[^\w.\/-]/g, '') || 'WordPress/wp-bench';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+  const pct = (v, d = 1) => v == null ? '—' : (v * 100).toFixed(d) + '%';
+  const ms = (v) => v == null ? '—' : (v >= 1000 ? (v / 1000).toFixed(1) + ' s' : Math.round(v) + ' ms');
+  const usd = (v) => v == null ? '—' : '$' + (v < 0.01 ? v.toFixed(4) : v < 1 ? v.toFixed(3) : v.toFixed(2));
+  const num = (v) => v == null ? '—' : Math.round(v).toLocaleString();
+  const wilson = (p, n, z = 1.96) => { if (!n) return 0; const d = 1 + z * z / n; const c = (p + z * z / (2 * n)) / d; const h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return h; };
+  const commitUrl = (sha) => `https://github.com/${REPO}/commit/${sha}`;
+  const fileUrl = (file, sha) => `https://github.com/${REPO}/blob/${sha || 'trunk'}/${DATA.results_dir || 'leaderboard/results'}/${file}`;
+  const tip = $('tip');
+  const showTip = (e, text) => { tip.textContent = text; tip.style.display = 'block'; const x = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 12) + 'px'; };
+  const hideTip = () => tip.style.display = 'none';
 
-  function setLinks() {
-    document.getElementById('repoLink').href = `https://github.com/${REPO}`;
-    document.getElementById('repoLink').textContent = REPO;
-    document.getElementById('rawLink').href = `https://github.com/${REPO}/tree/${REF}/${DIR}`;
-    document.getElementById('histLink').href = `https://github.com/${REPO}/commits/${REF}/${DIR}`;
-    document.getElementById('srcLine').textContent = `Source: ${REPO} @ ${REF}`;
-  }
-  setLinks();
+  let DATA = { runs: [], tests: {}, history: [] };
+  let sortKey = 'scores.overall', sortDir = -1;
+  let h2hInit = false;
 
-  const cache = {
-    get(k) { try { const v = sessionStorage.getItem('wpb:' + k); return v ? JSON.parse(v) : null; } catch { return null; } },
-    set(k, v) { try { sessionStorage.setItem('wpb:' + k, JSON.stringify(v)); } catch {} },
-  };
-  async function getJSON(url, {noCache} = {}) {
-    if (!noCache) { const c = cache.get(url); if (c) return c; }
-    const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
-    const data = await res.json();
-    cache.set(url, data);
-    return data;
-  }
+  $('buildLink').href = `https://github.com/${REPO}/blob/trunk/leaderboard/site/build_data.py`;
+  $('folderLink').href = `https://github.com/${REPO}/tree/trunk/leaderboard/results`;
+  $('repoLink').href = `https://github.com/${REPO}`; $('repoLink').textContent = REPO;
 
-  /** Load every *.json in the results folder at `ref` and flatten to leaderboard rows. */
-  async function loadFolder(ref, {noCache} = {}) {
-    const listing = await getJSON(listUrl(ref), { noCache });
-    const files = (Array.isArray(listing) ? listing : []).filter(f => f.type === 'file' && RUN_FILE.test(f.name));
-    const docs = await Promise.all(files.map(async f => {
-      try { return { file: f.name, doc: await getJSON(rawUrl(ref, f.name), { noCache }) }; }
-      catch (e) { console.warn('skipping', f.name, e); return null; }
-    }));
-    return docs.filter(Boolean).flatMap(({ file, doc }) => toRows(file, doc));
-  }
-
-  /** One row per model in a raw `wp-bench run` output (single- or multi-model payload). */
-  function toRows(file, doc) {
-    const md = doc.metadata || {};
-    const m = RUN_FILE.exec(file);
-    const run_date = m ? `${m[1]}-${m[2]}-${m[3]}` : null;
-    const run_ts = m ? `${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}` : '';
-    const base = (model, scores, usage, records, errored) => {
-      const passed = records.filter(r => r.scores?.execution_pass).length;
-      return {
-        file, model, run_date, run_ts, suite: md.suite ?? null, scoring_version: md.scoring_version ?? null,
-        scores, usage: usage || {}, tests: { passed, total: records.length }, errored: errored.length,
-        // Filled in from the folder's commit history (see attribute()).
-        submitted_by: '—', source: `https://github.com/${REPO}/blob/${REF}/${DIR}/${file}`, commit_date: null,
-      };
-    };
-    if (Array.isArray(doc.results)) {
-      if (md.mode && md.mode !== 'model') return [];
-      if (!md.model?.name || !md.scores) return [];
-      return [base(md.model.name, md.scores, md.usage, doc.results, md.errored_test_ids || [])];
-    }
-    return Object.values(doc.models || {})
-      .filter(e => (e.variant?.kind ?? 'none') === 'none' && e.config?.name && e.scores)
-      .map(e => base(e.config.name, e.scores, usageFromRecords(e.results || []), e.results || [], (e.results || []).filter(r => r.error).map(r => r.test_id)));
-  }
-
-  /** Multi-model payloads carry no run-level usage; rebuild it the way the harness does. */
-  function usageFromRecords(records) {
-    const lat = records.map(r => r.usage?.latency_ms).filter(v => typeof v === 'number').sort((a, b) => a - b);
-    const costs = records.map(r => r.usage?.cost_usd).filter(v => typeof v === 'number');
-    const pick = (f) => lat[Math.min(lat.length - 1, Math.max(0, Math.round(f * (lat.length - 1))))];
-    return {
-      median_latency_ms: lat.length ? pick(0.5) : null,
-      estimated_cost_usd: costs.length ? costs.reduce((a, b) => a + b, 0) : null,
-    };
-  }
-
-  /** Latest run per model (by the timestamp in the file name). */
+  // ---------- selection ----------
+  const suite = () => $('suiteFilter').value;
+  const scoring = () => $('scoringFilter').value;
+  const inGroup = (r) => (r.suite ?? '—') === suite() && (r.scoring_version ?? '—') === scoring();
   function latestByModel(rows) {
     const best = new Map();
     for (const r of rows) if (!best.has(r.model) || r.run_ts > best.get(r.model).run_ts) best.set(r.model, r);
     return [...best.values()];
   }
-
-  /** Attribute each row to the last commit that touched its file: newest commit first, stop once every file is covered. */
-  async function attribute(rows) {
-    let list;
-    try { list = await getJSON(commitsUrl()); } catch (e) { console.warn('no commit history', e); return; }
-    commits = commits || list;
-    const pending = new Map();
-    for (const r of rows) { const k = `${DIR}/${r.file}`; if (!pending.has(k)) pending.set(k, []); pending.get(k).push(r); }
-    for (const c of list) {
-      if (!pending.size) break;
-      let detail;
-      try { detail = await getJSON(`https://api.github.com/repos/${REPO}/commits/${c.sha}`); } catch (e) { console.warn(e); break; }
-      for (const f of detail.files || []) {
-        const group = pending.get(f.filename) || (f.previous_filename && pending.get(f.previous_filename));
-        if (!group) continue;
-        for (const r of group) {
-          r.submitted_by = c.author?.login || c.commit.author.name;
-          r.commit_date = c.commit.author.date.slice(0, 10);
-          r.source = c.html_url;
-          r.commit_message = c.commit.message;
-        }
-        pending.delete(f.filename);
-      }
-    }
-  }
-
-  // ---------- helpers ----------
-  const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
-  const pct = (v) => v == null ? '—' : (v * 100).toFixed(1) + '%';
-  const ms = (v) => v == null ? '—' : Math.round(v).toLocaleString() + ' ms';
-  const usd = (v) => v == null ? '—' : '$' + v.toFixed(v < 1 ? 4 : 2);
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const runDate = (r) => r.run_date || r.commit_date || '';
+  /** Ranked rows: latest run per model inside the selected suite/scoring group. */
+  const ranked = () => latestByModel(DATA.runs.filter(inGroup)).sort((a, b) => (b.scores.overall ?? -1) - (a.scores.overall ?? -1) || a.model.localeCompare(b.model));
+  const searchHit = (r) => { const q = $('search').value.trim().toLowerCase(); return !q || r.model.toLowerCase().includes(q) || (r.published?.by || '').toLowerCase().includes(q); };
 
   // ---------- tabs ----------
-  document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => {
+  function selectTab(name, push = true) {
+    const btn = document.querySelector(`.tabs button[data-tab="${name}"]`) || document.querySelector('.tabs button');
     document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b === btn)));
     document.querySelectorAll('.panel').forEach(p => p.hidden = p.id !== 'panel-' + btn.dataset.tab);
-    if (btn.dataset.tab === 'history') loadHistory();
-  }));
+    $('globalControls').style.display = btn.dataset.tab === 'history' ? 'none' : '';
+    if (push && location.hash !== '#' + btn.dataset.tab) history.replaceState(null, '', '#' + btn.dataset.tab);
+    if (DATA.runs.length) renderAll();
+  }
+  document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => selectTab(btn.dataset.tab)));
+  addEventListener('hashchange', () => selectTab(location.hash.slice(1), false));
 
   // ---------- leaderboard ----------
-  let runs = [];
-  let sortKey = 'scores.overall', sortDir = -1;
-  const tbody = document.querySelector('#board tbody');
-
-  function render() {
-    const suite = document.getElementById('suiteFilter').value;
-    const scoring = document.getElementById('scoringFilter').value;
-    const allRuns = document.getElementById('allRuns').checked;
-    const q = document.getElementById('search').value.trim().toLowerCase();
-    let rows = (allRuns ? runs : latestByModel(runs)).filter(r =>
-      (suite === 'all' || (r.suite ?? '—') === suite) &&
-      (scoring === 'all' || (r.scoring_version ?? '—') === scoring) &&
-      (!q || r.model.toLowerCase().includes(q) || (r.submitted_by || '').toLowerCase().includes(q)));
-    rows.sort((a, b) => (get(b, 'scores.overall') ?? -1) - (get(a, 'scores.overall') ?? -1));
+  function renderBoard() {
+    const rows = ranked();
     rows.forEach((r, i) => r.rank = i + 1);
-    if (sortKey !== 'scores.overall' || sortDir !== -1) {
-      rows.sort((a, b) => {
-        let va = sortKey === 'date' ? runDate(a) : get(a, sortKey);
-        let vb = sortKey === 'date' ? runDate(b) : get(b, sortKey);
-        if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1;
-        return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb))) * sortDir;
-      });
-    }
-    document.getElementById('count').textContent = allRuns ? `${rows.length} of ${runs.length} runs` : `${rows.length} models · ${runs.length} runs`;
-    document.querySelectorAll('thead th').forEach(th => {
-      th.querySelector('.dir')?.remove();
-      if (th.dataset.key === sortKey) th.insertAdjacentHTML('beforeend', `<span class="dir">${sortDir < 0 ? '▼' : '▲'}</span>`);
+    let shown = $('allRuns').checked ? DATA.runs.map(r => (rows.includes(r) ? r : { ...r, rank: null, dim: true })) : rows;
+    shown = shown.filter(searchHit);
+    shown.sort((a, b) => {
+      let va = get(a, sortKey), vb = get(b, sortKey);
+      if (sortKey === 'rank') { va = a.rank ?? 1e9; vb = b.rank ?? 1e9; }
+      if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1;
+      return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb))) * sortDir;
     });
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="13" class="status">No models match.</td></tr>'; return; }
-    tbody.innerHTML = rows.map(r => `
-      <tr title="${esc(r.commit_message || '')}">
-        <td class="rank">${r.rank}</td>
-        <td class="model"><a href="https://github.com/${esc(REPO)}/blob/${esc(REF)}/${DIR}/${esc(r.file)}" rel="noopener" target="_blank" style="color:inherit;text-decoration:none" title="${esc(r.file)}">${esc(r.model)}</a></td>
-        <td>${esc(r.suite ?? '—')}</td>
-        <td><strong>${pct(r.scores.overall)}</strong><span class="bar"><i style="width:${Math.round((r.scores.overall ?? 0) * 100)}%"></i></span></td>
-        <td>${pct(r.scores.execution_pass_rate)}</td>
-        <td>${pct(r.scores.runtime)}</td>
-        <td>${pct(r.scores.static_policy_pass_rate)}</td>
-        <td>${esc(r.scoring_version ?? '—')}</td>
-        <td>${r.tests.passed != null ? `${r.tests.passed}/${r.tests.total ?? '?'}` : (r.tests.total != null ? `${r.tests.total} tests` : '—')}${r.errored ? `<span class="tag" title="${r.errored} tests errored">${r.errored} err</span>` : ''}</td>
-        <td>${ms(r.usage?.median_latency_ms)}</td>
-        <td>${usd(r.usage?.estimated_cost_usd)}</td>
-        <td>${esc(runDate(r)) || '—'}</td>
-        <td class="left"><a href="${esc(r.source)}" rel="noopener" target="_blank">${esc(r.submitted_by)}</a></td>
-      </tr>`).join('');
+    document.querySelectorAll('#board thead th').forEach(th => { th.querySelector('.dir')?.remove(); if (th.dataset.key === sortKey) th.insertAdjacentHTML('beforeend', `<span class="dir">${sortDir < 0 ? '▼' : '▲'}</span>`); });
+    $('count').textContent = `${rows.length} models ranked · ${DATA.runs.length} runs total`;
+    const tbody = document.querySelector('#board tbody');
+    if (!shown.length) { tbody.innerHTML = '<tr><td colspan="12" class="status">No runs match.</td></tr>'; return; }
+    tbody.innerHTML = shown.map(r => {
+      const ci = wilson(r.scores.overall ?? 0, r.tests.total);
+      const pub = r.published;
+      return `<tr class="${r.dim ? 'dim' : ''}">
+        <td class="rank">${r.rank ?? '—'}</td>
+        <td class="model left"><a href="${esc(fileUrl(r.file, pub?.sha))}" rel="noopener" target="_blank" style="color:inherit;text-decoration:none" title="${esc(r.file)}">${esc(r.model)}</a>${r.dim ? `<span class="tag" title="not ranked: ${esc(r.suite)} / scoring ${esc(r.scoring_version)}${rows.some(x => x.model === r.model) ? ', older run' : ''}">${rows.some(x => x.model === r.model) ? 'older run' : esc(r.suite + ' · ' + r.scoring_version)}</span>` : ''}</td>
+        <td><strong>${pct(r.scores.overall)}</strong><span class="ci">±${(ci * 100).toFixed(1)}</span><span class="bar"><i style="width:${Math.round((r.scores.overall ?? 0) * 100)}%"></i></span></td>
+        <td>${r.tests.passed}/${r.tests.total}${r.tests.errored ? `<span class="tag" title="${r.tests.errored} tests errored in the harness">${r.tests.errored} err</span>` : ''}</td>
+        <td>${usd(r.cost_usd.total)}</td>
+        <td>${usd(r.cost_usd.per_pass)}</td>
+        <td>${num(r.tokens.completion_p50)}</td>
+        <td>${ms(r.latency_ms.p50)}</td>
+        <td>${ms(r.latency_ms.p90)}</td>
+        <td>${esc(r.run_date)}</td>
+        <td class="left">${pub ? `<a href="${esc(commitUrl(pub.sha))}" rel="noopener" target="_blank" title="${esc(pub.message)}">${esc(pub.by)}</a> <span class="muted">${esc(pub.date)}</span>` : '<span class="muted">uncommitted</span>'}</td>
+        <td class="left"><details class="drawer"><summary>details</summary><div class="drawer-body"><dl>
+          <dt>suite</dt><dd>${esc(r.suite)} · scoring ${esc(r.scoring_version)} · schema ${esc(r.result_schema_version)}</dd>
+          <dt>model</dt><dd>${esc(r.model)} (${esc(r.config.kind)}) · temperature ${esc(r.config.temperature)} · max_tokens ${esc(r.config.max_tokens ?? 'default')}</dd>
+          <dt>runtime</dt><dd>${esc(r.config.grader)} / ${esc(r.config.database)} · ${esc(r.config.runtime_isolation)} (${esc(r.config.runtime_isolation_boundary)}) · concurrency ${esc(r.config.execution_concurrency)} · seed ${esc(r.config.seed)}</dd>
+          <dt>image</dt><dd>${esc(r.config.runtime_image_id ?? '—')}</dd>
+          <dt>dataset</dt><dd>${esc(r.config.dataset?.source)} ${esc(r.config.dataset?.name)}${r.config.dataset?.revision ? ' @ ' + esc(r.config.dataset.revision) : ''}</dd>
+          <dt>scores</dt><dd>exec pass ${pct(r.scores.execution_pass_rate)} · runtime partial ${pct(r.scores.runtime)} · static policy ${pct(r.scores.static_policy_pass_rate)} · correctness (legacy) ${pct(r.scores.correctness)}</dd>
+          <dt>usage</dt><dd>${num(r.usage.prompt_tokens)} prompt + ${num(r.usage.completion_tokens)} completion tokens · wall ${r.latency_ms.total_min ?? '—'} min of model time · max latency ${ms(r.latency_ms.max)}</dd>
+          <dt>file</dt><dd><a href="${esc(fileUrl(r.file, pub?.sha))}" rel="noopener" target="_blank">${esc(r.file)}</a></dd>
+        </dl></div></details></td>
+      </tr>`;
+    }).join('');
+    // tiles
+    const top = rows[0];
+    const cheapest = rows.filter(r => r.cost_usd.per_pass != null).sort((a, b) => a.cost_usd.per_pass - b.cost_usd.per_pass)[0];
+    const fastest = rows.filter(r => r.latency_ms.p50 != null).sort((a, b) => a.latency_ms.p50 - b.latency_ms.p50)[0];
+    const hard = hardestRows(rows);
+    const allFail = hard.filter(h => h.fails === rows.length && rows.length > 1).length;
+    $('tiles').innerHTML = rows.length ? [
+      ['Top score', top ? pct(top.scores.overall) : '—', top?.model],
+      ['Cheapest per pass', cheapest ? usd(cheapest.cost_usd.per_pass) : '—', cheapest?.model],
+      ['Fastest (p50)', fastest ? ms(fastest.latency_ms.p50) : '—', fastest?.model],
+      ['Tests', top ? top.tests.total : '—', `${Object.keys(categoriesIn(rows)).length} categories`],
+      ['Fail for every model', rows.length > 1 ? allFail : '—', rows.length > 1 ? 'likely benchmark hardness' : 'needs ≥2 models'],
+    ].map(([k, v, s]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s ?? '')}</div></div>`).join('') : '';
+  }
+  document.querySelectorAll('#board thead th[data-key]').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.key;
+    if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'model' || k === 'published.by' || k === 'rank') ? 1 : -1; }
+    renderBoard();
+  }));
+
+  // ---------- categories ----------
+  const categoriesIn = (rows) => { const c = {}; for (const r of rows) for (const [k, v] of Object.entries(r.categories)) c[k] = Math.max(c[k] || 0, v.total); return c; };
+  const seqClass = (p) => p == null ? 'na' : p >= .99 ? 'seq-700 dark' : p >= .9 ? 'seq-600 dark' : p >= .8 ? 'seq-500 dark' : p >= .7 ? 'seq-400 dark' : p >= .55 ? 'seq-300' : p >= .35 ? 'seq-200' : 'seq-100';
+  function renderHeatmap() {
+    const rows = ranked().filter(searchHit);
+    const el = $('heatmap');
+    if (!rows.length) { el.innerHTML = '<div class="status">No models in this group.</div>'; return; }
+    const cats = Object.entries(categoriesIn(rows)).sort((a, b) => {
+      const avg = (c) => rows.reduce((s, r) => s + (r.categories[c]?.total ? r.categories[c].passed / r.categories[c].total : 0), 0) / rows.length;
+      return avg(b[0]) - avg(a[0]) || a[0].localeCompare(b[0]);
+    });
+    el.className = '';
+    el.innerHTML = `<table class="heat"><thead><tr><th class="cat"></th>${rows.map(r => `<th class="col" title="${esc(r.model)}">${esc(r.model)}</th>`).join('')}</tr></thead><tbody>
+      <tr><th class="cat"><strong>overall</strong> <span class="muted">n=${rows[0].tests.total}</span></th>${rows.map(r => cell(r, null, r.tests.passed, r.tests.total)).join('')}</tr>
+      ${cats.map(([c, n]) => `<tr><th class="cat">${esc(c)} <span class="muted">n=${n}</span>${n < 5 ? '<span class="tag">n&lt;5</span>' : ''}</th>${rows.map(r => { const v = r.categories[c]; return cell(r, c, v?.passed, v?.total); }).join('')}</tr>`).join('')}
+    </tbody></table>`;
+    el.querySelectorAll('.cell[data-model]').forEach(td => {
+      td.addEventListener('click', () => showCell(td.dataset.model, td.dataset.cat || null));
+      td.addEventListener('mousemove', e => showTip(e, `${td.dataset.model}\n${td.dataset.cat || 'overall'}: ${td.dataset.p}/${td.dataset.n} passed`));
+      td.addEventListener('mouseleave', hideTip);
+    });
+  }
+  function cell(r, cat, p, n) {
+    if (!n) return `<td><span class="cell na">—</span></td>`;
+    const rate = p / n; const cls = seqClass(rate);
+    return `<td><span class="cell ${cls}" style="background:var(--${cls.split(' ')[0]})" data-model="${esc(r.model)}" data-cat="${esc(cat ?? '')}" data-p="${p}" data-n="${n}">${Math.round(rate * 100)}</span></td>`;
+  }
+  function showCell(model, cat) {
+    const r = ranked().find(x => x.model === model); if (!r) return;
+    const ids = Object.keys(DATA.tests).filter(t => !cat || DATA.tests[t].category === cat).filter(t => r.passed_ids.includes(t) || r.failures[t]).sort();
+    const el = $('cellDetail'); el.hidden = false;
+    el.innerHTML = `<h3 style="margin:0 0 8px;font-size:15px"><code>${esc(model)}</code> · ${esc(cat || 'all categories')} <span class="muted">${ids.filter(t => r.passed_ids.includes(t)).length}/${ids.length} passed</span></h3>
+      <ul class="plain" style="font-size:13px">${ids.map(t => { const f = r.failures[t]; return `<li>${f ? '✗' : '✓'} <code>${esc(t)}</code>${f ? ` <span class="muted">— ${esc(f.reason)}${f.assertions.length ? ': ' + esc(f.assertions.join('; ')) : ''}</span>` : ''}</li>`; }).join('')}</ul>`;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  document.querySelectorAll('thead th').forEach(th => th.addEventListener('click', () => {
-    const k = th.dataset.key;
-    if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === 'model' || k === 'suite' || k === 'submitted_by' || k === 'scoring_version') ? 1 : -1; }
-    render();
-  }));
-  ['suiteFilter', 'scoringFilter', 'allRuns', 'search'].forEach(id => document.getElementById(id).addEventListener('input', render));
+  // ---------- score vs cost ----------
+  function renderScatter() {
+    const rows = ranked();
+    const pts = rows.filter(r => r.cost_usd.total != null && r.scores.overall != null);
+    const svg = $('scatter'); const W = svg.clientWidth || 800, H = svg.clientHeight || 360; const m = { t: 16, r: 24, b: 44, l: 52 };
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    if (pts.length < 1) { svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle">No runs with cost estimates in this group.</text>`; return; }
+    const costs = pts.map(p => p.cost_usd.total);
+    const lo = Math.pow(10, Math.floor(Math.log10(Math.min(...costs)))), hi = Math.pow(10, Math.ceil(Math.log10(Math.max(...costs))));
+    const x = (c) => m.l + (Math.log10(c) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo) || 1) * (W - m.l - m.r);
+    const y = (s) => m.t + (1 - s) * (H - m.t - m.b);
+    let xt = []; for (let v = lo; v <= hi * 1.0001; v *= 10) xt.push(v);
+    const yt = [0, .2, .4, .6, .8, 1];
+    const q = $('search').value.trim().toLowerCase();
+    svg.innerHTML = `
+      <g class="grid">${yt.map(v => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>`).join('')}</g>
+      <g class="axis"><line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}"/><line x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${y(0)}"/></g>
+      ${yt.map(v => `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v * 100}%</text>`).join('')}
+      ${xt.map(v => `<text x="${x(v)}" y="${H - m.b + 18}" text-anchor="middle">$${v}</text>`).join('')}
+      <text x="${(m.l + W - m.r) / 2}" y="${H - 6}" text-anchor="middle">estimated cost of the full run (log)</text>
+      ${pts.map(p => `<circle class="dot ${q && !p.model.toLowerCase().includes(q) ? 'dim' : ''}" r="6" cx="${x(p.cost_usd.total)}" cy="${y(p.scores.overall)}" data-i="${rows.indexOf(p)}"/>`).join('')}
+      ${pts.map(p => `<text class="lbl" x="${x(p.cost_usd.total) + 10}" y="${y(p.scores.overall) + 4}">${esc(p.model)}</text>`).join('')}`;
+    svg.querySelectorAll('.dot').forEach(d => {
+      const p = rows[+d.dataset.i];
+      d.addEventListener('mousemove', e => showTip(e, `${p.model}\noverall ${pct(p.scores.overall)} · ${usd(p.cost_usd.total)} per run\n${usd(p.cost_usd.per_pass)} per passed test · p50 ${ms(p.latency_ms.p50)}`));
+      d.addEventListener('mouseleave', hideTip);
+    });
+    document.querySelector('#costTable tbody').innerHTML = rows.filter(searchHit).map(r => `<tr><td class="left model">${esc(r.model)}</td><td>${pct(r.scores.overall)}</td><td>${usd(r.cost_usd.total)}</td><td>${usd(r.cost_usd.per_pass)}</td><td>${r.cost_usd.total ? (r.tests.passed / r.cost_usd.total).toFixed(1) : '—'}</td><td>${num(r.tokens.completion_p50)}</td><td>${ms(r.latency_ms.p50)}</td></tr>`).join('');
+  }
 
-  async function loadBoard() {
-    let lastErr = null;
-    for (const [repo, ref] of SOURCES) {
-      REPO = repo; REF = ref;
-      try { runs = await loadFolder(REF, { noCache: true }); lastErr = null; break; } catch (e) { lastErr = e; }
-    }
-    if (lastErr) {
-      tbody.innerHTML = `<tr><td colspan="13" class="status err">Could not list ${esc(DIR)} in ${esc(SOURCES.map(s => s.join('@')).join(' or '))}<br>${esc(lastErr.message)}</td></tr>`;
-      return;
-    }
-    setLinks();
-    render();
-    attribute(runs).then(render);
-    for (const [id, key] of [['suiteFilter', 'suite'], ['scoringFilter', 'scoring_version']]) {
-      const sel = document.getElementById(id);
-      [...new Set(runs.map(r => r[key] ?? '—'))].sort().forEach(v => sel.insertAdjacentHTML('beforeend', `<option value="${esc(v)}">${esc(v)}</option>`));
-    }
-    render();
+  // ---------- head to head ----------
+  function renderH2H() {
+    const rows = ranked();
+    const a = $('h2hA'), b = $('h2hB');
+    const prevA = a.value, prevB = b.value;
+    const opts = rows.map(r => `<option value="${esc(r.model)}">${esc(r.model)} (${pct(r.scores.overall, 0)})</option>`).join('');
+    a.innerHTML = opts; b.innerHTML = opts;
+    a.value = rows.some(r => r.model === prevA) ? prevA : rows[0]?.model; b.value = rows.some(r => r.model === prevB) && prevB !== a.value ? prevB : (rows[1] || rows[0])?.model;
+    if (!h2hInit) { a.addEventListener('change', renderH2H); b.addEventListener('change', renderH2H); h2hInit = true; }
+    const A = rows.find(r => r.model === a.value), B = rows.find(r => r.model === b.value);
+    const box = $('h2h');
+    if (!A || !B) { box.innerHTML = '<div class="card pad status">Need two models in this group.</div>'; $('h2hSummary').textContent = ''; return; }
+    const ids = Object.keys(DATA.tests).filter(t => (A.passed_ids.includes(t) || A.failures[t]) && (B.passed_ids.includes(t) || B.failures[t]));
+    const onlyA = ids.filter(t => A.failures[t] && !B.failures[t]), onlyB = ids.filter(t => B.failures[t] && !A.failures[t]), both = ids.filter(t => A.failures[t] && B.failures[t]);
+    const d = (A.scores.overall - B.scores.overall) * 100;
+    $('h2hSummary').innerHTML = `${ids.length} shared tests · <code>${esc(A.model)}</code> ${d >= 0 ? '+' : ''}${d.toFixed(1)} pts · ${A.cost_usd.total && B.cost_usd.total ? (A.cost_usd.total / B.cost_usd.total).toFixed(1) + '× the cost' : ''}`;
+    const list = (ts, who) => ts.length ? `<ul>${ts.map(t => { const f = who?.failures[t]; return `<li><code>${esc(t)}</code> <span class="muted">${esc(DATA.tests[t]?.category)}</span>${f?.assertions?.length ? `<div class="why">${esc(f.assertions[0])}</div>` : ''}</li>`; }).join('')}</ul>` : '<p class="muted">None</p>';
+    box.innerHTML = `
+      <div class="card pad"><h3>Only <code>${esc(A.model)}</code> fails<span class="pill">${onlyA.length}</span></h3>${list(onlyA, A)}</div>
+      <div class="card pad"><h3>Only <code>${esc(B.model)}</code> fails<span class="pill">${onlyB.length}</span></h3>${list(onlyB, B)}</div>
+      <div class="card pad"><h3>Both fail<span class="pill">${both.length}</span></h3>${list(both, A)}</div>`;
+  }
+
+  // ---------- hardest ----------
+  function hardestRows(rows) {
+    const fails = {};
+    for (const r of rows) for (const [t, f] of Object.entries(r.failures)) (fails[t] ||= { models: [], why: new Set() }).models.push(r.model), f.assertions.forEach(a => fails[t].why.add(a));
+    return Object.entries(fails).map(([t, v]) => ({ t, fails: v.models.length, models: v.models, why: [...v.why], ...DATA.tests[t] })).sort((a, b) => b.fails - a.fails || a.t.localeCompare(b.t));
+  }
+  function renderHardest() {
+    const rows = ranked();
+    const hard = hardestRows(rows).filter(h => h.fails > 0);
+    document.querySelector('#hardest tbody').innerHTML = hard.length ? hard.slice(0, 80).map(h => `<tr>
+      <td class="left"><code>${esc(h.t)}</code></td><td class="left">${esc(h.category)}</td>
+      <td><strong>${h.fails}</strong>/${rows.length}${h.fails === rows.length && rows.length > 1 ? '<span class="tag">all</span>' : ''}</td>
+      <td class="left" style="white-space:normal;max-width:260px">${h.models.map(m => `<code>${esc(m)}</code>`).join(', ')}</td>
+      <td class="left" style="white-space:normal;max-width:360px">${esc(h.why.slice(0, 2).join('; ') || '—')}</td>
+      <td class="left" style="white-space:normal;max-width:300px">${(h.source_refs || []).slice(0, 3).map(s => `<code>${esc(s.replace(/^src\//, ''))}</code>`).join('<br>')}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="status">No failures in this group.</td></tr>';
   }
 
   // ---------- history ----------
-  let commits = null, histLoading = false, histRendered = false;
-  const commitsEl = document.getElementById('commits');
-  const diffEl = document.getElementById('diff');
-
-  async function loadHistory() {
-    if (histRendered || histLoading) return;
-    histLoading = true;
-    try {
-      commits = commits || await getJSON(commitsUrl());
-      histRendered = true;
-      if (!commits.length) { commitsEl.innerHTML = '<div class="status">No commits found for this folder on this ref.</div>'; return; }
-      commitsEl.innerHTML = commits.map((c, i) => `
-        <div class="commit" data-i="${i}">
-          <div class="msg" title="${esc(c.commit.message)}">${esc(c.commit.message.split('\n')[0])}</div>
-          <div class="meta">
-            ${c.author?.avatar_url ? `<img src="${esc(c.author.avatar_url)}&s=32" alt="">` : ''}
-            <span>${esc(c.author?.login || c.commit.author.name)}</span>
-            <span>${esc(c.commit.author.date.slice(0, 10))}</span>
-            <a href="${esc(c.html_url)}" rel="noopener" target="_blank" onclick="event.stopPropagation()"><code>${c.sha.slice(0, 7)}</code></a>
-          </div>
-        </div>`).join('');
-      commitsEl.querySelectorAll('.commit').forEach(el => el.addEventListener('click', () => showDiff(+el.dataset.i, +el.dataset.i + 1)));
-      showDiff(0, 1);
-    } catch (e) {
-      commitsEl.innerHTML = `<div class="status err">Could not load commit history.<br>${esc(e.message)}</div>`;
-    } finally { histLoading = false; }
+  function renderHistory() {
+    const H = DATA.history; const el = $('commits');
+    if (!H.length) { el.innerHTML = '<div class="status">No commits recorded in the data file.</div>'; return; }
+    if (el.dataset.done) return; el.dataset.done = '1';
+    el.innerHTML = H.map((c, i) => `<div class="commit" data-i="${i}">
+      <div class="msg" title="${esc(c.message)}">${esc(c.message.split('\n')[0])}</div>
+      <div class="meta"><span>${esc(c.author)}</span><span>${esc(c.date.slice(0, 10))}</span><a href="${esc(commitUrl(c.sha))}" rel="noopener" target="_blank" onclick="event.stopPropagation()"><code>${esc(c.short)}</code></a><span>${c.added.length ? `+${c.added.length} ` : ''}${c.removed.length ? `−${c.removed.length} ` : ''}${c.modified.length ? `~${c.modified.length}` : ''}</span></div></div>`).join('');
+    el.querySelectorAll('.commit').forEach(d => d.addEventListener('click', () => showCommit(+d.dataset.i)));
+    showCommit(0);
+  }
+  function showCommit(i) {
+    const H = DATA.history; const c = H[i]; const prev = H[i + 1];
+    document.querySelectorAll('.commit').forEach(d => d.classList.toggle('active', +d.dataset.i === i));
+    const latest = (snap) => { const m = new Map(); for (const s of snap) { const ts = (s.file.match(/results_(\d{8}_\d{6})/) || [])[1] || ''; if (!m.has(s.model) || ts > m.get(s.model).ts) m.set(s.model, { ...s, ts }); } return m; };
+    const A = latest(c.snapshot), B = latest(prev ? prev.snapshot : []);
+    const added = [...A.keys()].filter(k => !B.has(k)), removed = [...B.keys()].filter(k => !A.has(k));
+    const changed = [...A.keys()].filter(k => B.has(k) && (A.get(k).overall !== B.get(k).overall || A.get(k).file !== B.get(k).file));
+    const row = (s) => `<li><code>${esc(s.model)}</code> <span class="muted">${esc(s.suite)} · ${esc(s.file)}</span> — ${pct(s.overall)} <span class="muted">(${s.passed}/${s.total})</span></li>`;
+    $('diff').innerHTML = `
+      <p style="margin:0 0 4px;white-space:pre-wrap"><strong>${esc(c.message.split('\n')[0])}</strong>${c.message.includes('\n') ? '\n' + esc(c.message.split('\n').slice(1).join('\n').trim()) : ''}</p>
+      <p class="sub" style="margin:0 0 10px">${esc(c.author)} · ${esc(c.date.replace('T', ' ').slice(0, 16))} · <a href="${esc(commitUrl(c.sha))}" rel="noopener" target="_blank"><code>${esc(c.short)}</code></a> · files: ${[...c.added.map(f => '+' + f), ...c.removed.map(f => '−' + f), ...c.modified.map(f => '~' + f)].map(esc).join(', ') || 'none'}</p>
+      <p class="sub">${A.size} models after this commit, ${B.size} before.</p>
+      <h3>Models added<span class="pill">${added.length}</span></h3>${added.length ? `<ul class="plain">${added.map(k => row(A.get(k))).join('')}</ul>` : '<p class="muted">None</p>'}
+      <h3>Models removed<span class="pill">${removed.length}</span></h3>${removed.length ? `<ul class="plain">${removed.map(k => row(B.get(k))).join('')}</ul>` : '<p class="muted">None</p>'}
+      <h3>Latest run changed<span class="pill">${changed.length}</span></h3>${changed.length ? `<ul class="plain">${changed.map(k => { const a = A.get(k), b = B.get(k); const d = (a.overall - b.overall) * 100; return `<li><code>${esc(k)}</code>: ${pct(b.overall)} → <span class="${d >= 0 ? 'up' : 'down'}">${pct(a.overall)} (${d >= 0 ? '+' : ''}${d.toFixed(1)})</span> <span class="muted">${esc(b.file)} → ${esc(a.file)}</span></li>`; }).join('')}</ul>` : '<p class="muted">None</p>'}`;
   }
 
-  async function folderAt(i) {
-    if (i >= commits.length) return [];
-    try { return await loadFolder(commits[i].sha); }
-    catch (e) { if (/404/.test(e.message)) return []; throw e; }
+  // ---------- boot ----------
+  function renderAll() {
+    const tab = document.querySelector('.tabs button[aria-selected="true"]').dataset.tab;
+    ({ board: renderBoard, categories: renderHeatmap, cost: renderScatter, h2h: renderH2H, hardest: renderHardest, history: renderHistory })[tab]();
   }
-
-  function label(i) {
-    if (i >= commits.length) return 'before first commit (empty)';
-    const c = commits[i];
-    return `${c.sha.slice(0, 7)} · ${c.commit.author.date.slice(0, 10)} · ${c.author?.login || c.commit.author.name}`;
+  function fillGroupFilters() {
+    const groups = {};
+    for (const r of DATA.runs) (groups[r.suite ?? '—'] ||= new Set()).add(r.scoring_version ?? '—');
+    const suites = Object.keys(groups).sort();
+    const pick = (sel, values, prefer) => { sel.innerHTML = values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''); sel.value = values.includes(prefer) ? prefer : values[0]; };
+    // default: the group with the most models
+    const count = (s, v) => latestByModel(DATA.runs.filter(r => (r.suite ?? '—') === s && (r.scoring_version ?? '—') === v)).length;
+    let best = null; for (const s of suites) for (const v of groups[s]) if (!best || count(s, v) > count(...best)) best = [s, v];
+    pick($('suiteFilter'), suites, best?.[0]);
+    const refreshScoring = () => pick($('scoringFilter'), [...(groups[suite()] || [])].sort().reverse(), best?.[1]);
+    refreshScoring();
+    $('suiteFilter').addEventListener('change', () => { refreshScoring(); renderAll(); });
+    ['scoringFilter', 'allRuns', 'search'].forEach(id => $(id).addEventListener('input', renderAll));
   }
-
-  async function showDiff(newer, older) {
-    commitsEl.querySelectorAll('.commit').forEach(el => el.classList.toggle('active', +el.dataset.i === newer));
-    diffEl.innerHTML = '<div class="status">Loading versions…</div>';
-    try {
-      const [a, b] = await Promise.all([folderAt(newer), folderAt(older)]);
-      const A = new Map(latestByModel(a).map(r => [r.model, r]));
-      const B = new Map(latestByModel(b).map(r => [r.model, r]));
-      const added = [...A.keys()].filter(k => !B.has(k)).map(k => A.get(k));
-      const removed = [...B.keys()].filter(k => !A.has(k)).map(k => B.get(k));
-      const changed = [];
-      const fields = ['scores.overall', 'scores.execution_pass_rate', 'scores.runtime', 'scores.static_policy_pass_rate', 'scores.correctness', 'tests.passed', 'tests.total', 'errored', 'usage.median_latency_ms', 'usage.estimated_cost_usd', 'suite', 'scoring_version', 'run_date', 'file'];
-      for (const [k, ra] of A) {
-        const rb = B.get(k); if (!rb) continue;
-        const diffs = fields.filter(f => JSON.stringify(get(ra, f) ?? null) !== JSON.stringify(get(rb, f) ?? null));
-        if (diffs.length) changed.push({ r: ra, old: rb, diffs });
-      }
-      const opts = (sel) => commits.map((c, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(label(i))}</option>`).join('') + `<option value="${commits.length}" ${sel >= commits.length ? 'selected' : ''}>(empty)</option>`;
-      const fmt = (f, v) => f.startsWith('scores.') ? pct(v) : f === 'usage.median_latency_ms' ? ms(v) : f === 'usage.estimated_cost_usd' ? usd(v) : esc(v ?? '—');
-      const row = (r) => `<li><code>${esc(r.model)}</code> <span class="muted">${esc(r.suite ?? '—')} · ${esc(r.run_date ?? '—')} · ${esc(r.file)}</span> — overall <strong>${pct(r.scores?.overall)}</strong></li>`;
-      const msg = newer < commits.length ? commits[newer].commit.message : '';
-      diffEl.innerHTML = `
-        <div class="cmp">
-          <label>Compare <select id="selNew">${opts(newer)}</select></label>
-          <span>with</span>
-          <label><select id="selOld">${opts(older)}</select></label>
-        </div>
-        ${msg ? `<p class="muted" style="margin:0 0 10px;white-space:pre-wrap">${esc(msg)}</p>` : ''}
-        <p class="muted" style="margin:0 0 6px">${A.size} models in newer version, ${B.size} in older.</p>
-        <h3>Added<span class="pill">${added.length}</span></h3>
-        ${added.length ? `<ul class="plain">${added.map(row).join('')}</ul>` : '<p class="muted">None</p>'}
-        <h3>Removed<span class="pill">${removed.length}</span></h3>
-        ${removed.length ? `<ul class="plain">${removed.map(row).join('')}</ul>` : '<p class="muted">None</p>'}
-        <h3>Changed<span class="pill">${changed.length}</span></h3>
-        ${changed.length ? `<ul class="plain">${changed.map(({r, old, diffs}) => `<li><code>${esc(r.model)}</code> <span class="muted">${esc(r.suite ?? '—')}</span><ul class="plain">${
-          diffs.map(f => {
-            const o = get(old, f), n = get(r, f);
-            const num = typeof o === 'number' && typeof n === 'number';
-            const cls = num ? (n > o ? 'delta-up' : 'delta-down') : '';
-            return `<li>${esc(f)}: ${fmt(f, o)} → <span class="${cls}">${fmt(f, n)}</span></li>`;
-          }).join('')}</ul></li>`).join('')}</ul>` : '<p class="muted">None</p>'}`;
-      document.getElementById('selNew').addEventListener('change', e => showDiff(+e.target.value, +document.getElementById('selOld').value));
-      document.getElementById('selOld').addEventListener('change', e => showDiff(+document.getElementById('selNew').value, +e.target.value));
-    } catch (e) {
-      diffEl.innerHTML = `<div class="status err">Could not load folder versions.<br>${esc(e.message)}</div>`;
-    }
-  }
-
-  loadBoard();
+  fetch('data/leaderboard.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); }).then(d => {
+    DATA = d;
+    $('srcLine').textContent = `${d.runs.length} runs · ${Object.keys(d.tests).length} tests · data built ${d.generated_at.replace('T', ' ').slice(0, 16)} UTC${d.source_commit ? ' from ' + d.source_commit.slice(0, 7) : ''}`;
+    fillGroupFilters(); selectTab(location.hash.slice(1) || 'board', false);
+    addEventListener('resize', () => { if (!$('panel-cost').hidden) renderScatter(); });
+  }).catch(e => { document.querySelector('#board tbody').innerHTML = `<tr><td colspan="12" class="status err">Could not load data/leaderboard.json — ${esc(e.message)}</td></tr>`; $('srcLine').textContent = ''; });
 })();
 </script>
 </body>

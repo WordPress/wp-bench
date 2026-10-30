@@ -23,16 +23,31 @@ and when, is the file's git history, which the page shows as well.
    cp output/results_<timestamp>.json output/results_<timestamp>.jsonl leaderboard/results/
    ```
 
-3. Run `pytest python -k leaderboard`, commit with a message that links the
-   discussion, and open a PR.
+3. Commit the run files (the commit becomes the run's attribution on the page),
+   then rebuild the page data and commit it too:
+
+   ```sh
+   python3 leaderboard/site/build_data.py
+   ```
+
+4. Run `pytest python -k leaderboard` and open a PR linking the discussion.
 
 ## Leaderboard page
 
-`site/index.html` is the static leaderboard page, hosted on Spacefast at
+`site/` is the static leaderboard page, hosted on Spacefast at
 https://wpbench-leaderboard.space.fast/ and deployed from this folder through the
-Space's Git connection. It has no build step or backend: it lists `results/` through
-the GitHub contents API, reads each run's `metadata`, and attributes each run to
-the commit that added it. The History tab walks the commits that touched the folder
-and diffs the leaderboard between any two of them. The data source defaults to
-`WordPress/wp-bench@trunk` and falls back to the PR branch while it is open;
-override with `?repo=owner/name&ref=branch`.
+Space's Git connection.
+
+- `site/build_data.py` reads every run in `results/` plus `git log` and writes
+  `site/data/leaderboard.json`: per-run scores, usage, latency/cost/token
+  percentiles, per-category pass counts, passed test ids, failure details
+  (failing assertion descriptions), the commit that published each file, and the
+  folder's commit history with a score snapshot per commit. It is committed so
+  the page needs no API calls and no multi-megabyte downloads.
+- `site/index.html` renders that file: leaderboard (latest run per model, with
+  confidence intervals, cost per run and per passed test, tokens, latency),
+  category heatmap, score-vs-cost chart, head-to-head comparison of two models,
+  hardest tests across models, and the folder history with per-commit diffs.
+  Rows of a different suite or scoring version than the selected one are greyed
+  out, never ranked together.
+- `pytest python -k leaderboard` fails when the data file is stale.
