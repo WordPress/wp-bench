@@ -39,15 +39,5 @@
       "overall": 0.757
     }
   },
-  "submission": {
-    "submitted_by": "fellyph",
-    "source": "https://github.com/WordPress/wp-bench/issues/5#issuecomment-5573990531",
-    "run_date": null,
-    "reported_at": "2026-09-07",
-    "tests": {
-      "passed": null,
-      "total": null
-    },
-    "notes": "Execution-only metrics (execution pass / runtime partial). Suite and test count not stated in source."
-  }
+  "results": []
 }

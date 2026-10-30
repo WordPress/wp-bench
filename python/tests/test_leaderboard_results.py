@@ -1,4 +1,4 @@
-"""Shape checks for the per-model leaderboard files."""
+"""Shape checks for the per-model leaderboard files (single-model harness output)."""
 
 from __future__ import annotations
 
@@ -8,15 +8,14 @@ from pathlib import Path
 import pytest
 
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "leaderboard" / "results"
-SCORE_KEYS = {"correctness", "execution_pass_rate", "runtime", "overall"}
-SUBMISSION_KEYS = {
-    "submitted_by",
-    "source",
-    "run_date",
-    "reported_at",
-    "tests",
-    "notes",
+SCORE_KEYS = {
+    "correctness",
+    "execution_pass_rate",
+    "runtime",
+    "static_policy_pass_rate",
+    "overall",
 }
+USAGE_KEYS = {"estimated_cost_usd", "median_latency_ms"}
 
 
 def result_files() -> list[Path]:
@@ -28,17 +27,21 @@ def test_results_folder_is_not_empty() -> None:
 
 
 @pytest.mark.parametrize("path", result_files(), ids=lambda p: p.name)
-def test_result_file_shape(path: Path) -> None:
-    document = json.loads(path.read_text())
-    assert set(document) == {"metadata", "submission"}, (
-        f"unexpected top-level keys in {path.name}"
+def test_result_file_is_single_model_output(path: Path) -> None:
+    payload = json.loads(path.read_text())
+    assert set(payload) == {"metadata", "results"}, (
+        f"{path.name}: expected harness output shape"
     )
+    assert isinstance(payload["results"], list)
 
-    metadata = document["metadata"]
+    metadata = payload["metadata"]
     model = metadata["model"]["name"]
     assert model and isinstance(model, str)
     assert path.name == model.replace("/", "__") + ".json", (
         f"{path.name} must be named after its model id ({model})"
+    )
+    assert metadata.get("mode", "model") == "model", (
+        f"{path.name}: reference runs are not entries"
     )
     assert SCORE_KEYS <= set(metadata["scores"]), f"{path.name} is missing score keys"
     for key, value in metadata["scores"].items():
@@ -49,16 +52,8 @@ def test_result_file_shape(path: Path) -> None:
     assert metadata["scores"]["overall"] is not None, (
         f"{path.name} has no overall score"
     )
-    assert {"median_latency_ms", "estimated_cost_usd"} <= set(metadata["usage"])
-
-    submission = document["submission"]
-    assert set(submission) == SUBMISSION_KEYS, (
-        f"unexpected submission keys in {path.name}"
-    )
-    assert submission["submitted_by"] and isinstance(submission["submitted_by"], str)
-    assert submission["source"].startswith("https://github.com/WordPress/wp-bench/")
-    assert (
-        isinstance(submission["reported_at"], str)
-        and len(submission["reported_at"]) == 10
-    )
-    assert set(submission["tests"]) == {"passed", "total"}
+    assert USAGE_KEYS <= set(metadata["usage"]), f"{path.name} is missing usage keys"
+    for record in payload["results"]:
+        assert record["model"]["name"] == model, (
+            f"{path.name}: record for another model"
+        )

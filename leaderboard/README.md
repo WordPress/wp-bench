@@ -2,70 +2,44 @@
 
 `results/` holds one JSON file per benchmarked model, named after the LiteLLM
 model id with `/` replaced by `__` (`gemini/gemini-3-flash-preview` →
-`results/gemini__gemini-3-flash-preview.json`). The leaderboard page lists this
-folder straight from GitHub, and the folder's git history is the change log:
-re-running a model overwrites its file, so `git log -- leaderboard/results` shows
-who changed which score, and when.
+`results/gemini__gemini-3-flash-preview.json`). Each file is the harness output
+of that model's run, exactly as `wp-bench run` writes `output/results_<timestamp>.json`
+for a single-model run: a `metadata` block (suite, model config, grader, dataset,
+scoring version, usage, scores, selected and errored test ids) and the per-test
+`results` records.
+
+Who ran a model, and when, is the git history: re-running a model overwrites its
+file, so `git log -- leaderboard/results` (and the leaderboard page's History tab)
+shows every change with its author, date and commit message. Put the context a
+reader needs — run date, link to the discussion, caveats — in the commit message.
 
 The initial files were seeded from the tables in
-[issue #5](https://github.com/WordPress/wp-bench/issues/5); fields the source did
-not state are `null`.
+[issue #5](https://github.com/WordPress/wp-bench/issues/5). They keep the harness
+key set with everything the tables did not state set to `null`, an empty `results`
+array, and (for the oldest rows) a legacy `scores.knowledge` value from the retired
+knowledge track, which the page flags as not comparable with execution-only runs.
 
-## File shape
-
-```json
-{
-  "metadata": { ... },      // the "metadata" object from output/results_<timestamp>.json, minus "results"
-  "submission": {
-    "submitted_by": "github-login",
-    "source": "https://github.com/WordPress/wp-bench/...",
-    "run_date": "2026-09-23",
-    "reported_at": "2026-10-02",
-    "tests": { "passed": 152, "total": 185 },
-    "notes": null
-  }
-}
-```
-
-`metadata` is the harness run metadata exactly as `wp-bench run` writes it
-(suite, model config, grader, dataset, scoring version, usage, scores, selected
-and errored test ids), with the per-test `results` array dropped. The leaderboard
-reads these keys from it:
-
-| Key | Meaning |
-| --- | --- |
-| `model.name` | Model id; must match the file name. |
-| `suite` | Dataset suite (`wp-core-v1`, `wp-cli-v1`, ...), or `null` when unknown. |
-| `scoring_version` | `SCORING_VERSION` at run time. Only compare files with the same value. Legacy knowledge-era rows carry `scores.knowledge` and are flagged on the page. |
-| `scores` | 0–1 fractions: `execution_pass_rate`, `runtime`, `correctness`, `static_policy_pass_rate`, `overall` (and legacy `knowledge`). |
-| `usage.median_latency_ms`, `usage.estimated_cost_usd` | Run-level usage; cost is an estimate, not billing truth. |
-
-`submission` is written by the person publishing the run: GitHub login, URL of
-the issue/PR/comment with the numbers, dates (ISO `YYYY-MM-DD`), pass counts and
-caveats.
-
-## Adding or updating a run
+## Adding or updating a model
 
 1. Check the model does not already have a file (see `AGENTS.md`, "Leaderboard
    results").
-2. Build the file from the run output. Single- and multi-model outputs both work;
-   one file is written per model:
+2. Copy the run output into place. Single- and multi-model outputs both work; one
+   file is written per model (multi-model runs are split into single-model payloads):
 
    ```sh
-   python leaderboard/build_entry.py output/results_<timestamp>.json \
-     --submitted-by <github-login> --source <url of the PR or issue comment>
+   python leaderboard/build_entry.py output/results_<timestamp>.json
    ```
 
-   `--run-date` defaults to the timestamp in the file name; add `--notes` for
-   caveats.
-3. Run `pytest python -k leaderboard` and open a PR linking to the run output.
+3. Run `pytest python -k leaderboard`, commit with a message that says when the run
+   happened and links the discussion, and open a PR.
 
 ## Leaderboard page
 
 `site/index.html` is the static leaderboard page, hosted on Spacefast at
 https://wpbench-leaderboard.space.fast/ and deployed from this folder through the
 Space's Git connection. It has no build step or backend: it lists `results/`
-through the GitHub contents API, and its History tab walks the commits that
-touched the folder and diffs any two versions. The data source defaults to
+through the GitHub contents API, reads each file's `metadata`, and attributes each
+row to the last commit that touched its file. The History tab walks the commits
+that touched the folder and diffs any two versions. The data source defaults to
 `WordPress/wp-bench@trunk` and falls back to the PR branch while it is open;
 override with `?repo=owner/name&ref=branch`.

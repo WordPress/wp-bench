@@ -89,7 +89,7 @@
 <div class="wrap">
   <header>
     <h1>WP-Bench Leaderboard</h1>
-    <p>Published benchmark runs from <a id="repoLink" href="#" rel="noopener">WordPress/wp-bench</a>, read live from the <code>leaderboard/results/</code> folder (one file per model).</p>
+    <p>Published benchmark runs from <a id="repoLink" href="#" rel="noopener">WordPress/wp-bench</a>, read live from the <code>leaderboard/results/</code> folder (one <code>wp-bench run</code> output per model). Who ran a model, and when, comes from the file's last commit.</p>
     <div class="src" id="srcLine"></div>
   </header>
 
@@ -109,7 +109,7 @@
         </select>
       </label>
       <label>Suite <select id="suiteFilter"><option value="all">All</option></select></label>
-      <label>Search <input type="search" id="search" placeholder="model or submitter"></label>
+      <label>Search <input type="search" id="search" placeholder="model or author"></label>
       <span class="muted" id="count"></span>
     </div>
     <div class="card table-wrap">
@@ -126,8 +126,8 @@
           <th data-key="tests.passed">Passed</th>
           <th data-key="usage.median_latency_ms">Median latency</th>
           <th data-key="usage.estimated_cost_usd">Est. cost</th>
-          <th data-key="date">Run date</th>
-          <th data-key="submitted_by" class="left">By</th>
+          <th data-key="date">Updated</th>
+          <th data-key="submitted_by" class="left">By (last commit)</th>
         </tr></thead>
         <tbody><tr><td colspan="13" class="status">Loading…</td></tr></tbody>
       </table>
@@ -144,7 +144,7 @@
 
   <footer>
     Data: <a id="rawLink" href="#" rel="noopener">results folder</a> · <a id="histLink" href="#" rel="noopener">file history on GitHub</a> ·
-    Override the source with <code>?repo=owner/name&amp;ref=branch</code>. GitHub's unauthenticated API allows 60 requests/hour (one call per folder listing); responses are cached for this browser session.
+    Override the source with <code>?repo=owner/name&amp;ref=branch</code>. GitHub's unauthenticated API allows 60 requests/hour (one call per folder listing, plus one per commit for attribution); responses are cached for this browser session.
   </footer>
 </div>
 
@@ -195,22 +195,48 @@
     return docs.filter(Boolean).map(({ file, doc }) => toRow(file, doc)).filter(Boolean);
   }
 
-  /** Normalise one per-model file (harness metadata + submission) into a flat row. */
+  /** Normalise one per-model file (a single-model `wp-bench run` output) into a flat row. */
   function toRow(file, doc) {
-    const md = doc.metadata || doc; const sub = doc.submission || {};
-    const model = md.model?.name || md.model || file.replace(/\.json$/, '').replace(/__/g, '/');
+    const md = doc.metadata || {};
+    const records = Array.isArray(doc.results) ? doc.results : [];
+    const model = md.model?.name || file.replace(/\.json$/, '').replace(/__/g, '/');
     if (!md.scores) return null;
+    const ids = Array.isArray(md.selected_test_ids) ? md.selected_test_ids : null;
+    // Seeded rows carry a placeholder id like "<185 tests, ids not published>".
+    const placeholder = ids && ids.length === 1 && /^<(\d+) tests/.exec(ids[0]);
+    const total = records.length || (placeholder ? +placeholder[1] : ids ? ids.length : null);
+    const passed = records.length
+      ? records.filter(r => r.scores?.execution_pass).length
+      : (total != null && md.scores.execution_pass_rate != null ? Math.round(md.scores.execution_pass_rate * total) : null);
     return {
       file, model: String(model), suite: md.suite ?? null, scoring_version: md.scoring_version ?? null,
-      scores: md.scores, usage: md.usage || {},
-      // Pass counts come from the submission; fall back to the harness test-id list.
-      tests: sub.tests || (Array.isArray(md.selected_test_ids) ? {
-        total: md.selected_test_ids.length,
-        passed: md.scores.execution_pass_rate == null ? null : Math.round(md.scores.execution_pass_rate * md.selected_test_ids.length),
-      } : {}),
-      submitted_by: sub.submitted_by || '—', source: sub.source || `https://github.com/${REPO}/blob/${REF}/${DIR}/${file}`,
-      run_date: sub.run_date ?? null, reported_at: sub.reported_at ?? null, notes: sub.notes ?? null,
+      scores: md.scores, usage: md.usage || {}, tests: { passed, total },
+      errored: Array.isArray(md.errored_test_ids) ? md.errored_test_ids.length : 0,
+      // Filled in from the folder's commit history (see attribute()).
+      submitted_by: '—', source: `https://github.com/${REPO}/blob/${REF}/${DIR}/${file}`, commit_date: null,
     };
+  }
+
+  /** Attribute each row to the last commit that touched its file: newest commit first, stop once every file is covered. */
+  async function attribute(rows) {
+    let list;
+    try { list = await getJSON(commitsUrl()); } catch (e) { console.warn('no commit history', e); return; }
+    commits = commits || list;
+    const pending = new Map(rows.map(r => [`${DIR}/${r.file}`, r]));
+    for (const c of list) {
+      if (!pending.size) break;
+      let detail;
+      try { detail = await getJSON(`https://api.github.com/repos/${REPO}/commits/${c.sha}`); } catch (e) { console.warn(e); break; }
+      for (const f of detail.files || []) {
+        const r = pending.get(f.filename) || (f.previous_filename && pending.get(f.previous_filename));
+        if (!r) continue;
+        r.submitted_by = c.author?.login || c.commit.author.name;
+        r.commit_date = c.commit.author.date.slice(0, 10);
+        r.source = c.html_url;
+        r.commit_message = c.commit.message;
+        pending.delete(f.filename);
+      }
+    }
   }
 
   // ---------- helpers ----------
@@ -219,7 +245,7 @@
   const ms = (v) => v == null ? '—' : Math.round(v).toLocaleString() + ' ms';
   const usd = (v) => v == null ? '—' : '$' + v.toFixed(v < 1 ? 4 : 2);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const runDate = (r) => r.run_date || r.reported_at || '';
+  const runDate = (r) => r.commit_date || '';
   const isKnowledgeEra = (r) => r.scores && r.scores.knowledge != null;
 
   // ---------- tabs ----------
@@ -259,7 +285,7 @@
     });
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="13" class="status">No models match.</td></tr>'; return; }
     tbody.innerHTML = rows.map(r => `
-      <tr title="${esc(r.notes || '')}">
+      <tr title="${esc(r.commit_message || '')}">
         <td class="rank">${r.rank}</td>
         <td class="model"><a href="https://github.com/${esc(REPO)}/blob/${esc(REF)}/${DIR}/${esc(r.file)}" rel="noopener" target="_blank" style="color:inherit;text-decoration:none">${esc(r.model)}</a>${isKnowledgeEra(r) ? '<span class="tag">knowledge era</span>' : ''}</td>
         <td>${esc(r.suite ?? '—')}</td>
@@ -268,10 +294,10 @@
         <td>${pct(r.scores.runtime)}</td>
         <td>${pct(r.scores.knowledge)}</td>
         <td>${pct(r.scores.correctness)}</td>
-        <td>${r.tests?.passed != null ? `${r.tests.passed}/${r.tests.total ?? '?'}` : (r.tests?.total != null ? `${r.tests.total} tests` : '—')}</td>
+        <td>${r.tests.passed != null ? `${r.tests.passed}/${r.tests.total ?? '?'}` : (r.tests.total != null ? `${r.tests.total} tests` : '—')}${r.errored ? `<span class="tag" title="${r.errored} tests errored">${r.errored} err</span>` : ''}</td>
         <td>${ms(r.usage?.median_latency_ms)}</td>
         <td>${usd(r.usage?.estimated_cost_usd)}</td>
-        <td>${esc(runDate(r)) || '—'}${r.run_date || !r.reported_at ? '' : '<span class="muted" title="run date unknown; shows report date">*</span>'}</td>
+        <td>${esc(runDate(r)) || '—'}</td>
         <td class="left"><a href="${esc(r.source)}" rel="noopener" target="_blank">${esc(r.submitted_by)}</a></td>
       </tr>`).join('');
   }
@@ -294,6 +320,8 @@
       return;
     }
     setLinks();
+    render();
+    attribute(runs).then(render);
     const suites = [...new Set(runs.map(r => r.suite ?? '—'))].sort();
     const sel = document.getElementById('suiteFilter');
     suites.forEach(s => sel.insertAdjacentHTML('beforeend', `<option value="${esc(s)}">${esc(s)}</option>`));
@@ -301,15 +329,16 @@
   }
 
   // ---------- history ----------
-  let commits = null, histLoading = false;
+  let commits = null, histLoading = false, histRendered = false;
   const commitsEl = document.getElementById('commits');
   const diffEl = document.getElementById('diff');
 
   async function loadHistory() {
-    if (commits || histLoading) return;
+    if (histRendered || histLoading) return;
     histLoading = true;
     try {
-      commits = await getJSON(commitsUrl());
+      commits = commits || await getJSON(commitsUrl());
+      histRendered = true;
       if (!commits.length) { commitsEl.innerHTML = '<div class="status">No commits found for this folder on this ref.</div>'; return; }
       commitsEl.innerHTML = commits.map((c, i) => `
         <div class="commit" data-i="${i}">
@@ -350,7 +379,7 @@
       const added = [...A.keys()].filter(k => !B.has(k)).map(k => A.get(k));
       const removed = [...B.keys()].filter(k => !A.has(k)).map(k => B.get(k));
       const changed = [];
-      const fields = ['scores.overall', 'scores.execution_pass_rate', 'scores.runtime', 'scores.knowledge', 'scores.correctness', 'tests.passed', 'tests.total', 'usage.median_latency_ms', 'usage.estimated_cost_usd', 'suite', 'scoring_version', 'run_date', 'submitted_by', 'notes'];
+      const fields = ['scores.overall', 'scores.execution_pass_rate', 'scores.runtime', 'scores.static_policy_pass_rate', 'scores.knowledge', 'scores.correctness', 'tests.passed', 'tests.total', 'errored', 'usage.median_latency_ms', 'usage.estimated_cost_usd', 'suite', 'scoring_version'];
       for (const [k, ra] of A) {
         const rb = B.get(k); if (!rb) continue;
         const diffs = fields.filter(f => JSON.stringify(get(ra, f) ?? null) !== JSON.stringify(get(rb, f) ?? null));
@@ -358,7 +387,7 @@
       }
       const opts = (sel) => commits.map((c, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(label(i))}</option>`).join('') + `<option value="${commits.length}" ${sel >= commits.length ? 'selected' : ''}>(empty)</option>`;
       const fmt = (f, v) => f.startsWith('scores.') ? pct(v) : f === 'usage.median_latency_ms' ? ms(v) : f === 'usage.estimated_cost_usd' ? usd(v) : esc(v ?? '—');
-      const row = (r) => `<li><code>${esc(r.model)}</code> <span class="muted">${esc(r.suite ?? '—')} · ${esc(runDate(r) || '—')} · ${esc(r.submitted_by)}</span> — overall <strong>${pct(r.scores?.overall)}</strong></li>`;
+      const row = (r) => `<li><code>${esc(r.model)}</code> <span class="muted">${esc(r.suite ?? '—')}</span> — overall <strong>${pct(r.scores?.overall)}</strong></li>`;
       const msg = newer < commits.length ? commits[newer].commit.message : '';
       diffEl.innerHTML = `
         <div class="cmp">

@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
-"""Turn a wp-bench ``output/results_<timestamp>.json`` into leaderboard files.
+"""Copy a wp-bench ``output/results_<timestamp>.json`` into ``leaderboard/results/``.
 
-Writes one ``leaderboard/results/<model-id>.json`` per model found in the run
-output. Both output shapes are accepted: a single-model run (``metadata`` +
-``results``) and a multi-model run (``metadata`` + ``models``). The written
-``metadata`` block is the harness metadata with the per-test ``results`` array
-dropped; for multi-model runs the per-model usage summary is rebuilt from the
-records the same way the harness does for single-model runs.
+One ``<model-id>.json`` is written per model, in the exact shape ``wp-bench run``
+writes for a single-model run (``metadata`` + per-test ``results``). A
+single-model output is copied verbatim. A multi-model output (``metadata`` +
+``models``) is split into one single-model payload per model: the shared run
+metadata plus that model's config, scores, test ids and a usage summary rebuilt
+from its records the same way the harness does. Skills variants are skipped.
 
 Example::
 
-    python leaderboard/build_entry.py output/results_20261030_180527.json \
-        --submitted-by octocat --source https://github.com/WordPress/wp-bench/pull/123
+    python leaderboard/build_entry.py output/results_20261030_180527.json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 from collections.abc import Iterator
-from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -61,15 +58,13 @@ def usage_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def iter_models(
-    payload: dict[str, Any],
-) -> Iterator[tuple[str, dict[str, Any], list[dict[str, Any]]]]:
-    """Yield (model id, metadata, records) for every leaderboard-eligible model in a run."""
+def iter_payloads(payload: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Yield (model id, single-model payload) for every leaderboard-eligible model in a run."""
     metadata = payload["metadata"]
     if "results" in payload:
         if metadata.get("mode") != "model":
             raise SystemExit("Reference-solution runs are not leaderboard entries.")
-        yield metadata["model"]["name"], metadata, payload["results"]
+        yield metadata["model"]["name"], payload
         return
     shared = {
         key: value
@@ -83,49 +78,22 @@ def iter_models(
         yield (
             entry["config"]["name"],
             {
-                **shared,
-                "mode": "model",
-                "model": entry["config"],
-                "selected_test_ids": sorted(record["test_id"] for record in records),
-                "errored_test_ids": sorted(
-                    record["test_id"] for record in records if record.get("error")
-                ),
-                "usage": usage_summary(records),
-                "scores": entry["scores"],
+                "metadata": {
+                    **shared,
+                    "mode": "model",
+                    "model": entry["config"],
+                    "selected_test_ids": sorted(
+                        record["test_id"] for record in records
+                    ),
+                    "errored_test_ids": sorted(
+                        record["test_id"] for record in records if record.get("error")
+                    ),
+                    "usage": usage_summary(records),
+                    "scores": entry["scores"],
+                },
+                "results": records,
             },
-            records,
         )
-
-
-def build_entry(
-    model: str,
-    metadata: dict[str, Any],
-    records: list[dict[str, Any]],
-    *,
-    submitted_by: str,
-    source: str,
-    run_date: str | None,
-    notes: str | None,
-) -> dict[str, Any]:
-    passed = sum(
-        1 for record in records if (record.get("scores") or {}).get("execution_pass")
-    )
-    return {
-        "metadata": {key: value for key, value in metadata.items() if key != "results"},
-        "submission": {
-            "submitted_by": submitted_by,
-            "source": source,
-            "run_date": run_date,
-            "reported_at": date.today().isoformat(),
-            "tests": {"passed": passed, "total": len(records)},
-            "notes": notes,
-        },
-    }
-
-
-def run_date_from_filename(path: Path) -> str | None:
-    match = re.search(r"results_(\d{4})(\d{2})(\d{2})_\d{6}", path.name)
-    return f"{match[1]}-{match[2]}-{match[3]}" if match else None
 
 
 def main() -> None:
@@ -135,37 +103,17 @@ def main() -> None:
     parser.add_argument(
         "results", type=Path, help="output/results_<timestamp>.json from wp-bench run"
     )
-    parser.add_argument(
-        "--submitted-by", required=True, help="GitHub login of the person who ran it"
-    )
-    parser.add_argument(
-        "--source", required=True, help="URL of the PR/issue/comment publishing the run"
-    )
-    parser.add_argument(
-        "--run-date", help="ISO date of the run (default: from the results filename)"
-    )
-    parser.add_argument("--notes", help="Caveats worth showing next to the scores")
     parser.add_argument("--output-dir", type=Path, default=RESULTS_DIR)
     args = parser.parse_args()
 
     payload = json.loads(args.results.read_text())
-    run_date = args.run_date or run_date_from_filename(args.results)
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    for model, metadata, records in iter_models(payload):
-        entry = build_entry(
-            model,
-            metadata,
-            records,
-            submitted_by=args.submitted_by,
-            source=args.source,
-            run_date=run_date,
-            notes=args.notes,
-        )
+    for model, entry in iter_payloads(payload):
         target = args.output_dir / model_filename(model)
         target.write_text(json.dumps(entry, indent=2) + "\n")
+        scores = entry["metadata"]["scores"]
         print(
-            f"{target}: overall {entry['metadata']['scores']['overall']:.1%} "
-            f"({entry['submission']['tests']['passed']}/{entry['submission']['tests']['total']})"
+            f"{target}: overall {scores['overall']:.1%} over {len(entry['results'])} tests"
         )
 
 
