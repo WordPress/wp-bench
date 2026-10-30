@@ -59,3 +59,13 @@ caveats.
    `--run-date` defaults to the timestamp in the file name; add `--notes` for
    caveats.
 3. Run `pytest python -k leaderboard` and open a PR linking to the run output.
+
+## Leaderboard page
+
+`site/index.html` is the static leaderboard page, hosted on Spacefast at
+https://wpbench-leaderboard.space.fast/ and deployed from this folder through the
+Space's Git connection. It has no build step or backend: it lists `results/`
+through the GitHub contents API, and its History tab walks the commits that
+touched the folder and diffs any two versions. The data source defaults to
+`WordPress/wp-bench@trunk` and falls back to the PR branch while it is open;
+override with `?repo=owner/name&ref=branch`.
