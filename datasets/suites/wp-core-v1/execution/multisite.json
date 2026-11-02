@@ -1,0 +1,534 @@
+{
+  "id": "wp-core-execution-v1-multisite",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "WordPress Core Execution Tests - Multisite",
+    "description": "Code generation tasks for WordPress Multisite network APIs, graded on a subdirectory multisite network",
+    "wp_version": "7.1",
+    "created_at": "2026-11-02"
+  },
+  "tests": [
+    {
+      "id": "e-multisite-001",
+      "category": "multisite",
+      "prompt": "Implement a function that saves a plugin's settings array once for the whole multisite network under the name 'wpbp_network_settings', so that every site in the network, including sites created later, reads the same settings. The function returns the settings that were saved before this call, or an empty array when nothing was saved yet.",
+      "expected_behavior": "The function reads the previous value with `get_site_option()` / `get_network_option()` and stores the new array with `update_site_option()` / `update_network_option()`, which write to the network's `sitemeta` table regardless of which site is current. Runtime validation saves once from the main site and once while switched to a sub-site, then checks the network value, that neither site gained a per-site option of that name, and that a site created afterwards reads the same settings.",
+      "requirements": [
+        "Store the settings as network-level data, not as an option of any single site",
+        "Saving must target the network even when the code runs while another site is the current site",
+        "Return the previously saved settings array, or an empty array when there were none"
+      ],
+      "test_function": "wpbp_multisite_001( array $settings ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "(update|get)_(site|network)_option",
+            "description": "Uses the network options API",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_network_settings",
+            "description": "Uses the requested setting name",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; };$GLOBALS['wpbp_ms_001_site'] = $wpbp_site( 'wpbp-settings', 'WPBP Settings Site' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_001' ) ) { return false; } $site = (int) ( $GLOBALS['wpbp_ms_001_site'] ?? 0 ); if ( $site <= 1 ) { return false; } $first = wpbp_multisite_001( array( 'mode' => 'strict', 'limit' => 5 ) ); switch_to_blog( $site ); $second = wpbp_multisite_001( array( 'mode' => 'relaxed', 'limit' => 9 ) ); restore_current_blog(); if ( array() !== $first || array( 'mode' => 'strict', 'limit' => 5 ) !== $second ) { return false; } $expected = array( 'mode' => 'relaxed', 'limit' => 9 ); if ( $expected !== get_network_option( get_current_network_id(), 'wpbp_network_settings' ) ) { return false; } if ( false !== get_blog_option( 1, 'wpbp_network_settings' ) || false !== get_blog_option( $site, 'wpbp_network_settings' ) ) { return false; } $later = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/wpbp-later/', 'title' => 'WPBP Later', 'user_id' => 1 ) ); if ( is_wp_error( $later ) ) { return false; } switch_to_blog( (int) $later ); $seen = get_site_option( 'wpbp_network_settings' ); restore_current_blog(); return $expected === $seen && 1 === get_current_blog_id() && ! ms_is_switched();",
+            "description": "Both saves land in one network option visible to every site, with no per-site copies and the previous value returned",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_001( array $settings ): array { $previous = get_site_option( 'wpbp_network_settings', array() ); update_site_option( 'wpbp_network_settings', $settings ); return is_array( $previous ) ? $previous : array(); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/option.php",
+          "src/wp-includes/ms-blogs.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_001( array $settings ): array { $previous = get_option( 'wpbp_network_settings', array() ); update_option( 'wpbp_network_settings', $settings ); return is_array( $previous ) ? $previous : array(); }",
+        "function wpbp_multisite_001( array $settings ): array { $main = get_main_site_id(); $previous = get_blog_option( $main, 'wpbp_network_settings', array() ); update_blog_option( $main, 'wpbp_network_settings', $settings ); return is_array( $previous ) ? $previous : array(); }"
+      ]
+    },
+    {
+      "id": "e-multisite-002",
+      "category": "multisite",
+      "prompt": "Implement a function that runs a callback once in the context of every live site of the multisite network (every site that is not archived, not marked as spam and not deleted) and returns the callback's return values keyed by site ID. While the callback runs, WordPress must behave as if that site were the current one, so its options, content and database tables are the ones in use. When the function returns, the caller must be back in exactly the site context it started in, even if the caller had itself switched to another site before calling.",
+      "expected_behavior": "The function lists sites with `get_sites()` filtered on `archived`, `spam` and `deleted` (IDs only), and for each one calls `switch_to_blog()`, invokes the callback, and calls `restore_current_blog()` before the next site, so the switch stack is unwound one level per switch. Runtime validation creates two live sites (one flagged mature, which is still live) plus archived, spam and deleted sites, calls the function while already switched to a sub-site, and checks the result keys, that each callback saw its own site's ID, name and options table, and that the caller's site and switch-stack depth are unchanged afterwards.",
+      "requirements": [
+        "Skip sites that are archived, flagged as spam, or deleted",
+        "Run the callback with each site as the current site",
+        "Return an array keyed by site ID whose values are the callback's return values",
+        "Leave the caller in the same site, with the same switch history, it had before the call"
+      ],
+      "test_function": "wpbp_multisite_002( callable $callback ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_sites",
+            "description": "Lists the network's sites",
+            "weight": 1
+          },
+          {
+            "pattern": "switch_to_blog",
+            "description": "Switches into each site",
+            "weight": 1
+          },
+          {
+            "pattern": "restore_current_blog",
+            "description": "Restores the previous site",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $ids = array( 'live' => $wpbp_site( 'wpbp-live', 'WPBP Live' ), 'mature' => $wpbp_site( 'wpbp-mature', 'WPBP Mature' ), 'archived' => $wpbp_site( 'wpbp-archived', 'WPBP Archived' ), 'spam' => $wpbp_site( 'wpbp-spam', 'WPBP Spam' ), 'deleted' => $wpbp_site( 'wpbp-deleted', 'WPBP Deleted' ), ); wp_update_site( $ids['mature'], array( 'mature' => 1 ) ); wp_update_site( $ids['archived'], array( 'archived' => 1 ) ); wp_update_site( $ids['spam'], array( 'spam' => 1 ) ); wp_update_site( $ids['deleted'], array( 'deleted' => 1 ) ); $GLOBALS['wpbp_ms_002_ids'] = $ids;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_002' ) ) { return false; } $ids = (array) ( $GLOBALS['wpbp_ms_002_ids'] ?? array() ); if ( 5 !== count( $ids ) ) { return false; } global $wpdb; switch_to_blog( $ids['live'] ); $depth = count( (array) $GLOBALS['_wp_switched_stack'] ); $result = wpbp_multisite_002( static function () { global $wpdb; return array( get_current_blog_id(), get_option( 'blogname' ), $wpdb->options ); } ); $caller_ok = $ids['live'] === get_current_blog_id() && $depth === count( (array) $GLOBALS['_wp_switched_stack'] ) && $wpdb->get_blog_prefix( $ids['live'] ) . 'options' === $wpdb->options; restore_current_blog(); if ( ! $caller_ok || ! ( 1 === get_current_blog_id() && ! ms_is_switched() ) || ! is_array( $result ) ) { return false; } $keys = array_map( 'intval', array_keys( $result ) ); sort( $keys ); $expected = array( 1, $ids['live'], $ids['mature'] ); sort( $expected ); if ( $keys !== $expected ) { return false; } foreach ( $result as $id => $seen ) { if ( array( (int) $id, get_blog_option( (int) $id, 'blogname' ), $wpdb->get_blog_prefix( (int) $id ) . 'options' ) !== $seen ) { return false; } } return true;",
+            "description": "Only the live sites run the callback in their own context, and the caller's site and switch depth are restored",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_002( callable $callback ): array { $results = array(); $site_ids = get_sites( array( 'fields' => 'ids', 'number' => 0, 'archived' => 0, 'spam' => 0, 'deleted' => 0 ) ); foreach ( $site_ids as $site_id ) { switch_to_blog( (int) $site_id ); try { $results[ (int) $site_id ] = $callback(); } finally { restore_current_blog(); } } return $results; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/ms-site.php",
+          "src/wp-includes/class-wp-site-query.php",
+          "src/wp-includes/ms-blogs.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_002( callable $callback ): array { $results = array(); foreach ( get_sites( array( 'fields' => 'ids' ) ) as $site_id ) { switch_to_blog( (int) $site_id ); $results[ (int) $site_id ] = $callback(); restore_current_blog(); } return $results; }",
+        "function wpbp_multisite_002( callable $callback ): array { $original = get_current_blog_id(); $results = array(); foreach ( get_sites( array( 'fields' => 'ids', 'archived' => 0, 'spam' => 0, 'deleted' => 0 ) ) as $site_id ) { switch_to_blog( (int) $site_id ); $results[ (int) $site_id ] = $callback(); } switch_to_blog( $original ); return $results; }",
+        "function wpbp_multisite_002( callable $callback ): array { $results = array(); foreach ( get_sites( array( 'fields' => 'ids', 'archived' => 0, 'spam' => 0, 'deleted' => 0 ) ) as $site_id ) { switch_to_blog( (int) $site_id ); $results[ (int) $site_id ] = $callback(); } restore_current_blog(); return $results; }"
+      ]
+    },
+    {
+      "id": "e-multisite-003",
+      "category": "multisite",
+      "prompt": "Implement a function that returns the most recently published blog posts (post type 'post') across every site of the multisite network, newest first, at most $limit items in total. Each item is an array with the keys 'site_id', 'post_id', 'title' and 'url', where 'url' is the post's public permalink on the site the post belongs to.",
+      "expected_behavior": "The function iterates the network's sites with `get_sites()`, switches into each one, queries its newest published posts, and builds each item's permalink with `get_permalink()` while still switched (or uses `get_blog_permalink()`), because post IDs repeat between sites and a permalink built after `restore_current_blog()` points at the main site. Items are then merged, sorted by publish date across sites, and cut to the limit. Runtime validation creates posts with interleaved dates on three sites, plus a draft and a page that must be ignored, and checks order, limit, IDs, titles and per-site URLs.",
+      "requirements": [
+        "Consider published posts of type 'post' from every site of the network",
+        "Sort all items together by publish date, newest first, and return at most $limit items",
+        "Each item is an array with the keys 'site_id', 'post_id', 'title' and 'url'",
+        "Leave the caller in the site it started in"
+      ],
+      "test_function": "wpbp_multisite_003( int $limit ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_sites",
+            "description": "Lists the network's sites",
+            "weight": 1
+          },
+          {
+            "pattern": "switch_to_blog|get_blog_permalink",
+            "description": "Reads each site's content in that site's context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $a = $wpbp_site( 'wpbp-news-a', 'WPBP News A' ); $b = $wpbp_site( 'wpbp-news-b', 'WPBP News B' ); foreach ( array( 1, $a, $b ) as $site ) { switch_to_blog( $site ); wp_delete_post( 1, true ); restore_current_blog(); } $make = static function ( int $site, string $title, string $date, string $status = 'publish', string $type = 'post' ) { switch_to_blog( $site ); $id = wp_insert_post( array( 'post_title' => $title, 'post_status' => $status, 'post_type' => $type, 'post_date' => $date, 'post_date_gmt' => $date ) ); restore_current_blog(); return array( 'site_id' => $site, 'post_id' => (int) $id, 'title' => $title ); }; $GLOBALS['wpbp_ms_003_sites'] = array( $a, $b ); $GLOBALS['wpbp_ms_003'] = array( 'a1' => $make( $a, 'WPBP A newest', '2025-03-05 10:00:00' ), 'b1' => $make( $b, 'WPBP B middle', '2025-03-04 10:00:00' ), 'm1' => $make( 1, 'WPBP Main older', '2025-03-03 10:00:00' ), 'a2' => $make( $a, 'WPBP A oldest', '2025-03-01 10:00:00' ), 'b2' => $make( $b, 'WPBP B second', '2025-03-02 10:00:00' ), ); $make( $a, 'WPBP A draft', '2025-03-06 10:00:00', 'draft' ); $make( $b, 'WPBP B page', '2025-03-07 10:00:00', 'publish', 'page' );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_003' ) ) { return false; } $posts = (array) ( $GLOBALS['wpbp_ms_003'] ?? array() ); if ( 5 !== count( $posts ) ) { return false; } $expect = static function ( array $keys ) use ( $posts ) { $out = array(); foreach ( $keys as $key ) { $item = $posts[ $key ]; $item['url'] = get_blog_permalink( $item['site_id'], $item['post_id'] ); $out[] = $item; } return $out; }; $normalize = static function ( $items ) { if ( ! is_array( $items ) ) { return null; } $out = array(); foreach ( $items as $item ) { if ( ! is_array( $item ) ) { return null; } $out[] = array( 'site_id' => (int) ( $item['site_id'] ?? 0 ), 'post_id' => (int) ( $item['post_id'] ?? 0 ), 'title' => (string) ( $item['title'] ?? '' ), 'url' => (string) ( $item['url'] ?? '' ) ); } return $out; }; $three = $normalize( wpbp_multisite_003( 3 ) ); $all = $normalize( wpbp_multisite_003( 10 ) ); $site_a = (int) $GLOBALS['wpbp_ms_003_sites'][0]; $a_url_ok = isset( $three[0]['url'] ) && str_contains( $three[0]['url'], '/wpbp-news-a/' ); return $a_url_ok && $expect( array( 'a1', 'b1', 'm1' ) ) === $three && $expect( array( 'a1', 'b1', 'm1', 'b2', 'a2' ) ) === $all && 1 === get_current_blog_id() && ! ms_is_switched();",
+            "description": "Posts from all sites are merged newest first and limited, with each URL on its own site",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_003( int $limit ): array { $items = array(); foreach ( get_sites( array( 'fields' => 'ids', 'number' => 0 ) ) as $site_id ) { switch_to_blog( (int) $site_id ); try { $posts = get_posts( array( 'post_type' => 'post', 'post_status' => 'publish', 'numberposts' => $limit, 'orderby' => 'date', 'order' => 'DESC' ) ); foreach ( $posts as $post ) { $items[] = array( 'site_id' => (int) $site_id, 'post_id' => (int) $post->ID, 'title' => get_the_title( $post ), 'url' => get_permalink( $post ), 'date' => $post->post_date_gmt ); } } finally { restore_current_blog(); } } usort( $items, static function ( $a, $b ) { return strcmp( $b['date'], $a['date'] ); } ); $items = array_slice( $items, 0, max( 0, $limit ) ); foreach ( $items as &$item ) { unset( $item['date'] ); } unset( $item ); return $items; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/ms-blogs.php",
+          "src/wp-includes/ms-functions.php",
+          "src/wp-includes/link-template.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_003( int $limit ): array { $items = array(); foreach ( get_sites( array( 'fields' => 'ids' ) ) as $site_id ) { switch_to_blog( (int) $site_id ); $posts = get_posts( array( 'post_type' => 'post', 'numberposts' => $limit ) ); restore_current_blog(); foreach ( $posts as $post ) { $items[] = array( 'site_id' => (int) $site_id, 'post_id' => (int) $post->ID, 'title' => $post->post_title, 'url' => get_permalink( $post->ID ), 'date' => $post->post_date_gmt ); } } usort( $items, static function ( $a, $b ) { return strcmp( $b['date'], $a['date'] ); } ); $items = array_slice( $items, 0, $limit ); foreach ( $items as &$item ) { unset( $item['date'] ); } unset( $item ); return $items; }",
+        "function wpbp_multisite_003( int $limit ): array { $items = array(); foreach ( get_sites( array( 'fields' => 'ids' ) ) as $site_id ) { switch_to_blog( (int) $site_id ); foreach ( get_posts( array( 'post_type' => 'post', 'numberposts' => $limit ) ) as $post ) { $items[] = array( 'site_id' => (int) $site_id, 'post_id' => (int) $post->ID, 'title' => $post->post_title, 'url' => get_permalink( $post ) ); } restore_current_blog(); } return array_slice( $items, 0, $limit ); }"
+      ]
+    },
+    {
+      "id": "e-multisite-004",
+      "category": "multisite",
+      "prompt": "Implement a function that reports whether a given user is allowed to change the network-wide settings of the multisite network, meaning the settings that apply to every site rather than to one site.",
+      "expected_behavior": "Network-wide settings belong to super admins: the function checks `is_super_admin( $user_id )` or `user_can( $user_id, 'manage_network_options' )`. A site administrator holds `manage_options` on their own site but must be denied. Runtime validation covers the installing super admin, a newly granted super admin, a revoked super admin, the main site's administrator, a sub-site administrator, and a subscriber.",
+      "requirements": [
+        "Return true only for users allowed to manage the whole network",
+        "Site administrators of individual sites, including the main site, are not allowed",
+        "Answer for the given user, not for the current user"
+      ],
+      "test_function": "wpbp_multisite_004( int $user_id ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "is_super_admin|manage_network",
+            "description": "Checks network-level authority",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $site = $wpbp_site( 'wpbp-perm', 'WPBP Perm' ); $user = static function ( string $login, string $role ) { $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => wp_generate_password(), 'user_email' => $login . '@wp-bench.test', 'role' => $role ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $granted = $user( 'wpbp_granted', 'subscriber' ); grant_super_admin( $granted ); $revoked = $user( 'wpbp_revoked', 'administrator' ); grant_super_admin( $revoked ); revoke_super_admin( $revoked ); $sub_admin = $user( 'wpbp_sub_admin', 'subscriber' ); add_user_to_blog( $site, $sub_admin, 'administrator' ); $GLOBALS['wpbp_ms_004'] = array( 1 => true, $granted => true, $revoked => false, $user( 'wpbp_main_admin', 'administrator' ) => false, $sub_admin => false, $user( 'wpbp_subscriber', 'subscriber' ) => false, );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_004' ) ) { return false; } $cases = (array) ( $GLOBALS['wpbp_ms_004'] ?? array() ); if ( 6 !== count( $cases ) ) { return false; } wp_set_current_user( 0 ); foreach ( $cases as $user_id => $expected ) { if ( $expected !== wpbp_multisite_004( (int) $user_id ) ) { return false; } } return true;",
+            "description": "Only current super admins may change network settings; site administrators and revoked super admins may not",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_004( int $user_id ): bool { return is_super_admin( $user_id ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-user.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_004( int $user_id ): bool { return user_can( $user_id, 'manage_options' ); }",
+        "function wpbp_multisite_004( int $user_id ): bool { $user = get_userdata( $user_id ); return $user && in_array( 'administrator', (array) $user->roles, true ); }"
+      ]
+    },
+    {
+      "id": "e-multisite-005",
+      "category": "multisite",
+      "prompt": "Implement a function that gives an existing user the role $role on the network site $site_id, replacing any role the user had on that site but leaving the user's roles on every other site unchanged. Return true when the user now has that role on that site. When the site or the user does not exist, return false without storing anything.",
+      "expected_behavior": "The function confirms the site with `get_site()` and the user with `get_userdata()`, then uses `add_user_to_blog()` (or `switch_to_blog()` plus `WP_User::set_role()`, or `WP_User::for_site()`). `add_user_to_blog()` itself never checks that the site exists and would write `wp_<id>_capabilities` for a missing site. `set_role()` without switching changes the current site's role instead. Runtime validation starts from a user who is an editor on the main site and an author on site B, then assigns roles on sites A and B and attempts a missing site and a missing user.",
+      "requirements": [
+        "Assign the role on the given site only; roles on other sites must not change",
+        "Replace the user's previous role on that site",
+        "Return false and store nothing when the site or the user does not exist",
+        "Leave the caller in the site it started in"
+      ],
+      "test_function": "wpbp_multisite_005( int $user_id, int $site_id, string $role ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "add_user_to_blog|switch_to_blog|for_site",
+            "description": "Assigns the role in the target site's context",
+            "weight": 1
+          },
+          {
+            "pattern": "get_site|get_blog_details",
+            "description": "Confirms that the site exists",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $a = $wpbp_site( 'wpbp-team-a', 'WPBP Team A' ); $b = $wpbp_site( 'wpbp-team-b', 'WPBP Team B' ); $user = wp_insert_user( array( 'user_login' => 'wpbp_member', 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp_member@wp-bench.test', 'role' => 'editor' ) ); if ( is_wp_error( $user ) ) { throw new Exception( $user->get_error_message() ); } update_user_meta( $user, 'primary_blog', 1 ); add_user_to_blog( $b, $user, 'author' ); $GLOBALS['wpbp_ms_005'] = array( 'user' => (int) $user, 'a' => $a, 'b' => $b );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_005' ) ) { return false; } $f = (array) ( $GLOBALS['wpbp_ms_005'] ?? array() ); if ( 3 !== count( $f ) ) { return false; } global $wpdb; $caps = static function ( int $site ) use ( $f, $wpdb ) { return get_user_meta( $f['user'], $wpdb->get_blog_prefix( $site ) . 'capabilities', true ); }; $missing_site = 900000 + $f['b']; if ( true !== wpbp_multisite_005( $f['user'], $f['a'], 'contributor' ) ) { return false; } if ( true !== wpbp_multisite_005( $f['user'], $f['b'], 'editor' ) ) { return false; } if ( false !== wpbp_multisite_005( $f['user'], $missing_site, 'author' ) ) { return false; } if ( false !== wpbp_multisite_005( 900000 + $f['user'], $f['a'], 'author' ) ) { return false; } return array( 'contributor' => true ) === $caps( $f['a'] ) && array( 'editor' => true ) === $caps( $f['b'] ) && array( 'editor' => true ) === $caps( 1 ) && '' === $caps( $missing_site ) && is_user_member_of_blog( $f['user'], $f['a'] ) && 1 === get_current_blog_id() && ! ms_is_switched();",
+            "description": "Each site gets exactly its assigned role, other sites keep theirs, and missing sites or users store nothing",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_005( int $user_id, int $site_id, string $role ): bool { if ( ! get_site( $site_id ) || ! get_userdata( $user_id ) ) { return false; } $added = add_user_to_blog( $site_id, $user_id, $role ); if ( is_wp_error( $added ) ) { return false; } $user = new WP_User( $user_id, '', $site_id ); return in_array( $role, (array) $user->roles, true ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/ms-functions.php",
+          "src/wp-includes/class-wp-user.php",
+          "src/wp-includes/ms-site.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_005( int $user_id, int $site_id, string $role ): bool { if ( ! get_userdata( $user_id ) ) { return false; } return true === add_user_to_blog( $site_id, $user_id, $role ); }",
+        "function wpbp_multisite_005( int $user_id, int $site_id, string $role ): bool { if ( ! get_site( $site_id ) ) { return false; } $user = get_userdata( $user_id ); if ( ! $user ) { return false; } $user->set_role( $role ); return true; }"
+      ]
+    },
+    {
+      "id": "e-multisite-006",
+      "category": "multisite",
+      "prompt": "Implement a function that reports whether the plugin with basename $plugin (for example 'akismet/akismet.php') is active on the network site $site_id, whether it was activated on that site alone or network-wide. It must answer correctly for any site of the network, not only the current one.",
+      "expected_behavior": "A plugin is active on a site when it is network-activated (`is_plugin_active_for_network()`, the network's `active_sitewide_plugins` option) or listed in that site's own `active_plugins` option, read with `get_blog_option( $site_id, 'active_plugins' )` or while switched to that site. `is_plugin_active()` only reflects the current site. Runtime validation activates one plugin network-wide, one on site A only and one on the main site only, then asks about several sites from the main site.",
+      "requirements": [
+        "Count both site-level and network-wide activation",
+        "Answer for the given site even when it is not the current site",
+        "Leave the caller in the site it started in"
+      ],
+      "test_function": "wpbp_multisite_006( int $site_id, string $plugin ): bool",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "active_sitewide_plugins|is_plugin_active_for_network",
+            "description": "Accounts for network-wide activation",
+            "weight": 1
+          },
+          {
+            "pattern": "active_plugins|switch_to_blog",
+            "description": "Reads the target site's own activations",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $a = $wpbp_site( 'wpbp-plug-a', 'WPBP Plug A' ); $b = $wpbp_site( 'wpbp-plug-b', 'WPBP Plug B' ); update_option( 'active_plugins', array( 'wpbp-main-only/wpbp-main-only.php' ) ); update_blog_option( $a, 'active_plugins', array( 'wpbp-site-only/wpbp-site-only.php' ) ); $network = (array) get_site_option( 'active_sitewide_plugins', array() ); $network['wpbp-network/wpbp-network.php'] = time(); update_site_option( 'active_sitewide_plugins', $network ); $GLOBALS['wpbp_ms_006'] = array( 'a' => $a, 'b' => $b );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_006' ) ) { return false; } $s = (array) ( $GLOBALS['wpbp_ms_006'] ?? array() ); if ( 2 !== count( $s ) ) { return false; } $cases = array( array( $s['a'], 'wpbp-site-only/wpbp-site-only.php', true ), array( $s['a'], 'wpbp-main-only/wpbp-main-only.php', false ), array( $s['a'], 'wpbp-network/wpbp-network.php', true ), array( $s['b'], 'wpbp-site-only/wpbp-site-only.php', false ), array( $s['b'], 'wpbp-network/wpbp-network.php', true ), array( 1, 'wpbp-main-only/wpbp-main-only.php', true ), array( 1, 'wpbp-site-only/wpbp-site-only.php', false ), array( $s['b'], 'wpbp-missing/wpbp-missing.php', false ), ); foreach ( $cases as $case ) { if ( $case[2] !== wpbp_multisite_006( $case[0], $case[1] ) ) { return false; } } return 1 === get_current_blog_id() && ! ms_is_switched();",
+            "description": "Site-level and network-wide activations are reported for the requested site, not the current one",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_006( int $site_id, string $plugin ): bool { if ( ! function_exists( 'is_plugin_active_for_network' ) ) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; } if ( is_plugin_active_for_network( $plugin ) ) { return true; } return in_array( $plugin, (array) get_blog_option( $site_id, 'active_plugins', array() ), true ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-admin/includes/plugin.php",
+          "src/wp-includes/ms-blogs.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_006( int $site_id, string $plugin ): bool { if ( ! function_exists( 'is_plugin_active' ) ) { require_once ABSPATH . 'wp-admin/includes/plugin.php'; } return is_plugin_active( $plugin ); }",
+        "function wpbp_multisite_006( int $site_id, string $plugin ): bool { return in_array( $plugin, (array) get_blog_option( $site_id, 'active_plugins', array() ), true ); }"
+      ]
+    },
+    {
+      "id": "e-multisite-007",
+      "category": "multisite",
+      "prompt": "Make every site that is created in this multisite network from now on start with the option 'wpbp_site_tier' set to 'starter' and a published page titled 'Getting Started'. Sites that already exist must not be changed.",
+      "expected_behavior": "The code hooks `wp_initialize_site` at a priority after core's own initializer (priority 10), which creates the new site's tables and default content, switches to the new site with `switch_to_blog( $site->id )`, adds the option and page, and calls `restore_current_blog()`. Hooking `wp_insert_site` or an earlier priority runs before the tables exist, the deprecated `wpmu_new_blog` hook raises a deprecation notice, and writing without switching changes the main site. Runtime validation creates two sites, one with `wp_insert_site()` and one with `wpmu_create_blog()`, and checks both new sites, the untouched main site, and the restored site context.",
+      "requirements": [
+        "Apply the defaults automatically to every newly created site",
+        "Store the option and the page in the new site, not in the site that created it",
+        "Do not change sites that already exist"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wp_initialize_site",
+            "description": "Hooks into site initialization",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_site_tier",
+            "description": "Sets the requested option",
+            "weight": 1
+          },
+          {
+            "pattern": "Getting Started",
+            "description": "Creates the requested page",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$first = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/wpbp-new-one/', 'title' => 'WPBP New One', 'user_id' => 1 ) ); $second = wpmu_create_blog( get_network()->domain, '/wpbp-new-two/', 'WPBP New Two', 1 ); if ( is_wp_error( $first ) || is_wp_error( $second ) || ! ( 1 === get_current_blog_id() && ! ms_is_switched() ) ) { return false; } $seeded = static function ( int $site ) { switch_to_blog( $site ); $tier = get_option( 'wpbp_site_tier' ); $pages = get_posts( array( 'post_type' => 'page', 'post_status' => 'any', 'title' => 'Getting Started', 'numberposts' => -1 ) ); restore_current_blog(); return array( $tier, array_map( static function ( $page ) { return $page->post_status; }, $pages ) ); }; $expected = array( 'starter', array( 'publish' ) ); return $expected === $seeded( (int) $first ) && $expected === $seeded( (int) $second ) && array( false, array() ) === $seeded( 1 ) && 1 === get_current_blog_id() && ! ms_is_switched();",
+            "description": "New sites created either way get the option and one published page; the main site is untouched",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "add_action( 'wp_initialize_site', static function ( WP_Site $site ) { switch_to_blog( (int) $site->id ); try { update_option( 'wpbp_site_tier', 'starter' ); wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Getting Started' ) ); } finally { restore_current_blog(); } }, 20 );",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/ms-site.php",
+          "src/wp-includes/ms-default-filters.php",
+          "src/wp-includes/ms-functions.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "add_action( 'wp_insert_site', static function ( WP_Site $site ) { switch_to_blog( (int) $site->id ); update_option( 'wpbp_site_tier', 'starter' ); wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Getting Started' ) ); restore_current_blog(); } );",
+        "add_action( 'wp_initialize_site', static function ( WP_Site $site ) { update_option( 'wpbp_site_tier', 'starter' ); wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Getting Started' ) ); }, 20 );",
+        "add_action( 'wp_initialize_site', static function ( WP_Site $site ) { switch_to_blog( (int) $site->id ); update_option( 'wpbp_site_tier', 'starter' ); wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Getting Started' ) ); restore_current_blog(); }, 5 );"
+      ]
+    },
+    {
+      "id": "e-multisite-008",
+      "category": "multisite",
+      "prompt": "Implement a function that removes the plugin's stored data from the whole multisite network when the plugin is uninstalled: the per-site option 'wpbp_cache_version' and the per-site transient 'wpbp_last_sync' on every site of the network, including archived, spam-flagged and deleted sites, and the network-wide option 'wpbp_license'. Other data must be left alone.",
+      "expected_behavior": "The function lists every site with `get_sites()` without status filters, removes the option with `delete_blog_option()` or `delete_option()` while switched, removes the transient with `delete_transient()` while switched to each site (transients are per-site), restores after each switch, and removes the network option with `delete_site_option()`. Runtime validation seeds the data on the main site and on live, archived, spam and deleted sites, plus neighbouring data that must survive.",
+      "requirements": [
+        "Clean every site of the network, whatever its status",
+        "Remove the network-wide option as well",
+        "Do not remove any other options, transients or network options",
+        "Leave the caller in the site it started in"
+      ],
+      "test_function": "wpbp_multisite_008(): void",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_sites",
+            "description": "Lists the network's sites",
+            "weight": 1
+          },
+          {
+            "pattern": "delete_(site|network)_option",
+            "description": "Removes the network option",
+            "weight": 1
+          },
+          {
+            "pattern": "delete_transient|switch_to_blog",
+            "description": "Removes each site's transient in that site's context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $sites = array( 1, $wpbp_site( 'wpbp-u-live', 'WPBP U Live' ), $wpbp_site( 'wpbp-u-archived', 'WPBP U Archived' ), $wpbp_site( 'wpbp-u-spam', 'WPBP U Spam' ), $wpbp_site( 'wpbp-u-deleted', 'WPBP U Deleted' ) ); wp_update_site( $sites[2], array( 'archived' => 1 ) ); wp_update_site( $sites[3], array( 'spam' => 1 ) ); wp_update_site( $sites[4], array( 'deleted' => 1 ) ); foreach ( $sites as $site ) { switch_to_blog( $site ); update_option( 'wpbp_cache_version', 3 + $site ); update_option( 'wpbp_keep', 'keep-' . $site ); set_transient( 'wpbp_last_sync', 'synced-' . $site, HOUR_IN_SECONDS ); set_transient( 'wpbp_keep_sync', 'keep-' . $site, HOUR_IN_SECONDS ); restore_current_blog(); } update_site_option( 'wpbp_license', 'LICENSE-KEY' ); update_site_option( 'wpbp_keep_network', 'keep' ); $GLOBALS['wpbp_ms_008'] = $sites;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_008' ) ) { return false; } $sites = (array) ( $GLOBALS['wpbp_ms_008'] ?? array() ); if ( 5 !== count( $sites ) ) { return false; } wpbp_multisite_008(); if ( ! ( 1 === get_current_blog_id() && ! ms_is_switched() ) ) { return false; } foreach ( $sites as $site ) { switch_to_blog( $site ); $clean = false === get_option( 'wpbp_cache_version' ) && false === get_transient( 'wpbp_last_sync' ) && false === get_option( '_transient_timeout_wpbp_last_sync' ); $kept = 'keep-' . $site === get_option( 'wpbp_keep' ) && 'keep-' . $site === get_transient( 'wpbp_keep_sync' ); restore_current_blog(); if ( ! $clean || ! $kept ) { return false; } } return false === get_site_option( 'wpbp_license' ) && 'keep' === get_site_option( 'wpbp_keep_network' );",
+            "description": "The option and transient are gone from every site and the network option is gone, while other data remains",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_008(): void { foreach ( get_sites( array( 'fields' => 'ids', 'number' => 0 ) ) as $site_id ) { switch_to_blog( (int) $site_id ); try { delete_option( 'wpbp_cache_version' ); delete_transient( 'wpbp_last_sync' ); } finally { restore_current_blog(); } } delete_site_option( 'wpbp_license' ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/ms-site.php",
+          "src/wp-includes/option.php",
+          "src/wp-includes/class-wp-site-query.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_008(): void { foreach ( get_sites( array( 'fields' => 'ids', 'archived' => 0, 'spam' => 0, 'deleted' => 0 ) ) as $site_id ) { switch_to_blog( (int) $site_id ); delete_option( 'wpbp_cache_version' ); delete_transient( 'wpbp_last_sync' ); restore_current_blog(); } delete_site_option( 'wpbp_license' ); }",
+        "function wpbp_multisite_008(): void { delete_option( 'wpbp_cache_version' ); delete_transient( 'wpbp_last_sync' ); delete_site_option( 'wpbp_license' ); }",
+        "function wpbp_multisite_008(): void { foreach ( get_sites( array( 'fields' => 'ids' ) ) as $site_id ) { delete_blog_option( (int) $site_id, 'wpbp_cache_version' ); } delete_transient( 'wpbp_last_sync' ); delete_site_option( 'wpbp_license' ); }"
+      ]
+    },
+    {
+      "id": "e-multisite-009",
+      "category": "multisite",
+      "prompt": "Each site in the multisite network may carry a billing plan stored as site metadata under the key 'wpbp_plan' (network-level metadata about the site, not an option inside the site). Implement a function that returns the IDs of the sites on the given plan, in ascending order.",
+      "expected_behavior": "Site metadata lives in the network's `blogmeta` table and is read with `get_site_meta()` or queried with `get_sites()` and a `meta_query` / `meta_key` + `meta_value` filter (WordPress 5.1+). A site whose own options hold a `wpbp_plan` value is not on the plan. Runtime validation tags sites with 'pro', 'free' and 'professional' site metadata and gives another site only an option, then queries three plans.",
+      "requirements": [
+        "Read the plan from site metadata, not from options",
+        "Match the plan exactly",
+        "Return integer site IDs in ascending order, or an empty array when no site matches"
+      ],
+      "test_function": "wpbp_multisite_009( string $plan ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "get_site_meta|meta_query|meta_key",
+            "description": "Reads site metadata",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_plan",
+            "description": "Uses the requested metadata key",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $ids = array( 'pro_one' => $wpbp_site( 'wpbp-plan-pro-one', 'WPBP Pro One' ), 'free' => $wpbp_site( 'wpbp-plan-free', 'WPBP Free' ), 'option_only' => $wpbp_site( 'wpbp-plan-option', 'WPBP Option Only' ), 'professional' => $wpbp_site( 'wpbp-plan-professional', 'WPBP Professional' ), 'pro_two' => $wpbp_site( 'wpbp-plan-pro-two', 'WPBP Pro Two' ), ); add_site_meta( $ids['pro_one'], 'wpbp_plan', 'pro' ); add_site_meta( $ids['free'], 'wpbp_plan', 'free' ); update_blog_option( $ids['option_only'], 'wpbp_plan', 'pro' ); add_site_meta( $ids['professional'], 'wpbp_plan', 'professional' ); add_site_meta( $ids['pro_two'], 'wpbp_plan', 'pro' ); $GLOBALS['wpbp_ms_009'] = $ids;",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_009' ) ) { return false; } $ids = (array) ( $GLOBALS['wpbp_ms_009'] ?? array() ); if ( 5 !== count( $ids ) ) { return false; } $as_ints = static function ( $value ) { return is_array( $value ) ? array_values( $value ) : null; }; return array( $ids['pro_one'], $ids['pro_two'] ) === $as_ints( wpbp_multisite_009( 'pro' ) ) && array( $ids['free'] ) === $as_ints( wpbp_multisite_009( 'free' ) ) && array() === $as_ints( wpbp_multisite_009( 'enterprise' ) );",
+            "description": "Only sites whose site metadata holds the exact plan are returned, as ascending integer IDs",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_009( string $plan ): array { $ids = get_sites( array( 'fields' => 'ids', 'number' => 0, 'meta_query' => array( array( 'key' => 'wpbp_plan', 'value' => $plan ) ) ) ); $ids = array_map( 'intval', $ids ); sort( $ids ); return $ids; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/ms-site.php",
+          "src/wp-includes/class-wp-site-query.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_009( string $plan ): array { $ids = array(); foreach ( get_sites( array( 'fields' => 'ids' ) ) as $site_id ) { if ( $plan === get_blog_option( (int) $site_id, 'wpbp_plan' ) ) { $ids[] = (int) $site_id; } } return $ids; }",
+        "function wpbp_multisite_009( string $plan ): array { $ids = array_map( 'intval', get_sites( array( 'fields' => 'ids', 'meta_query' => array( array( 'key' => 'wpbp_plan', 'value' => $plan, 'compare' => 'LIKE' ) ) ) ) ); sort( $ids ); return $ids; }"
+      ]
+    },
+    {
+      "id": "e-multisite-010",
+      "category": "multisite",
+      "prompt": "Implement a function that returns the IDs of the multisite network's sites on which the given user can publish posts, in ascending order.",
+      "expected_behavior": "Capabilities are per site, so the function checks `publish_posts` for each site of the network with `user_can_for_site()` (or `switch_to_blog()` plus `user_can()`). A check against the current site applies one answer to every site; listing only `get_blogs_of_user()` memberships includes sites where the user is a subscriber unless capabilities are checked, and misses super admins, who can publish on sites they are not members of. Runtime validation uses a user with different roles on four sites, an administrator of one sub-site, and a super admin who is a member of the main site only.",
+      "requirements": [
+        "Decide per site, using the user's capabilities on that site",
+        "Return integer site IDs in ascending order",
+        "Leave the caller in the site it started in"
+      ],
+      "test_function": "wpbp_multisite_010( int $user_id ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "publish_posts",
+            "description": "Checks the publishing capability",
+            "weight": 1
+          },
+          {
+            "pattern": "user_can_for_site|switch_to_blog",
+            "description": "Checks capabilities in each site's context",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$wpbp_site = static function ( string $slug, string $title ) { $id = wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/' . $slug . '/', 'title' => $title, 'user_id' => 1 ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } return (int) $id; }; $a = $wpbp_site( 'wpbp-pub-a', 'WPBP Pub A' ); $b = $wpbp_site( 'wpbp-pub-b', 'WPBP Pub B' ); $c = $wpbp_site( 'wpbp-pub-c', 'WPBP Pub C' ); $d = $wpbp_site( 'wpbp-pub-d', 'WPBP Pub D' ); $user = static function ( string $login, string $role ) { $id = wp_insert_user( array( 'user_login' => $login, 'user_pass' => wp_generate_password(), 'user_email' => $login . '@wp-bench.test', 'role' => $role ) ); if ( is_wp_error( $id ) ) { throw new Exception( $id->get_error_message() ); } update_user_meta( $id, 'primary_blog', 1 ); return (int) $id; }; $mixed = $user( 'wpbp_mixed', 'contributor' ); add_user_to_blog( $a, $mixed, 'editor' ); add_user_to_blog( $b, $mixed, 'subscriber' ); add_user_to_blog( $c, $mixed, 'author' ); $d_admin = $user( 'wpbp_d_admin', 'subscriber' ); add_user_to_blog( $d, $d_admin, 'administrator' ); $super = $user( 'wpbp_super', 'subscriber' ); grant_super_admin( $super ); $GLOBALS['wpbp_ms_010'] = array( $mixed => array( $a, $c ), $d_admin => array( $d ), $super => array( 1, $a, $b, $c, $d ), );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_multisite_010' ) ) { return false; } $cases = (array) ( $GLOBALS['wpbp_ms_010'] ?? array() ); if ( 3 !== count( $cases ) ) { return false; } wp_set_current_user( 0 ); foreach ( $cases as $user_id => $expected ) { $actual = wpbp_multisite_010( (int) $user_id ); if ( ! is_array( $actual ) || $expected !== array_values( $actual ) ) { return false; } } return 1 === get_current_blog_id() && ! ms_is_switched();",
+            "description": "Each user gets exactly the sites where they hold publish_posts, including a super admin's non-member sites",
+            "weight": 1
+          }
+        ]
+      },
+      "reference_solution": "function wpbp_multisite_010( int $user_id ): array { $ids = array(); foreach ( get_sites( array( 'fields' => 'ids', 'number' => 0 ) ) as $site_id ) { if ( user_can_for_site( $user_id, (int) $site_id, 'publish_posts' ) ) { $ids[] = (int) $site_id; } } sort( $ids ); return $ids; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/user.php",
+          "src/wp-includes/ms-site.php"
+        ],
+        "release_focus": "classic",
+        "requires_multisite": true
+      },
+      "exploit_solutions": [
+        "function wpbp_multisite_010( int $user_id ): array { $ids = array_map( 'intval', array_keys( get_blogs_of_user( $user_id ) ) ); sort( $ids ); return $ids; }",
+        "function wpbp_multisite_010( int $user_id ): array { $ids = array(); foreach ( array_keys( get_blogs_of_user( $user_id ) ) as $site_id ) { if ( user_can_for_site( $user_id, (int) $site_id, 'publish_posts' ) ) { $ids[] = (int) $site_id; } } sort( $ids ); return $ids; }",
+        "function wpbp_multisite_010( int $user_id ): array { if ( ! user_can( $user_id, 'publish_posts' ) ) { return array(); } $ids = array_map( 'intval', get_sites( array( 'fields' => 'ids' ) ) ); sort( $ids ); return $ids; }"
+      ]
+    }
+  ]
+}

@@ -56,6 +56,11 @@ class WordPressEnvironment:
         #: graded code could truncate or seed to defeat isolation.
         self._baseline: str | None = None
         self._site_config: str | None = None
+        #: Multisite network baseline, captured only when a selected test
+        #: sets ``metadata.requires_multisite``. Held on the host like the
+        #: single-site baseline.
+        self._multisite_baseline: str | None = None
+        self._multisite_config: str | None = None
         self._image: str = config.image
         self._isolated = False
         self._local = threading.local()
@@ -69,14 +74,23 @@ class WordPressEnvironment:
         """Immutable image used by the isolated run, for result provenance."""
         return self._image if self._isolated else None
 
-    def setup(self, *, capture_baseline: bool = True) -> None:
+    def setup(self, *, capture_baseline: bool = True, multisite: bool = False) -> None:
         """Prepare a pristine private baseline, or start the diagnostic runtime.
 
         capture_baseline creates a fresh trusted install from the image and
         retains its database/configuration on the host. Existing containers
         are never used for this baseline. False selects the existing shared
         runtime for diagnostic isolation ``none``.
+
+        multisite also captures a subdirectory multisite network baseline,
+        restored by ``reset(multisite=True)``. It needs a captured baseline:
+        the shared diagnostic runtime is single-site.
         """
+        if multisite and not capture_baseline:
+            raise RuntimeError(
+                "Multisite tests need execution_isolation='reset_per_test' with the "
+                "Docker grader; the shared diagnostic runtime is single-site."
+            )
         if capture_baseline:
             if self.config.kind != "docker":
                 raise RuntimeError(
@@ -90,10 +104,12 @@ class WordPressEnvironment:
                 self._wait_for_container()
                 self._require_sqlite()
                 self._capture_baseline()
-                stdout, stderr, rc, timed_out = self._exec(["cat", "wp-config.php"])
-                if timed_out or rc != 0 or not stdout.startswith("<?php"):
-                    raise RuntimeError(f"Could not capture clean WordPress configuration: {stderr}")
-                self._site_config = stdout
+                self._site_config = self._read_site_config()
+                if multisite:
+                    # After the single-site capture: the network install adds
+                    # the multisite constants to the live wp-config.php.
+                    self._capture_baseline(multisite=True)
+                    self._multisite_config = self._read_site_config()
             finally:
                 self.release()
             return
@@ -119,12 +135,22 @@ class WordPressEnvironment:
             self._require_sqlite()
             return
 
-    def _install_command(self) -> list[str]:
-        """The canonical clean install every reset restores the site to."""
+    def _read_site_config(self) -> str:
+        stdout, stderr, rc, timed_out = self._exec(["cat", "wp-config.php"])
+        if timed_out or rc != 0 or not stdout.startswith("<?php"):
+            raise RuntimeError(f"Could not capture clean WordPress configuration: {stderr}")
+        return stdout
+
+    def _install_command(self, *, multisite: bool = False) -> list[str]:
+        """The canonical clean install every reset restores the site to.
+
+        multisite installs a subdirectory network (WP-CLI's default), the
+        only kind usable without HTTP or DNS.
+        """
         return [
             "wp",
             "core",
-            "install",
+            "multisite-install" if multisite else "install",
             f"--url={self.config.base_url}",
             "--title=WP-Bench",
             "--admin_user=admin",
@@ -133,7 +159,7 @@ class WordPressEnvironment:
             "--skip-email",
         ]
 
-    def _capture_baseline(self) -> None:
+    def _capture_baseline(self, *, multisite: bool = False) -> None:
         """Record the clean baseline that every later reset restores.
 
         Install once and replay a snapshot per test. The snapshot travels on
@@ -146,7 +172,7 @@ class WordPressEnvironment:
         script = " && ".join(
             [
                 f"{clear} >/dev/null",
-                f"{shlex.join(self._install_command())} >/dev/null",
+                f"{shlex.join(self._install_command(multisite=multisite))} >/dev/null",
                 export,
             ]
         )
@@ -167,33 +193,46 @@ class WordPressEnvironment:
         # Every restore decodes, header-checks and integrity-checks the
         # snapshot before replacing the database, so a bad capture fails the
         # first reset instead of grading against it.
-        self._baseline = stdout
+        if multisite:
+            self._multisite_baseline = stdout
+        else:
+            self._baseline = stdout
 
-    def reset(self) -> None:
+    def reset(self, *, multisite: bool = False) -> None:
         """Create a private runtime from the image and host-held SQLite baseline.
 
         The old container, its private filesystems, and all its processes are
         removed. Each thread owns a distinct container; even serial executions
         use a fresh filesystem, process namespace, and network namespace.
+
+        multisite restores the network baseline captured by
+        ``setup(multisite=True)`` instead of the single-site one.
         """
+        database, site_config = (
+            (self._multisite_baseline, self._multisite_config)
+            if multisite
+            else (self._baseline, self._site_config)
+        )
         # setup() refuses to capture for a cli grader, so this also stops a
         # cli run from stamping an isolation guarantee it never delivered.
-        if self._baseline is None or self._site_config is None:
+        if database is None or site_config is None:
             raise RuntimeError(
-                "No clean baseline was captured, so reset() cannot restore one. "
-                "Call setup(capture_baseline=True) before grading."
+                f"No clean {'multisite ' if multisite else ''}baseline was captured, so "
+                "reset() cannot restore one. Call setup(capture_baseline=True"
+                f"{', multisite=True' if multisite else ''}) before grading."
             )
         self.release()
         try:
             self._start_isolated_container(install=False)
             restore = shlex.join(self._sqlite_snapshot_command("prepare"))
+            installed = "wp core is-installed --network" if multisite else "wp core is-installed"
             script = (
                 "cp -R /opt/wp-bench-wordpress/. /var/www/html/ && "
-                f"{restore} && wp core is-installed"
+                f"{restore} && {installed}"
             )
             self._reset_step(
                 ["sh", "-c", script],
-                stdin=json.dumps({"config": self._site_config, "database": self._baseline}),
+                stdin=json.dumps({"config": site_config, "database": database}),
             )
         except BaseException:
             self.release()
