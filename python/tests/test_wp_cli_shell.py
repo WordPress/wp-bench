@@ -66,7 +66,7 @@ def test_shell_scripts_reach_the_runtime_in_every_mode(monkeypatch, tmp_path, mo
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
-    runner.environment.reset = lambda: None  # type: ignore[method-assign]
+    runner.environment.reset = lambda **kwargs: None  # type: ignore[method-assign]
     artifacts: list[Artifact] = []
 
     def execute(artifact: Artifact, spec: dict) -> ExecutionResult:

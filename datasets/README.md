@@ -127,7 +127,7 @@ field named `suite_metadata` would be shadowed — avoid that name).
 | `release_focus` | string | WordPress release the task targets (e.g. `6.9`, `classic`) |
 | `wordpress_min_version` | string | Optional minimum WordPress version |
 | `wordpress_target_version` | string | Optional intended WordPress version |
-| `requires_multisite` | bool | Optional; task needs a multisite install |
+| `requires_multisite` | bool | Optional; `true` grades the task on a subdirectory multisite network baseline instead of the single-site one |
 | `review_status` | string | Optional editorial state (e.g. `reviewed`) |
 
 All fields are optional; unknown fields are preserved as-is. Prefer adding
