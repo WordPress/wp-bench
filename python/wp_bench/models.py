@@ -9,6 +9,7 @@ problems are not hidden behind retries.
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -185,6 +186,20 @@ class ModelInterface:
             "top_p": self.config.top_p,
             "timeout": self.config.request_timeout,
         }
+        if self.config.api_base is not None:
+            kwargs["api_base"] = self.config.api_base
+        if self.config.kind == "openai-compatible":
+            kwargs["custom_llm_provider"] = "openai"
+            if self.config.api_base is not None:
+                # Local servers commonly have no authentication, but the
+                # OpenAI client still requires a nonempty key. Do not pick
+                # up a cloud credential from OPENAI_API_KEY for this endpoint.
+                kwargs["api_key"] = "not-needed"
+        if self.config.api_key_env is not None:
+            key = os.environ.get(self.config.api_key_env)
+            if not key:
+                raise ValueError(f"Missing API key environment variable: {self.config.api_key_env}")
+            kwargs["api_key"] = key
         if not self._omit_temperature:
             kwargs["temperature"] = self.config.temperature
         return kwargs

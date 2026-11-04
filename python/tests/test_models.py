@@ -136,3 +136,66 @@ def test_generate_does_not_retry_other_bad_request_errors(monkeypatch) -> None:
         assert "some other invalid request" in str(error)
     else:
         raise AssertionError("Expected BadRequestError to be raised")
+
+
+def test_local_endpoint_routes_without_model_prefix_or_cloud_credentials(monkeypatch) -> None:
+    """Exercise real LiteLLM routing against a local OpenAI-compatible server."""
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from wp_bench.records import _model_info
+
+    received: list[tuple[str, str | None, dict]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            received.append((self.path, self.headers.get('Authorization'), body))
+            response = json.dumps({
+                'id': 'local-test', 'object': 'chat.completion', 'created': 1,
+                'model': body['model'],
+                'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'ok'},
+                             'finish_reason': 'stop'}],
+                'usage': {'prompt_tokens': 1, 'completion_tokens': 1, 'total_tokens': 2},
+            }).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+        def log_message(self, *args):
+            pass
+
+    monkeypatch.setenv('OPENAI_API_KEY', 'cloud-secret-must-not-be-sent')
+    monkeypatch.setenv('OPENAI_API_BASE', 'http://127.0.0.1:1/v1')
+    with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            config = ModelConfig(kind='openai-compatible', name='qwen3.6-27b-mtp',
+                                 api_base=f'http://127.0.0.1:{server.server_port}/v1',
+                                 max_retries=0, request_timeout=5)
+            assert ModelInterface(config).generate('hello') == 'ok'
+        finally:
+            server.shutdown()
+            worker.join()
+    assert received[0][0] == '/v1/chat/completions'
+    assert received[0][1] == 'Bearer not-needed'
+    assert received[0][2]['model'] == 'qwen3.6-27b-mtp'
+    info = _model_info(config)
+    assert info is not None and info['name'] == 'qwen3.6-27b-mtp'
+    assert info['api_base'] == config.api_base
+    assert 'cloud-secret' not in config.model_dump_json()
+
+
+def test_explicit_api_key_env_is_resolved_without_serializing_secret(monkeypatch) -> None:
+    monkeypatch.setenv('LM_STUDIO_TOKEN', 'private-local-token')
+    config = ModelConfig(kind='openai-compatible', name='local-model',
+                         api_base='http://localhost:1234/v1', api_key_env='LM_STUDIO_TOKEN')
+    assert ModelInterface(config)._completion_kwargs('hello')['api_key'] == 'private-local-token'
+    assert 'private-local-token' not in config.model_dump_json()
+    monkeypatch.delenv('LM_STUDIO_TOKEN')
+    with pytest.raises(ValueError, match='LM_STUDIO_TOKEN'):
+        ModelInterface(config).generate('hello')

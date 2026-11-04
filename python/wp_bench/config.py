@@ -47,10 +47,14 @@ class DatasetConfig(StrictModel):
 
 
 class ModelConfig(StrictModel):
-    #: Informational provider family, recorded in result records for audit.
-    #: Routing itself is driven by ``name`` (a LiteLLM model string).
+    #: Provider family; openai-compatible explicitly selects the API protocol.
+    #: Other kinds retain LiteLLM routing through the model name.
     kind: Literal["openai", "anthropic", "ollama", "openai-compatible"] = "openai"
     name: str = "gpt-4o-mini"
+    #: Explicit endpoint for local/hosted inference, including its /v1 path.
+    api_base: str | None = None
+    #: Name of an optional credential environment variable; never the secret.
+    api_key_env: str | None = None
     temperature: float = 0.0
     max_tokens: int | None = None
     top_p: float | None = None
@@ -91,7 +95,10 @@ class ModelConfig(StrictModel):
 
 
 class GraderConfig(StrictModel):
-    kind: Literal["docker", "cli"] = "docker"
+    kind: Literal["docker", "cli", "playground"] = "docker"
+    playground_directory: Path = Path(__file__).resolve().parents[2] / "runtime" / "playground"
+    playground_node: str = "node"
+    playground_wordpress_version: str = "7.1"
     image: str = "wp-bench-grader:dev"
     container_name: str = "wp-bench-grader"
     base_url: str = "http://localhost:8888"
@@ -229,6 +236,12 @@ class HarnessConfig(StrictModel):
     skills: SkillsConfig = SkillsConfig()
 
     @model_validator(mode="after")
+    def _validate_playground_isolation(self) -> HarnessConfig:
+        if self.grader.kind == "playground" and self.run.execution_isolation != "reset_per_test":
+            raise ValueError("Playground requires run.execution_isolation='reset_per_test'.")
+        return self
+
+    @model_validator(mode="after")
     def _validate_unique_model_names(self) -> HarnessConfig:
         """Reject duplicate model names.
 
@@ -292,6 +305,9 @@ class HarnessConfig(StrictModel):
             for key in ("path", "jsonl_path"):
                 if key in data["output"] and data["output"][key]:
                     data["output"][key] = resolve_path(data["output"][key])
+
+        if isinstance(data.get("grader"), dict) and data["grader"].get("playground_directory"):
+            data["grader"]["playground_directory"] = resolve_path(data["grader"]["playground_directory"])
 
         if "skills" in data and isinstance(data["skills"], dict):
             paths = data["skills"].get("paths")

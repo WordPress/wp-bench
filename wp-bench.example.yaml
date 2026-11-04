@@ -30,9 +30,22 @@ models:
 #   # retry_on_rate_limit: true
 #   # retry_on_timeout: true
 
+# Local LM Studio alternative: replace models above with a single model block.
+# model:
+#   kind: openai-compatible
+#   name: qwen3.6-27b-mtp
+#   api_base: http://localhost:1234/v1
+#   # api_key_env: LM_STUDIO_TOKEN # optional authenticated endpoint
+#   request_timeout: 600
+#   max_tokens: 8192
+
 # WordPress runtime grader
 grader:
-  kind: docker
+  kind: docker              # or playground (Node.js, no Docker)
+  # Playground setup: npm ci --prefix runtime/playground (Node.js 24.18+)
+  # playground_wordpress_version: "7.1"
+  # playground_node: node
+  # playground_directory: runtime/playground # relative to this YAML file
   image: wp-bench-grader:dev # docker build -t wp-bench-grader:dev ./runtime
   # Limits per isolated candidate; choose concurrency to fit host capacity.
   # container_cpus: 1.0
