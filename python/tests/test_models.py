@@ -138,7 +138,7 @@ def test_generate_does_not_retry_other_bad_request_errors(monkeypatch) -> None:
         raise AssertionError("Expected BadRequestError to be raised")
 
 
-def test_local_endpoint_routes_without_model_prefix_or_cloud_credentials(monkeypatch) -> None:
+def test_local_endpoint_routes_without_model_prefix_or_cloud_credentials(monkeypatch, capsys) -> None:
     """Exercise real LiteLLM routing against a local OpenAI-compatible server."""
     import json
     import threading
@@ -188,6 +188,7 @@ def test_local_endpoint_routes_without_model_prefix_or_cloud_credentials(monkeyp
     assert info is not None and info['name'] == 'qwen3.6-27b-mtp'
     assert info['api_base'] == config.api_base
     assert 'cloud-secret' not in config.model_dump_json()
+    assert 'Provider List:' not in capsys.readouterr().out
 
 
 def test_explicit_api_key_env_is_resolved_without_serializing_secret(monkeypatch) -> None:
@@ -199,3 +200,10 @@ def test_explicit_api_key_env_is_resolved_without_serializing_secret(monkeypatch
     monkeypatch.delenv('LM_STUDIO_TOKEN')
     with pytest.raises(ValueError, match='LM_STUDIO_TOKEN'):
         ModelInterface(config).generate('hello')
+
+
+def test_provider_error_is_raised_without_advisory_banner(capsys) -> None:
+    model = ModelInterface(ModelConfig(name="wp-bench-unknown-model", max_retries=0))
+    with pytest.raises(BadRequestError):
+        model.generate("hello")
+    assert "Provider List:" not in capsys.readouterr().out

@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+import litellm
 from litellm import completion, completion_cost
 from litellm.exceptions import (
     APIConnectionError,
@@ -76,6 +77,10 @@ class ModelInterface:
     """Thin wrapper over LiteLLM to keep prompts consistent."""
 
     def __init__(self, config: ModelConfig, system_prompt: str | None = None):
+        # The harness reports exceptions itself. LiteLLM's provider/help
+        # banners otherwise pollute progress output, including when an
+        # optional pricing lookup cannot identify a local model.
+        litellm.suppress_debug_info = True
         self.config = config
         #: Variant state (e.g. injected skill content), deliberately not part
         #: of ModelConfig so it never lands in serialized model config blocks.

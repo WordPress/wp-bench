@@ -190,9 +190,9 @@ per second. Reasoning tokens can account for most of the wait even when the
 final PHP answer is short. A subsequent `POST /v1/chat/completions` request
 shows the harness has moved on to another prompt.
 
-LiteLLM may print `Provider List` messages when it cannot estimate pricing for
-a local model. Those messages alone do not indicate a failed request; local
-model cost estimates can be unavailable.
+The harness suppresses LiteLLM's provider/help banners, including those from
+unavailable local-model pricing lookups. Local model cost estimates can be
+unavailable; request failures and grading failures are still reported.
 
 Completed runs produce matching timestamped files under `output/`:
 
