@@ -36,6 +36,7 @@ from .output import (
     print_test_error,
     print_test_warning,
 )
+from .playground import PlaygroundEnvironment
 from .records import (
     RESULT_SCHEMA_VERSION,
     build_error_record,
@@ -138,6 +139,10 @@ def select_run_tests(tests: list[Any], config: HarnessConfig) -> list[Any]:
             f"'{config.dataset.name}' (suite {config.run.suite!r}). "
             "Check the dataset source, suite name, and selection filters."
         )
+    if config.grader.kind == "playground" and any(
+        getattr(test, "artifact_kind", "php_snippet") == "wp_cli_shell" for test in selected
+    ):
+        raise ValueError("Playground does not support wp_cli_shell tests; use grader.kind='docker'.")
     return selected
 
 
@@ -478,7 +483,10 @@ class BenchmarkRunner(_ResultBookkeeping):
         """
         self.config = config
         self.model = ModelInterface(config.model or config.get_models()[0])
-        self.environment = WordPressEnvironment(config.grader)
+        self.environment = (
+            PlaygroundEnvironment(config.grader) if config.grader.kind == "playground"
+            else WordPressEnvironment(config.grader)
+        )
         self._results_path, stream = open_run_artifacts(config.output)
         self._init_bookkeeping(stream or RecordStream(None))
 
@@ -521,7 +529,8 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
                 "runtime_isolation_boundary": (
-                    "container_per_test" if _restores_a_baseline(self.config) else "shared"
+                    ("playground_per_test" if self.config.grader.kind == "playground"
+                     else "container_per_test") if _restores_a_baseline(self.config) else "shared"
                 ),
                 "execution_concurrency": self.config.run.execution_concurrency,
                 "runtime_image_id": self.environment.image_id,
@@ -702,7 +711,8 @@ class BenchmarkRunner(_ResultBookkeeping):
                 "dataset": self.config.dataset.model_dump(mode="json"),
                 "runtime_isolation": self.config.run.execution_isolation,
                 "runtime_isolation_boundary": (
-                    "container_per_test" if _restores_a_baseline(self.config) else "shared"
+                    ("playground_per_test" if self.config.grader.kind == "playground"
+                     else "container_per_test") if _restores_a_baseline(self.config) else "shared"
                 ),
                 "execution_concurrency": self.config.run.execution_concurrency,
                 "runtime_image_id": self.environment.image_id,
@@ -974,7 +984,10 @@ class MultiModelRunner:
                 unless ``config.skills.only`` skips the baseline.
         """
         self.config = config
-        self.environment = WordPressEnvironment(config.grader)
+        self.environment = (
+            PlaygroundEnvironment(config.grader) if config.grader.kind == "playground"
+            else WordPressEnvironment(config.grader)
+        )
         self.skills = skills or []
         self.variants = build_variants(self.skills, skills_only=config.skills.only)
         self.results: dict[str, dict[str, Any]] = {}
@@ -1073,7 +1086,8 @@ class MultiModelRunner:
                 "runtime_isolation": self.config.run.execution_isolation,
                 "continue_on_error": self.config.run.continue_on_error,
                 "runtime_isolation_boundary": (
-                    "container_per_test" if _restores_a_baseline(self.config) else "shared"
+                    ("playground_per_test" if self.config.grader.kind == "playground"
+                     else "container_per_test") if _restores_a_baseline(self.config) else "shared"
                 ),
                 "execution_concurrency": self.config.run.execution_concurrency,
                 "runtime_image_id": self.environment.image_id,

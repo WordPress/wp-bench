@@ -26,6 +26,7 @@ RUN curl -fsSL "https://github.com/WordPress/sqlite-database-integration/release
     rm -rf /tmp/sqlite /tmp/sqlite.zip
 
 COPY wp-bench-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/wp-bench-runtime.php
+COPY verifier-bootstrap.php /var/www/html/wp-content/plugins/wp-bench-runtime/verifier-bootstrap.php
 COPY verify-runtime.php /var/www/html/wp-content/plugins/wp-bench-runtime/verify-runtime.php
 COPY src /var/www/html/wp-content/plugins/wp-bench-runtime/src
 COPY sqlite-snapshot.php /var/www/html/wp-content/plugins/wp-bench-runtime/sqlite-snapshot.php
