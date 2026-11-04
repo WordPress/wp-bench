@@ -150,6 +150,24 @@ The token value is not stored in result metadata.
 and `grader.setup_timeout_seconds` limits Playground boot. The first boot
 downloads WordPress into Playground's cache and requires internet access.
 
+### Optional: disable reasoning in LM Studio
+
+For LM Studio models that support switching reasoning off, add these inference
+options under `model`. This was verified with Qwen 3.6 27B:
+
+```yaml
+model:
+  extra_body:
+    reasoning_effort: "none"
+```
+
+Merge this into your existing `model` section. `extra_body` passes
+server-specific inference options through the compatible API and records them
+with the results. Check the server response to confirm that no reasoning tokens
+were generated; support varies by model and server. This setting can change
+both speed and accuracy, so keep reasoning-on and reasoning-off results
+separate. It is not a universal option for every OpenAI-compatible server.
+
 ## 4. Try a small run
 
 ```bash

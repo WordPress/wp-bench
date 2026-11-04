@@ -7,7 +7,7 @@ at load time instead of becoming silent no-ops: config means behavior.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -55,6 +55,8 @@ class ModelConfig(StrictModel):
     api_base: str | None = None
     #: Name of an optional credential environment variable; never the secret.
     api_key_env: str | None = None
+    #: Provider-specific inference options, recorded for reproducibility.
+    extra_body: dict[str, Any] = Field(default_factory=dict)
     temperature: float = 0.0
     max_tokens: int | None = None
     top_p: float | None = None

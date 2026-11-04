@@ -191,6 +191,8 @@ class ModelInterface:
             "top_p": self.config.top_p,
             "timeout": self.config.request_timeout,
         }
+        if self.config.extra_body:
+            kwargs["extra_body"] = self.config.extra_body
         if self.config.api_base is not None:
             kwargs["api_base"] = self.config.api_base
         if self.config.kind == "openai-compatible":

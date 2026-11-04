@@ -176,7 +176,7 @@ def test_local_endpoint_routes_without_model_prefix_or_cloud_credentials(monkeyp
         try:
             config = ModelConfig(kind='openai-compatible', name='qwen3.6-27b-mtp',
                                  api_base=f'http://127.0.0.1:{server.server_port}/v1',
-                                 max_retries=0, request_timeout=5)
+                                 max_retries=0, request_timeout=5, extra_body={'reasoning_effort': 'none'})
             assert ModelInterface(config).generate('hello') == 'ok'
         finally:
             server.shutdown()
@@ -184,9 +184,11 @@ def test_local_endpoint_routes_without_model_prefix_or_cloud_credentials(monkeyp
     assert received[0][0] == '/v1/chat/completions'
     assert received[0][1] == 'Bearer not-needed'
     assert received[0][2]['model'] == 'qwen3.6-27b-mtp'
+    assert received[0][2]['reasoning_effort'] == 'none'
     info = _model_info(config)
     assert info is not None and info['name'] == 'qwen3.6-27b-mtp'
     assert info['api_base'] == config.api_base
+    assert info['extra_body'] == {'reasoning_effort': 'none'}
     assert 'cloud-secret' not in config.model_dump_json()
     assert 'Provider List:' not in capsys.readouterr().out
 
