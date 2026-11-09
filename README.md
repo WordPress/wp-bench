@@ -260,7 +260,7 @@ Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 
-The default suite `wp-core-v1` contains 350 tasks covering WordPress core APIs,
+The default suite `wp-core-v1` contains 353 tasks covering WordPress core APIs,
 hooks, database operations, and security patterns.
 
 ### WP-CLI workflows

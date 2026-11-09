@@ -38,8 +38,8 @@ def _execution_tests() -> list[dict[str, Any]]:
     return tests
 
 
-def test_execution_suite_has_exactly_350_tests() -> None:
-    assert len(_execution_tests()) == 350
+def test_execution_suite_has_exactly_353_tests() -> None:
+    assert len(_execution_tests()) == 353
 
 
 def test_execution_test_ids_are_unique() -> None:
