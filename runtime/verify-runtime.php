@@ -12,6 +12,7 @@ use WPBench\Runtime\Verifier;
 require_once __DIR__ . '/src/class-sandbox.php';
 require_once __DIR__ . '/src/class-static-analysis.php';
 require_once __DIR__ . '/src/class-artifact-installer.php';
+require_once __DIR__ . '/src/class-theme-installer.php';
 require_once __DIR__ . '/src/class-verifier.php';
 require_once __DIR__ . '/src/class-shell-verifier.php';
 require_once __DIR__ . '/src/class-preservation.php';

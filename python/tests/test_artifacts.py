@@ -35,6 +35,16 @@ PLUGIN_JSON = json.dumps(
     }
 )
 
+THEME_JSON = json.dumps(
+    {
+        "files": {
+            "style.css": "/*\nTheme Name: Demo\nTemplate: twentytwentyfive\n*/",
+            "functions.php": "<?php\nadd_action('after_setup_theme', 'demo_setup');",
+            "template-parts/content.php": "<article><?php the_title(); ?></article>",
+        }
+    }
+)
+
 
 def _plugin_test(test_id: str = "e-plugin-001") -> ExecutionTest:
     return ExecutionTest(
@@ -124,6 +134,33 @@ def test_plugin_artifact_rejects_too_many_files() -> None:
         parse_artifact(json.dumps({"files": files}), "wp_plugin_files")
 
 
+def test_parse_theme_files_json_output() -> None:
+    artifact = parse_artifact(f"```json\n{THEME_JSON}\n```", "wp_theme_files")
+
+    assert artifact.kind == "wp_theme_files"
+    assert set(artifact.files) == {"style.css", "functions.php", "template-parts/content.php"}
+    assert artifact.payload_fields()["files"] == artifact.files
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"functions.php": "<?php"},
+        {"style.css": "/* Plugin Name: Not a theme */"},
+        {"css/style.css": "/*\nTheme Name: Nested\n*/"},
+    ],
+)
+def test_theme_files_require_top_level_style_css_header(files: dict[str, str]) -> None:
+    with pytest.raises(ArtifactError, match="style.css"):
+        parse_artifact(json.dumps({"files": files}), "wp_theme_files")
+
+
+def test_theme_files_reject_traversal() -> None:
+    files = {"style.css": "/*\nTheme Name: Demo\n*/", "../functions.php": "<?php"}
+    with pytest.raises(ArtifactError, match="traversal"):
+        parse_artifact(json.dumps({"files": files}), "wp_theme_files")
+
+
 def test_unknown_artifact_kind_rejected() -> None:
     with pytest.raises(ArtifactError, match="Unsupported artifact kind"):
         parse_artifact("anything", "js_module")
@@ -136,6 +173,9 @@ def test_prompt_instructions_differ_by_kind() -> None:
     assert "```php" in snippet
     assert "files" in plugin
     assert snippet != plugin
+    theme = render_artifact_instructions("wp_theme_files")
+    assert "Theme Name:" in theme
+    assert "Plugin Name:" not in theme
 
 
 # --- Runner integration ----------------------------------------------------
@@ -263,3 +303,32 @@ def test_snippet_prompt_unchanged_plugin_prompt_asks_for_json(
 
     assert "```php" in snippet_prompt
     assert "files" in plugin_prompt
+
+
+def test_reference_solution_uses_reference_files_for_theme_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    test = _plugin_test()
+    test.artifact_kind = "wp_theme_files"
+    test.reference_files = {"style.css": "/*\nTheme Name: Demo\n*/", "index.php": "<?php"}
+    monkeypatch.setattr(
+        "wp_bench.core.load_tests",
+        lambda dataset: [test],
+    )
+    runner = BenchmarkRunner(_config(tmp_path, check_reference_solution=True))
+    runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
+    runner.environment.reset = lambda: None  # type: ignore[method-assign]
+    seen: dict = {}
+
+    def fake_execute_artifact(artifact: Artifact, verification_spec: dict) -> ExecutionResult:
+        seen["artifact"] = artifact
+        return _passing_result()
+
+    runner.environment.execute_artifact = fake_execute_artifact  # type: ignore[method-assign]
+
+    runner.run()
+
+    assert seen["artifact"].kind == "wp_theme_files"
+    assert seen["artifact"].files == test.reference_files
+    assert seen["artifact"].payload_fields()["artifact_kind"] == "wp_theme_files"

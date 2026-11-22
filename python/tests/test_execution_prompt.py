@@ -4,6 +4,7 @@ from __future__ import annotations
 from wp_bench.core import (
     EXECUTION_CONTEXT_NOTE,
     PLUGIN_EXECUTION_CONTEXT_NOTE,
+    THEME_EXECUTION_CONTEXT_NOTE,
     BenchmarkRunner,
 )
 from wp_bench.datasets import ExecutionTest
@@ -41,3 +42,13 @@ def test_plugin_artifact_prompt_carries_the_plugin_note() -> None:
     assert EXECUTION_CONTEXT_NOTE not in prompt
     assert "add_action and add_filter" in prompt
     assert "Plugin Name:" in prompt
+
+
+def test_theme_artifact_prompt_carries_the_theme_note() -> None:
+    prompt = BenchmarkRunner._render_execution_prompt(_test("wp_theme_files"))
+
+    assert THEME_EXECUTION_CONTEXT_NOTE in prompt
+    assert EXECUTION_CONTEXT_NOTE not in prompt
+    assert PLUGIN_EXECUTION_CONTEXT_NOTE not in prompt
+    assert "after_setup_theme" in prompt
+    assert "Theme Name:" in prompt

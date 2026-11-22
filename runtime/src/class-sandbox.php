@@ -29,10 +29,11 @@ class Sandbox {
 	 *
 	 * @param string               $code   The generated code to execute.
 	 * @param array<string, mixed> $checks Runtime check configuration.
+	 * @param callable|null        $load   Loads a candidate artifact after setup, before the assertions.
 	 *
 	 * @return array{score: float, details: array<string, mixed>}
 	 */
-	public function execute_and_verify( string $code, array $checks ): array {
+	public function execute_and_verify( string $code, array $checks, ?callable $load = null ): array {
 		$setup_value    = $checks['setup'] ?? '';
 		$setup          = is_string( $setup_value ) ? $setup_value : '';
 		$teardown_value = $checks['teardown'] ?? '';
@@ -58,6 +59,11 @@ class Sandbox {
 
 			// Execute the generated code.
 			$this->safe_eval( $code );
+
+			// Load an installed artifact that must see the setup's fixtures.
+			if ( null !== $load ) {
+				$load();
+			}
 
 			// Run assertions.
 			if ( is_array( $assertions ) ) {

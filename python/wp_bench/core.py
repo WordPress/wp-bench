@@ -442,6 +442,21 @@ PLUGIN_EXECUTION_CONTEXT_NOTE = (
     "did_action() checks."
 )
 
+#: Theme submissions are installed into wp-content/themes and activated after
+#: the site booted with another theme. The grader reproduces the theme part
+#: of the boot (functions.php, then after_setup_theme); later actions such as
+#: init or wp_enqueue_scripts are fired by the assertions that need them.
+THEME_EXECUTION_CONTEXT_NOTE = (
+    "Execution context: the theme is installed into wp-content/themes and activated on "
+    "a WordPress site that has already finished booting. The grader then loads it the "
+    "way WordPress boots a theme: the child theme's functions.php, then the parent's, "
+    "then the after_setup_theme action. Later actions such as init, widgets_init, "
+    "wp_enqueue_scripts and customize_register are fired by the grader when it needs "
+    "them, and templates are rendered through WordPress's own template functions. "
+    "Write it as a normal theme: attach behavior to hooks exactly as you would in "
+    "production and do not skip hook registration behind did_action() checks."
+)
+
 EXECUTION_CONTEXT_NOTE = (
     "Execution context: this code is loaded into a WordPress site that has already "
     "finished booting (the init action has already fired, as have plugins_loaded, "
@@ -627,10 +642,10 @@ class BenchmarkRunner(_ResultBookkeeping):
         def process_test(test: ExecutionTest) -> dict[str, Any]:
             try:
                 artifact_kind = getattr(test, "artifact_kind", "php_snippet")
-                if artifact_kind == "wp_plugin_files":
+                if artifact_kind in ("wp_plugin_files", "wp_theme_files"):
                     if not test.reference_files:
-                        raise ValueError("Missing reference_files for plugin artifact test")
-                    artifact = Artifact(kind="wp_plugin_files", files=test.reference_files)
+                        raise ValueError(f"Missing reference_files for {artifact_kind} test")
+                    artifact = Artifact(kind=artifact_kind, files=test.reference_files)
                 else:
                     if not test.reference_solution:
                         raise ValueError("Missing reference_solution")
@@ -811,6 +826,8 @@ class BenchmarkRunner(_ResultBookkeeping):
             if artifact_kind == "wp_cli_shell"
             else PLUGIN_EXECUTION_CONTEXT_NOTE
             if artifact_kind == "wp_plugin_files"
+            else THEME_EXECUTION_CONTEXT_NOTE
+            if artifact_kind == "wp_theme_files"
             else EXECUTION_CONTEXT_NOTE
         )
         lines.append(render_artifact_instructions(artifact_kind))

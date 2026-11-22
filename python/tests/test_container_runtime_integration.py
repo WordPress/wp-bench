@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from wp_bench.artifacts import Artifact
 from wp_bench.config import GraderConfig
 from wp_bench.environment import WordPressEnvironment
 
@@ -61,6 +62,39 @@ def test_files_database_and_core_changes_do_not_survive(environment) -> None:
             && !file_exists(ABSPATH . 'wp-content/plugins/wp-bench-candidate-leftover')
             && str_contains(file_get_contents(ABSPATH . 'index.php'), 'wp-blog-header.php');
     """)
+
+
+def test_theme_artifact_is_activated_after_setup_and_removed(environment) -> None:
+    env = environment
+    env.reset()
+    # Setup installs a classic parent theme; the candidate is its child.
+    setup = """
+        $dir = get_theme_root() . '/wpbp-fixture-parent';
+        mkdir($dir);
+        file_put_contents($dir . '/style.css', "/*\\nTheme Name: Fixture Parent\\n*/");
+        file_put_contents($dir . '/index.php', '<?php');
+        file_put_contents($dir . '/functions.php', "<?php\\nadd_action('after_setup_theme', static fn () => add_theme_support('title-tag'));");
+    """
+    checks = [
+        "return str_starts_with(get_stylesheet(), 'wp-bench-candidate-') && 'wpbp-fixture-parent' === get_template();",
+        "return is_child_theme() && current_theme_supports('title-tag') && current_theme_supports('post-thumbnails');",
+        "return ! current_theme_supports('editor-styles') && false === has_action('wp_enqueue_scripts', 'twentytwentyfive_enqueue_styles');",
+        "return get_stylesheet_directory() . '/index.php' === locate_template('index.php');",
+    ]
+    files = {
+        "style.css": "/*\nTheme Name: Candidate Child\nTemplate: wpbp-fixture-parent\n*/",
+        "functions.php": "<?php\nadd_action('after_setup_theme', static fn () => add_theme_support('post-thumbnails'));",
+        "index.php": "<?php",
+    }
+    result = env.execute_artifact(Artifact(kind="wp_theme_files", files=files), {
+        "runtime_checks": {
+            "setup": setup,
+            "assertions": [{"type": "custom_assertion", "code": code, "weight": 1} for code in checks],
+        },
+    })
+    assert result.success, (result.raw, result.stdout, result.stderr)
+    assert result.raw["runtime"]["score"] == 1
+    assert result.raw["artifact_kind"] == "wp_theme_files"
 
 
 def test_admin_hooks_do_not_make_core_maintenance_requests(environment) -> None:

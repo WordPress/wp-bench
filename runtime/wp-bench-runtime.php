@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP-Bench Runtime
  * Description: Minimal WordPress runtime for executing WP-Bench verification commands.
- * Version: 2.2.0
+ * Version: 2.3.0
  * Requires at least: 7.1
  * Requires PHP: 8.1
  * Author: WordPress Community
@@ -21,6 +21,7 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 	require_once __DIR__ . '/src/class-sandbox.php';
 	require_once __DIR__ . '/src/class-static-analysis.php';
 	require_once __DIR__ . '/src/class-artifact-installer.php';
+	require_once __DIR__ . '/src/class-theme-installer.php';
 	require_once __DIR__ . '/src/class-shell-verifier.php';
 	require_once __DIR__ . '/src/class-verifier.php';
 	require_once __DIR__ . '/src/class-preservation.php';
