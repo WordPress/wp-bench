@@ -668,6 +668,422 @@
       "exploit_solutions": [
         "function wpbp_post_types_taxonomy_014( int $term_id ): int { $posts = get_posts( array( 'category' => $term_id, 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids' ) ); return count( $posts ); }"
       ]
+    },
+    {
+      "id": "e-post-types-taxonomy-015",
+      "category": "post-types-taxonomy",
+      "prompt": "Register the 'wpbp_doc' post type for product documentation. Docs are public pages that nest under other docs, and editors choose the order of the docs that share a parent. The block editor and other REST clients work with docs at /wp/v2/docs, and must be able to set a doc's parent, its order and its excerpt there. Every edit keeps a revision. On the front end the archive of all docs is at /docs/ and a doc's address follows its parents, such as /docs/getting-started/install/. The site's post permalinks use a /blog/ prefix, and docs must not inherit that prefix.",
+      "expected_behavior": "`register_post_type()` with `hierarchical => true`, `show_in_rest => true` (it defaults to false), `rest_base => 'docs'`, `supports` including `excerpt`, `revisions` and `page-attributes` (without it the REST API neither accepts `menu_order` nor allows ordering by it), `has_archive` resolving to `docs` and `rewrite` with `slug => 'docs'` and `with_front => false` so the `/blog/` front is not prepended. Runtime validation sets the permalink structure to `/blog/%postname%/`, lists and creates child docs through the REST API, checks permalinks, the archive link and rewrite resolution, revisions through REST, and that the type stays public and searchable.",
+      "requirements": [
+        "Register 'wpbp_doc' as a public hierarchical post type",
+        "Expose it in the REST API at /wp/v2/docs with parent, page order and excerpt editable there",
+        "Keep revisions of every edit",
+        "Serve the archive at /docs/ and nested doc addresses under /docs/ without the /blog/ permalink prefix"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_post_type",
+            "description": "Registers the post type",
+            "weight": 1
+          },
+          {
+            "pattern": "hierarchical",
+            "description": "Makes docs hierarchical",
+            "weight": 1
+          },
+          {
+            "pattern": "page-attributes",
+            "description": "Supports page attributes for the order",
+            "weight": 1
+          },
+          {
+            "pattern": "with_front",
+            "description": "Drops the permalink front from doc URLs",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wp_rewrite; $GLOBALS['wpbp_ptt_015'] = array( 'structure' => (string) get_option( 'permalink_structure' ) ); $wp_rewrite->set_permalink_structure( '/blog/%postname%/' ); $make = static function ( $title, $slug, $parent, $order ) { $post_id = (int) wp_insert_post( array( 'post_type' => 'wpbp_doc', 'post_title' => $title, 'post_name' => $slug, 'post_status' => 'publish', 'post_parent' => $parent, 'menu_order' => $order, 'post_content' => 'First draft.' ) ); $GLOBALS['wpbp_ptt_015']['posts'][] = $post_id; return $post_id; }; $GLOBALS['wpbp_ptt_015']['parent'] = $make( 'Getting Started', 'getting-started', 0, 0 ); $GLOBALS['wpbp_ptt_015']['install'] = $make( 'Install', 'install', $GLOBALS['wpbp_ptt_015']['parent'], 2 ); $GLOBALS['wpbp_ptt_015']['configure'] = $make( 'Configure', 'configure', $GLOBALS['wpbp_ptt_015']['parent'], 1 ); $GLOBALS['wpbp_ptt_015']['other'] = $make( 'Reference', 'reference', 0, 0 );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$fx = $GLOBALS['wpbp_ptt_015']; wp_set_current_user( 1 ); $list = new WP_REST_Request( 'GET', '/wp/v2/docs' ); $list->set_query_params( array( 'parent' => $fx['parent'], 'orderby' => 'menu_order', 'order' => 'asc' ) ); $res = rest_do_request( $list ); if ( 200 !== $res->get_status() ) { return false; } $titles = array_map( static function ( $item ) { return $item['title']['rendered'] ?? ''; }, (array) $res->get_data() ); if ( array( 'Configure', 'Install' ) !== $titles ) { return false; } $create = new WP_REST_Request( 'POST', '/wp/v2/docs' ); $create->set_body_params( array( 'title' => 'Upgrade', 'status' => 'publish', 'parent' => $fx['parent'], 'menu_order' => 3, 'excerpt' => 'How to upgrade.' ) ); $made = rest_do_request( $create ); if ( 201 !== $made->get_status() ) { return false; } $data = $made->get_data(); $post = get_post( (int) ( $data['id'] ?? 0 ) ); if ( ! $post instanceof WP_Post ) { return false; } $GLOBALS['wpbp_ptt_015']['posts'][] = $post->ID; return 'wpbp_doc' === $post->post_type && (int) $fx['parent'] === (int) $post->post_parent && 3 === (int) $post->menu_order && 'How to upgrade.' === $post->post_excerpt;",
+            "description": "Docs are served at /wp/v2/docs, where they can be filtered by parent, ordered by page order and created as children with an order and an excerpt",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fx = $GLOBALS['wpbp_ptt_015']; global $wp_rewrite; $wp_rewrite->flush_rules( false ); $child = get_permalink( $fx['install'] ); if ( home_url( '/docs/getting-started/install/' ) !== $child ) { return false; } if ( home_url( '/docs/' ) !== get_post_type_archive_link( 'wpbp_doc' ) ) { return false; } if ( (int) $fx['install'] !== url_to_postid( $child ) ) { return false; } $rules = (array) $wp_rewrite->wp_rewrite_rules(); return isset( $rules['docs/?$'] ) && str_contains( (string) $rules['docs/?$'], 'post_type=wpbp_doc' );",
+            "description": "Docs live at /docs/<parent>/<child>/ with an archive at /docs/, outside the /blog/ prefix of the post permalinks, and the rewrite rules resolve them",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$fx = $GLOBALS['wpbp_ptt_015']; wp_update_post( array( 'ID' => $fx['configure'], 'post_content' => 'Second draft.' ) ); if ( count( wp_get_post_revisions( $fx['configure'] ) ) < 1 ) { return false; } wp_set_current_user( 1 ); $res = rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/docs/' . (int) $fx['configure'] . '/revisions' ) ); return 200 === $res->get_status() && count( (array) $res->get_data() ) >= 1;",
+            "description": "Edits to a doc keep revisions, and they are listed through the REST API",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$type = get_post_type_object( 'wpbp_doc' ); if ( ! $type instanceof WP_Post_Type ) { return false; } $query = new WP_Query( array( 's' => 'Reference', 'post_type' => 'any', 'fields' => 'ids' ) ); return is_post_type_viewable( $type ) && $type->show_ui && $type->show_in_nav_menus && in_array( (int) $GLOBALS['wpbp_ptt_015']['other'], array_map( 'intval', $query->posts ), true );",
+            "description": "Docs stay public: viewable, managed in the admin, offered in menus and found by site search",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fx = $GLOBALS['wpbp_ptt_015'] ?? array(); foreach ( ( $fx['posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } if ( post_type_exists( 'wpbp_doc' ) ) { unregister_post_type( 'wpbp_doc' ); } global $wp_rewrite; $wp_rewrite->set_permalink_structure( (string) ( $fx['structure'] ?? '' ) ); $wp_rewrite->flush_rules( false ); wp_set_current_user( 0 ); unset( $GLOBALS['wpbp_ptt_015'] );"
+      },
+      "reference_solution": "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => true,\n\t\t'show_in_rest' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions', 'page-attributes' ),\n\t)\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/class-wp-post-type.php",
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php",
+          "src/wp-includes/class-wp-rewrite.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions', 'page-attributes' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => false,\n\t\t'show_in_rest' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions', 'page-attributes' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => true,\n\t\t'show_in_rest' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => true,\n\t\t'show_in_rest' => true,\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions', 'page-attributes' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => true,\n\t\t'show_in_rest' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions', 'page-attributes' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => true,\n\t\t'hierarchical' => true,\n\t\t'show_in_rest' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'page-attributes' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_doc',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Docs',\n\t\t\t'singular_name' => 'Doc',\n\t\t),\n\t\t'public'       => false,\n\t\t'show_ui'      => true,\n\t\t'publicly_queryable' => true,\n\t\t'hierarchical' => true,\n\t\t'show_in_rest' => true,\n\t\t'rest_base'    => 'docs',\n\t\t'has_archive'  => 'docs',\n\t\t'rewrite'      => array(\n\t\t\t'slug'       => 'docs',\n\t\t\t'with_front' => false,\n\t\t),\n\t\t'supports'     => array( 'title', 'editor', 'excerpt', 'revisions', 'page-attributes' ),\n\t)\n);"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-016",
+      "category": "post-types-taxonomy",
+      "prompt": "Register an internal 'wpbp_log' post type for audit log entries. Staff manage the entries in the admin, from a screen listed under the Tools menu rather than in a menu of its own. The entries must never reach visitors or outside clients: no single entry pages, no archive, no query variable, no results in site search, not offered when building navigation menus, and not available through the REST API.",
+      "expected_behavior": "`register_post_type()` with `public => false` and `show_ui => true` (show_ui defaults to the value of public, so a non-public type has no admin screen unless it is turned back on) and `show_in_menu => 'tools.php'`. Keeping `public` false lets the other defaults follow: `publicly_queryable`, `show_in_nav_menus` and `show_in_rest` stay false and `exclude_from_search` becomes true; a public type with only `publicly_queryable => false` still shows in search and menus. Runtime validation builds the post type submenus, inspects the registered object, runs an `'any'` search and checks the REST routes.",
+      "requirements": [
+        "Register 'wpbp_log' as a post type managed in the admin",
+        "List its admin screen under the Tools menu, not as a top-level menu",
+        "No single pages, archive or query variable on the front end",
+        "Exclude entries from site search and from navigation menu building",
+        "Do not expose the post type through the REST API"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_post_type",
+            "description": "Registers the post type",
+            "weight": 1
+          },
+          {
+            "pattern": "show_ui",
+            "description": "Turns the admin screen on",
+            "weight": 1
+          },
+          {
+            "pattern": "tools\\.php",
+            "description": "Places the screen under Tools",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_016'] = array(); foreach ( array( 'Login failed for admin', 'Plugin settings changed' ) as $title ) { $GLOBALS['wpbp_ptt_016'][] = (int) wp_insert_post( array( 'post_type' => 'wpbp_log', 'post_title' => $title, 'post_status' => 'publish', 'post_content' => 'wpbpaudit entry' ) ); } $GLOBALS['wpbp_ptt_016'][] = (int) wp_insert_post( array( 'post_type' => 'post', 'post_title' => 'Public note', 'post_status' => 'publish', 'post_content' => 'wpbpaudit public' ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$type = get_post_type_object( 'wpbp_log' ); if ( ! $type instanceof WP_Post_Type || ! $type->show_ui || 'tools.php' !== $type->show_in_menu ) { return false; } require_once ABSPATH . 'wp-admin/includes/plugin.php'; wp_set_current_user( 1 ); global $submenu; $saved = $submenu ?? null; $submenu = array(); _add_post_type_submenus(); $tools = wp_list_pluck( $submenu['tools.php'] ?? array(), 2 ); $elsewhere = 0; foreach ( $submenu as $parent => $items ) { if ( 'tools.php' !== $parent && in_array( 'edit.php?post_type=wpbp_log', wp_list_pluck( $items, 2 ), true ) ) { $elsewhere++; } } $submenu = $saved; return in_array( 'edit.php?post_type=wpbp_log', $tools, true ) && 0 === $elsewhere && current_user_can( 'edit_post', (int) $GLOBALS['wpbp_ptt_016'][0] );",
+            "description": "Entries are managed in the admin from a screen listed under the Tools menu",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$type = get_post_type_object( 'wpbp_log' ); if ( ! $type instanceof WP_Post_Type ) { return false; } global $wp; return ! is_post_type_viewable( $type ) && ! $type->publicly_queryable && false === get_post_type_archive_link( 'wpbp_log' ) && ! in_array( 'wpbp_log', (array) $wp->public_query_vars, true );",
+            "description": "Entries have no front-end pages, archive or public query variable",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$query = new WP_Query( array( 's' => 'wpbpaudit', 'post_type' => 'any', 'fields' => 'ids' ) ); $found = array_map( 'intval', $query->posts ); return array( (int) $GLOBALS['wpbp_ptt_016'][2] ) === $found;",
+            "description": "Site search over every searchable type finds the public post but no log entry",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$type = get_post_type_object( 'wpbp_log' ); if ( ! $type instanceof WP_Post_Type || $type->show_in_nav_menus || $type->show_in_rest ) { return false; } wp_set_current_user( 1 ); $routes = array_keys( rest_get_server()->get_routes() ); foreach ( $routes as $route ) { if ( str_contains( $route, 'wpbp_log' ) ) { return false; } } return 404 === rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/wpbp_log' ) )->get_status();",
+            "description": "Entries are not offered in navigation menus and have no REST route",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_ptt_016'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } if ( post_type_exists( 'wpbp_log' ) ) { unregister_post_type( 'wpbp_log' ); } wp_set_current_user( 0 ); unset( $GLOBALS['wpbp_ptt_016'] );"
+      },
+      "reference_solution": "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => false,\n\t\t'show_ui'      => true,\n\t\t'show_in_menu' => 'tools.php',\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/class-wp-post-type.php",
+          "src/wp-admin/menu.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => false,\n\t\t'show_in_menu' => 'tools.php',\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => true,\n\t\t'publicly_queryable' => false,\n\t\t'show_ui'      => true,\n\t\t'show_in_menu' => 'tools.php',\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => false,\n\t\t'show_ui'      => true,\n\t\t'show_in_menu' => true,\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => false,\n\t\t'show_ui'      => true,\n\t\t'show_in_rest' => true,\n\t\t'show_in_menu' => 'tools.php',\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => false,\n\t\t'show_ui'      => true,\n\t\t'publicly_queryable' => true,\n\t\t'show_in_menu' => 'tools.php',\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);",
+        "register_post_type(\n\t'wpbp_log',\n\tarray(\n\t\t'labels'       => array(\n\t\t\t'name'          => 'Audit Log',\n\t\t\t'singular_name' => 'Log Entry',\n\t\t),\n\t\t'public'       => true,\n\t\t'publicly_queryable' => false,\n\t\t'exclude_from_search' => true,\n\t\t'show_ui'      => true,\n\t\t'show_in_menu' => 'tools.php',\n\t\t'rewrite'      => false,\n\t\t'query_var'    => false,\n\t\t'supports'     => array( 'title', 'editor' ),\n\t)\n);"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-017",
+      "category": "post-types-taxonomy",
+      "prompt": "Register a flat (non-hierarchical) 'wpbp_topic' taxonomy shared by posts and pages, with these rules. Authors list a post's topics in order of importance, so get_the_terms() must return a post's topics in the order they were assigned, not alphabetically. A post or page saved without any topic gets the 'General' topic (slug 'general'). Anyone who can edit posts may assign existing topics, but only users who can manage options may open the Topics admin screen and rename or delete topics. The block editor reads topics from /wp/v2/topics, the posts and pages lists in the admin show each item's topics in a column, and a topic's archive lives at /topic/<slug>/.",
+      "expected_behavior": "`register_taxonomy()` for `post` and `page` with `sort => true` plus `args => array( 'orderby' => 'term_order' )` (sort only records the order; `args` makes `wp_get_object_terms()` and so `get_the_terms()` read it back), `default_term` with the General name and slug, `capabilities` mapping `manage_terms`, `edit_terms` and `delete_terms` to `manage_options` and `assign_terms` to `edit_posts` (the defaults are `manage_categories`, which Editors hold), `show_in_rest` with `rest_base => 'topics'`, `show_admin_column` and `rewrite` slug `topic`. Runtime validation reassigns topics in a new order, saves posts and pages with and without topics, checks term meta capabilities for editors, contributors and the administrator, tries to rename and delete topics and assigns one through REST as an editor, and checks the term link.",
+      "requirements": [
+        "Register 'wpbp_topic' as a non-hierarchical taxonomy for posts and pages",
+        "Return a post's topics from get_the_terms() in the order they were assigned",
+        "Give posts and pages saved without a topic the 'General' topic (slug 'general')",
+        "Let anyone who can edit posts assign topics, and only users who can manage options manage, rename or delete them",
+        "Serve topics at /wp/v2/topics, show them as an admin list column and link archives at /topic/<slug>/"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_taxonomy",
+            "description": "Registers the taxonomy",
+            "weight": 1
+          },
+          {
+            "pattern": "[Gg]eneral",
+            "description": "Names the default topic",
+            "weight": 1
+          },
+          {
+            "pattern": "assign_terms",
+            "description": "Maps the term capabilities",
+            "weight": 1
+          },
+          {
+            "pattern": "term_order",
+            "description": "Reads topics back in assigned order",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "global $wp_rewrite; $GLOBALS['wpbp_ptt_017'] = array( 'structure' => (string) get_option( 'permalink_structure' ), 'posts' => array(), 'users' => array() ); $wp_rewrite->set_permalink_structure( '/%postname%/' ); foreach ( array( 'editor', 'contributor' ) as $role ) { $GLOBALS['wpbp_ptt_017']['users'][ $role ] = (int) wp_insert_user( array( 'user_login' => 'wpbp_ptt_017_' . $role, 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-ptt-017-' . $role . '@example.com', 'role' => $role ) ); }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = array(); foreach ( array( 'Zeta', 'Alpha', 'Mid' ) as $name ) { $term = term_exists( $name, 'wpbp_topic' ); if ( ! $term ) { $term = wp_insert_term( $name, 'wpbp_topic' ); } if ( is_wp_error( $term ) ) { return false; } $ids[ $name ] = (int) $term['term_id']; } $names = static function ( $post_id ) { clean_object_term_cache( $post_id, get_post_type( $post_id ) ); $terms = get_the_terms( $post_id, 'wpbp_topic' ); return is_array( $terms ) ? wp_list_pluck( $terms, 'name' ) : array(); }; $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP ordered', 'post_status' => 'publish' ) ); $GLOBALS['wpbp_ptt_017']['posts'][] = $post_id; wp_set_post_terms( $post_id, array( $ids['Zeta'], $ids['Alpha'], $ids['Mid'] ), 'wpbp_topic' ); if ( array( 'Zeta', 'Alpha', 'Mid' ) !== $names( $post_id ) ) { return false; } wp_set_post_terms( $post_id, array( $ids['Mid'], $ids['Zeta'] ), 'wpbp_topic' ); return array( 'Mid', 'Zeta' ) === $names( $post_id );",
+            "description": "get_the_terms() returns a post's topics in the order they were assigned, also after reassigning",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$ids = array(); foreach ( array( 'Zeta', 'Alpha', 'Mid' ) as $name ) { $term = term_exists( $name, 'wpbp_topic' ); if ( ! $term ) { $term = wp_insert_term( $name, 'wpbp_topic' ); } if ( is_wp_error( $term ) ) { return false; } $ids[ $name ] = (int) $term['term_id']; } $names = static function ( $post_id ) { clean_object_term_cache( $post_id, get_post_type( $post_id ) ); $terms = get_the_terms( $post_id, 'wpbp_topic' ); return is_array( $terms ) ? wp_list_pluck( $terms, 'name' ) : array(); }; wp_set_current_user( 1 ); $bare = (int) wp_insert_post( array( 'post_title' => 'WPBP bare', 'post_status' => 'publish' ) ); $page = (int) wp_insert_post( array( 'post_type' => 'page', 'post_title' => 'WPBP page', 'post_status' => 'publish' ) ); $chosen = (int) wp_insert_post( array( 'post_title' => 'WPBP chosen', 'post_status' => 'publish', 'tax_input' => array( 'wpbp_topic' => array( $ids['Alpha'] ) ) ) ); array_push( $GLOBALS['wpbp_ptt_017']['posts'], $bare, $page, $chosen ); $general = get_term_by( 'slug', 'general', 'wpbp_topic' ); return $general instanceof WP_Term && 'General' === $general->name && array( 'General' ) === $names( $bare ) && array( 'General' ) === $names( $page ) && array( 'Alpha' ) === $names( $chosen );",
+            "description": "Posts and pages saved without a topic get the General topic; a chosen topic replaces it",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$ids = array(); foreach ( array( 'Zeta', 'Alpha', 'Mid' ) as $name ) { $term = term_exists( $name, 'wpbp_topic' ); if ( ! $term ) { $term = wp_insert_term( $name, 'wpbp_topic' ); } if ( is_wp_error( $term ) ) { return false; } $ids[ $name ] = (int) $term['term_id']; } $fx = $GLOBALS['wpbp_ptt_017']; $editor = (int) $fx['users']['editor']; $contributor = (int) $fx['users']['contributor']; foreach ( array( $editor, $contributor ) as $user_id ) { if ( ! user_can( $user_id, 'assign_term', $ids['Alpha'] ) || user_can( $user_id, 'edit_term', $ids['Alpha'] ) || user_can( $user_id, 'delete_term', $ids['Alpha'] ) || user_can( $user_id, get_taxonomy( 'wpbp_topic' )->cap->manage_terms ) ) { return false; } } if ( ! user_can( 1, 'edit_term', $ids['Alpha'] ) || ! user_can( 1, 'delete_term', $ids['Alpha'] ) ) { return false; } wp_set_current_user( $editor ); $rename = new WP_REST_Request( 'POST', '/wp/v2/topics/' . $ids['Alpha'] ); $rename->set_body_params( array( 'name' => 'Renamed' ) ); $delete = new WP_REST_Request( 'DELETE', '/wp/v2/topics/' . $ids['Zeta'] ); $delete->set_query_params( array( 'force' => true ) ); if ( 403 !== rest_do_request( $rename )->get_status() || 403 !== rest_do_request( $delete )->get_status() || ! term_exists( $ids['Zeta'], 'wpbp_topic' ) || 'Alpha' !== get_term( $ids['Alpha'], 'wpbp_topic' )->name ) { return false; } $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP rest', 'post_status' => 'publish', 'post_author' => $editor ) ); $GLOBALS['wpbp_ptt_017']['posts'][] = $post_id; $assign = new WP_REST_Request( 'POST', '/wp/v2/posts/' . $post_id ); $assign->set_body_params( array( 'topics' => array( $ids['Mid'] ) ) ); $res = rest_do_request( $assign ); wp_set_current_user( 0 ); clean_object_term_cache( $post_id, 'post' ); return 200 === $res->get_status() && array( $ids['Mid'] ) === array_map( 'intval', wp_get_object_terms( $post_id, 'wpbp_topic', array( 'fields' => 'ids' ) ) );",
+            "description": "Editors and contributors may assign topics, also through REST, but not manage, rename or delete them; administrators may",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "global $wp_rewrite; $wp_rewrite->flush_rules( false ); $general = get_term_by( 'slug', 'general', 'wpbp_topic' ); if ( ! $general instanceof WP_Term || home_url( '/topic/general/' ) !== get_term_link( $general ) ) { return false; } $tax = get_taxonomy( 'wpbp_topic' ); return $tax instanceof WP_Taxonomy && ! $tax->hierarchical && $tax->show_admin_column && in_array( 'page', (array) $tax->object_type, true ) && array_key_exists( '/wp/v2/topics', rest_get_server()->get_routes() );",
+            "description": "Topics are flat, shown as an admin column, attached to posts and pages, served at /wp/v2/topics and linked at /topic/<slug>/",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fx = $GLOBALS['wpbp_ptt_017'] ?? array(); foreach ( ( $fx['posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( ( $fx['users'] ?? array() ) as $user_id ) { wp_delete_user( (int) $user_id ); } if ( taxonomy_exists( 'wpbp_topic' ) ) { delete_option( 'default_term_wpbp_topic' ); foreach ( get_terms( array( 'taxonomy' => 'wpbp_topic', 'hide_empty' => false, 'fields' => 'ids' ) ) as $term_id ) { wp_delete_term( (int) $term_id, 'wpbp_topic' ); } unregister_taxonomy( 'wpbp_topic' ); } global $wp_rewrite; $wp_rewrite->set_permalink_structure( (string) ( $fx['structure'] ?? '' ) ); $wp_rewrite->flush_rules( false ); wp_set_current_user( 0 ); unset( $GLOBALS['wpbp_ptt_017'] );"
+      },
+      "reference_solution": "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t'args'              => array( 'orderby' => 'term_order' ),\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'manage_options',\n\t\t\t'edit_terms'   => 'manage_options',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php",
+          "src/wp-includes/class-wp-taxonomy.php",
+          "src/wp-includes/post.php",
+          "src/wp-includes/capabilities.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'manage_options',\n\t\t\t'edit_terms'   => 'manage_options',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+        "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t// term_order\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'manage_options',\n\t\t\t'edit_terms'   => 'manage_options',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+        "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t'args'              => array( 'orderby' => 'term_order' ),\n\t\t// default_term\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'manage_options',\n\t\t\t'edit_terms'   => 'manage_options',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+        "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t'args'              => array( 'orderby' => 'term_order' ),\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t// assign_terms\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+        "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t'args'              => array( 'orderby' => 'term_order' ),\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'edit_others_posts',\n\t\t\t'edit_terms'   => 'edit_others_posts',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+        "register_taxonomy(\n\t'wpbp_topic',\n\t'post',\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'rest_base'         => 'topics',\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t'args'              => array( 'orderby' => 'term_order' ),\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'manage_options',\n\t\t\t'edit_terms'   => 'manage_options',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);",
+        "register_taxonomy(\n\t'wpbp_topic',\n\tarray( 'post', 'page' ),\n\tarray(\n\t\t'labels'            => array(\n\t\t\t'name'          => 'Topics',\n\t\t\t'singular_name' => 'Topic',\n\t\t),\n\t\t'public'            => true,\n\t\t'hierarchical'      => false,\n\t\t'show_in_rest'      => true,\n\t\t'show_admin_column' => true,\n\t\t'sort'              => true,\n\t\t'args'              => array( 'orderby' => 'term_order' ),\n\t\t'default_term'      => array(\n\t\t\t'name' => 'General',\n\t\t\t'slug' => 'general',\n\t\t),\n\t\t'capabilities'      => array(\n\t\t\t'manage_terms' => 'manage_options',\n\t\t\t'edit_terms'   => 'manage_options',\n\t\t\t'delete_terms' => 'manage_options',\n\t\t\t'assign_terms' => 'edit_posts',\n\t\t),\n\t\t'rewrite'           => array( 'slug' => 'topic' ),\n\t)\n);"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-018",
+      "category": "post-types-taxonomy",
+      "prompt": "The site has a hierarchical 'wpbp_genre' taxonomy for posts, available in the REST API at /wp/v2/genres. Give genres two pieces of term meta. 'wpbp_color' is a single hex colour such as '#1a2b3c'; a value that is not a valid hex colour must never be stored, whichever way it is saved. 'wpbp_rank' is a single whole number that reads as 0 for a genre that was never ranked. Both must be readable and writable as the genre's meta through the REST API. Also return the IDs of every genre for a featured listing: ranked genres first, highest rank first, then the genres that were never ranked, ordered by name. Genres that have no posts yet belong in the listing too.",
+      "expected_behavior": "Both keys are registered with `register_term_meta()` for `wpbp_genre` as `single` with `show_in_rest`; the colour with `type => 'string'` and a `sanitize_callback` such as `sanitize_hex_color` (which runs for REST and `update_term_meta()` alike), the rank with `type => 'integer'` and `default => 0`. The listing reads `get_terms()` with `hide_empty => false`, orders ranks with `meta_value_num` (as text, 9 sorts above 100) and adds the terms with no rank meta (a `meta_key` order drops them), ordered by name. Runtime validation inspects the registration and defaults, compares the listing, writes and reads meta through REST, and saves invalid colours through REST and `update_term_meta()`.",
+      "requirements": [
+        "Register 'wpbp_color' as a single hex colour string that rejects anything else, however it is saved",
+        "Register 'wpbp_rank' as a single integer that reads 0 when never set",
+        "Expose both keys as genre meta in the REST API",
+        "Return every genre ID: ranked genres by rank, highest first, then unranked genres by name, including genres without posts"
+      ],
+      "test_function": "wpbp_post_types_taxonomy_018(): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_term_meta|register_meta",
+            "description": "Registers the term meta",
+            "weight": 1
+          },
+          {
+            "pattern": "show_in_rest",
+            "description": "Exposes the meta in REST",
+            "weight": 1
+          },
+          {
+            "pattern": "hide_empty",
+            "description": "Includes genres without posts",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_taxonomy( 'wpbp_genre', 'post', array( 'label' => 'Genres', 'public' => true, 'hierarchical' => true, 'show_in_rest' => true, 'rest_base' => 'genres' ) ); $GLOBALS['wpbp_ptt_018'] = array( 'terms' => array(), 'posts' => array() ); foreach ( array( 'Drama' => array( 10, true ), 'Horror' => array( 9, true ), 'Sci-Fi' => array( 100, false ), 'Beta' => array( null, true ), 'Alpha' => array( null, false ), 'Comedy' => array( null, true ) ) as $name => $spec ) { $term = wp_insert_term( $name, 'wpbp_genre' ); $term_id = is_wp_error( $term ) ? 0 : (int) $term['term_id']; $GLOBALS['wpbp_ptt_018']['terms'][ $name ] = $term_id; if ( null !== $spec[0] ) { add_term_meta( $term_id, 'wpbp_rank', (string) $spec[0], true ); } if ( $spec[1] ) { $post_id = (int) wp_insert_post( array( 'post_title' => 'WPBP ' . $name, 'post_status' => 'publish' ) ); wp_set_post_terms( $post_id, array( $term_id ), 'wpbp_genre' ); $GLOBALS['wpbp_ptt_018']['posts'][] = $post_id; } }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$keys = get_registered_meta_keys( 'term', 'wpbp_genre' ); if ( empty( $keys['wpbp_color']['single'] ) || empty( $keys['wpbp_rank']['single'] ) || 'integer' !== ( $keys['wpbp_rank']['type'] ?? '' ) || 'string' !== ( $keys['wpbp_color']['type'] ?? '' ) ) { return false; } $terms = $GLOBALS['wpbp_ptt_018']['terms']; return 0 === get_term_meta( $terms['Alpha'], 'wpbp_rank', true ) && '10' === (string) get_term_meta( $terms['Drama'], 'wpbp_rank', true );",
+            "description": "Both keys are registered as single values for genres, the rank as an integer that reads 0 when never set",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$t = $GLOBALS['wpbp_ptt_018']['terms']; $expected = array( $t['Sci-Fi'], $t['Drama'], $t['Horror'], $t['Alpha'], $t['Beta'], $t['Comedy'] ); $ids = wpbp_post_types_taxonomy_018(); return is_array( $ids ) && $expected === array_map( 'intval', $ids );",
+            "description": "Ranked genres come first by rank as numbers, then unranked genres by name, including genres with no posts",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$term_id = (int) $GLOBALS['wpbp_ptt_018']['terms']['Comedy']; wp_set_current_user( 1 ); $request = new WP_REST_Request( 'POST', '/wp/v2/genres/' . $term_id ); $request->set_body_params( array( 'meta' => array( 'wpbp_color' => '#A1B2C3', 'wpbp_rank' => 7 ) ) ); $res = rest_do_request( $request ); if ( 200 !== $res->get_status() ) { return false; } $data = $res->get_data(); $read = rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/genres/' . $term_id ) )->get_data(); return '#A1B2C3' === get_term_meta( $term_id, 'wpbp_color', true ) && '7' === (string) get_term_meta( $term_id, 'wpbp_rank', true ) && 7 === ( $data['meta']['wpbp_rank'] ?? null ) && '#A1B2C3' === ( $read['meta']['wpbp_color'] ?? null ) && 0 === ( rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/genres/' . (int) $GLOBALS['wpbp_ptt_018']['terms']['Alpha'] ) )->get_data()['meta']['wpbp_rank'] ?? null );",
+            "description": "The colour and rank are written and read as genre meta through the REST API",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$term_id = (int) $GLOBALS['wpbp_ptt_018']['terms']['Horror']; wp_set_current_user( 1 ); $request = new WP_REST_Request( 'POST', '/wp/v2/genres/' . $term_id ); $request->set_body_params( array( 'meta' => array( 'wpbp_color' => 'red' ) ) ); rest_do_request( $request ); if ( 'red' === get_term_meta( $term_id, 'wpbp_color', true ) ) { return false; } update_term_meta( $term_id, 'wpbp_color', '#0f0\" onmouseover=\"x' ); $stored = (string) get_term_meta( $term_id, 'wpbp_color', true ); if ( '' !== $stored && ! preg_match( '/^#([0-9a-fA-F]{3}){1,2}$/', $stored ) ) { return false; } update_term_meta( $term_id, 'wpbp_color', '#abc' ); return '#abc' === get_term_meta( $term_id, 'wpbp_color', true );",
+            "description": "Values that are not hex colours are never stored, through REST or update_term_meta()",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fx = $GLOBALS['wpbp_ptt_018'] ?? array(); foreach ( ( $fx['posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } foreach ( ( $fx['terms'] ?? array() ) as $term_id ) { wp_delete_term( (int) $term_id, 'wpbp_genre' ); } unregister_term_meta( 'wpbp_genre', 'wpbp_color' ); unregister_term_meta( 'wpbp_genre', 'wpbp_rank' ); unregister_taxonomy( 'wpbp_genre' ); wp_set_current_user( 0 ); unset( $GLOBALS['wpbp_ptt_018'] );"
+      },
+      "reference_solution": "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'sanitize_hex_color',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => false,\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value_num',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/taxonomy.php",
+          "src/wp-includes/meta.php",
+          "src/wp-includes/class-wp-term-query.php",
+          "src/wp-includes/rest-api/fields/class-wp-rest-term-meta-fields.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'sanitize_hex_color',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => false,\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}",
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'sanitize_hex_color',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array { return array_map( 'intval', get_terms( array( 'taxonomy' => 'wpbp_genre', 'hide_empty' => false, 'fields' => 'ids', 'meta_key' => 'wpbp_rank', 'orderby' => 'meta_value_num', 'order' => 'DESC' ) ) ); }",
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'sanitize_hex_color',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => true, // hide_empty\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value_num',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}",
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => false,\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value_num',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}",
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'show_in_rest'      => array( 'schema' => array( 'format' => 'hex-color' ) ),\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => false,\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value_num',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}",
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'sanitize_hex_color',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'absint',\n\t\t'show_in_rest'      => true,\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => false,\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value_num',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}",
+        "register_term_meta(\n\t'wpbp_genre',\n\t'wpbp_color',\n\tarray(\n\t\t'type'              => 'string',\n\t\t'single'            => true,\n\t\t'default'           => '',\n\t\t'sanitize_callback' => 'sanitize_hex_color',\n\t\t// show_in_rest\n\t)\n);\n\nregister_term_meta(\n\t'wpbp_genre',\n\t'wpbp_rank',\n\tarray(\n\t\t'type'              => 'integer',\n\t\t'single'            => true,\n\t\t'default'           => 0,\n\t\t'sanitize_callback' => 'absint',\n\t\t// show_in_rest\n\t)\n);\n\nfunction wpbp_post_types_taxonomy_018(): array {\n\t$base = array(\n\t\t'taxonomy'   => 'wpbp_genre',\n\t\t'hide_empty' => false,\n\t\t'fields'     => 'ids',\n\t);\n\n\t$ranked = get_terms(\n\t\t$base + array(\n\t\t\t'meta_key' => 'wpbp_rank',\n\t\t\t'orderby'  => 'meta_value_num',\n\t\t\t'order'    => 'DESC',\n\t\t)\n\t);\n\n\t$unranked = get_terms(\n\t\t$base + array(\n\t\t\t'orderby'    => 'name',\n\t\t\t'order'      => 'ASC',\n\t\t\t'meta_query' => array(\n\t\t\t\tarray(\n\t\t\t\t\t'key'     => 'wpbp_rank',\n\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t),\n\t\t\t),\n\t\t)\n\t);\n\n\treturn array_map( 'intval', array_merge( $ranked, $unranked ) );\n}"
+      ]
+    },
+    {
+      "id": "e-post-types-taxonomy-019",
+      "category": "post-types-taxonomy",
+      "prompt": "Register an admin-only 'wpbp_invoice' post type, available in the REST API at /wp/v2/invoices, that is guarded by its own capabilities rather than the post capabilities, named from 'invoice' and 'invoices' (edit_invoice, edit_invoices, publish_invoices and so on). Add an 'Accountant' role with the slug 'wpbp_accountant'. Accountants can reach the admin, write invoices and edit any invoice, including other people's and published ones, and delete their own invoices whether published or not, but they cannot delete other people's invoices, cannot publish, and cannot see private invoices; administrators publish their drafts. Administrators must be able to do everything with every invoice. No other role gains any invoice capability. WordPress must keep deciding per invoice whether a user may edit, delete or read it.",
+      "expected_behavior": "`register_post_type()` with `capability_type => array( 'invoice', 'invoices' )` and `map_meta_cap => true` (it only defaults to true for the post and page capability types, and without it `edit_post` checks the literal `edit_invoice` capability), `add_role( 'wpbp_accountant', 'Accountant', ... )` with `read`, `edit_invoices`, `edit_others_invoices`, `edit_published_invoices`, `delete_invoices` and `delete_published_invoices`, and every primitive invoice capability added to the administrator role, which does not receive custom capabilities by itself. Runtime validation inspects the capability object and role, checks meta capabilities per invoice for an accountant, the administrator and an Editor, scans the other roles, and creates and publishes invoices through REST.",
+      "requirements": [
+        "Register 'wpbp_invoice' with capabilities named from 'invoice' and 'invoices' and meta capability mapping",
+        "Expose the post type in the REST API at /wp/v2/invoices",
+        "Add the 'wpbp_accountant' role named 'Accountant' with admin access, writing, editing every invoice and deleting only their own, without publishing or private access",
+        "Give administrators every invoice capability and no other role any"
+      ],
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "register_post_type",
+            "description": "Registers the post type",
+            "weight": 1
+          },
+          {
+            "pattern": "capability_type|capabilities",
+            "description": "Gives the post type its own capabilities",
+            "weight": 1
+          },
+          {
+            "pattern": "add_role",
+            "description": "Creates the Accountant role",
+            "weight": 1
+          },
+          {
+            "pattern": "add_cap",
+            "description": "Grants capabilities to an existing role",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$GLOBALS['wpbp_ptt_019'] = array( 'users' => array(), 'posts' => array() ); foreach ( array( 'acc_one' => '', 'acc_two' => '', 'editor' => 'editor' ) as $key => $role ) { $GLOBALS['wpbp_ptt_019']['users'][ $key ] = (int) wp_insert_user( array( 'user_login' => 'wpbp_ptt_019_' . $key, 'user_pass' => wp_generate_password(), 'user_email' => 'wpbp-ptt-019-' . $key . '@example.com', 'role' => $role ) ); } $u = $GLOBALS['wpbp_ptt_019']['users']; foreach ( array( 'own_draft' => array( $u['acc_one'], 'draft' ), 'own_live' => array( $u['acc_one'], 'publish' ), 'other_live' => array( 1, 'publish' ), 'other_draft' => array( $u['acc_two'], 'draft' ), 'private' => array( 1, 'private' ) ) as $key => $spec ) { $GLOBALS['wpbp_ptt_019']['posts'][ $key ] = (int) wp_insert_post( array( 'post_type' => 'wpbp_invoice', 'post_title' => 'WPBP invoice ' . $key, 'post_status' => $spec[1], 'post_author' => $spec[0] ) ); } $GLOBALS['wpbp_ptt_019']['posts']['blog'] = (int) wp_insert_post( array( 'post_title' => 'WPBP blog post', 'post_status' => 'draft', 'post_author' => 1 ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$type = get_post_type_object( 'wpbp_invoice' ); $role = get_role( 'wpbp_accountant' ); if ( ! $type instanceof WP_Post_Type || ! $role ) { return false; } $cap = $type->cap; return $type->map_meta_cap && 'edit_invoice' === $cap->edit_post && 'delete_invoice' === $cap->delete_post && 'read_invoice' === $cap->read_post && 'edit_invoices' === $cap->edit_posts && 'publish_invoices' === $cap->publish_posts && 'delete_others_invoices' === $cap->delete_others_posts && 'Accountant' === wp_roles()->get_names()['wpbp_accountant'];",
+            "description": "The post type uses invoice capabilities with meta capability mapping, and the Accountant role exists",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! get_role( 'wpbp_accountant' ) ) { return false; } $fx = $GLOBALS['wpbp_ptt_019']; $p = $fx['posts']; foreach ( array( 'acc_one', 'acc_two' ) as $key ) { $user = new WP_User( $fx['users'][ $key ] ); if ( ! in_array( 'wpbp_accountant', $user->roles, true ) ) { $user->set_role( 'wpbp_accountant' ); } } $acc = $fx['users']['acc_one']; $may = array( array( 'edit_post', $p['own_draft'] ), array( 'edit_post', $p['own_live'] ), array( 'edit_post', $p['other_live'] ), array( 'edit_post', $p['other_draft'] ), array( 'delete_post', $p['own_draft'] ), array( 'delete_post', $p['own_live'] ), array( 'read' ), array( 'edit_invoices' ) ); $may_not = array( array( 'delete_post', $p['other_live'] ), array( 'delete_post', $p['other_draft'] ), array( 'publish_invoices' ), array( 'publish_post', $p['own_draft'] ), array( 'edit_posts' ), array( 'edit_post', $p['blog'] ), array( 'read_post', $p['private'] ), array( 'edit_post', $p['private'] ) ); foreach ( $may as $check ) { if ( ! user_can( $acc, ...$check ) ) { return false; } } foreach ( $may_not as $check ) { if ( user_can( $acc, ...$check ) ) { return false; } } return true;",
+            "description": "Accountants edit every invoice and delete only their own, but cannot publish, see private invoices or touch posts",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! get_role( 'wpbp_accountant' ) ) { return false; } $fx = $GLOBALS['wpbp_ptt_019']; $p = $fx['posts']; foreach ( array( 'acc_one', 'acc_two' ) as $key ) { $user = new WP_User( $fx['users'][ $key ] ); if ( ! in_array( 'wpbp_accountant', $user->roles, true ) ) { $user->set_role( 'wpbp_accountant' ); } } $acc = $fx['users']['acc_one']; foreach ( array( 'own_draft', 'other_live', 'private' ) as $key ) { foreach ( array( 'edit_post', 'delete_post', 'read_post' ) as $cap ) { if ( ! user_can( 1, $cap, $p[ $key ] ) ) { return false; } } } if ( ! user_can( 1, 'publish_invoices' ) || ! user_can( 1, 'publish_post', $p['own_draft'] ) ) { return false; } $editor = $fx['users']['editor']; foreach ( array( 'edit_invoices', 'publish_invoices', 'delete_invoices' ) as $cap ) { if ( user_can( $editor, $cap ) ) { return false; } } foreach ( array( 'edit_post', 'delete_post', 'read_post' ) as $cap ) { if ( user_can( $editor, $cap, $p['private'] ) || ( 'read_post' !== $cap && user_can( $editor, $cap, $p['other_live'] ) ) ) { return false; } } foreach ( wp_roles()->roles as $slug => $data ) { if ( in_array( $slug, array( 'administrator', 'wpbp_accountant' ), true ) ) { continue; } foreach ( array_keys( (array) $data['capabilities'] ) as $cap ) { if ( str_contains( $cap, 'invoice' ) ) { return false; } } } return true;",
+            "description": "Administrators can do everything with any invoice; Editors and every other role gain nothing",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! get_role( 'wpbp_accountant' ) ) { return false; } $fx = $GLOBALS['wpbp_ptt_019']; $p = $fx['posts']; foreach ( array( 'acc_one', 'acc_two' ) as $key ) { $user = new WP_User( $fx['users'][ $key ] ); if ( ! in_array( 'wpbp_accountant', $user->roles, true ) ) { $user->set_role( 'wpbp_accountant' ); } } $acc = $fx['users']['acc_one']; wp_set_current_user( $acc ); $publish = new WP_REST_Request( 'POST', '/wp/v2/invoices' ); $publish->set_body_params( array( 'title' => 'WPBP REST publish', 'status' => 'publish' ) ); $denied = rest_do_request( $publish ); $draft = new WP_REST_Request( 'POST', '/wp/v2/invoices' ); $draft->set_body_params( array( 'title' => 'WPBP REST draft', 'status' => 'draft' ) ); $made = rest_do_request( $draft ); $id = (int) ( $made->get_data()['id'] ?? 0 ); if ( $id ) { $GLOBALS['wpbp_ptt_019']['posts'][] = $id; } wp_set_current_user( 1 ); $live = new WP_REST_Request( 'POST', '/wp/v2/invoices/' . $id ); $live->set_body_params( array( 'status' => 'publish' ) ); $approved = rest_do_request( $live ); wp_set_current_user( 0 ); return 403 === $denied->get_status() && 201 === $made->get_status() && $acc === (int) get_post_field( 'post_author', $id ) && 200 === $approved->get_status() && 'publish' === get_post_status( $id );",
+            "description": "Through /wp/v2/invoices an accountant can save a draft but not publish it, and an administrator publishes it",
+            "weight": 1
+          }
+        ],
+        "teardown": "$fx = $GLOBALS['wpbp_ptt_019'] ?? array(); foreach ( ( $fx['posts'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( ( $fx['users'] ?? array() ) as $user_id ) { wp_delete_user( (int) $user_id ); } foreach ( wp_roles()->roles as $slug => $data ) { $role = get_role( $slug ); foreach ( array_keys( (array) $data['capabilities'] ) as $cap ) { if ( $role && str_contains( $cap, 'invoice' ) ) { $role->remove_cap( $cap ); } } } remove_role( 'wpbp_accountant' ); if ( post_type_exists( 'wpbp_invoice' ) ) { unregister_post_type( 'wpbp_invoice' ); } wp_set_current_user( 0 ); unset( $GLOBALS['wpbp_ptt_019'] );"
+      },
+      "reference_solution": "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => array( 'invoice', 'invoices' ),\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap;\n\n// Administrators get every primitive invoice capability.\n$wpbp_admin = get_role( 'administrator' );\nif ( $wpbp_admin ) {\n\tforeach ( array( 'edit_posts', 'edit_others_posts', 'edit_private_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_private_posts', 'delete_published_posts' ) as $wpbp_generic ) {\n\t\t$wpbp_admin->add_cap( $wpbp_invoice_caps->$wpbp_generic );\n\t}\n}\n\n// Accountants write and edit every invoice, delete their own, never publish.\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->edit_published_posts   => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n\t$wpbp_invoice_caps->delete_published_posts => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/post.php",
+          "src/wp-includes/capabilities.php",
+          "src/wp-includes/class-wp-roles.php",
+          "src/wp-includes/rest-api/endpoints/class-wp-rest-posts-controller.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => 'post',\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap; // capability_type invoice\n\n// Administrators get every primitive invoice capability.\n$wpbp_admin = get_role( 'administrator' );\nif ( $wpbp_admin ) {\n\tforeach ( array( 'edit_posts', 'edit_others_posts', 'edit_private_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_private_posts', 'delete_published_posts' ) as $wpbp_generic ) {\n\t\t$wpbp_admin->add_cap( $wpbp_invoice_caps->$wpbp_generic );\n\t}\n}\n\n// Accountants write and edit every invoice, delete their own, never publish.\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->edit_published_posts   => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n\t$wpbp_invoice_caps->delete_published_posts => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}",
+        "register_post_type( 'wpbp_invoice', array(\n\t'label'           => 'Invoices',\n\t'show_ui'         => true,\n\t'show_in_rest'    => true,\n\t'rest_base'       => 'invoices',\n\t'capability_type' => 'invoice',\n) );\nremove_role( 'wpbp_accountant' );\nadd_role( 'wpbp_accountant', 'Accountant', array(\n\t'read'                      => true,\n\t'edit_invoices'             => true,\n\t'edit_others_invoices'      => true,\n\t'edit_published_invoices'   => true,\n\t'delete_invoices'           => true,\n\t'delete_published_invoices' => true,\n\t'edit_invoice'              => true,\n\t'delete_invoice'            => true,\n\t'read_invoice'              => true,\n) );\n$role = get_role( 'administrator' );\nforeach ( array( 'edit_invoices', 'edit_others_invoices', 'edit_private_invoices', 'edit_published_invoices', 'publish_invoices', 'read_private_invoices', 'delete_invoices', 'delete_others_invoices', 'delete_private_invoices', 'delete_published_invoices' ) as $cap ) {\n\t$role->add_cap( $cap );\n}",
+        "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => array( 'invoice', 'invoices' ),\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap;\n\n\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->edit_published_posts   => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n\t$wpbp_invoice_caps->delete_published_posts => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}\n// add_cap",
+        "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => array( 'invoice', 'invoices' ),\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap;\n\n// Administrators get every primitive invoice capability.\n$wpbp_admin = get_role( 'administrator' );\nif ( $wpbp_admin ) {\n\tforeach ( array( 'edit_posts', 'edit_others_posts', 'edit_private_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_private_posts', 'delete_published_posts' ) as $wpbp_generic ) {\n\t\t$wpbp_admin->add_cap( $wpbp_invoice_caps->$wpbp_generic );\n\t}\n}\n\n// Accountants write and edit every invoice, delete their own, never publish.\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->edit_published_posts   => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n\t$wpbp_invoice_caps->delete_published_posts => true,\n\t$wpbp_invoice_caps->publish_posts          => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}",
+        "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => array( 'invoice', 'invoices' ),\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap;\n\n// Administrators get every primitive invoice capability.\n$wpbp_admin = get_role( 'administrator' );\nif ( $wpbp_admin ) {\n\tforeach ( array( 'edit_posts', 'edit_others_posts', 'edit_private_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_private_posts', 'delete_published_posts' ) as $wpbp_generic ) {\n\t\t$wpbp_admin->add_cap( $wpbp_invoice_caps->$wpbp_generic );\n\t}\n}\n\n// Accountants write and edit every invoice, delete their own, never publish.\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->edit_published_posts   => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n\t$wpbp_invoice_caps->delete_published_posts => true,\n\t$wpbp_invoice_caps->delete_others_posts    => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}",
+        "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => array( 'invoice', 'invoices' ),\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap;\n\n// Administrators get every primitive invoice capability.\n$wpbp_admin = get_role( 'administrator' );\nif ( $wpbp_admin ) {\n\tforeach ( array( 'edit_posts', 'edit_others_posts', 'edit_private_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_private_posts', 'delete_published_posts' ) as $wpbp_generic ) {\n\t\t$wpbp_admin->add_cap( $wpbp_invoice_caps->$wpbp_generic );\n\t}\n}\n\n// Accountants write and edit every invoice, delete their own, never publish.\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->edit_published_posts   => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n\t$wpbp_invoice_caps->delete_published_posts => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}\nforeach ( array( 'edit_invoices', 'edit_others_invoices', 'edit_published_invoices' ) as $wpbp_cap ) { get_role( 'editor' )->add_cap( $wpbp_cap ); }",
+        "register_post_type(\n\t'wpbp_invoice',\n\tarray(\n\t\t'labels'          => array(\n\t\t\t'name'          => 'Invoices',\n\t\t\t'singular_name' => 'Invoice',\n\t\t),\n\t\t'public'          => false,\n\t\t'show_ui'         => true,\n\t\t'show_in_rest'    => true,\n\t\t'rest_base'       => 'invoices',\n\t\t'capability_type' => array( 'invoice', 'invoices' ),\n\t\t'map_meta_cap'    => true,\n\t\t'supports'        => array( 'title', 'editor', 'author' ),\n\t)\n);\n\n$wpbp_invoice_caps = get_post_type_object( 'wpbp_invoice' )->cap;\n\n// Administrators get every primitive invoice capability.\n$wpbp_admin = get_role( 'administrator' );\nif ( $wpbp_admin ) {\n\tforeach ( array( 'edit_posts', 'edit_others_posts', 'edit_private_posts', 'edit_published_posts', 'publish_posts', 'read_private_posts', 'delete_posts', 'delete_others_posts', 'delete_private_posts', 'delete_published_posts' ) as $wpbp_generic ) {\n\t\t$wpbp_admin->add_cap( $wpbp_invoice_caps->$wpbp_generic );\n\t}\n}\n\n// Accountants write and edit every invoice, delete their own, never publish.\n$wpbp_accountant_caps = array(\n\t'read'                                      => true,\n\t$wpbp_invoice_caps->edit_posts             => true,\n\t$wpbp_invoice_caps->edit_others_posts      => true,\n\t$wpbp_invoice_caps->delete_posts           => true,\n);\n$wpbp_accountant = get_role( 'wpbp_accountant' );\nif ( ! $wpbp_accountant ) {\n\tadd_role( 'wpbp_accountant', 'Accountant', $wpbp_accountant_caps );\n} else {\n\tforeach ( $wpbp_accountant_caps as $wpbp_cap => $wpbp_grant ) {\n\t\t$wpbp_accountant->add_cap( $wpbp_cap, $wpbp_grant );\n\t}\n}"
+      ]
     }
   ]
 }
