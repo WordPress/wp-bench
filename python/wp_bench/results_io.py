@@ -7,7 +7,7 @@ console, and this module is the only place that turns records into files.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Self
 
@@ -162,7 +162,7 @@ def open_run_artifacts(output: OutputConfig) -> tuple[Path, RecordStream]:
     by construction, instead of every runner threading a start time to two
     call sites.
     """
-    moment = datetime.now(timezone.utc)
+    moment = datetime.now(UTC)
     json_path = timestamped_path(output.path, moment)
     stream = open_stream(output.jsonl_path, moment)
     suffix = 2

@@ -10,7 +10,7 @@ The benchmark uses WordPress itself as the grader, running generated code in a s
 
 ## Requirements
 
-Requires Python version 3.10 or later and Docker with Compose support.
+Requires Python version 3.11 or later and Docker with Compose support.
 
 ## Quick Start
 
