@@ -1,6 +1,6 @@
 {
   "id": "wp-core-execution-v1-hooks",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "metadata": {
     "name": "WordPress Core Execution Tests - Hooks",
     "description": "Code generation tasks for WordPress Hooks APIs",
@@ -12,7 +12,7 @@
       "id": "e-hooks-001",
       "category": "hooks",
       "prompt": "Implement a function that attaches a filter to the_title that appends the literal suffix ' [WPBP]' to the incoming title string.",
-      "expected_behavior": "`wpbp_hooks_001()` registers a `the_title` filter whose callback returns the original title plus ` [WPBP]`. Runtime validation calls the function and applies the WordPress title filter to sample values to verify the appended result.",
+      "expected_behavior": "`wpbp_hooks_001()` registers a `the_title` filter whose callback returns the original title plus ` [WPBP]`. Runtime validation calls the function and applies the WordPress title filter to fixed samples and a runtime-generated probe to verify the appended result for arbitrary incoming titles.",
       "requirements": [
         "Use add_filter() on the the_title filter",
         "Append the suffix without replacing the original title"
@@ -41,7 +41,7 @@
         "assertions": [
           {
             "type": "custom_assertion",
-            "code": "if ( ! function_exists( 'wpbp_hooks_001' ) ) { return false; } wpbp_hooks_001(); return 'Hello [WPBP]' === apply_filters( 'the_title', 'Hello', 123 ) && 'Draft [WPBP]' === apply_filters( 'the_title', 'Draft', 456 );",
+            "code": "if ( ! function_exists( 'wpbp_hooks_001' ) ) { return false; } wpbp_hooks_001(); $probe = 'Probe-' . wp_generate_uuid4(); return 'Hello [WPBP]' === apply_filters( 'the_title', 'Hello', 123 ) && 'Draft [WPBP]' === apply_filters( 'the_title', 'Draft', 456 ) && $probe . ' [WPBP]' === apply_filters( 'the_title', $probe, 789 );",
             "description": "The title filter appends the required suffix to filtered titles",
             "weight": 1
           }
@@ -53,7 +53,10 @@
           "src/wp-includes/plugin.php"
         ],
         "release_focus": "classic"
-      }
+      },
+      "exploit_solutions": [
+        "function wpbp_hooks_001(): void { add_filter( 'the_title', static function ( $title ) { if ( 'Hello' === $title || 'Draft' === $title ) { return $title . ' [WPBP]'; } return $title; }, 10, 1 ); }"
+      ]
     },
     {
       "id": "e-hooks-002",
