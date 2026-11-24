@@ -260,8 +260,24 @@ Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 
-The default suite `wp-core-v1` contains 350 tasks covering WordPress core APIs,
+The default suite `wp-core-v1` contains 355 tasks covering WordPress core APIs,
 hooks, database operations, and security patterns.
+
+Most tasks ask for a PHP snippet. A task's `artifact_kind` can instead ask for a
+JSON `files` map:
+
+- `wp_plugin_files`: installed under `wp-content/plugins/` and its main file
+  (the top-level file with a `Plugin Name:` header) is included before the
+  test's setup code runs.
+- `wp_theme_files`: installed under `wp-content/themes/` (a top-level
+  `style.css` with a `Theme Name:` header is required) and activated after the
+  test's setup code runs, so setup can install a fixture parent theme for a child
+  theme. Activation follows the theme part of `wp-settings.php`: hooks defined
+  by the previously active theme are removed, theme supports start empty, the
+  child's `functions.php` loads before the parent's, and `after_setup_theme`
+  fires. The previous theme is restored afterwards.
+
+Both kinds use `reference_files` for `--check-reference-solution`.
 
 ### WP-CLI workflows
 

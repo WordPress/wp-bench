@@ -8,6 +8,8 @@ This module turns raw model completions into validated artifacts:
 - ``wp_plugin_files``: the model must return a JSON object with a
   ``files`` map of relative paths to file contents, which the runtime
   installs as a plugin before running assertions.
+- ``wp_theme_files``: the same ``files`` map, installed as a theme with a
+  top-level ``style.css`` and activated before the assertions run.
 - ``wp_cli_shell``: a plain Bash command/script string executed in the
   WordPress root of the disposable runtime.
 
@@ -67,28 +69,40 @@ def parse_artifact(completion: str, artifact_kind: str) -> Artifact:
             raise ArtifactError("Shell submission must be nonempty, NUL-free, and at most 256KB.")
         return Artifact(kind="wp_cli_shell", code=code)
     if artifact_kind == "wp_plugin_files":
-        return _parse_plugin_files(completion)
+        files = _parse_files(completion, "Plugin")
+        if _find_main_plugin_file(files) is None:
+            raise ArtifactError(
+                "Plugin artifact needs a top-level .php file with a 'Plugin Name:' header."
+            )
+        return Artifact(kind="wp_plugin_files", files=files)
+    if artifact_kind == "wp_theme_files":
+        files = _parse_files(completion, "Theme")
+        if not re.search(r"Theme\s+Name\s*:", files.get("style.css", ""), re.IGNORECASE):
+            raise ArtifactError(
+                "Theme artifact needs a top-level style.css with a 'Theme Name:' header."
+            )
+        return Artifact(kind="wp_theme_files", files=files)
     raise ArtifactError(f"Unsupported artifact kind: {artifact_kind}")
 
 
-def _parse_plugin_files(completion: str) -> Artifact:
-    """Parse a JSON files-object completion into a plugin artifact."""
+def _parse_files(completion: str, label: str) -> dict[str, str]:
+    """Parse and validate a JSON files-object completion (plugin or theme)."""
     text = strip_code_fences(completion)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as error:
         raise ArtifactError(
-            f"Plugin artifact must be a JSON object with a 'files' map: {error}"
+            f"{label} artifact must be a JSON object with a 'files' map: {error}"
         ) from error
 
     if not isinstance(data, dict) or not isinstance(data.get("files"), dict):
-        raise ArtifactError("Plugin artifact JSON must contain a 'files' object.")
+        raise ArtifactError(f"{label} artifact JSON must contain a 'files' object.")
 
     files: dict[str, str] = {}
     total_bytes = 0
     for raw_path, content in data["files"].items():
         if not isinstance(raw_path, str) or not isinstance(content, str):
-            raise ArtifactError("Plugin artifact file paths and contents must be strings.")
+            raise ArtifactError(f"{label} artifact file paths and contents must be strings.")
         path = _validate_relative_path(raw_path)
         size = len(content.encode("utf-8"))
         if size > MAX_FILE_BYTES:
@@ -97,19 +111,13 @@ def _parse_plugin_files(completion: str) -> Artifact:
         files[path] = content
 
     if not files:
-        raise ArtifactError("Plugin artifact contains no files.")
+        raise ArtifactError(f"{label} artifact contains no files.")
     if len(files) > MAX_ARTIFACT_FILES:
-        raise ArtifactError(f"Plugin artifact has too many files ({len(files)}).")
+        raise ArtifactError(f"{label} artifact has too many files ({len(files)}).")
     if total_bytes > MAX_TOTAL_BYTES:
-        raise ArtifactError(f"Plugin artifact too large ({total_bytes} bytes).")
+        raise ArtifactError(f"{label} artifact too large ({total_bytes} bytes).")
 
-    main_file = _find_main_plugin_file(files)
-    if main_file is None:
-        raise ArtifactError(
-            "Plugin artifact needs a top-level .php file with a 'Plugin Name:' header."
-        )
-
-    return Artifact(kind="wp_plugin_files", files=files)
+    return files
 
 
 def _validate_relative_path(raw_path: str) -> str:
@@ -150,6 +158,13 @@ def render_artifact_instructions(artifact_kind: str) -> str:
             "Return a JSON object with a `files` object. Keys are relative file "
             "paths inside the plugin directory and values are complete file "
             "contents. Include a top-level PHP file with a valid `Plugin Name:` "
+            "header. Do not include explanations or markdown fences."
+        )
+    if artifact_kind == "wp_theme_files":
+        return (
+            "Return a JSON object with a `files` object. Keys are relative file "
+            "paths inside the theme directory and values are complete file "
+            "contents. Include a top-level style.css with a valid `Theme Name:` "
             "header. Do not include explanations or markdown fences."
         )
     return "Return only valid PHP code without explanations. Wrap the response in ```php fences."

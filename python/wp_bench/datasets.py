@@ -28,10 +28,11 @@ class ExecutionTest:
     reference_solution: str | None
     metadata: dict[str, Any]
     #: What the model must produce: 'php_snippet' (default) or
-    #: 'wp_plugin_files' (JSON files map installed as a plugin), or
-    #: 'wp_cli_shell' (plain Bash command/script string).
+    #: 'wp_plugin_files' (JSON files map installed as a plugin),
+    #: 'wp_theme_files' (JSON files map installed and activated as a theme),
+    #: or 'wp_cli_shell' (plain Bash command/script string).
     artifact_kind: str = "php_snippet"
-    #: Reference files for wp_plugin_files reference-solution runs.
+    #: Reference files for wp_plugin_files / wp_theme_files reference-solution runs.
     reference_files: dict[str, str] | None = None
     #: Authored cheat snippets that must FAIL the assertions; the inverse of
     #: reference_solution, run by --check-exploits alongside the generic

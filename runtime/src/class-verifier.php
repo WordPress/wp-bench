@@ -8,7 +8,7 @@ declare(strict_types=1);
 namespace WPBench\Runtime;
 
 class Verifier {
-	public const VERSION = '2.2.0';
+	public const VERSION = '2.3.0';
 
 	private Static_Analysis $static_analysis;
 	private Sandbox $sandbox;
@@ -25,6 +25,8 @@ class Verifier {
 	 * - php_snippet (default): `code` string executed via the sandbox.
 	 * - wp_plugin_files: `files` map installed as a plugin before the
 	 *   assertions run; static analysis covers the concatenated files.
+	 * - wp_theme_files: `files` map installed as a theme and activated
+	 *   after the setup code, before the assertions run.
 	 * - wp_cli_shell: a plain Bash script run with native WP-CLI commands.
 	 *
 	 * @param array<string, mixed> $payload Verification payload.
@@ -45,6 +47,10 @@ class Verifier {
 
 		if ( 'wp_plugin_files' === $kind ) {
 			return $this->verify_plugin_files( $payload, $static_checks, $runtime_checks );
+		}
+
+		if ( 'wp_theme_files' === $kind ) {
+			return $this->verify_theme_files( $payload, $static_checks, $runtime_checks );
 		}
 
 		$code_value = $payload['code'] ?? '';
@@ -76,28 +82,7 @@ class Verifier {
 
 		if ( true !== $install_result['success'] ) {
 			$installer->cleanup();
-			$error = isset( $install_result['error'] ) && is_string( $install_result['error'] )
-				? $install_result['error']
-				: 'Plugin artifact installation failed.';
-			return [
-				'success' => false,
-				'static'  => $this->static_analysis->check( $combined, $static_checks ),
-				'runtime' => [
-					'score'   => 0.0,
-					'details' => [
-						'assertions'    => [
-							[
-								'type'        => 'artifact_install_error',
-								'description' => $error,
-								'passed'      => false,
-							],
-						],
-						'total_weight'  => 0,
-						'passed_weight' => 0,
-					],
-				],
-				'version' => self::VERSION,
-			];
+			return $this->install_failure( $install_result, $combined, $static_checks, 'Plugin artifact installation failed.' );
 		}
 
 		try {
@@ -110,6 +95,72 @@ class Verifier {
 		}
 
 		return $this->build_result( $static_result, $runtime_result, 'wp_plugin_files' );
+	}
+
+	/**
+	 * Verify a theme-files artifact: install, run setup, activate, assert, clean up.
+	 *
+	 * @param array<string, mixed> $payload        Full payload.
+	 * @param array<string, mixed> $static_checks  Static check config.
+	 * @param array<string, mixed> $runtime_checks Runtime check config.
+	 * @return array<string, mixed>
+	 */
+	private function verify_theme_files( array $payload, array $static_checks, array $runtime_checks ): array {
+		$files_value = $payload['files'] ?? [];
+		$files       = is_array( $files_value ) ? $files_value : [];
+		$combined    = implode( "\n\n", array_map( 'strval', array_values( $files ) ) );
+
+		$installer      = new Theme_Installer();
+		$install_result = $installer->install( $files );
+
+		if ( true !== $install_result['success'] ) {
+			$installer->cleanup();
+			return $this->install_failure( $install_result, $combined, $static_checks, 'Theme artifact installation failed.' );
+		}
+
+		try {
+			$static_result = $this->static_analysis->check( $combined, $static_checks );
+			// Activation runs after the setup code, so setup can provide a parent theme.
+			$runtime_result = $this->sandbox->execute_and_verify( '', $runtime_checks, [ $installer, 'activate' ] );
+		} finally {
+			$installer->cleanup();
+		}
+
+		return $this->build_result( $static_result, $runtime_result, 'wp_theme_files' );
+	}
+
+	/**
+	 * Result for an artifact that could not be installed.
+	 *
+	 * @param array<string, mixed> $install_result Installer outcome.
+	 * @param string               $combined       All artifact files, for static analysis.
+	 * @param array<string, mixed> $static_checks  Static check config.
+	 * @param string               $fallback       Error when the installer gave none.
+	 * @return array<string, mixed>
+	 */
+	private function install_failure( array $install_result, string $combined, array $static_checks, string $fallback ): array {
+		$error = isset( $install_result['error'] ) && is_string( $install_result['error'] )
+			? $install_result['error']
+			: $fallback;
+		return [
+			'success' => false,
+			'static'  => $this->static_analysis->check( $combined, $static_checks ),
+			'runtime' => [
+				'score'   => 0.0,
+				'details' => [
+					'assertions'    => [
+						[
+							'type'        => 'artifact_install_error',
+							'description' => $error,
+							'passed'      => false,
+						],
+					],
+					'total_weight'  => 0,
+					'passed_weight' => 0,
+				],
+			],
+			'version' => self::VERSION,
+		];
 	}
 
 	/**

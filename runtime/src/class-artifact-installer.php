@@ -24,7 +24,7 @@ class Artifact_Installer {
 	/**
 	 * Directory created for the current candidate, if any.
 	 */
-	private ?string $plugin_dir = null;
+	protected ?string $plugin_dir = null;
 
 	/**
 	 * Install candidate plugin files and include the main plugin file.
@@ -33,49 +33,13 @@ class Artifact_Installer {
 	 * @return array{success: bool, error?: string, plugin_dir?: string}
 	 */
 	public function install( array $files ): array {
-		$base = trailingslashit( WP_PLUGIN_DIR ) . self::PLUGIN_DIR_PREFIX . '-' . wp_generate_password( 8, false );
-
-		foreach ( $files as $relative_path => $contents ) {
-			if ( ! is_string( $relative_path ) || ! is_string( $contents ) ) {
-				return [
-					'success' => false,
-					'error'   => 'Artifact file entries must map string paths to string contents.',
-				];
-			}
-			$validated = $this->validate_relative_path( $relative_path );
-			if ( null === $validated ) {
-				return [
-					'success' => false,
-					'error'   => "Unsafe artifact file path: {$relative_path}",
-				];
-			}
-		}
-
-		if ( ! wp_mkdir_p( $base ) ) {
+		$base  = trailingslashit( WP_PLUGIN_DIR ) . self::PLUGIN_DIR_PREFIX . '-' . wp_generate_password( 8, false );
+		$error = $this->write_files( $base, $files, 'plugin' );
+		if ( null !== $error ) {
 			return [
 				'success' => false,
-				'error'   => 'Could not create candidate plugin directory.',
+				'error'   => $error,
 			];
-		}
-		$this->plugin_dir = $base;
-
-		foreach ( $files as $relative_path => $contents ) {
-			$validated = $this->validate_relative_path( $relative_path );
-			$target    = $base . '/' . $validated;
-			$dir       = dirname( $target );
-			if ( ! wp_mkdir_p( $dir ) ) {
-				return [
-					'success' => false,
-					'error'   => "Could not create directory for: {$relative_path}",
-				];
-			}
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Runtime container filesystem.
-			if ( false === file_put_contents( $target, $contents ) ) {
-				return [
-					'success' => false,
-					'error'   => "Could not write artifact file: {$relative_path}",
-				];
-			}
 		}
 
 		$main_file = $this->find_main_plugin_file( $files );
@@ -113,9 +77,46 @@ class Artifact_Installer {
 	}
 
 	/**
+	 * Validate every path, then write the files below a new directory.
+	 *
+	 * @param string                $base  Absolute directory to create.
+	 * @param array<string, string> $files Relative path => file contents.
+	 * @param string                $label Artifact label used in errors.
+	 * @return string|null Error message, or null on success.
+	 */
+	protected function write_files( string $base, array $files, string $label ): ?string {
+		foreach ( $files as $relative_path => $contents ) {
+			if ( ! is_string( $relative_path ) || ! is_string( $contents ) ) {
+				return 'Artifact file entries must map string paths to string contents.';
+			}
+			if ( null === $this->validate_relative_path( $relative_path ) ) {
+				return "Unsafe artifact file path: {$relative_path}";
+			}
+		}
+
+		if ( ! wp_mkdir_p( $base ) ) {
+			return "Could not create candidate {$label} directory.";
+		}
+		$this->plugin_dir = $base;
+
+		foreach ( $files as $relative_path => $contents ) {
+			$target = $base . '/' . $this->validate_relative_path( $relative_path );
+			if ( ! wp_mkdir_p( dirname( $target ) ) ) {
+				return "Could not create directory for: {$relative_path}";
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Runtime container filesystem.
+			if ( false === file_put_contents( $target, $contents ) ) {
+				return "Could not write artifact file: {$relative_path}";
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Validate a relative artifact path; null when unsafe.
 	 */
-	private function validate_relative_path( string $path ): ?string {
+	protected function validate_relative_path( string $path ): ?string {
 		$normalized = str_replace( '\\', '/', trim( $path ) );
 		if ( '' === $normalized || str_starts_with( $normalized, '/' ) || 1 === preg_match( '/^[A-Za-z]:/', $normalized ) ) {
 			return null;
@@ -142,7 +143,7 @@ class Artifact_Installer {
 	 *
 	 * @param string $file Absolute path of the main plugin file.
 	 */
-	private static function include_at_global_scope( string $file ): void {
+	protected static function include_at_global_scope( string $file ): void {
 		include_once $file;
 
 		foreach ( get_defined_vars() as $wpbp_name => $wpbp_value ) {
@@ -173,7 +174,7 @@ class Artifact_Installer {
 	/**
 	 * Recursively delete a directory.
 	 */
-	private function delete_dir( string $dir ): void {
+	protected function delete_dir( string $dir ): void {
 		$items = scandir( $dir );
 		if ( false === $items ) {
 			return;
