@@ -1,6 +1,7 @@
 # Dependencies
 /vendor/
 node_modules/
+!runtime/playground/package-lock.json
 .venv/
 __pycache__/
 *.pyc

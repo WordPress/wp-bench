@@ -10,7 +10,8 @@ The benchmark uses WordPress itself as the grader, running generated code in a s
 
 ## Requirements
 
-Requires Python version 3.10 or later and Docker with Compose support.
+Requires Python version 3.10 or later, plus either Docker with Compose support
+or Node.js 24.18 or later for WordPress Playground.
 
 ## Quick Start
 
@@ -30,6 +31,32 @@ OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...
 ```
+
+### Local LLM testing
+
+For a complete setup using local models and no Docker, follow
+[Test local LLMs with WP-Bench](local-llms.md). It includes LM Studio and Ollama
+examples, plus guidance for other compatible inference servers.
+
+Start a local inference server and load a model. For example, configure an
+LM Studio endpoint directly:
+
+```yaml
+model:
+  kind: openai-compatible
+  name: qwen3.6-27b-mtp  # exact model identifier shown by LM Studio
+  api_base: http://localhost:1234/v1
+  max_tokens: 8192
+  request_timeout: 600
+```
+
+The model name stays unchanged in results and reports. `kind: openai-compatible`
+selects the API protocol explicitly, so no `openai/` prefix or `OPENAI_API_BASE`
+and `OPENAI_API_KEY` variables are needed. When an explicit compatible endpoint
+has no `api_key_env`, the harness supplies a placeholder credential rather than
+using a cloud API key. If your server requires authentication, set
+`api_key_env: LM_STUDIO_TOKEN` and export that variable; the secret is never
+stored in result metadata. Run with `wp-bench run --config wp-bench.yaml`.
 
 ### 3. Build the WordPress Runtime
 
@@ -105,6 +132,61 @@ WordPress SQL compatibility, including `dbDelta()`, `SHOW COLUMNS`, `SHOW INDEX`
 identifier placeholders, and escaped LIKE queries. SQLite results should be
 compared separately from MySQL results; `metadata.grader.database` records the
 backend, after setup verifies that WordPress loaded the SQLite drop-in.
+
+### Alternative: WordPress Playground (no Docker)
+
+Playground runs WordPress and SQLite using WebAssembly PHP. Install the pinned
+Node dependencies from this repository checkout (Node.js 24.18+ and npm 11.16+):
+
+```bash
+npm ci --prefix runtime/playground
+```
+
+In your benchmark YAML, replace the `grader` section with:
+
+```yaml
+grader:
+  kind: playground
+  playground_wordpress_version: "7.1"
+  timeout_seconds: 90
+  setup_timeout_seconds: 600
+```
+
+Then use the same CLI as the Docker runtime, for example:
+
+```bash
+wp-bench run --config wp-bench.yaml --check-reference-solution --limit 5
+wp-bench run --config wp-bench.yaml --execution-concurrency 2
+```
+
+No browser, Docker daemon, native PHP, or database server is required. The first
+boot downloads WordPress into Playground's `~/.wordpress-playground` cache and
+needs internet access. Each candidate gets a new Node process, WASM filesystem,
+and SQLite installation; candidate PHP has no mounted host directories. Both
+PHP snippets and plugin-file artifacts use the same static/runtime verifier as
+Docker. `wp_cli_shell` artifacts (including the `wp-cli-v1` suite) are rejected,
+since they require native Bash and WP-CLI. `reset_per_test` is required;
+`execution_concurrency` still bounds simultaneous candidates. Boot failures
+abort the run, while execution timeouts produce normal failed test results.
+
+`grader.playground_node` can name a Node executable. When the harness is
+installed outside a repository checkout, set `grader.playground_directory` to
+this checkout's `runtime/playground` directory; relative paths resolve against
+the YAML file. `grader.playground_wordpress_version` selects the WordPress
+release; use an exact patch version when publishing reproducible results.
+
+Playground results identify their isolation boundary as `playground_per_test`,
+with no Docker image ID. Keep these results separate from Docker comparisons:
+Playground uses PHP 8.2 and its bundled SQLite adapter, installs a clean site per
+candidate rather than replaying a frozen database snapshot, and does not apply
+Docker's CPU, memory, PID, filesystem, or network limits. Host capacity and
+wall-clock timeouts still affect runs.
+
+To run the real Playground integration checks after installation:
+
+```bash
+WP_BENCH_TEST_PLAYGROUND_NODE="$(command -v node)" pytest python/tests/test_playground.py -q
+```
 
 ### 4. Run the Benchmark
 

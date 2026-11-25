@@ -35,6 +35,8 @@ def _model_info(model_config: ModelConfig | None) -> dict[str, Any] | None:
     return {
         "name": model_config.name,
         "kind": model_config.kind,
+        **({"extra_body": model_config.extra_body} if model_config.extra_body else {}),
+        **({"api_base": model_config.api_base} if model_config.api_base is not None else {}),
         "temperature": model_config.temperature,
         "top_p": model_config.top_p,
         "max_tokens": model_config.max_tokens,

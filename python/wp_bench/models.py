@@ -9,10 +9,12 @@ problems are not hidden behind retries.
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
 
+import litellm
 from litellm import completion, completion_cost
 from litellm.exceptions import (
     APIConnectionError,
@@ -75,6 +77,10 @@ class ModelInterface:
     """Thin wrapper over LiteLLM to keep prompts consistent."""
 
     def __init__(self, config: ModelConfig, system_prompt: str | None = None):
+        # The harness reports exceptions itself. LiteLLM's provider/help
+        # banners otherwise pollute progress output, including when an
+        # optional pricing lookup cannot identify a local model.
+        litellm.suppress_debug_info = True
         self.config = config
         #: Variant state (e.g. injected skill content), deliberately not part
         #: of ModelConfig so it never lands in serialized model config blocks.
@@ -185,6 +191,22 @@ class ModelInterface:
             "top_p": self.config.top_p,
             "timeout": self.config.request_timeout,
         }
+        if self.config.extra_body:
+            kwargs["extra_body"] = self.config.extra_body
+        if self.config.api_base is not None:
+            kwargs["api_base"] = self.config.api_base
+        if self.config.kind == "openai-compatible":
+            kwargs["custom_llm_provider"] = "openai"
+            if self.config.api_base is not None:
+                # Local servers commonly have no authentication, but the
+                # OpenAI client still requires a nonempty key. Do not pick
+                # up a cloud credential from OPENAI_API_KEY for this endpoint.
+                kwargs["api_key"] = "not-needed"
+        if self.config.api_key_env is not None:
+            key = os.environ.get(self.config.api_key_env)
+            if not key:
+                raise ValueError(f"Missing API key environment variable: {self.config.api_key_env}")
+            kwargs["api_key"] = key
         if not self._omit_temperature:
             kwargs["temperature"] = self.config.temperature
         return kwargs
