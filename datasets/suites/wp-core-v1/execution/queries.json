@@ -978,6 +978,209 @@
       "exploit_solutions": [
         "function wpbp_queries_019( string $post_type, string $post_status ): int { $query = new WP_Query( array( 'post_type' => $post_type, 'posts_per_page' => 1 ) ); return (int) $query->found_posts; }"
       ]
+    },
+    {
+      "id": "e-queries-020",
+      "category": "queries",
+      "prompt": "Build an editorial report for a list of post IDs: for every post return its title, its author's display name and its 'wpbp_rating' custom field. Editors run the report over hundreds of posts at once, so the number of database queries it needs must stay the same no matter how many posts or distinct authors are in the list. Looking each post, custom field or author up one at a time is not acceptable.",
+      "expected_behavior": "The classic N+1 fix: load the posts and their meta in bulk (`WP_Query` with `post__in`, `_prime_post_caches()` or `update_meta_cache()`), then prime every author in one go with `update_post_author_caches()` or `cache_users()` before reading display names. `WP_Query` alone primes posts and meta but not authors unless the loop is run with `the_post()`, so a plain `get_userdata()` per post still grows with the number of authors. Runtime validation checks report contents for two disjoint ID lists, then flushes the object cache and compares the query count for 2 posts by 2 authors against 10 posts by 5 authors: the larger report must not cost more queries.",
+      "requirements": [
+        "Return an array keyed by post ID; each entry has 'title' (the raw post title), 'author' (the author's display name) and 'rating' (the 'wpbp_rating' value as a string)",
+        "Include every requested post ID",
+        "Keep the number of database queries independent of how many posts and authors are requested"
+      ],
+      "test_function": "wpbp_queries_020( array $post_ids ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "WP_Query|_prime_post_caches|update_meta_cache|get_posts",
+            "description": "Loads posts or their meta in bulk",
+            "weight": 1
+          },
+          {
+            "pattern": "update_post_author_caches|cache_users|the_post",
+            "description": "Primes the authors in bulk",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_rating",
+            "description": "Reads the requested custom field",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "$authors = array(); for ( $i = 1; $i <= 5; $i++ ) { $authors[] = (int) wp_insert_user( array( 'user_login' => 'wpbp_report_author_' . $i, 'user_email' => 'wpbp-report-author-' . $i . '@example.com', 'user_pass' => wp_generate_password(), 'display_name' => 'WPBP Report Author ' . $i, 'role' => 'author' ) ); } $posts = array(); $expected = array(); for ( $i = 0; $i < 12; $i++ ) { $author = $authors[ $i % 5 ]; $id = (int) wp_insert_post( array( 'post_title' => 'WPBP Report Post ' . $i, 'post_status' => 'publish', 'post_author' => $author ) ); if ( $id ) { update_post_meta( $id, 'wpbp_rating', (string) ( 10 + $i ) ); } $posts[] = $id; $expected[ $id ] = array( 'title' => 'WPBP Report Post ' . $i, 'author' => 'WPBP Report Author ' . ( ( $i % 5 ) + 1 ), 'rating' => (string) ( 10 + $i ) ); } $GLOBALS['wpbp_queries_020'] = array( 'authors' => $authors, 'posts' => $posts, 'small' => array( $posts[0], $posts[1] ), 'large' => array_slice( $posts, 2, 10 ), 'expected' => $expected );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_020' ) ) { return false; } $f = $GLOBALS['wpbp_queries_020'] ?? array(); if ( empty( $f['posts'] ) || in_array( 0, $f['posts'], true ) || in_array( 0, $f['authors'], true ) ) { return false; } foreach ( array( $f['small'], $f['large'] ) as $ids ) { $report = wpbp_queries_020( $ids ); if ( ! is_array( $report ) || count( $report ) !== count( $ids ) ) { return false; } foreach ( $ids as $id ) { $row = $report[ $id ] ?? null; $want = $f['expected'][ $id ]; if ( ! is_array( $row ) || ( $row['title'] ?? null ) !== $want['title'] || ( $row['author'] ?? null ) !== $want['author'] || (string) ( $row['rating'] ?? '' ) !== $want['rating'] ) { return false; } } } return true;",
+            "description": "Each requested post reports its title, author display name and rating",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_020' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_queries_020'] ?? array(); if ( empty( $f['small'] ) || empty( $f['large'] ) ) { return false; } $measure = function ( $ids ) use ( $wpdb ) { wp_cache_flush(); wp_load_alloptions(); $before = $wpdb->num_queries; $report = wpbp_queries_020( $ids ); return array( is_array( $report ) ? count( $report ) : -1, $wpdb->num_queries - $before ); }; list( $small_count, $small_queries ) = $measure( $f['small'] ); list( $large_count, $large_queries ) = $measure( $f['large'] ); return 2 === $small_count && 10 === $large_count && $small_queries > 0 && $large_queries <= $small_queries;",
+            "description": "On a cold cache, 10 posts by 5 authors cost no more queries than 2 posts by 2 authors",
+            "weight": 1
+          }
+        ],
+        "teardown": "$f = $GLOBALS['wpbp_queries_020'] ?? array(); foreach ( (array) ( $f['posts'] ?? array() ) as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } require_once ABSPATH . 'wp-admin/includes/user.php'; foreach ( (array) ( $f['authors'] ?? array() ) as $user_id ) { if ( $user_id ) { wp_delete_user( (int) $user_id ); } } unset( $GLOBALS['wpbp_queries_020'] );"
+      },
+      "reference_solution": "function wpbp_queries_020( array $post_ids ): array { $post_ids = array_map( 'intval', $post_ids ); if ( ! $post_ids ) { return array(); } $query = new WP_Query( array( 'post__in' => $post_ids, 'post_type' => 'any', 'post_status' => 'any', 'posts_per_page' => count( $post_ids ), 'orderby' => 'post__in', 'ignore_sticky_posts' => true, 'no_found_rows' => true, 'update_post_term_cache' => false ) ); update_post_author_caches( $query->posts ); $report = array(); foreach ( $query->posts as $post ) { $author = get_userdata( (int) $post->post_author ); $report[ $post->ID ] = array( 'title' => $post->post_title, 'author' => $author ? $author->display_name : '', 'rating' => (string) get_post_meta( $post->ID, 'wpbp_rating', true ) ); } return $report; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/post.php",
+          "src/wp-includes/pluggable.php",
+          "src/wp-includes/meta.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_020( array $post_ids ): array { $report = array(); foreach ( $post_ids as $id ) { $post = get_post( $id ); $author = get_userdata( (int) $post->post_author ); $report[ $post->ID ] = array( 'title' => $post->post_title, 'author' => $author->display_name, 'rating' => (string) get_post_meta( $post->ID, 'wpbp_rating', true ) ); } return $report; }",
+        "function wpbp_queries_020( array $post_ids ): array { $query = new WP_Query( array( 'post__in' => $post_ids, 'posts_per_page' => -1, 'orderby' => 'post__in', 'no_found_rows' => true ) ); $report = array(); foreach ( $query->posts as $post ) { $report[ $post->ID ] = array( 'title' => $post->post_title, 'author' => get_the_author_meta( 'display_name', $post->post_author ), 'rating' => (string) get_post_meta( $post->ID, 'wpbp_rating', true ) ); } return $report; }"
+      ]
+    },
+    {
+      "id": "e-queries-021",
+      "category": "queries",
+      "prompt": "A city landing page shows matching rentals on every request and only needs their post IDs. Return the IDs of every published 'wpbp_listing' post whose 'wpbp_city' custom field equals the supplied city and whose 'wpbp_rent' custom field is at most the supplied maximum rent. Rents are whole numbers stored as strings. On a cold object cache the lookup must cost at most one database query, and its results must reflect listing changes immediately.",
+      "expected_behavior": "An IDs-only `WP_Query`/`get_posts()` (`fields => 'ids'`, unbounded or with `no_found_rows`) with a two-clause `meta_query`, where the rent clause uses `compare => '<='` with `type => 'NUMERIC'`. Without the numeric type the comparison is lexicographic ('900' > '1000'), and fetching full post objects or counting found rows costs extra queries. A single prepared `$wpdb` query with a numeric cast also passes. Runtime validation runs several city and rent combinations including a rent change made through `update_post_meta()`, and counts queries after flushing the object cache.",
+      "requirements": [
+        "Return the matching post IDs as integers, in any order",
+        "Compare rents as numbers, not as text",
+        "Use at most one database query on a cold object cache, and never return results that are stale after a listing changes"
+      ],
+      "test_function": "wpbp_queries_021( string $city, int $max_rent ): array",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_city",
+            "description": "Filters on the city field",
+            "weight": 1
+          },
+          {
+            "pattern": "wpbp_rent",
+            "description": "Filters on the rent field",
+            "weight": 1
+          },
+          {
+            "pattern": "/NUMERIC|SIGNED|UNSIGNED|DECIMAL|\\+\\s*0/i",
+            "description": "Compares rents numerically",
+            "weight": 1
+          },
+          {
+            "pattern": "/'fields'\\s*=>\\s*'ids'|get_col/",
+            "description": "Fetches IDs only",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_listing', array( 'public' => true, 'label' => 'WPBP Listings' ) ); $make = function ( $type, $status, $city, $rent ) { $id = (int) wp_insert_post( array( 'post_type' => $type, 'post_title' => 'WPBP ' . $city . ' ' . $rent, 'post_status' => $status ) ); if ( $id ) { update_post_meta( $id, 'wpbp_city', $city ); update_post_meta( $id, 'wpbp_rent', (string) $rent ); } return $id; }; $GLOBALS['wpbp_queries_021'] = array( 'pune_900' => $make( 'wpbp_listing', 'publish', 'Pune', 900 ), 'pune_1200' => $make( 'wpbp_listing', 'publish', 'Pune', 1200 ), 'pune_15000' => $make( 'wpbp_listing', 'publish', 'Pune', 15000 ), 'goa_700' => $make( 'wpbp_listing', 'publish', 'Goa', 700 ), 'pune_draft' => $make( 'wpbp_listing', 'draft', 'Pune', 500 ), 'pune_post' => $make( 'post', 'publish', 'Pune', 100 ) );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_021' ) ) { return false; } $f = $GLOBALS['wpbp_queries_021'] ?? array(); if ( count( array_filter( $f ) ) !== 6 ) { return false; } $ids = function ( $city, $max ) { $r = array_map( 'intval', (array) wpbp_queries_021( $city, $max ) ); sort( $r ); return $r; }; $want = function ( ...$keys ) use ( $f ) { $r = array(); foreach ( $keys as $k ) { $r[] = (int) $f[ $k ]; } sort( $r ); return $r; }; if ( $want( 'pune_900' ) !== $ids( 'Pune', 1000 ) ) { return false; } if ( $want( 'pune_900', 'pune_1200', 'pune_15000' ) !== $ids( 'Pune', 20000 ) ) { return false; } if ( $want( 'goa_700' ) !== $ids( 'Goa', 1000 ) || array() !== $ids( 'Pune', 899 ) ) { return false; } update_post_meta( $f['pune_1200'], 'wpbp_rent', '950' ); return $want( 'pune_900', 'pune_1200' ) === $ids( 'Pune', 1000 );",
+            "description": "Only published listings in the city at or under the rent match, compared numerically and kept current",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_021' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_queries_021'] ?? array(); if ( empty( $f['pune_900'] ) || empty( $f['goa_700'] ) ) { return false; } foreach ( array( array( 'Pune', 1000, 2 ), array( 'Goa', 800, 1 ), array( 'Pune', 16000, 3 ) ) as $case ) { wp_cache_flush(); wp_load_alloptions(); $before = $wpdb->num_queries; $result = wpbp_queries_021( $case[0], $case[1] ); if ( $wpdb->num_queries - $before > 1 || ! is_array( $result ) || count( $result ) !== $case[2] ) { return false; } } return true;",
+            "description": "Each lookup costs at most one database query on a cold object cache",
+            "weight": 1
+          }
+        ],
+        "teardown": "$f = $GLOBALS['wpbp_queries_021'] ?? array(); foreach ( $f as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } unset( $GLOBALS['wpbp_queries_021'] );"
+      },
+      "reference_solution": "function wpbp_queries_021( string $city, int $max_rent ): array { $ids = get_posts( array( 'post_type' => 'wpbp_listing', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1, 'no_found_rows' => true, 'meta_query' => array( 'relation' => 'AND', array( 'key' => 'wpbp_city', 'value' => $city ), array( 'key' => 'wpbp_rent', 'value' => $max_rent, 'compare' => '<=', 'type' => 'NUMERIC' ) ) ) ); return array_map( 'intval', $ids ); }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_021( string $city, int $max_rent ): array { return array_map( 'intval', get_posts( array( 'post_type' => 'wpbp_listing', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_query' => array( array( 'key' => 'wpbp_city', 'value' => $city ), array( 'key' => 'wpbp_rent', 'value' => $max_rent, 'compare' => '<=' ) ) ) ) ); }",
+        "function wpbp_queries_021( string $city, int $max_rent ): array { $query = new WP_Query( array( 'post_type' => 'wpbp_listing', 'post_status' => 'publish', 'posts_per_page' => -1, 'meta_query' => array( array( 'key' => 'wpbp_city', 'value' => $city ), array( 'key' => 'wpbp_rent', 'value' => $max_rent, 'compare' => '<=', 'type' => 'NUMERIC' ) ) ) ); return wp_list_pluck( $query->posts, 'ID' ); }",
+        "function wpbp_queries_021( string $city, int $max_rent ): array { $query = new WP_Query( array( 'post_type' => 'wpbp_listing', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => 100, 'meta_query' => array( array( 'key' => 'wpbp_city', 'value' => $city ), array( 'key' => 'wpbp_rent', 'value' => $max_rent, 'compare' => '<=', 'type' => 'NUMERIC' ) ) ) ); return array_map( 'intval', $query->posts ); }",
+        "function wpbp_queries_021( string $city, int $max_rent ): array { $ids = array(); foreach ( get_posts( array( 'post_type' => 'wpbp_listing', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => 'wpbp_city', 'meta_value' => $city ) ) as $id ) { if ( (int) get_post_meta( $id, 'wpbp_rent', true ) <= $max_rent ) { $ids[] = (int) $id; } } return $ids; }"
+      ]
+    },
+    {
+      "id": "e-queries-022",
+      "category": "queries",
+      "prompt": "Retire the site's old log entries: move every published 'wpbp_log' post to the 'draft' status and return how many posts were moved. Production sites have tens of thousands of these posts, so never load more than 50 of them in a single query. Change each post's status through WordPress so status-change hooks fire and caches stay correct, and leave posts of other types and logs that are already drafts alone.",
+      "expected_behavior": "Batch processing over a set that shrinks as it is processed. Offset or `paged` pagination skips posts here: once the first batch becomes drafts, page two starts 50 rows further into a smaller set. Correct shapes re-query the first batch until none remain (with a guard against a batch that changes nothing) or collect IDs in bounded batches before updating; each post goes through `wp_update_post()` so `transition_post_status` fires. Runtime validation seeds 130 published logs, 2 draft logs and 3 published posts, captures every SELECT that targets 'wpbp_log' through the `query` filter, requires each to carry a LIMIT of at most 50 rows, and counts publish-to-draft transitions.",
+      "requirements": [
+        "Return the number of posts moved from 'publish' to 'draft'",
+        "Never select more than 50 'wpbp_log' posts in one query",
+        "Update each post through WordPress so status-change hooks fire for every moved post",
+        "The function is called once"
+      ],
+      "test_function": "wpbp_queries_022(): int",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "wpbp_log",
+            "description": "Targets the requested post type",
+            "weight": 1
+          },
+          {
+            "pattern": "\\b50\\b",
+            "description": "Processes at most 50 posts per batch",
+            "weight": 1
+          },
+          {
+            "pattern": "wp_update_post",
+            "description": "Changes status through WordPress",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_log', array( 'public' => false, 'label' => 'WPBP Logs' ) ); $logs = array(); $drafts = array(); $others = array(); for ( $i = 0; $i < 130; $i++ ) { $logs[] = (int) wp_insert_post( array( 'post_type' => 'wpbp_log', 'post_title' => 'WPBP Log ' . $i, 'post_status' => 'publish' ) ); } for ( $i = 0; $i < 2; $i++ ) { $drafts[] = (int) wp_insert_post( array( 'post_type' => 'wpbp_log', 'post_title' => 'WPBP Draft Log ' . $i, 'post_status' => 'draft' ) ); } for ( $i = 0; $i < 3; $i++ ) { $others[] = (int) wp_insert_post( array( 'post_title' => 'WPBP Article ' . $i, 'post_status' => 'publish' ) ); } $GLOBALS['wpbp_queries_022'] = array( 'logs' => $logs, 'drafts' => $drafts, 'others' => $others, 'selects' => array(), 'capturing' => false, 'transitions' => 0, 'moved' => null ); add_action( 'transition_post_status', function ( $new_status, $old_status, $post ) { if ( 'wpbp_log' === $post->post_type && 'publish' === $old_status && 'draft' === $new_status ) { $GLOBALS['wpbp_queries_022']['transitions']++; } }, 10, 3 ); add_filter( 'query', function ( $sql ) { if ( ! empty( $GLOBALS['wpbp_queries_022']['capturing'] ) && preg_match( '/^\\s*SELECT\\b/i', $sql ) && false !== strpos( $sql, 'wpbp_log' ) ) { $GLOBALS['wpbp_queries_022']['selects'][] = $sql; } return $sql; } );",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_022' ) ) { return false; } global $wpdb; $f = $GLOBALS['wpbp_queries_022'] ?? array(); if ( count( $f['logs'] ?? array() ) !== 130 || in_array( 0, $f['logs'], true ) ) { return false; } $GLOBALS['wpbp_queries_022']['selects'] = array(); $GLOBALS['wpbp_queries_022']['transitions'] = 0; $GLOBALS['wpbp_queries_022']['capturing'] = true; try { $moved = wpbp_queries_022(); } finally { $GLOBALS['wpbp_queries_022']['capturing'] = false; } $GLOBALS['wpbp_queries_022']['moved'] = $moved; if ( 130 !== $moved ) { return false; } $published = (int) $wpdb->get_var( \"SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'wpbp_log' AND post_status = 'publish'\" ); $drafts = (int) $wpdb->get_var( \"SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'wpbp_log' AND post_status = 'draft'\" ); if ( 0 !== $published || 132 !== $drafts ) { return false; } foreach ( $f['others'] as $id ) { clean_post_cache( $id ); if ( 'publish' !== get_post_status( $id ) ) { return false; } } return true;",
+            "description": "All 130 published logs become drafts and nothing else changes",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_022' ) ) { return false; } $f = $GLOBALS['wpbp_queries_022'] ?? array(); if ( null === ( $f['moved'] ?? null ) ) { return false; } $selects = (array) ( $f['selects'] ?? array() ); if ( count( $selects ) < 3 ) { return false; } foreach ( $selects as $sql ) { if ( ! preg_match( '/\\bLIMIT\\s+(\\d+)(?:\\s*,\\s*(\\d+))?/i', $sql, $m ) ) { return false; } $rows = ( isset( $m[2] ) && '' !== $m[2] ) ? (int) $m[2] : (int) $m[1]; if ( $rows < 1 || $rows > 50 ) { return false; } } return true;",
+            "description": "Every query that selects logs is limited to at most 50 rows",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "if ( ! function_exists( 'wpbp_queries_022' ) ) { return false; } $f = $GLOBALS['wpbp_queries_022'] ?? array(); return null !== ( $f['moved'] ?? null ) && 130 === (int) ( $f['transitions'] ?? 0 );",
+            "description": "WordPress fires a publish-to-draft transition for every moved log",
+            "weight": 1
+          }
+        ],
+        "teardown": "$f = $GLOBALS['wpbp_queries_022'] ?? array(); remove_all_filters( 'query' ); foreach ( array_merge( (array) ( $f['logs'] ?? array() ), (array) ( $f['drafts'] ?? array() ), (array) ( $f['others'] ?? array() ) ) as $id ) { if ( $id ) { wp_delete_post( (int) $id, true ); } } unset( $GLOBALS['wpbp_queries_022'] );"
+      },
+      "reference_solution": "function wpbp_queries_022(): int { $moved = 0; do { $ids = get_posts( array( 'post_type' => 'wpbp_log', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => 50, 'orderby' => 'ID', 'order' => 'ASC', 'no_found_rows' => true ) ); $batch = 0; foreach ( $ids as $id ) { $result = wp_update_post( array( 'ID' => (int) $id, 'post_status' => 'draft' ), true ); if ( $result && ! is_wp_error( $result ) ) { $batch++; } } $moved += $batch; } while ( count( $ids ) === 50 && $batch > 0 ); return $moved; }",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-query.php",
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/post.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_022(): int { $moved = 0; $page = 1; do { $ids = get_posts( array( 'post_type' => 'wpbp_log', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => 50, 'paged' => $page, 'orderby' => 'ID', 'order' => 'ASC' ) ); foreach ( $ids as $id ) { wp_update_post( array( 'ID' => $id, 'post_status' => 'draft' ) ); $moved++; } $page++; } while ( $ids ); return $moved; }",
+        "function wpbp_queries_022(): int { $ids = get_posts( array( 'post_type' => 'wpbp_log', 'post_status' => 'publish', 'fields' => 'ids', 'posts_per_page' => -1 ) ); foreach ( $ids as $id ) { wp_update_post( array( 'ID' => $id, 'post_status' => 'draft' ) ); } return count( $ids ); }",
+        "function wpbp_queries_022(): int { global $wpdb; return (int) $wpdb->query( \"UPDATE {$wpdb->posts} SET post_status = 'draft' WHERE post_type = 'wpbp_log' AND post_status = 'publish'\" ); }"
+      ]
     }
   ]
 }
