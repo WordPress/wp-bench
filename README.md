@@ -260,8 +260,19 @@ Test suites live in `datasets/suites/<suite-name>/`:
 
 - `execution/` — Code generation tasks with assertions (one JSON file per category)
 
-The default suite `wp-core-v1` contains 350 tasks covering WordPress core APIs,
-hooks, database operations, and security patterns.
+The default suite `wp-core-v1` contains 360 tasks covering WordPress core APIs,
+hooks, database operations, security patterns, and multisite networks.
+
+### Multisite tasks
+
+The `multisite` category runs on a subdirectory multisite network instead of
+the single-site install. Its tasks set `metadata.requires_multisite: true`.
+When a run selects one, setup also captures a network baseline
+(`wp core multisite-install`) from the same image, and each flagged candidate
+gets a private container restored from that baseline. Other tasks keep the
+single-site baseline. Runs without multisite tasks do no extra work. Multisite
+tasks need `execution_isolation: reset_per_test`; the shared diagnostic runtime
+is single-site and refuses them.
 
 ### WP-CLI workflows
 

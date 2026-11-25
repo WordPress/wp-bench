@@ -38,8 +38,18 @@ def _execution_tests() -> list[dict[str, Any]]:
     return tests
 
 
-def test_execution_suite_has_exactly_350_tests() -> None:
-    assert len(_execution_tests()) == 350
+def test_execution_suite_has_exactly_360_tests() -> None:
+    assert len(_execution_tests()) == 360
+
+
+def test_multisite_category_and_flag_agree() -> None:
+    """The harness restores the network baseline only for flagged tests."""
+    multisite = [test for test in _execution_tests() if test["category"] == "multisite"]
+    assert len(multisite) == 10
+    for test in _execution_tests():
+        flagged = test["metadata"].get("requires_multisite")
+        assert flagged in (None, True), test["id"]
+        assert (flagged is True) == (test["category"] == "multisite"), test["id"]
 
 
 def test_execution_test_ids_are_unique() -> None:

@@ -301,6 +301,46 @@ def _restores_a_baseline(config: HarnessConfig) -> bool:
     return config.run.execution_isolation == "reset_per_test"
 
 
+def requires_multisite(test: Any) -> bool:
+    """Whether a test runs on the multisite network baseline.
+
+    Set per test with ``metadata.requires_multisite: true``. Every other
+    test keeps running on the single-site baseline.
+    """
+    metadata = getattr(test, "metadata", None)
+    return isinstance(metadata, dict) and metadata.get("requires_multisite") is True
+
+
+def _setup_environment(
+    environment: WordPressEnvironment, config: HarnessConfig, tests: list[Any]
+) -> None:
+    """Capture the baselines the selected tests need.
+
+    The multisite baseline costs one extra install, so it is captured only
+    when the run selects a multisite test.
+    """
+    capture = _restores_a_baseline(config)
+    if not any(requires_multisite(test) for test in select_run_tests(tests, config)):
+        environment.setup(capture_baseline=capture)
+        return
+    if not capture:
+        raise ValueError(
+            "The selected tests include multisite tests (metadata.requires_multisite), "
+            "which need execution_isolation='reset_per_test' with the Docker grader. "
+            "The shared diagnostic runtime is single-site; select only single-site "
+            "tests to use it."
+        )
+    environment.setup(capture_baseline=True, multisite=True)
+
+
+def _reset_for(environment: WordPressEnvironment, test: Any) -> None:
+    """Restore the baseline matching the test's site mode."""
+    if requires_multisite(test):
+        environment.reset(multisite=True)
+    else:
+        environment.reset()
+
+
 def _run_isolated_execution_loop(
     *,
     tests_to_run: list[Any],
@@ -339,7 +379,7 @@ def _run_isolated_execution_loop(
 
     def isolated_test(test: Any) -> Any:
         # Reset failures are environment failures, outside the TestError policy.
-        environment.reset()
+        _reset_for(environment, test)
         try:
             return process_test(test)
         finally:
@@ -504,7 +544,7 @@ class BenchmarkRunner(_ResultBookkeeping):
             return self._run_exploit_audit(tests)
         reference_mode = self.config.run.check_reference_solution
         with _graded_run(self._stream, self.environment):
-            self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
+            _setup_environment(self.environment, self.config, tests)
             if reference_mode:
                 self._run_reference_solution_tests(tests)
             else:
@@ -680,7 +720,7 @@ class BenchmarkRunner(_ResultBookkeeping):
         when any test is exploitable, mirroring reference-solution mode.
         """
         with _graded_run(self._stream, self.environment):
-            self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
+            _setup_environment(self.environment, self.config, tests)
             self._run_exploit_audit_tests(tests)
 
         exploitable = [record for record in self.records if record["exploitable"]]
@@ -773,7 +813,7 @@ class BenchmarkRunner(_ResultBookkeeping):
         isolate = self.config.run.execution_isolation == "reset_per_test"
         for label, code in candidates:
             if isolate:
-                self.environment.reset()
+                _reset_for(self.environment, test)
             env_result = self.environment.execute_artifact(
                 parse_artifact(code, "wp_cli_shell" if test.artifact_kind == "wp_cli_shell" else "php_snippet"),
                 verification_spec,
@@ -1002,7 +1042,7 @@ class MultiModelRunner:
                 "tests. Check the dataset source and suite name."
             )
         with _graded_run(self._stream, self.environment):
-            self.environment.setup(capture_baseline=_restores_a_baseline(self.config))
+            _setup_environment(self.environment, self.config, tests)
             for model_config in models:
                 for variant in self.variants:
                     display_name = f"{model_config.name}{variant.label_suffix}"

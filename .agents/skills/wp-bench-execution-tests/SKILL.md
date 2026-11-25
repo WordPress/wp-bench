@@ -95,7 +95,7 @@ Each runtime execution is capped by `grader.timeout_seconds` (default 90s), cove
 
 ## Runtime Facts
 
-The grader is a WP-CLI PHP process (`wp eval-file`) against a single-site WordPress 7.1 with the default block theme, no other plugins, no HTTP request, no network, no JavaScript. Runtime order is `setup`, submitted code, assertions, then `teardown`.
+The grader is a WP-CLI PHP process (`wp eval-file`) against a single-site WordPress 7.1 with the default block theme, no other plugins, no HTTP request, no network, no JavaScript. Tests with `metadata.requires_multisite: true` run on a subdirectory multisite network instead (see "Multisite Tests"). Runtime order is `setup`, submitted code, assertions, then `teardown`.
 
 - **Any PHP notice, warning, or deprecation aborts the run.** The sandbox error handler throws on every error level, including `@`-suppressed calls, and `WP_DEBUG` is on so `_doing_it_wrong()` also throws. Setup and assertions must be notice-clean; when a `_doing_it_wrong` is expected, add `add_filter( 'doing_it_wrong_trigger_error', '__return_false' )` in setup. Avoid core paths that rely on `@` for their failure branches.
 - `rest_do_request()` dispatches only: it skips `check_authentication()` and `response_to_data()`. Call `rest_get_server()->response_to_data( $response, true )` to observe `_links`/`_embedded`, and `rest_get_server()->check_authentication()` to test `rest_authentication_errors`.
@@ -148,6 +148,42 @@ Clean up state in `teardown` when it persists beyond the PHP process or can affe
 Avoid cleanup for in-process-only registries when each verifier run starts a fresh WP-CLI process. Extra cleanup can make failing cases noisy and less diagnostic.
 
 The default `run.execution_isolation: reset_per_test` gives every candidate a fresh private container, pristine WordPress files, and a trusted SQLite baseline. It discards the container and all descendants after verification, so database, filesystem, and process state cannot leak into other tests. Teardown still matters within a single test: assertions run in the same process and site state as the submitted code, and authors iterating with `execution_isolation: none` rely on it.
+
+## Multisite Tests
+
+The `multisite` category in `wp-core-v1` runs on a subdirectory multisite network
+installed with `wp core multisite-install`. Every test in that category sets
+`metadata.requires_multisite: true`, and no other test does (the dataset test
+enforces both). The harness captures the network baseline only when a run selects
+a flagged test, and restores it per candidate under `reset_per_test`. Flagged tests
+cannot run with `execution_isolation: none`, so teardown is optional for them.
+
+- The verifier runs on the main site (ID 1, the network's `/` path). Create sub-sites
+  in `setup` with `wp_insert_site( array( 'domain' => get_network()->domain, 'path' => '/<slug>/', ... ) )`;
+  `get_network()->domain` follows `grader.base_url`, port included.
+- Every new site gets its own "Hello world!" post (ID 1), sample page and comment,
+  dated at creation time. Post IDs repeat across sites, which is a useful discriminator;
+  delete the defaults on every site when a fixture depends on dates or counts.
+- The main site's permalink structure is `/blog/%year%/%monthnum%/%day%/%postname%/`
+  and sub-sites use `/%year%/%monthnum%/%day%/%postname%/`. Single-site defaults to
+  plain permalinks. Compute expected URLs with `get_blog_permalink()`.
+- `wp_delete_site()` calls `@opendir()` on `uploads/sites/<id>`, which does not exist
+  in a fresh runtime; the sandbox turns the suppressed warning into an exception.
+  Do not delete sites in teardown.
+- `add_user_to_blog()` does not check that the site exists; it reads
+  `get_site( $blog_id )->domain` when the user has no `primary_blog` meta. Users
+  created with `wp_insert_user()` have none, so set `primary_blog` in fixtures that
+  pass a missing site ID.
+- `wp_insert_site()` adds `user_id` as an administrator of the new site. Use a
+  separate user when membership matters. A super admin passes `user_can_for_site()`
+  on sites they are not a member of.
+- `get_sites()` defaults to `number => 100` and does not filter `archived`, `spam` or
+  `deleted`. Flag fixture sites with `wp_update_site()`.
+- Hooking `wpmu_new_blog` raises a deprecation notice that aborts the run. New-site
+  hooks belong on `wp_initialize_site` after core's priority 10 initializer.
+- Assert that the caller's site context is restored: `get_current_blog_id()`,
+  `ms_is_switched()`, and the depth of `$GLOBALS['_wp_switched_stack']` when the
+  call starts while switched.
 
 ## WP-CLI Workflow Tests
 

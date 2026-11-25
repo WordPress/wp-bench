@@ -66,7 +66,7 @@ def test_shell_scripts_reach_the_runtime_in_every_mode(monkeypatch, tmp_path, mo
     )
     runner = BenchmarkRunner(config)
     runner.environment.setup = lambda **kwargs: None  # type: ignore[method-assign]
-    runner.environment.reset = lambda: None  # type: ignore[method-assign]
+    runner.environment.reset = lambda **kwargs: None  # type: ignore[method-assign]
     artifacts: list[Artifact] = []
 
     def execute(artifact: Artifact, spec: dict) -> ExecutionResult:
@@ -151,8 +151,8 @@ def test_cli_suite_has_workflows_with_behavioral_and_exploit_checks() -> None:
         "cli-migration": 2,
     }
     core = load_tests(DatasetConfig(source="local", name="wp-core-v1"))
-    assert len(core) == 350
-    assert len({t.id for t in core + tests}) == 377
+    assert len(core) == 360
+    assert len({t.id for t in core + tests}) == 387
     for test in tests:
         assert test.suite == "wp-cli-v1" and test.artifact_kind == "wp_cli_shell"
         assert test.test_function is None

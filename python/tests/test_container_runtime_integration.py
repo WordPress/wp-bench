@@ -158,3 +158,27 @@ def test_timeout_or_exit_removes_the_entire_process_namespace(environment, code:
     assert inspect.returncode != 0
     env.reset()
     verify(env, "", "return !str_contains(shell_exec('ps'), 'sleep 60');")
+
+
+def test_multisite_and_single_site_baselines_restore_independently() -> None:
+    env = WordPressEnvironment(GraderConfig(image=IMAGE or "", setup_timeout_seconds=120))
+    try:
+        env.setup(multisite=True)
+        env.reset(multisite=True)
+        verify(env, """
+            $site = wp_insert_site(array('domain' => get_network()->domain, 'path' => '/probe/', 'title' => 'Probe', 'user_id' => 1));
+            switch_to_blog($site);
+            update_option('isolation_probe', 'dirty');
+            restore_current_blog();
+            update_site_option('isolation_probe', 'dirty');
+        """, "return is_multisite() && 2 === count(get_sites()) && 'dirty' === get_site_option('isolation_probe');")
+        env.reset(multisite=True)
+        verify(env, "", """
+            return is_multisite() && !is_subdomain_install()
+                && array('/') === wp_list_pluck(get_sites(), 'path')
+                && false === get_site_option('isolation_probe');
+        """)
+        env.reset()
+        verify(env, "", "return !is_multisite() && !function_exists('get_sites');")
+    finally:
+        env.close()
