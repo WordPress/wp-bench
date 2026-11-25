@@ -978,6 +978,73 @@
       "exploit_solutions": [
         "function wpbp_queries_019( string $post_type, string $post_status ): int { $query = new WP_Query( array( 'post_type' => $post_type, 'posts_per_page' => 1 ) ); return (int) $query->found_posts; }"
       ]
+    },
+    {
+      "id": "e-queries-020",
+      "category": "queries",
+      "prompt": "Property listings are published posts of the 'wpbp_q_listing' post type with these custom fields: 'wpbp_q_city' (the city name), 'wpbp_q_price' (a whole number stored as text), 'wpbp_q_featured' ('1' for featured listings; usually absent, sometimes '0') and 'wpbp_q_sold' ('1' once sold, '0' when a sale fell through, absent for listings never sold). Return a WP_Query of every published listing in the supplied city that is either featured or priced at or below the supplied maximum, and that is not sold. Order the results by price, lowest first, comparing prices as numbers.",
+      "expected_behavior": "One `meta_query` with nested relations: the city clause AND (featured equals '1' OR price `<=` the maximum with `type => 'NUMERIC'`) AND (sold `NOT EXISTS` OR sold `!=` '1'), ordered numerically by price (a named clause with `type => 'NUMERIC'` or `meta_value_num`), returning all matches. A flat relation, a text comparison of prices, `EXISTS` on the featured flag, or either half of the sold group alone gives the wrong set. Runtime validation uses listings on both sides of every rule, including a relisted sale and a featured flag of '0', with three argument sets.",
+      "requirements": [
+        "Return only published 'wpbp_q_listing' posts in the supplied city",
+        "Keep listings that are featured or priced at or below the maximum, comparing numbers",
+        "Exclude sold listings but keep listings whose sale fell through or that were never sold",
+        "Order by price ascending as numbers and return every match"
+      ],
+      "test_function": "wpbp_queries_020( string $city, int $max_price ): WP_Query",
+      "static_checks": {
+        "required_patterns": [
+          {
+            "pattern": "meta_query",
+            "description": "Filters on custom fields",
+            "weight": 1
+          },
+          {
+            "pattern": "relation",
+            "description": "Combines clauses with relations",
+            "weight": 1
+          },
+          {
+            "pattern": "NUMERIC",
+            "description": "Compares prices as numbers",
+            "weight": 1
+          }
+        ]
+      },
+      "runtime_checks": {
+        "setup": "register_post_type( 'wpbp_q_listing', array( 'label' => 'Listings', 'public' => true ) ); $GLOBALS['wpbp_q_020'] = array(); $listings = array( 'cheap' => array( 'Pune', '950', null, null, 'publish' ), 'featured' => array( 'Pune', '1500', '1', null, 'publish' ), 'pricey' => array( 'Pune', '1200', null, null, 'publish' ), 'sold' => array( 'Pune', '700', null, '1', 'publish' ), 'relisted' => array( 'Pune', '99', null, '0', 'publish' ), 'elsewhere' => array( 'Goa', '500', null, null, 'publish' ), 'draft' => array( 'Pune', '300', '1', null, 'draft' ), 'unflagged' => array( 'Pune', '2000', '0', null, 'publish' ), 'sold_featured' => array( 'Pune', '400', '1', '1', 'publish' ) ); foreach ( $listings as $key => $spec ) { $post_id = (int) wp_insert_post( array( 'post_type' => 'wpbp_q_listing', 'post_title' => 'WPBP Q20 ' . $key, 'post_status' => $spec[4] ) ); update_post_meta( $post_id, 'wpbp_q_city', $spec[0] ); update_post_meta( $post_id, 'wpbp_q_price', $spec[1] ); if ( null !== $spec[2] ) { update_post_meta( $post_id, 'wpbp_q_featured', $spec[2] ); } if ( null !== $spec[3] ) { update_post_meta( $post_id, 'wpbp_q_sold', $spec[3] ); } $GLOBALS['wpbp_q_020'][ $key ] = $post_id; }",
+        "assertions": [
+          {
+            "type": "custom_assertion",
+            "code": "$ids = static function ( $query ) { return $query instanceof WP_Query ? array_map( 'intval', wp_list_pluck( $query->posts, 'ID' ) ) : null; }; $fx = $GLOBALS['wpbp_q_020']; return array( $fx['relisted'], $fx['cheap'], $fx['featured'] ) === $ids( wpbp_queries_020( 'Pune', 1000 ) );",
+            "description": "Listings in the city that are featured or affordable and not sold come back ordered by price as numbers",
+            "weight": 1
+          },
+          {
+            "type": "custom_assertion",
+            "code": "$ids = static function ( $query ) { return $query instanceof WP_Query ? array_map( 'intval', wp_list_pluck( $query->posts, 'ID' ) ) : null; }; $fx = $GLOBALS['wpbp_q_020']; return array( $fx['relisted'], $fx['featured'] ) === $ids( wpbp_queries_020( 'Pune', 100 ) ) && array( $fx['elsewhere'] ) === $ids( wpbp_queries_020( 'Goa', 600 ) ) && array() === $ids( wpbp_queries_020( 'Goa', 400 ) );",
+            "description": "The city and the price limit come from the arguments",
+            "weight": 1
+          }
+        ],
+        "teardown": "foreach ( ( $GLOBALS['wpbp_q_020'] ?? array() ) as $post_id ) { wp_delete_post( (int) $post_id, true ); } unregister_post_type( 'wpbp_q_listing' ); unset( $GLOBALS['wpbp_q_020'] );"
+      },
+      "reference_solution": "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'   => 'wpbp_q_featured',\n\t\t\t\t\t\t'value' => '1',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'value'   => '1',\n\t\t\t\t\t\t'compare' => '!=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+      "metadata": {
+        "source_refs": [
+          "src/wp-includes/class-wp-meta-query.php",
+          "src/wp-includes/class-wp-query.php"
+        ],
+        "release_focus": "classic"
+      },
+      "exploit_solutions": [
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'AND',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'   => 'wpbp_q_featured',\n\t\t\t\t\t\t'value' => '1',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'value'   => '1',\n\t\t\t\t\t\t'compare' => '!=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'   => 'wpbp_q_featured',\n\t\t\t\t\t\t'value' => '1',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'value'   => '1',\n\t\t\t\t\t\t'compare' => '!=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'   => 'wpbp_q_featured',\n\t\t\t\t\t\t'value' => '1',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'value'   => '1',\n\t\t\t\t\t\t'compare' => '!=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'   => 'wpbp_q_featured',\n\t\t\t\t\t\t'value' => '1',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_featured',\n\t\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'value'   => '1',\n\t\t\t\t\t\t'compare' => '!=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query(\n\t\tarray(\n\t\t\t'post_type'      => 'wpbp_q_listing',\n\t\t\t'post_status'    => 'publish',\n\t\t\t'posts_per_page' => -1,\n\t\t\t'no_found_rows'  => true,\n\t\t\t'meta_query'     => array(\n\t\t\t\t'relation' => 'AND',\n\t\t\t\tarray(\n\t\t\t\t\t'key'   => 'wpbp_q_city',\n\t\t\t\t\t'value' => $city,\n\t\t\t\t),\n\t\t\t\t'price'    => array(\n\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t'compare' => 'EXISTS',\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'   => 'wpbp_q_featured',\n\t\t\t\t\t\t'value' => '1',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_price',\n\t\t\t\t\t\t'value'   => $max_price,\n\t\t\t\t\t\t'compare' => '<=',\n\t\t\t\t\t\t'type'    => 'NUMERIC',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t\tarray(\n\t\t\t\t\t'relation' => 'OR',\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'compare' => 'NOT EXISTS',\n\t\t\t\t\t),\n\t\t\t\t\tarray(\n\t\t\t\t\t\t'key'     => 'wpbp_q_sold',\n\t\t\t\t\t\t'value'   => '1',\n\t\t\t\t\t\t'compare' => '!=',\n\t\t\t\t\t),\n\t\t\t\t),\n\t\t\t),\n\t\t\t'orderby'        => array( 'price' => 'ASC' ),\n\t\t)\n\t);\n}",
+        "function wpbp_queries_020( string $city, int $max_price ): WP_Query {\n\treturn new WP_Query( array( 'post_type' => 'wpbp_q_listing', 'posts_per_page' => -1, 'meta_key' => 'wpbp_q_price', 'orderby' => 'meta_value_num', 'order' => 'ASC', 'meta_query' => array( 'relation' => 'OR', array( 'key' => 'wpbp_q_featured', 'value' => '1' ), array( 'key' => 'wpbp_q_price', 'value' => $max_price, 'compare' => '<=', 'type' => 'NUMERIC' ) ) ) );\n}"
+      ]
     }
   ]
 }

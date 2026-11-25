@@ -151,8 +151,8 @@ def test_cli_suite_has_workflows_with_behavioral_and_exploit_checks() -> None:
         "cli-migration": 2,
     }
     core = load_tests(DatasetConfig(source="local", name="wp-core-v1"))
-    assert len(core) == 350
-    assert len({t.id for t in core + tests}) == 377
+    assert len(core) == 356
+    assert len({t.id for t in core + tests}) == 383
     for test in tests:
         assert test.suite == "wp-cli-v1" and test.artifact_kind == "wp_cli_shell"
         assert test.test_function is None
