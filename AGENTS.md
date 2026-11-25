@@ -9,6 +9,11 @@ This guide is the fastest path to contributing to WP-Bench. Keep changes minimal
 - `legacy/wp-cli-runner/`: Archived PHP-first runner; avoid changes unless documenting history.
 - `notebooks/` and `staging/`: Scratch space for experiments; avoid committing large artifacts to git.
 
+## Leaderboard Results
+- Published runs live in a separate repository, https://github.com/joaopamaral/wp-bench-results (`results/results_<timestamp>.json` + `.jsonl`, raw `wp-bench run` outputs), which also builds the leaderboard at https://wpbench-leaderboard.space.fast/. See `leaderboard/README.md`.
+- **Before starting any benchmark run, check whether the model already has a run** for the suite: `curl -s https://raw.githubusercontent.com/joaopamaral/wp-bench-results/main/site/data/leaderboard.json | jq -r '.runs[] | [.model, .suite, .scoring_version, .run_date, .scores.overall] | @tsv' | grep -i '<model>'`. If it does, do not re-run by default: report the existing result to the user and ask whether a fresh run is wanted (new suite or scoring version, or they explicitly ask for one).
+- After a completed run, publish it there, not here: fork `wp-bench-results`, copy `output/results_<timestamp>.json` and `.jsonl` into `results/`, commit (that commit is the run's attribution, so link the discussion), run `python3 site/build_data.py`, commit the regenerated `site/data/leaderboard.json`, run `pytest -q`, and open a pull request against its `main`. Never commit run outputs to this repository.
+
 ## Build, Test, and Development Commands
 - Create a venv and install the harness: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ./python`.
 - Install dev tooling: `pip install -e ./python[dev]` (adds `pytest`, `ruff`, `mypy`).
